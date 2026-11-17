@@ -14,6 +14,7 @@
 #define BUFFER_COUNT 4
 #define BUFFER_FRAMES 2048           // About 43 ms at 48 kHz: the picture's clock moves in these steps.
 #define BUFFER_BYTES (BUFFER_FRAMES * 2 * sizeof(s16))
+#define FADE_FRAMES 480              // 10 ms at 48 kHz: in and out of silence without a click.
 #define BUFFER_ALIGN 0x1000
 #define WAIT_TIMEOUT_NS 10000000ull
 #define THREAD_STACK_SIZE 0x40000
@@ -190,7 +191,7 @@ static void addFrame(Audio *a, AVFrame *f)
 // Decodes until pending holds a buffer's worth, or the file ends. False at the end.
 static bool fill(Audio *a)
 {
-    while (a->pending_frames < BUFFER_FRAMES && !a->stop) {
+    while (a->pending_frames < BUFFER_FRAMES) {  // Also when stopping: the fade-out needs the sound that comes next.
         int r = avcodec_receive_frame(a->codec, a->frame);
         if (r == 0) {
             addFrame(a, a->frame);
@@ -210,14 +211,34 @@ static bool fill(Audio *a)
     return a->pending_frames > 0;
 }
 
+typedef enum {
+    FADE_NONE,
+    FADE_IN,   // From silence: after starting, a seek or a pause.
+    FADE_OUT,  // To silence: before stopping, a seek or a pause, so nothing is cut mid-wave (a click).
+} Fade;
+
+// Ramps the first FADE_FRAMES of a buffer up from silence, or down to it
+// (then silence for the rest).
+static void applyFade(s16 *pcm, Fade fade)
+{
+    for (size_t f = 0; fade != FADE_NONE && f < BUFFER_FRAMES; f++) {
+        float gain = f >= FADE_FRAMES ? 1.0f : (float)f / FADE_FRAMES;
+        if (fade == FADE_OUT)
+            gain = 1.0f - gain;
+        pcm[f * 2] = (s16)(pcm[f * 2] * gain);
+        pcm[f * 2 + 1] = (s16)(pcm[f * 2 + 1] * gain);
+    }
+}
+
 // Queues a buffer from pending (padded with silence at the very end).
-static void queueBuffer(Audio *a, int i)
+static void queueBuffer(Audio *a, int i, Fade fade)
 {
     AudioOutBuffer *b = &a->buffers[i];
     size_t n = a->pending_frames < BUFFER_FRAMES ? a->pending_frames : BUFFER_FRAMES;
     memcpy(b->buffer, a->pending, n * 2 * sizeof(s16));
     if (n < BUFFER_FRAMES)
         memset((s16 *)b->buffer + n * 2, 0, (BUFFER_FRAMES - n) * 2 * sizeof(s16));
+    applyFade(b->buffer, fade);
     int64_t pts = a->pending_pts_ns;
     memmove(a->pending, a->pending + n * 2, (a->pending_frames - n) * 2 * sizeof(s16));
     a->pending_frames -= n;
@@ -238,9 +259,34 @@ static void queueBuffer(Audio *a, int i)
     mutexUnlock(&a->lock);
 }
 
+// A buffer the output is done with, waiting for one if needed; -1 if none frees up.
+static int freeBuffer(Audio *a)
+{
+    for (int tries = 0; tries < 50; tries++) {
+        for (int i = 0; i < BUFFER_COUNT; i++)
+            if (!a->queued[i])
+                return i;
+        reap(a);
+    }
+    return -1;
+}
+
+// Ends the sound softly: one more buffer fading to silence, then lets what's
+// queued play out (a flush would cut a wave in the middle: a click).
+static void fadeOut(Audio *a)
+{
+    int i = freeBuffer(a);
+    if (i >= 0) {
+        fill(a);
+        queueBuffer(a, i, FADE_OUT);
+    }
+    for (int tries = 0; tries < 50 && anyQueued(a); tries++)
+        reap(a);
+}
+
 static void doSeek(Audio *a, int64_t target_ns)
 {
-    flushOutput(a);
+    flushOutput(a);  // Already faded out and played out: nothing is cut.
     int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, a->time_base);
     av_seek_frame(a->fmt, a->stream, ts, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(a->codec);
@@ -256,13 +302,19 @@ static void doSeek(Audio *a, int64_t target_ns)
 static void audioThread(void *arg)
 {
     Audio *a = arg;
-    bool ended = false;
-    while (!a->stop) {
+    bool ended = false, silent = true;  // silent: nothing sounding, the next buffer fades in.
+    while (true) {
         mutexLock(&a->lock);
-        bool paused = a->paused, seek = a->seek_requested;
+        bool stop = a->stop, paused = a->paused, seek = a->seek_requested;
         int64_t target = a->seek_ns;
         a->seek_requested = false;
         mutexUnlock(&a->lock);
+        if ((stop || paused || seek) && !silent && !ended) {
+            fadeOut(a);
+            silent = true;
+        }
+        if (stop)
+            break;
         if (seek) {
             doSeek(a, target);
             ended = false;
@@ -277,13 +329,15 @@ static void audioThread(void *arg)
             svcSleepThread(WAIT_TIMEOUT_NS);
             continue;
         }
-        for (int i = 0; i < BUFFER_COUNT && !a->stop && !ended; i++) {
+        for (int i = 0; i < BUFFER_COUNT && !ended; i++) {
             if (a->queued[i])
                 continue;
-            if (!fill(a))
+            if (!fill(a)) {
                 ended = true;
-            else
-                queueBuffer(a, i);
+            } else {
+                queueBuffer(a, i, silent ? FADE_IN : FADE_NONE);
+                silent = false;
+            }
         }
         reap(a);
     }
