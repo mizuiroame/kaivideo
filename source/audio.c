@@ -1,5 +1,6 @@
 #include "audio.h"
 #include "clock.h"
+#include "video.h"
 
 #include <malloc.h>
 #include <stdio.h>
@@ -35,6 +36,8 @@ struct Audio {
     AVPacket *pkt;
     AVFrame *frame;
     char description[64];
+    int tracks[VIDEO_AUDIO_TRACKS];  // The file's sound streams, in order.
+    int track_count, track;          // track: the one playing, an index into tracks.
 
     AudioOutBuffer buffers[BUFFER_COUNT];
     bool queued[BUFFER_COUNT];
@@ -348,7 +351,15 @@ static void audioThread(void *arg)
 
 // --- Opening ---
 
-Audio *audioOpen(const char *path, char *error, size_t error_size)
+// The file's sound streams, as video.c counts them (videoAudioTrackName).
+static void listTracks(Audio *a)
+{
+    for (unsigned i = 0; i < a->fmt->nb_streams && a->track_count < VIDEO_AUDIO_TRACKS; i++)
+        if (a->fmt->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+            a->tracks[a->track_count++] = (int)i;
+}
+
+Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
 {
     if (error_size)
         error[0] = '\0';
@@ -375,11 +386,24 @@ Audio *audioOpen(const char *path, char *error, size_t error_size)
     a->fmt->pb = a->io;
     a->fmt->flags |= AVFMT_FLAG_CUSTOM_IO;
     const AVCodec *decoder = NULL;
-    if (avformat_open_input(&a->fmt, NULL, NULL, NULL) < 0 || avformat_find_stream_info(a->fmt, NULL) < 0 ||
-        (a->stream = av_find_best_stream(a->fmt, AVMEDIA_TYPE_AUDIO, -1, -1, &decoder, 0)) < 0) {
+    if (avformat_open_input(&a->fmt, NULL, NULL, NULL) < 0 || avformat_find_stream_info(a->fmt, NULL) < 0) {
         audioClose(a);
         return NULL;  // No sound: the video plays silent.
     }
+    listTracks(a);
+    if (track >= 0 && track < a->track_count) {
+        a->stream = a->tracks[track];
+        decoder = avcodec_find_decoder(a->fmt->streams[a->stream]->codecpar->codec_id);
+    } else {
+        a->stream = av_find_best_stream(a->fmt, AVMEDIA_TYPE_AUDIO, -1, -1, &decoder, 0);
+    }
+    if (a->stream < 0) {
+        audioClose(a);
+        return NULL;
+    }
+    for (int i = 0; i < a->track_count; i++)
+        if (a->tracks[i] == a->stream)
+            a->track = i;
     AVStream *st = a->fmt->streams[a->stream];
     if (!decoder) {
         snprintf(error, error_size, "This video's sound (%s) can't be played.", avcodec_get_name(st->codecpar->codec_id));
@@ -489,4 +513,9 @@ bool audioFinished(Audio *a)
     bool finished = a->finished;
     mutexUnlock(&a->lock);
     return finished;
+}
+
+int audioTrack(const Audio *a)
+{
+    return a->track;
 }

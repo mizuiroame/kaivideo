@@ -47,3 +47,11 @@ int playerSubtitle(const Player *p);  // -1 for none.
 void playerSetSubtitle(Player *p, int track);
 // The text to show now ('\n' between lines); false if none.
 bool playerSubtitleText(Player *p, char *out, size_t size);
+
+// Sound tracks: the file's, in its order.
+int playerAudioTrackCount(const Player *p);
+const char *playerAudioTrackName(const Player *p, int track);
+int playerAudioTrack(const Player *p);  // -1 if none plays.
+// Plays track instead, from where playback is. False (error says why) if
+// it can't be played: the video goes on silent, another track can be chosen.
+bool playerSetAudioTrack(Player *p, int track, uint64_t now_ns, char *error, size_t error_size);

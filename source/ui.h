@@ -34,9 +34,10 @@ typedef enum {
     TAP_PAUSE,     // The player's play/pause button.
     TAP_SEEK,      // The progress bar: *fraction is where (0-1).
     TAP_SUBTITLES, // The player's CC button.
+    TAP_AUDIO,     // The player's Audio button (next sound track).
     TAP_PICTURE,   // Anywhere else on a playing video.
 } TapTarget;
 
 TapTarget uiTapBrowser(const Browser *b, int x, int y, size_t *row);
-// has_subtitles: the CC button is there.
-TapTarget uiTapPlayer(int x, int y, bool has_subtitles, double *fraction);
+// has_subtitles, has_tracks: the CC and Audio buttons are there.
+TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction);

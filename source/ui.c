@@ -14,6 +14,8 @@
 #define CC_W 56                 // The subtitles button, left of the time.
 #define CC_H 30
 #define CC_X (GFX_WIDTH - MARGIN - 200 - CC_W)
+#define AUDIO_W 76              // The sound track button, left of CC.
+#define AUDIO_X (CC_X - 12 - AUDIO_W)
 #define SUB_PX 34
 #define SUB_LINE_H 44
 #define SUB_MAX_W (GFX_WIDTH - 160)
@@ -151,14 +153,18 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
         gfxBlendRect(0, y - 60 + i * 5, GFX_WIDTH, 5, GFX_RGB(0, 0, 0), (unsigned)(i * 200 / 12));
     gfxBlendRect(0, y, GFX_WIDTH, BAR_H, GFX_RGB(0, 0, 0), 200);
     if (note && note[0])
-        fontDraw(FONT_BOLD, 18, MARGIN, y - 34, note, COLOR_ACCENT);
+        fontDrawClipped(FONT_BOLD, 18, MARGIN, y - 34, GFX_WIDTH - 2 * MARGIN, note, COLOR_ACCENT);
     if (playerPaused(p)) {
         gfxTriangle(MARGIN, y + 18, MARGIN, y + 44, MARGIN + 22, y + 31, COLOR_TEXT);  // Press to play.
     } else {
         gfxFillRoundRect(MARGIN, y + 18, 7, 26, 2, COLOR_TEXT);
         gfxFillRoundRect(MARGIN + 13, y + 18, 7, 26, 2, COLOR_TEXT);
     }
-    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, CC_X - MARGIN - 60, name, COLOR_TEXT);
+    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, AUDIO_X - MARGIN - 60, name, COLOR_TEXT);
+    if (playerAudioTrackCount(p) > 1) {
+        gfxFillRoundRect(AUDIO_X, y + 14, AUDIO_W, CC_H, 6, COLOR_SURFACE_HI);
+        fontDrawCentered(FONT_BOLD, 18, AUDIO_X + AUDIO_W / 2.0f, y + 14 + CC_H / 2.0f, "Audio", COLOR_TEXT);
+    }
     if (playerSubtitleCount(p) > 0) {  // CC: filled when subtitles show.
         bool on = playerSubtitle(p) >= 0;
         gfxFillRoundRect(CC_X, y + 14, CC_W, CC_H, 6, on ? COLOR_TEXT : COLOR_SURFACE_HI);
@@ -179,15 +185,17 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
     gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, 8, COLOR_ACCENT);
     char info[256];
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   Y subtitles   B back",
+    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   X sound   Y subtitles   B back",
              playerVideoInfo(p), playerAudioInfo(p));
     fontDrawClipped(FONT_REGULAR, 16, MARGIN, y + 82, track_w, info, COLOR_DIM);
 }
 
-TapTarget uiTapPlayer(int x, int y, bool has_subtitles, double *fraction)
+TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)
 {
     int bar_y = GFX_HEIGHT - BAR_H;
-    if (has_subtitles && x >= CC_X - 10 && x < CC_X + CC_W + 10 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
+    if (has_tracks && x >= AUDIO_X - 6 && x < AUDIO_X + AUDIO_W + 6 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
+        return TAP_AUDIO;
+    if (has_subtitles && x >= CC_X - 6 && x < CC_X + CC_W + 10 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
         return TAP_SUBTITLES;
     if (x < MARGIN + 50 && y < 80)
         return TAP_CLOSE;

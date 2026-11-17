@@ -15,9 +15,10 @@ bool audioSystemInit(void);
 void audioSystemExit(void);
 
 // Opens path's sound, paused: audioSetPaused(a, false) starts it (once the
-// picture is ready, so neither waits for the other). NULL if there is none
-// (error empty) or it can't be played (error says why).
-Audio *audioOpen(const char *path, char *error, size_t error_size);
+// picture is ready, so neither waits for the other). track: which of the
+// file's sound tracks (as video.h counts them), or -1 for FFmpeg's pick.
+// NULL if there is none (error empty) or it can't be played (error says why).
+Audio *audioOpen(const char *path, int track, char *error, size_t error_size);
 void audioClose(Audio *a);
 
 // "AAC, 48 kHz, stereo".
@@ -30,3 +31,5 @@ void audioSetPaused(Audio *a, bool paused);
 void audioSeek(Audio *a, int64_t pts_ns);
 // True once everything has been played.
 bool audioFinished(Audio *a);
+// The sound track playing (as video.h counts them).
+int audioTrack(const Audio *a);

@@ -120,7 +120,7 @@ typedef struct {
     char playing_name[BROWSER_NAME_MAX];
     char playing_path[BROWSER_PATH_MAX];
     ResumeList resume;
-    char bar_note[96];          // Said in the player's bar for a while ("Resumed at 12:34").
+    char bar_note[256];         // Said in the player's bar for a while ("Resumed at 12:34").
     uint64_t bar_note_until;
     uint64_t overlay_until;
     unsigned seeks;
@@ -161,6 +161,9 @@ static void startVideo(App *app, uint64_t now)
         app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
     }
     logLine("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
+    for (int i = 0; i < playerAudioTrackCount(app->player); i++)
+        logLine("  sound %d: %s%s", i + 1, playerAudioTrackName(app->player, i),
+                i == playerAudioTrack(app->player) ? " (on)" : "");
     for (int i = 0; i < playerSubtitleCount(app->player); i++)
         logLine("  subtitles %d: %s%s", i + 1, playerSubtitleLabel(app->player, i),
                 i == playerSubtitle(app->player) ? " (on)" : "");
@@ -260,6 +263,27 @@ static void nextSubtitle(App *app, uint64_t now)
     app->overlay_until = now + NOTE_NS;
 }
 
+// The next sound track (after the last: the first), said in the bar.
+static void nextAudioTrack(App *app, uint64_t now)
+{
+    Player *p = app->player;
+    int count = playerAudioTrackCount(p);
+    if (count < 2) {
+        snprintf(app->bar_note, sizeof(app->bar_note), "This video has one sound track.");
+    } else {
+        int next = (playerAudioTrack(p) + 1) % count;
+        char error[160];
+        if (playerSetAudioTrack(p, next, now, error, sizeof(error)))
+            snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s", playerAudioTrackName(p, next));
+        else
+            snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s. %s", playerAudioTrackName(p, next), error);
+        logLine("  sound track %d: %s", next + 1, playerAudioInfo(p));
+        app->seeks++;
+    }
+    app->bar_note_until = now + NOTE_NS;
+    app->overlay_until = now + NOTE_NS;
+}
+
 // False when playback should end (back to the list).
 static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
@@ -273,6 +297,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         playerTogglePause(p, now);
     if (pressed & HidNpadButton_Y)
         nextSubtitle(app, now);
+    if (pressed & HidNpadButton_X)
+        nextAudioTrack(app, now);
     if (pressed & HidNpadButton_ZL) {  // From the start.
         playerSeekTo(p, 0, now);
         app->seeks++;
@@ -289,9 +315,10 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     }
     if (touch.type == TOUCH_TAP && overlay) {  // A first tap only shows the bar.
         double fraction = 0;
-        switch (uiTapPlayer(touch.x, touch.y, playerSubtitleCount(p) > 0, &fraction)) {
+        switch (uiTapPlayer(touch.x, touch.y, playerSubtitleCount(p) > 0, playerAudioTrackCount(p) > 1, &fraction)) {
         case TAP_CLOSE: return false;
         case TAP_SUBTITLES: nextSubtitle(app, now); break;
+        case TAP_AUDIO: nextAudioTrack(app, now); break;
         case TAP_SEEK:
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
             app->seeks++;

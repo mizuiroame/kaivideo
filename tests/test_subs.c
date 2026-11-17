@@ -96,6 +96,16 @@ static void testLanguages(void)
     CHECK(strcmp(subsLanguageName("xyz"), "xyz") == 0);  // Unknown: as it is.
     CHECK(strcmp(subsLanguageName("e"), "e") == 0);      // Not a prefix match.
     CHECK(subsLanguageName("") == NULL && subsLanguageName(NULL) == NULL);
+
+    char name[64];
+    subsTrackName(name, sizeof(name), "Commentary", "eng", 2);
+    CHECK(strcmp(name, "Commentary") == 0);
+    subsTrackName(name, sizeof(name), "", "jpn", 2);
+    CHECK(strcmp(name, "Japanese") == 0);
+    subsTrackName(name, sizeof(name), NULL, "und", 3);
+    CHECK(strcmp(name, "Track 3") == 0);
+    subsTrackName(name, sizeof(name), NULL, NULL, 1);
+    CHECK(strcmp(name, "Track 1") == 0);
 }
 
 void testSubs(void)

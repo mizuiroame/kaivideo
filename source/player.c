@@ -13,6 +13,8 @@
 struct Player {
     Video *video;
     Audio *audio;
+    char path[512];
+    int audio_track;         // The sound track chosen (video.h's numbering), -1 before one is.
     char audio_info[160];
     bool paused;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
@@ -71,8 +73,10 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
         free(p);
         return NULL;
     }
+    snprintf(p->path, sizeof(p->path), "%s", path);
     char why[160];
-    p->audio = audioOpen(path, why, sizeof(why));
+    p->audio = audioOpen(path, -1, why, sizeof(why));
+    p->audio_track = p->audio ? audioTrack(p->audio) : -1;
     if (p->audio)
         snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
     else
@@ -239,4 +243,39 @@ void playerSize(const Player *p, int *width, int *height, double *aspect)
 VideoStats playerStats(const Player *p)
 {
     return videoStats(p->video);
+}
+
+int playerAudioTrackCount(const Player *p)
+{
+    return videoAudioTrackCount(p->video);
+}
+
+const char *playerAudioTrackName(const Player *p, int track)
+{
+    return videoAudioTrackName(p->video, track);
+}
+
+int playerAudioTrack(const Player *p)
+{
+    return p->audio_track;
+}
+
+bool playerSetAudioTrack(Player *p, int track, uint64_t now_ns, char *error, size_t error_size)
+{
+    error[0] = '\0';
+    if (track < 0 || track >= playerAudioTrackCount(p))
+        return false;
+    // The old sound stops; the new one opens and, like a seek, waits for the
+    // picture at the same spot, so they stay together.
+    int64_t at = p->position_ns;
+    audioClose(p->audio);
+    p->audio = audioOpen(p->path, track, error, error_size);
+    p->audio_track = track;
+    if (p->audio)
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
+    else
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", error[0] ? error : "No sound");
+    p->own_clock = !p->audio;
+    playerSeekTo(p, at, now_ns);
+    return p->audio != NULL;
 }

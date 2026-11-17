@@ -71,6 +71,8 @@ struct Video {
 
     SubStream subs[VIDEO_SUB_TRACKS];
     int sub_count;
+    char audio_names[VIDEO_AUDIO_TRACKS][64];
+    int audio_count;
 };
 
 // --- Reading the file (FFmpeg has no file protocol in this build) ---
@@ -395,13 +397,8 @@ static void openSubtitles(Video *v)
         s->preferred = st->disposition & (AV_DISPOSITION_DEFAULT | AV_DISPOSITION_FORCED);
         const AVDictionaryEntry *title = av_dict_get(st->metadata, "title", NULL, 0);
         const AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
-        const char *language = lang && strcmp(lang->value, "und") != 0 ? subsLanguageName(lang->value) : NULL;
-        if (title && title->value[0])
-            snprintf(s->label, sizeof(s->label), "%s", title->value);
-        else if (language)
-            snprintf(s->label, sizeof(s->label), "%s", language);
-        else
-            snprintf(s->label, sizeof(s->label), "Track %d", v->sub_count + 1);
+        subsTrackName(s->label, sizeof(s->label), title ? title->value : NULL, lang ? lang->value : NULL,
+                      v->sub_count + 1);
         v->sub_count++;
     }
 }
@@ -470,6 +467,16 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
         return NULL;
     }
     openSubtitles(v);
+    for (unsigned i = 0; i < v->fmt->nb_streams && v->audio_count < VIDEO_AUDIO_TRACKS; i++) {
+        AVStream *as = v->fmt->streams[i];
+        if (as->codecpar->codec_type != AVMEDIA_TYPE_AUDIO)
+            continue;
+        const AVDictionaryEntry *title = av_dict_get(as->metadata, "title", NULL, 0);
+        const AVDictionaryEntry *lang = av_dict_get(as->metadata, "language", NULL, 0);
+        subsTrackName(v->audio_names[v->audio_count], sizeof(v->audio_names[0]), title ? title->value : NULL,
+                      lang ? lang->value : NULL, v->audio_count + 1);
+        v->audio_count++;
+    }
     if (pthread_create(&v->thread, NULL, decodeThread, v) != 0) {
         snprintf(error, error_size, "The decoding thread can't start.");
         videoClose(v);
@@ -631,4 +638,16 @@ bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size
     bool on = subsAt(&v->subs[track].track, pos_ns, out, size);
     pthread_mutex_unlock(&v->lock);
     return on;
+}
+
+// --- Sound tracks ---
+
+int videoAudioTrackCount(const Video *v)
+{
+    return v->audio_count;
+}
+
+const char *videoAudioTrackName(const Video *v, int track)
+{
+    return track >= 0 && track < v->audio_count ? v->audio_names[track] : "";
 }

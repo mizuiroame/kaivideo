@@ -42,6 +42,10 @@ void subsClean(char *text);
 // the common ones; any other code comes back as it is, NULL or "" as NULL.
 const char *subsLanguageName(const char *code);
 
+// A track's name in a list (subtitles or sound): its title, else its
+// language's name, else "Track <number>". "und" counts as no language.
+void subsTrackName(char *out, size_t size, const char *title, const char *language, int number);
+
 // The .srt file for a video: "name.srt", else "name.<anything>.srt" (by
 // name), in its folder. False if there's none.
 bool subsFindFor(const char *video_path, char *out, size_t size);

@@ -263,6 +263,17 @@ const char *subsLanguageName(const char *code)
     return code;
 }
 
+void subsTrackName(char *out, size_t size, const char *title, const char *language, int number)
+{
+    const char *name = language && strcmp(language, "und") != 0 ? subsLanguageName(language) : NULL;
+    if (title && title[0])
+        snprintf(out, size, "%s", title);
+    else if (name)
+        snprintf(out, size, "%s", name);
+    else
+        snprintf(out, size, "Track %d", number);
+}
+
 bool subsFindFor(const char *video_path, char *out, size_t size)
 {
     char folder[512], base[256];
