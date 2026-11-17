@@ -32,10 +32,16 @@ const char *videoDescription(const Video *v);
 // The picture's size and shape: width / height as shown (sample aspect included).
 void videoSize(const Video *v, int *width, int *height, double *aspect);
 
-// The frame to show at now_ns (monotonic): the latest whose time has come;
-// the clock starts with the first frame. NULL before the first. The frame
-// stays valid until the next call.
-const GfxVideoFrame *videoFrameAt(Video *v, uint64_t now_ns);
-// True once the last frame has been shown, or decoding failed (see error).
+// The frame to show when playback is at media_ns (the file's time): the
+// latest whose time has come. NULL before the first. The frame stays valid
+// until the next call.
+const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns);
+// The time of the next frame waiting to be shown; false if none is decoded yet.
+bool videoNextPts(Video *v, int64_t *pts_ns);
+// Goes to pts_ns: from the keyframe before it, frames before it aren't shown.
+void videoSeek(Video *v, int64_t pts_ns);
+// The file's length, or 0 if it doesn't say.
+int64_t videoDuration(const Video *v);
+// True once every frame has been shown, or decoding failed (see error).
 bool videoFinished(Video *v, char *error, size_t error_size);
 VideoStats videoStats(const Video *v);

@@ -12,7 +12,7 @@
 
 #define IO_BUFFER (256 * 1024)
 #define SUBMIT_TIMEOUT_NS 2000000ull
-#define SUBMIT_TRIES 2500          // About 5 seconds of retries before giving up.
+#define SUBMIT_TRIES 2500             // About 5 seconds of retries before giving up.
 #define TAIL_TIMEOUT_NS 300000000ull  // After the last sample: how long to wait for frames.
 
 typedef struct {
@@ -27,6 +27,7 @@ struct Video {
     AVBSFContext *bsf;
     int stream;
     AVRational time_base;
+    int64_t duration_ns;
     VideoDecoder decoder;
     bool decoder_open;
     char description[96];
@@ -37,18 +38,19 @@ struct Video {
     pthread_t thread;
     bool thread_started;
     pthread_mutex_t lock;
-    pthread_cond_t space;          // A slot came free (or stop).
+    pthread_cond_t wake;           // A slot came free, a seek came, or stop.
     Slot slots[VIDEO_QUEUE];       // Decoded frames, oldest at head.
     int head, count;
     Slot shown;                    // The frame being shown: its buffers swap with a slot's.
     GfxVideoFrame frame;
     volatile bool stop;
-    bool done;                     // The thread has decoded all it will.
+    bool seek_requested;
+    int64_t seek_ns;
+    int64_t skip_until_ns;         // After a seek: frames before this aren't kept.
+    bool done;                     // The thread has decoded all there is.
     bool failed;
     char error[128];
 
-    bool clock_started;
-    int64_t clock_offset_ns;       // now - pts of the frames shown.
     unsigned frame_id;
     VideoStats stats;
     double copy_total_ms;
@@ -87,19 +89,33 @@ static void fail(Video *v, const char *message)
     pthread_mutex_unlock(&v->lock);
 }
 
+// True when the thread should drop what it's doing: stop, or a seek.
+static bool interrupted(Video *v)
+{
+    pthread_mutex_lock(&v->lock);
+    bool yes = v->stop || v->seek_requested;
+    pthread_mutex_unlock(&v->lock);
+    return yes;
+}
+
 // Moves every frame the decoder has ready into the queue, waiting up to
-// timeout_ns for the first; waits for room when the queue is full. False when stopped.
+// timeout_ns for the first; waits for room when the queue is full. False when interrupted.
 static bool takeFrames(Video *v, u64 timeout_ns)
 {
     VideoFrame f;
-    while (!v->stop && R_SUCCEEDED(videoDecoderGetFrame(&v->decoder, &f, timeout_ns))) {
+    while (R_SUCCEEDED(videoDecoderGetFrame(&v->decoder, &f, timeout_ns))) {
         timeout_ns = 0;
+        if (f.timestamp_ns < v->skip_until_ns) {  // Before a seek's target: decoded only to get there.
+            videoDecoderReleaseFrame(&v->decoder, &f);
+            continue;
+        }
         pthread_mutex_lock(&v->lock);
-        while (v->count == VIDEO_QUEUE && !v->stop)
-            pthread_cond_wait(&v->space, &v->lock);
+        while (v->count == VIDEO_QUEUE && !v->stop && !v->seek_requested)
+            pthread_cond_wait(&v->wake, &v->lock);
+        bool stop = v->stop || v->seek_requested;
         Slot *s = &v->slots[(v->head + v->count) % VIDEO_QUEUE];
         pthread_mutex_unlock(&v->lock);
-        if (v->stop) {
+        if (stop) {
             videoDecoderReleaseFrame(&v->decoder, &f);
             return false;
         }
@@ -111,19 +127,24 @@ static bool takeFrames(Video *v, u64 timeout_ns)
         if (R_FAILED(rc))
             continue;
         pthread_mutex_lock(&v->lock);
-        v->count++;
-        v->stats.decoded++;
-        v->copy_total_ms += ms;
+        bool seeking = v->seek_requested;  // A seek came while copying: this frame is from before.
+        if (!seeking) {
+            v->count++;
+            v->stats.decoded++;
+            v->copy_total_ms += ms;
+        }
         pthread_mutex_unlock(&v->lock);
+        if (seeking)
+            return false;
     }
-    return !v->stop;
+    return !interrupted(v);
 }
 
 static bool submit(Video *v, const AVPacket *p, bool last)
 {
     int64_t ts = p->pts != AV_NOPTS_VALUE ? p->pts : p->dts != AV_NOPTS_VALUE ? p->dts : 0;
     s64 ns = av_rescale_q(ts, v->time_base, (AVRational){1, 1000000000});
-    for (int tries = 0; tries < SUBMIT_TRIES && !v->stop; tries++) {
+    for (int tries = 0; tries < SUBMIT_TRIES; tries++) {
         if (!takeFrames(v, 0))
             return false;
         Result rc = videoDecoderSubmit(&v->decoder, p->data, p->size, ns, last, SUBMIT_TIMEOUT_NS);
@@ -136,18 +157,34 @@ static bool submit(Video *v, const AVPacket *p, bool last)
             return false;
         }
     }
-    if (!v->stop)
+    if (!interrupted(v))
         fail(v, "The video decoder stopped taking the video.");
     return false;
 }
 
-// Gives the decoder the stream's packets, one behind, so the last can say it's the last.
-static void *decodeThread(void *arg)
+// Goes to the keyframe before target and drops everything decoded or queued.
+static void doSeek(Video *v, int64_t target_ns)
 {
-    Video *v = arg;
-    AVPacket *pkt = av_packet_alloc(), *held = av_packet_alloc();
-    bool have_held = false, ok = pkt && held;
-    while (ok && !v->stop && av_read_frame(v->fmt, pkt) >= 0) {
+    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, v->time_base);
+    av_seek_frame(v->fmt, v->stream, ts, AVSEEK_FLAG_BACKWARD);
+    if (v->bsf)
+        av_bsf_flush(v->bsf);
+    videoDecoderFlush(&v->decoder);
+    v->skip_until_ns = target_ns;
+    pthread_mutex_lock(&v->lock);
+    v->head = 0;
+    v->count = 0;
+    v->done = false;
+    pthread_cond_broadcast(&v->wake);
+    pthread_mutex_unlock(&v->lock);
+}
+
+// Reads to the end of the file: the stream's packets go to the decoder one
+// behind, so the last can say it's the last. False if interrupted or failed.
+static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
+{
+    bool have_held = false;
+    while (!interrupted(v) && av_read_frame(v->fmt, pkt) >= 0) {
         if (pkt->stream_index != v->stream) {
             av_packet_unref(pkt);
             continue;
@@ -157,24 +194,50 @@ static void *decodeThread(void *arg)
             continue;
         }
         // Without a filter, the packet itself is the sample.
-        while (ok && !v->stop && (v->bsf ? av_bsf_receive_packet(v->bsf, pkt) >= 0 : pkt->size > 0)) {
-            if (have_held)
-                ok = submit(v, held, false);
+        while (v->bsf ? av_bsf_receive_packet(v->bsf, pkt) >= 0 : pkt->size > 0) {
+            if (have_held && !submit(v, held, false)) {
+                av_packet_unref(pkt);
+                av_packet_unref(held);
+                return false;
+            }
             av_packet_unref(held);
             av_packet_move_ref(held, pkt);
             have_held = true;
         }
         av_packet_unref(pkt);
     }
-    if (ok && have_held && !v->stop)
-        ok = submit(v, held, true);
-    if (ok)
-        takeFrames(v, TAIL_TIMEOUT_NS);
+    bool ok = !interrupted(v) && (!have_held || submit(v, held, true));
+    av_packet_unref(held);
+    return ok && takeFrames(v, TAIL_TIMEOUT_NS);
+}
+
+static void *decodeThread(void *arg)
+{
+    Video *v = arg;
+    AVPacket *pkt = av_packet_alloc(), *held = av_packet_alloc();
+    if (!pkt || !held)
+        fail(v, "Out of memory.");
+    while (pkt && held) {
+        pthread_mutex_lock(&v->lock);
+        bool stop = v->stop, seek = v->seek_requested;
+        int64_t target = v->seek_ns;
+        v->seek_requested = false;
+        pthread_mutex_unlock(&v->lock);
+        if (stop)
+            break;
+        if (seek)
+            doSeek(v, target);
+        if (decodeToEnd(v, pkt, held) || !interrupted(v)) {
+            // The end (or a failure): wait for a seek back, or to stop.
+            pthread_mutex_lock(&v->lock);
+            v->done = true;
+            while (!v->stop && !v->seek_requested)
+                pthread_cond_wait(&v->wake, &v->lock);
+            pthread_mutex_unlock(&v->lock);
+        }
+    }
     av_packet_free(&pkt);
     av_packet_free(&held);
-    pthread_mutex_lock(&v->lock);
-    v->done = true;
-    pthread_mutex_unlock(&v->lock);
     return NULL;
 }
 
@@ -208,12 +271,8 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     }
     if (filter) {
         const AVBitStreamFilter *spec = av_bsf_get_by_name(filter);
-        if (!spec || av_bsf_alloc(spec, &v->bsf) < 0 || avcodec_parameters_copy(v->bsf->par_in, par) < 0) {
-            snprintf(error, error_size, "The video can't be prepared for the decoder.");
-            return false;
-        }
-        v->bsf->time_base_in = st->time_base;
-        if (av_bsf_init(v->bsf) < 0) {
+        if (!spec || av_bsf_alloc(spec, &v->bsf) < 0 || avcodec_parameters_copy(v->bsf->par_in, par) < 0 ||
+            (v->bsf->time_base_in = st->time_base, av_bsf_init(v->bsf) < 0)) {
             snprintf(error, error_size, "The video can't be prepared for the decoder.");
             return false;
         }
@@ -250,7 +309,7 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
         return NULL;
     }
     pthread_mutex_init(&v->lock, NULL);
-    pthread_cond_init(&v->space, NULL);
+    pthread_cond_init(&v->wake, NULL);
     v->file = fopen(path, "rb");
     if (!v->file) {
         snprintf(error, error_size, "The file can't be opened.");
@@ -283,6 +342,7 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
     AVStream *st = v->fmt->streams[v->stream];
     AVCodecParameters *par = st->codecpar;
     v->time_base = st->time_base;
+    v->duration_ns = v->fmt->duration > 0 ? av_rescale(v->fmt->duration, 1000000000, AV_TIME_BASE) : 0;
     v->width = par->width & ~1;
     v->height = par->height & ~1;
     AVRational sar = av_guess_sample_aspect_ratio(v->fmt, st, NULL);
@@ -320,7 +380,7 @@ void videoClose(Video *v)
     if (v->thread_started) {
         pthread_mutex_lock(&v->lock);
         v->stop = true;
-        pthread_cond_broadcast(&v->space);
+        pthread_cond_broadcast(&v->wake);
         pthread_mutex_unlock(&v->lock);
         pthread_join(v->thread, NULL);
     }
@@ -340,7 +400,7 @@ void videoClose(Video *v)
         free(s->y);
         free(s->uv);
     }
-    pthread_cond_destroy(&v->space);
+    pthread_cond_destroy(&v->wake);
     pthread_mutex_destroy(&v->lock);
     free(v);
 }
@@ -359,16 +419,17 @@ void videoSize(const Video *v, int *width, int *height, double *aspect)
     *aspect = v->aspect;
 }
 
-const GfxVideoFrame *videoFrameAt(Video *v, uint64_t now_ns)
+int64_t videoDuration(const Video *v)
+{
+    return v->duration_ns;
+}
+
+const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
 {
     bool taken = false;
     pthread_mutex_lock(&v->lock);
-    if (!v->clock_started && v->count > 0) {
-        v->clock_started = true;
-        v->clock_offset_ns = (int64_t)now_ns - v->slots[v->head].pts_ns;
-    }
     // Every frame whose time has come: the latest is shown, the others were late.
-    while (v->count > 0 && v->slots[v->head].pts_ns + v->clock_offset_ns <= (int64_t)now_ns) {
+    while (v->count > 0 && v->slots[v->head].pts_ns <= media_ns) {
         if (taken)
             v->stats.dropped++;
         Slot due = v->slots[v->head];
@@ -380,7 +441,7 @@ const GfxVideoFrame *videoFrameAt(Video *v, uint64_t now_ns)
     }
     if (taken) {
         v->stats.shown++;
-        pthread_cond_signal(&v->space);
+        pthread_cond_signal(&v->wake);
     }
     pthread_mutex_unlock(&v->lock);
     if (taken) {
@@ -393,10 +454,30 @@ const GfxVideoFrame *videoFrameAt(Video *v, uint64_t now_ns)
     return v->frame_id ? &v->frame : NULL;
 }
 
+bool videoNextPts(Video *v, int64_t *pts_ns)
+{
+    pthread_mutex_lock(&v->lock);
+    bool have = v->count > 0;
+    if (have)
+        *pts_ns = v->slots[v->head].pts_ns;
+    pthread_mutex_unlock(&v->lock);
+    return have;
+}
+
+void videoSeek(Video *v, int64_t pts_ns)
+{
+    pthread_mutex_lock(&v->lock);
+    v->seek_requested = true;
+    v->seek_ns = pts_ns < 0 ? 0 : pts_ns;
+    v->count = 0;  // What's queued is from before; the thread empties it properly too.
+    pthread_cond_broadcast(&v->wake);
+    pthread_mutex_unlock(&v->lock);
+}
+
 bool videoFinished(Video *v, char *error, size_t error_size)
 {
     pthread_mutex_lock(&v->lock);
-    bool finished = v->failed || (v->done && v->count == 0);
+    bool finished = v->failed || (v->done && v->count == 0 && !v->seek_requested);
     if (v->failed && error)
         snprintf(error, error_size, "%s", v->error);
     else if (error && error_size)
