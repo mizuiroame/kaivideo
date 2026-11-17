@@ -123,7 +123,12 @@ bool browserUp(Browser *b)
 
 bool browserSelectedPath(const Browser *b, char *out, size_t size)
 {
-    return b->cursor < b->count && join(out, size, b->path, b->items[b->cursor].name);
+    return browserEntryPath(b, b->cursor, out, size);
+}
+
+bool browserEntryPath(const Browser *b, size_t i, char *out, size_t size)
+{
+    return i < b->count && join(out, size, b->path, b->items[i].name);
 }
 
 void browserSelect(Browser *b, const char *name)

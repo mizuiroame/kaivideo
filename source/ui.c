@@ -54,7 +54,7 @@ static void formatSize(int64_t bytes, char *out, size_t size)
         snprintf(out, size, "%.0f MB", bytes / 1048576.0);
 }
 
-void uiDrawBrowser(const Browser *b, const char *message)
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message)
 {
     gfxClear(COLOR_BG);
     int title_w = fontDraw(FONT_BOLD, 26, MARGIN, 18, "KaiVideo", COLOR_ACCENT);
@@ -92,6 +92,15 @@ void uiDrawBrowser(const Browser *b, const char *message)
         int text_x = MARGIN + ICON + 18;
         int name_w = GFX_WIDTH - MARGIN - text_x - (size_w ? size_w + 24 : 0);
         fontDrawClipped(FONT_BOLD, 21, text_x, y + (UI_ROW_H - 30) / 2, name_w, e->name, COLOR_TEXT);
+        // Started before: how far, as a thin bar under the name.
+        char path[BROWSER_PATH_MAX];
+        int64_t at, len;
+        if (!e->is_dir && resume && browserEntryPath(b, i, path, sizeof(path)) &&
+            resumeFind(resume, path, &at, &len) && len > 0) {
+            int bar_w = name_w < 220 ? name_w : 220, done = (int)(bar_w * ((double)at / len));
+            gfxFillRoundRect(text_x, y + UI_ROW_H - 12, bar_w, 4, 2, COLOR_TRACK);
+            gfxFillRoundRect(text_x, y + UI_ROW_H - 12, done > 4 ? done : 4, 4, 2, COLOR_ACCENT);
+        }
         if (size[0])
             fontDrawMiddle(FONT_REGULAR, 17, GFX_WIDTH - MARGIN - size_w, y + UI_ROW_H / 2.0f, size, COLOR_DIM);
     }
@@ -122,7 +131,7 @@ TapTarget uiTapBrowser(const Browser *b, int x, int y, size_t *row)
 
 // --- The player's bar ---
 
-void uiDrawPlayerBar(const Player *p, const char *name)
+void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
 {
     // The close button, top left.
     gfxFillCircle(MARGIN + 14, 36, 22, GFX_RGB(0, 0, 0));
@@ -134,6 +143,8 @@ void uiDrawPlayerBar(const Player *p, const char *name)
     for (int i = 0; i < 12; i++)
         gfxBlendRect(0, y - 60 + i * 5, GFX_WIDTH, 5, GFX_RGB(0, 0, 0), (unsigned)(i * 200 / 12));
     gfxBlendRect(0, y, GFX_WIDTH, BAR_H, GFX_RGB(0, 0, 0), 200);
+    if (note && note[0])
+        fontDraw(FONT_BOLD, 18, MARGIN, y - 34, note, COLOR_ACCENT);
     if (playerPaused(p)) {
         gfxTriangle(MARGIN, y + 18, MARGIN, y + 44, MARGIN + 22, y + 31, COLOR_TEXT);  // Press to play.
     } else {
@@ -155,7 +166,7 @@ void uiDrawPlayerBar(const Player *p, const char *name)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
     gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, 8, COLOR_ACCENT);
     char info[256];
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   B back",
+    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   B back",
              playerVideoInfo(p), playerAudioInfo(p));
     fontDrawClipped(FONT_REGULAR, 16, MARGIN, y + 82, track_w, info, COLOR_DIM);
 }

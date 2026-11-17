@@ -17,12 +17,15 @@
 #include "gfx.h"
 #include "input.h"
 #include "player.h"
+#include "resume.h"
 #include "touch.h"
 #include "ui.h"
+#include "util.h"
 
 #define CONFIG_FOLDER "sdmc:/config/kaivideo"
 #define CONFIG_PATH CONFIG_FOLDER "/settings.txt"
 #define LOG_PATH CONFIG_FOLDER "/kaivideo.log"
+#define RESUME_FILE CONFIG_FOLDER "/resume.txt"
 #define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define SEEK_SHORT_NS 10000000000ll
@@ -106,6 +109,10 @@ typedef struct {
     Browser browser;
     Player *player;
     char playing_name[BROWSER_NAME_MAX];
+    char playing_path[BROWSER_PATH_MAX];
+    ResumeList resume;
+    char bar_note[96];          // Said in the player's bar for a while ("Resumed at 12:34").
+    uint64_t bar_note_until;
     uint64_t overlay_until;
     unsigned seeks;
     uint64_t started;
@@ -133,6 +140,17 @@ static void startVideo(App *app, uint64_t now)
         return;
     }
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", app->browser.items[app->browser.cursor].name);
+    snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
+    app->bar_note[0] = '\0';
+    int64_t resume_at;
+    if (resumeFind(&app->resume, path, &resume_at, NULL)) {
+        // Where it was left: go on from there, and say how to start over.
+        playerSeekTo(app->player, resume_at, now);
+        char at[16];
+        utilFormatTime(at, sizeof(at), resume_at / 1e9);
+        snprintf(app->bar_note, sizeof(app->bar_note), "Resumed at %s  \xC2\xB7  ZL from the start", at);
+        app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
+    }
     logLine("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
     app->overlay_until = now + OVERLAY_NS;
     app->seeks = 0;
@@ -140,8 +158,12 @@ static void startVideo(App *app, uint64_t now)
     saveFolder(app->browser.path);
 }
 
-static void stopVideo(App *app, const char *error)
+static void stopVideo(App *app, const char *error, bool ended)
 {
+    // Remember where it was left (or, watched to the end, forget it).
+    int64_t duration = playerDuration(app->player);
+    resumeRemember(&app->resume, app->playing_path, ended ? duration : playerPosition(app->player), duration);
+    resumeSave(&app->resume, RESUME_FILE);
     VideoStats s = playerStats(app->player);
     logLine("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
             error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
@@ -216,6 +238,11 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         return false;
     if (pressed & HidNpadButton_A)
         playerTogglePause(p, now);
+    if (pressed & HidNpadButton_ZL) {  // From the start.
+        playerSeekTo(p, 0, now);
+        app->seeks++;
+        app->bar_note[0] = '\0';
+    }
     int64_t seek = (pressed & BUTTONS_LEFT)    ? -SEEK_SHORT_NS
                    : (pressed & BUTTONS_RIGHT) ? SEEK_SHORT_NS
                    : (pressed & HidNpadButton_L) ? -SEEK_LONG_NS
@@ -256,7 +283,7 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     if (frame)
         gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
     if (playerPaused(app->player) || now < app->overlay_until)
-        uiDrawPlayerBar(app->player, app->playing_name);
+        uiDrawPlayerBar(app->player, app->playing_name, now < app->bar_note_until ? app->bar_note : NULL);
 }
 
 int main(int argc, char **argv)
@@ -282,6 +309,7 @@ int main(int argc, char **argv)
     static App app;
     char folder[BROWSER_PATH_MAX];
     loadFolder(folder, sizeof(folder));
+    resumeLoad(&app.resume, RESUME_FILE);
     if (!browserOpen(&app.browser, folder))
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
     InputRepeat repeat;
@@ -298,13 +326,16 @@ int main(int argc, char **argv)
         if (app.player) {
             char error[160] = "";
             bool keep = playerInput(&app, pressed, t, now);
-            if (keep && playerFinished(app.player, error, sizeof(error)))
+            bool ended = false;
+            if (keep && playerFinished(app.player, error, sizeof(error))) {
                 keep = false;
+                ended = !error[0];
+            }
             if (!keep) {
-                stopVideo(&app, error);
+                stopVideo(&app, error, ended);
                 if (error[0])
                     showMessage(&app, error, now);
-                uiDrawBrowser(&app.browser, now < app.message_until ? app.message : NULL);
+                uiDrawBrowser(&app.browser, &app.resume, now < app.message_until ? app.message : NULL);
             } else {
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             }
@@ -313,12 +344,12 @@ int main(int argc, char **argv)
             if (app.player)
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             else
-                uiDrawBrowser(&app.browser, now < app.message_until ? app.message : NULL);
+                uiDrawBrowser(&app.browser, &app.resume, now < app.message_until ? app.message : NULL);
         }
         gfxEnd();
     }
     if (app.player)
-        stopVideo(&app, NULL);
+        stopVideo(&app, NULL, false);
     saveFolder(app.browser.path);
     browserFree(&app.browser);
     logLine("Done.");

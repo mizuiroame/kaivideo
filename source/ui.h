@@ -7,6 +7,7 @@
 
 #include "browser.h"
 #include "player.h"
+#include "resume.h"
 
 #define UI_LIST_Y 76
 #define UI_ROW_H 58
@@ -15,10 +16,12 @@
 // The first row shown so that the cursor stays in view.
 size_t uiFirstVisible(size_t cursor, size_t count);
 
-// The folder list; message (an error, for a while) replaces the help line.
-void uiDrawBrowser(const Browser *b, const char *message);
-// The bar over a playing video, and the close button above it.
-void uiDrawPlayerBar(const Player *p, const char *name);
+// The folder list, with how far each video has been watched; message (an
+// error, for a while) replaces the help line.
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message);
+// The bar over a playing video, and the close button above it; note, if
+// any, is said above the bar ("Resumed at 12:34").
+void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
 
 typedef enum {
     TAP_NOTHING,

@@ -36,5 +36,7 @@ bool browserEnter(Browser *b);
 bool browserUp(Browser *b);
 // The full path of the entry under the cursor. False if there is none.
 bool browserSelectedPath(const Browser *b, char *out, size_t size);
+// The full path of entry i. False if there is none.
+bool browserEntryPath(const Browser *b, size_t i, char *out, size_t size);
 // Puts the cursor on the entry with this name, if there is one.
 void browserSelect(Browser *b, const char *name);
