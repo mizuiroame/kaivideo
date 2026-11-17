@@ -401,6 +401,7 @@ Audio *audioOpen(const char *path, char *error, size_t error_size)
             return NULL;
         }
     }
+    a->paused = true;  // Until the player says the picture is ready.
     if (R_FAILED(threadCreate(&a->thread, audioThread, a, NULL, THREAD_STACK_SIZE, THREAD_PRIORITY, -2)) ||
         R_FAILED(threadStart(&a->thread))) {
         snprintf(error, error_size, "The sound thread can't start.");

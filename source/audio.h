@@ -14,8 +14,9 @@ typedef struct Audio Audio;
 bool audioSystemInit(void);
 void audioSystemExit(void);
 
-// Opens path's sound and starts playing it. NULL if there is none (error
-// empty) or it can't be played (error says why).
+// Opens path's sound, paused: audioSetPaused(a, false) starts it (once the
+// picture is ready, so neither waits for the other). NULL if there is none
+// (error empty) or it can't be played (error says why).
 Audio *audioOpen(const char *path, char *error, size_t error_size);
 void audioClose(Audio *a);
 

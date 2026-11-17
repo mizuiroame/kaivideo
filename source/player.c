@@ -12,7 +12,7 @@ struct Player {
     Audio *audio;
     char audio_info[160];
     bool paused;
-    bool started;            // The first frame has been shown.
+    bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
     int64_t position_ns;     // Where playback is, in the file's time.
     // The console's clock, when it's the one: position = base_pos + (now - base_now).
     bool own_clock;
@@ -40,6 +40,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     else
         snprintf(p->audio_info, sizeof(p->audio_info), "%s", why[0] ? why : "No sound");
     p->own_clock = !p->audio;
+    p->holding = true;  // The sound starts with the first frame (it opens paused).
     p->waiting_since_ns = now_ns;
     return p;
 }
@@ -63,14 +64,18 @@ static void useOwnClock(Player *p, uint64_t now_ns)
 
 const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 {
-    if (!p->started) {
-        // Show the first frame as soon as there is one; time starts from it.
+    if (p->holding) {
+        // The first frame (after opening or a seek) is ready: time starts from
+        // it, and the sound with it, so the picture isn't late from the start.
         int64_t first;
         if (videoNextPts(p->video, &first)) {
-            p->started = true;
+            p->holding = false;
             p->position_ns = first;
             p->base_pos_ns = first;
             p->base_now_ns = now_ns;
+            p->waiting_since_ns = now_ns;
+            if (p->audio)
+                audioSetPaused(p->audio, p->paused);
         }
     } else if (p->own_clock) {
         if (!p->paused)
@@ -91,7 +96,7 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 void playerTogglePause(Player *p, uint64_t now_ns)
 {
     p->paused = !p->paused;
-    if (p->audio)
+    if (p->audio && !p->holding)  // While holding, the sound stays paused until the picture's ready.
         audioSetPaused(p->audio, p->paused);
     if (!p->paused) {
         p->base_pos_ns = p->position_ns;  // The console's clock carries on from where it stopped.
@@ -115,8 +120,10 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
     p->position_ns = target;
     p->base_pos_ns = target;
     p->base_now_ns = now_ns;
+    p->holding = true;  // Until the picture has a frame from the target.
     if (p->audio) {
-        // The sound follows, and is the clock again (even if it had ended).
+        // The sound follows, held until then, and is the clock again (even if it had ended).
+        audioSetPaused(p->audio, true);
         audioSeek(p->audio, target);
         p->own_clock = false;
         p->waiting_since_ns = now_ns;
