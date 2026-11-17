@@ -1,0 +1,26 @@
+Lets FFmpeg's configure target Horizon (the Switch's OS), as devkitPro's
+switch-ffmpeg does, without its hardware video decoding changes.
+
+--- a/configure
++++ b/configure
+@@ -5970,6 +5970,9 @@ case $target_os in
+         ;;
+     minix)
+         ;;
++    horizon)
++        enable section_data_rel_ro
++        ;;
+     none)
+         ;;
+     *)
+@@ -7719,6 +7722,10 @@ haiku)
+         disable memalign
+     fi
+     ;;
++horizon)
++    disable sysctl
++    disable sysctlbyname
++    ;;
+ esac
+ 
+ flatten_extralibs(){

@@ -5,3 +5,4 @@ tests/build/
 *.elf
 *.map
 __pycache__/
+testvideos/
