@@ -123,6 +123,11 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
     }
 }
 
+void playerSeekTo(Player *p, int64_t target_ns, uint64_t now_ns)
+{
+    playerSeekBy(p, target_ns - p->position_ns, now_ns);
+}
+
 int64_t playerPosition(const Player *p)
 {
     return p->position_ns;

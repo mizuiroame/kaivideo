@@ -1,40 +1,35 @@
 // KaiVideo: a video player for Switch 2 homebrew (kaiHEN + libounce). Video
 // is decoded by the console's hardware decoder and drawn with the GPU; sound
-// is decoded with FFmpeg and is the clock.
-//
-// For now (stage 3) it plays every video in sdmc:/kaivideo-test, one after
-// another: A pauses, left and right go 10 seconds back or forward, L and R a
-// minute, B goes to the next video and + exits. What each played like goes
-// to sdmc:/kaivideo.log.
-#include <dirent.h>
+// is decoded with FFmpeg and is the clock. Choose a video on the card, then
+// A pauses, left and right go 10 seconds back or forward, L and R a minute,
+// and B goes back to the list. Every control works with touch too.
 #include <stdarg.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <strings.h>
+#include <sys/stat.h>
 
 #include <switch.h>
 
 #include "audio.h"
+#include "browser.h"
+#include "buttons.h"
 #include "font.h"
 #include "gfx.h"
+#include "input.h"
 #include "player.h"
-#include "util.h"
+#include "touch.h"
+#include "ui.h"
 
-#define FOLDER "sdmc:/kaivideo-test"
-#define LOG_PATH "sdmc:/kaivideo.log"
-#define MAX_FILES 64
-#define NAME_MAX_LEN 256
-#define OVERLAY_NS 3000000000ull     // How long the bar stays after a press.
+#define CONFIG_FOLDER "sdmc:/config/kaivideo"
+#define CONFIG_PATH CONFIG_FOLDER "/settings.txt"
+#define LOG_PATH CONFIG_FOLDER "/kaivideo.log"
+#define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
+#define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define SEEK_SHORT_NS 10000000000ll
 #define SEEK_LONG_NS 60000000000ll
-#define MARGIN 40
-#define BAR_H 120
-
-#define COLOR_TEXT GFX_RGB(0xF2, 0xF2, 0xF5)
-#define COLOR_DIM GFX_RGB(0xA4, 0xA4, 0xB0)
-#define COLOR_TRACK GFX_RGB(0x40, 0x40, 0x48)
-#define COLOR_ACCENT GFX_RGB(0xFF, 0x6B, 0x9A)  // KaiPlayer's pink.
+#define SCREEN_W 1280
+#define SCREEN_H 720
+#define PANEL_W 1920  // In case the touch panel reports its own resolution.
 
 static FILE *g_log;
 
@@ -50,141 +45,218 @@ static void logLine(const char *fmt, ...)
     fflush(g_log);
 }
 
-static bool isVideo(const char *name)
-{
-    const char *dot = strrchr(name, '.');
-    return name[0] != '.' && dot && (!strcasecmp(dot, ".mp4") || !strcasecmp(dot, ".mkv") || !strcasecmp(dot, ".webm"));
-}
-
-static int compareNames(const void *a, const void *b)
-{
-    return strcmp((const char *)a, (const char *)b);
-}
-
-static size_t listVideos(char names[][NAME_MAX_LEN], size_t max)
-{
-    DIR *dir = opendir(FOLDER);
-    if (!dir)
-        return 0;
-    size_t count = 0;
-    struct dirent *e;
-    while (count < max && (e = readdir(dir)) != NULL)
-        if (isVideo(e->d_name) && strlen(e->d_name) < NAME_MAX_LEN)
-            strcpy(names[count++], e->d_name);
-    closedir(dir);
-    qsort(names, count, NAME_MAX_LEN, compareNames);
-    return count;
-}
-
-// The largest box with the video's shape that fits the screen, centered (framebuffer pixels).
-static void fit(double aspect, float *x, float *y, float *w, float *h)
-{
-    double screen = (double)GFX_FB_WIDTH / GFX_FB_HEIGHT;
-    if (aspect > screen) {
-        *w = GFX_FB_WIDTH;
-        *h = (float)(GFX_FB_WIDTH / aspect);
-    } else {
-        *h = GFX_FB_HEIGHT;
-        *w = (float)(GFX_FB_HEIGHT * aspect);
-    }
-    *x = (GFX_FB_WIDTH - *w) / 2.0f;
-    *y = (GFX_FB_HEIGHT - *h) / 2.0f;
-}
-
 static uint64_t nowNs(void)
 {
     return armTicksToNs(armGetSystemTick());
 }
 
-// The bar over the bottom of the picture: name, time, progress and formats.
-static void drawOverlay(const Player *p, const char *name)
+// --- The folder kept between runs ---
+
+static void loadFolder(char *out, size_t size)
 {
-    int y = GFX_HEIGHT - BAR_H;
-    // A fade from the picture into the bar, in bands (gradients are opaque).
-    for (int i = 0; i < 12; i++)
-        gfxBlendRect(0, y - 60 + i * 5, GFX_WIDTH, 5, GFX_RGB(0, 0, 0), (unsigned)(i * 200 / 12));
-    gfxBlendRect(0, y, GFX_WIDTH, BAR_H, GFX_RGB(0, 0, 0), 200);
-    if (playerPaused(p)) {  // Two bars: paused.
-        gfxFillRoundRect(MARGIN, y + 18, 7, 26, 2, COLOR_TEXT);
-        gfxFillRoundRect(MARGIN + 13, y + 18, 7, 26, 2, COLOR_TEXT);
-    } else {
-        gfxTriangle(MARGIN, y + 18, MARGIN, y + 44, MARGIN + 22, y + 31, COLOR_TEXT);
+    snprintf(out, size, "%s", BROWSER_ROOT);
+    FILE *f = fopen(CONFIG_PATH, "r");
+    if (!f)
+        return;
+    char line[BROWSER_PATH_MAX + 16];
+    while (fgets(line, sizeof(line), f)) {
+        line[strcspn(line, "\r\n")] = '\0';
+        if (strncmp(line, "folder=sdmc:/", 13) == 0)
+            snprintf(out, size, "%s", line + 7);
     }
-    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, GFX_WIDTH - 2 * MARGIN - 260, name, COLOR_TEXT);
-    char pos[16], len[16], time[40];
-    double position = playerPosition(p) / 1e9, duration = playerDuration(p) / 1e9;
-    utilFormatTime(pos, sizeof(pos), position);
-    utilFormatTime(len, sizeof(len), duration);
-    snprintf(time, sizeof(time), "%s / %s", pos, len);
-    fontDraw(FONT_REGULAR, 20, GFX_WIDTH - MARGIN - fontTextWidth(FONT_REGULAR, 20, time), y + 18, time, COLOR_TEXT);
-    int track_w = GFX_WIDTH - 2 * MARGIN, done = duration > 0 ? (int)(track_w * (position / duration)) : 0;
-    if (done > track_w)
-        done = track_w;
-    gfxFillRoundRect(MARGIN, y + 60, track_w, 6, 3, COLOR_TRACK);
-    if (done > 0)
-        gfxFillRoundRect(MARGIN, y + 60, done, 6, 3, COLOR_ACCENT);
-    gfxFillCircle(MARGIN + done, y + 63, 8, COLOR_ACCENT);
-    char info[256];
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s", playerVideoInfo(p), playerAudioInfo(p));
-    fontDrawClipped(FONT_REGULAR, 16, MARGIN, y + 82, track_w, info, COLOR_DIM);
+    fclose(f);
 }
 
-// Plays one file. Returns false when the user asked to exit.
-static bool play(const char *path, const char *name, PadState *pad)
+static void saveFolder(const char *folder)
 {
-    char error[160];
-    uint64_t start = nowNs();
-    Player *p = playerOpen(path, start, error, sizeof(error));
-    if (!p) {
-        logLine("%s: %s", path, error);
-        return true;
+    mkdir("sdmc:/config", 0777);
+    mkdir(CONFIG_FOLDER, 0777);
+    FILE *f = fopen(CONFIG_PATH, "w");
+    if (!f)
+        return;
+    if (!strpbrk(folder, "\r\n"))
+        fprintf(f, "folder=%s\n", folder);
+    fclose(f);
+}
+
+// --- Touch ---
+
+static TouchEvent readTouch(TouchTracker *tracker, uint64_t now)
+{
+    static bool full_hd;  // Seen coordinates beyond 1280x720: scale them down.
+    HidTouchScreenState state = {0};
+    bool touching = hidGetTouchScreenStates(&state, 1) > 0 && state.count > 0;
+    int x = 0, y = 0;
+    if (touching) {
+        x = (int)state.touches[0].x;
+        y = (int)state.touches[0].y;
+        if (x >= SCREEN_W || y >= SCREEN_H)
+            full_hd = true;
+        if (full_hd) {
+            x = x * SCREEN_W / PANEL_W;
+            y = y * SCREEN_W / PANEL_W;
+        }
     }
-    logLine("%s: %s; %s", path, playerVideoInfo(p), playerAudioInfo(p));
+    return touchUpdate(tracker, touching, x, y, now);
+}
+
+// --- The app ---
+
+typedef struct {
+    Browser browser;
+    Player *player;
+    char playing_name[BROWSER_NAME_MAX];
+    uint64_t overlay_until;
+    unsigned seeks;
+    uint64_t started;
+    char message[200];
+    uint64_t message_until;
+    int drag_rows;
+    bool quit;
+} App;
+
+static void showMessage(App *app, const char *message, uint64_t now)
+{
+    snprintf(app->message, sizeof(app->message), "%s", message);
+    app->message_until = now + MESSAGE_NS;
+}
+
+static void startVideo(App *app, uint64_t now)
+{
+    char path[BROWSER_PATH_MAX], error[160];
+    if (!browserSelectedPath(&app->browser, path, sizeof(path)))
+        return;
+    app->player = playerOpen(path, now, error, sizeof(error));
+    if (!app->player) {
+        logLine("%s: %s", path, error);
+        showMessage(app, error, now);
+        return;
+    }
+    snprintf(app->playing_name, sizeof(app->playing_name), "%s", app->browser.items[app->browser.cursor].name);
+    logLine("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
+    app->overlay_until = now + OVERLAY_NS;
+    app->seeks = 0;
+    app->started = now;
+    saveFolder(app->browser.path);
+}
+
+static void stopVideo(App *app, const char *error)
+{
+    VideoStats s = playerStats(app->player);
+    logLine("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
+            error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
+            s.dropped);
+    playerClose(app->player);
+    app->player = NULL;
+}
+
+// Opens the entry under the cursor: a folder, or a video.
+static void openSelected(App *app, uint64_t now)
+{
+    if (app->browser.cursor >= app->browser.count)
+        return;
+    if (app->browser.items[app->browser.cursor].is_dir) {
+        if (!browserEnter(&app->browser))
+            showMessage(app, "That folder can't be opened.", now);
+    } else {
+        startVideo(app, now);
+    }
+}
+
+static void moveCursor(Browser *b, long delta)
+{
+    if (b->count == 0)
+        return;
+    long next = (long)b->cursor + delta;
+    b->cursor = next < 0 ? 0 : next >= (long)b->count ? b->count - 1 : (size_t)next;
+}
+
+static void browserInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+{
+    if (pressed & HidNpadButton_Plus) {
+        app->quit = true;
+        return;
+    }
+    if (pressed & BUTTONS_UP) moveCursor(&app->browser, -1);
+    if (pressed & BUTTONS_DOWN) moveCursor(&app->browser, 1);
+    if (pressed & BUTTONS_PAGE_UP) moveCursor(&app->browser, -UI_ROWS);
+    if (pressed & BUTTONS_PAGE_DOWN) moveCursor(&app->browser, UI_ROWS);
+    if (pressed & HidNpadButton_A) openSelected(app, now);
+    if (pressed & HidNpadButton_B) browserUp(&app->browser);
+    if (touch.type == TOUCH_TAP) {
+        size_t row;
+        switch (uiTapBrowser(&app->browser, touch.x, touch.y, &row)) {
+        case TAP_UP: browserUp(&app->browser); break;
+        case TAP_ROW:
+            app->browser.cursor = row;
+            openSelected(app, now);
+            break;
+        default: break;
+        }
+    } else if (touch.type == TOUCH_DRAG && touch.start_y >= UI_LIST_Y) {
+        // Dragging up shows the rows below, as on a phone.
+        app->drag_rows -= touch.dy;
+        for (; app->drag_rows >= UI_ROW_H; app->drag_rows -= UI_ROW_H)
+            moveCursor(&app->browser, 1);
+        for (; app->drag_rows <= -UI_ROW_H; app->drag_rows += UI_ROW_H)
+            moveCursor(&app->browser, -1);
+    } else if (touch.type == TOUCH_DRAG_END) {
+        app->drag_rows = 0;
+    }
+}
+
+// False when playback should end (back to the list).
+static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+{
+    Player *p = app->player;
+    bool overlay = playerPaused(p) || now < app->overlay_until;
+    if (pressed || touch.type == TOUCH_TAP)
+        app->overlay_until = now + OVERLAY_NS;
+    if (pressed & (HidNpadButton_B | HidNpadButton_Plus))
+        return false;
+    if (pressed & HidNpadButton_A)
+        playerTogglePause(p, now);
+    int64_t seek = (pressed & BUTTONS_LEFT)    ? -SEEK_SHORT_NS
+                   : (pressed & BUTTONS_RIGHT) ? SEEK_SHORT_NS
+                   : (pressed & HidNpadButton_L) ? -SEEK_LONG_NS
+                   : (pressed & HidNpadButton_R) ? SEEK_LONG_NS
+                                                 : 0;
+    if (seek) {
+        playerSeekBy(p, seek, now);
+        app->seeks++;
+    }
+    if (touch.type == TOUCH_TAP && overlay) {  // A first tap only shows the bar.
+        double fraction = 0;
+        switch (uiTapPlayer(touch.x, touch.y, &fraction)) {
+        case TAP_CLOSE: return false;
+        case TAP_SEEK:
+            playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
+            app->seeks++;
+            break;
+        case TAP_PAUSE:
+        case TAP_PICTURE: playerTogglePause(p, now); break;
+        default: break;
+        }
+    }
+    return true;
+}
+
+static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
+{
     int w, h;
     double aspect;
-    playerSize(p, &w, &h, &aspect);
-    float bx, by, bw, bh;
-    fit(aspect, &bx, &by, &bw, &bh);
-    bool keep_going = true;
-    uint64_t overlay_until = start + OVERLAY_NS;
-    unsigned seeks = 0;
-    while (appletMainLoop()) {
-        padUpdate(pad);
-        uint64_t now = nowNs();
-        u64 down = padGetButtonsDown(pad);
-        if (down)
-            overlay_until = now + OVERLAY_NS;
-        if (down & HidNpadButton_Plus) {
-            keep_going = false;
-            break;
-        }
-        if (down & HidNpadButton_B)
-            break;
-        if (down & HidNpadButton_A)
-            playerTogglePause(p, now);
-        int64_t seek = (down & HidNpadButton_Left) ? -SEEK_SHORT_NS : (down & HidNpadButton_Right) ? SEEK_SHORT_NS
-                       : (down & HidNpadButton_L) ? -SEEK_LONG_NS : (down & HidNpadButton_R) ? SEEK_LONG_NS : 0;
-        if (seek) {
-            playerSeekBy(p, seek, now);
-            seeks++;
-        }
-        if (playerFinished(p, error, sizeof(error)))
-            break;
-        const GfxVideoFrame *frame = playerUpdate(p, now);
-        gfxBegin();
-        gfxClear(GFX_RGB(0, 0, 0));
-        if (frame)
-            gfxDrawVideo(frame, bx, by, bw, bh);
-        if (playerPaused(p) || now < overlay_until)
-            drawOverlay(p, name);
-        gfxEnd();
+    playerSize(app->player, &w, &h, &aspect);
+    // The largest box with the video's shape that fits the screen, centered.
+    float bw = GFX_FB_WIDTH, bh = (float)(GFX_FB_WIDTH / aspect);
+    if (bh > GFX_FB_HEIGHT) {
+        bh = GFX_FB_HEIGHT;
+        bw = (float)(GFX_FB_HEIGHT * aspect);
     }
-    VideoStats s = playerStats(p);
-    double secs = (nowNs() - start) / 1e9;
-    logLine("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late; %.2f ms to take a frame",
-            error[0] ? error : "", error[0] ? "; " : "", secs, seeks, s.decoded, s.shown, s.dropped, s.copy_ms);
-    playerClose(p);
-    return keep_going;
+    gfxClear(GFX_RGB(0, 0, 0));
+    if (frame)
+        gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
+    if (playerPaused(app->player) || now < app->overlay_until)
+        uiDrawPlayerBar(app->player, app->playing_name);
 }
 
 int main(int argc, char **argv)
@@ -194,6 +266,9 @@ int main(int argc, char **argv)
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
+    hidInitializeTouchScreen();
+    mkdir("sdmc:/config", 0777);
+    mkdir(CONFIG_FOLDER, 0777);
     g_log = fopen(LOG_PATH, "w");
     if (!gfxInit() || !fontInit()) {
         logLine("The GPU or the fonts couldn't start.");
@@ -203,15 +278,49 @@ int main(int argc, char **argv)
     }
     if (!audioSystemInit())
         logLine("The audio output couldn't start: videos play silent.");
-    static char names[MAX_FILES][NAME_MAX_LEN];
-    size_t count = listVideos(names, MAX_FILES);
-    logLine("KaiVideo stage 3: %zu videos in " FOLDER, count);
-    char path[NAME_MAX_LEN + 32];
-    for (size_t i = 0; i < count; i++) {
-        snprintf(path, sizeof(path), FOLDER "/%s", names[i]);
-        if (!play(path, names[i], &pad))
-            break;
+
+    static App app;
+    char folder[BROWSER_PATH_MAX];
+    loadFolder(folder, sizeof(folder));
+    if (!browserOpen(&app.browser, folder))
+        browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
+    InputRepeat repeat;
+    inputRepeatInit(&repeat, BUTTONS_REPEATING);
+    TouchTracker touch;
+    touchReset(&touch);
+
+    while (!app.quit && appletMainLoop()) {
+        padUpdate(&pad);
+        uint64_t now = nowNs();
+        uint64_t pressed = inputRepeatUpdate(&repeat, padGetButtonsDown(&pad), padGetButtons(&pad), now);
+        TouchEvent t = readTouch(&touch, now);
+        gfxBegin();
+        if (app.player) {
+            char error[160] = "";
+            bool keep = playerInput(&app, pressed, t, now);
+            if (keep && playerFinished(app.player, error, sizeof(error)))
+                keep = false;
+            if (!keep) {
+                stopVideo(&app, error);
+                if (error[0])
+                    showMessage(&app, error, now);
+                uiDrawBrowser(&app.browser, now < app.message_until ? app.message : NULL);
+            } else {
+                drawPlayer(&app, playerUpdate(app.player, now), now);
+            }
+        } else {
+            browserInput(&app, pressed, t, now);
+            if (app.player)
+                drawPlayer(&app, playerUpdate(app.player, now), now);
+            else
+                uiDrawBrowser(&app.browser, now < app.message_until ? app.message : NULL);
+        }
+        gfxEnd();
     }
+    if (app.player)
+        stopVideo(&app, NULL);
+    saveFolder(app.browser.path);
+    browserFree(&app.browser);
     logLine("Done.");
     audioSystemExit();
     fontExit();
