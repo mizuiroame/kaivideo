@@ -1,8 +1,8 @@
 // Where an app keeps its own files: next to its NRO, as brewstore's path
 // guide asks, in a "config" folder of the app's own folder:
-//   sdmc:/brewstore/apps/kaivideo/KaiVideo.nro -> sdmc:/brewstore/apps/kaivideo/config
-//   sdmc:/switch/kaivideo/KaiVideo.nro         -> sdmc:/switch/kaivideo/config
-//   sdmc:/switch/KaiVideo.nro                  -> sdmc:/switch/kaivideo/config
+//   sdmc:/brewstore/apps/<app>/<App>.nro -> sdmc:/brewstore/apps/<app>/config
+//   sdmc:/switch/<app>/<App>.nro         -> sdmc:/switch/<app>/config
+//   sdmc:/switch/<App>.nro               -> sdmc:/switch/<app>/config
 // (a folder of its own, never files loose in sdmc:/switch). Without a usable
 // NRO path, the fixed folder used before (sdmc:/config/<app>).
 // The same file is in KaiPlayer, KaiRadio and KaiVideo.
