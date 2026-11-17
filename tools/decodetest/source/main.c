@@ -110,9 +110,23 @@ static bool submit(Run *run, const AVPacket *p, AVRational time_base, Result *la
     return false;
 }
 
-static void testFile(const char *path)
+// The first bytes of a buffer, in hex: to see that H.264 comes with start codes.
+static void sayBytes(const char *what, const uint8_t *data, int size)
 {
-    say("\n== %s\n", path);
+    say("  %s (%d bytes):", what, size);
+    for (int i = 0; data && i < size && i < 20; i++)
+        say(" %02x", data[i]);
+    say("\n");
+}
+
+// One pass over a video; image_count 0 is the decoder's default (4).
+// One pass over a video; image_count 0 is the decoder's default (4). With
+// align16, the decoder is given the size rounded up to H.264's 16-pixel
+// blocks (1080 is coded as 1088 and cropped).
+static void testFile(const char *path, u32 image_count, bool align16)
+{
+    say("\n== %s, %u output images%s\n", path, image_count ? image_count : VIDEO_DECODER_DEFAULT_IMAGES,
+        align16 ? ", size rounded up to 16" : "");
     FILE *f = fopen(path, "rb");
     if (!f) {
         say("  can't open the file\n");
@@ -154,26 +168,32 @@ static void testFile(const char *path)
     say("  %s %dx%d, %.2f fps, container %s\n", avcodec_get_name(par->codec_id), par->width, par->height, fps,
         fmt->iformat->name);
 
-    const AVBitStreamFilter *spec = av_bsf_get_by_name(filter ? filter : "null");
-    if (!spec || av_bsf_alloc(spec, &bsf) < 0 || avcodec_parameters_copy(bsf->par_in, par) < 0) {
-        say("  bitstream filter %s missing\n", filter ? filter : "null");
-        goto done;
-    }
-    bsf->time_base_in = st->time_base;
-    if (av_bsf_init(bsf) < 0) {
-        say("  bitstream filter failed to start\n");
-        goto done;
+    // Only H.264 and VP9 need a filter; AV1 and VP8 go to the decoder as they are.
+    if (filter) {
+        const AVBitStreamFilter *spec = av_bsf_get_by_name(filter);
+        if (!spec || av_bsf_alloc(spec, &bsf) < 0 || avcodec_parameters_copy(bsf->par_in, par) < 0) {
+            say("  bitstream filter %s missing\n", filter);
+            goto done;
+        }
+        bsf->time_base_in = st->time_base;
+        if (av_bsf_init(bsf) < 0) {
+            say("  bitstream filter failed to start\n");
+            goto done;
+        }
     }
 
     VideoDecoderConfig config = {
         .codec = codec,
-        .width = (u32)par->width,
-        .height = (u32)par->height,
+        .width = align16 ? (u32)FFALIGN(par->width, 16) : (u32)par->width,
+        .height = align16 ? (u32)FFALIGN(par->height, 16) : (u32)par->height,
+        .image_count = image_count,
         .frame_rate = fps >= 1 && fps <= VIDEO_DECODER_MAX_FRAME_RATE ? (u32)(fps + 0.5) : 0,
         .max_sample_size = 16 * 1024 * 1024,
         .codec_config = codec == ViddecCodec_H264 ? bsf->par_out->extradata : NULL,
         .codec_config_size = codec == ViddecCodec_H264 ? (size_t)bsf->par_out->extradata_size : 0,
     };
+    if (codec == ViddecCodec_H264)
+        sayBytes("codec config", config.codec_config, (int)config.codec_config_size);
     u64 t0 = armGetSystemTick();
     Result rc = videoDecoderCreate(&run.decoder, &config);
     say("  videoDecoderCreate: 0x%x %s (%.0f ms)\n", rc, R_SUCCEEDED(rc) ? "OK" : "FAILED",
@@ -189,8 +209,19 @@ static void testFile(const char *path)
     int samples = 0;
     t0 = armGetSystemTick();
     while (ok && run.frames < MAX_FRAMES && av_read_frame(fmt, pkt) >= 0) {
-        if (pkt->stream_index == vs && av_bsf_send_packet(bsf, pkt) >= 0) {
+        if (pkt->stream_index != vs) {
+            av_packet_unref(pkt);
+            continue;
+        }
+        if (!bsf) {
+            if (samples == 0)
+                sayBytes("first sample", pkt->data, pkt->size);
+            ok = submit(&run, pkt, st->time_base, &last);
+            samples++;
+        } else if (av_bsf_send_packet(bsf, pkt) >= 0) {
             while (ok && av_bsf_receive_packet(bsf, pkt) >= 0) {
+                if (samples == 0)
+                    sayBytes("first sample", pkt->data, pkt->size);
                 ok = submit(&run, pkt, st->time_base, &last);
                 samples++;
                 av_packet_unref(pkt);
@@ -250,10 +281,12 @@ int main(int argc, char **argv)
         struct dirent *e;
         char path[512];
         while ((e = readdir(dir)) != NULL) {
-            if (!isVideo(e->d_name))
+            // This round: the 1080p H.264 files, to find why 1080p60 at level 4.2 stalls.
+            if (!isVideo(e->d_name) || !strstr(e->d_name, "h264_1080p"))
                 continue;
             snprintf(path, sizeof(path), "%s/%s", FOLDER, e->d_name);
-            testFile(path);
+            testFile(path, 0, false);
+            testFile(path, 0, true);
         }
         closedir(dir);
     }
