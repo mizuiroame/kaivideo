@@ -1,0 +1,7 @@
+build/
+tests/build/
+*.nro
+*.nacp
+*.elf
+*.map
+__pycache__/
