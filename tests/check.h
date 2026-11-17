@@ -21,3 +21,4 @@ void testResume(void);
 void testBrowser(void);
 void testSubs(void);
 void testAppRoot(void);
+void testClock(void);

@@ -7,13 +7,15 @@ CFLAGS  := -std=gnu11 -g -O1 -Wall -Wextra -fwrapv -I$(SRC) $(SAN)
 LDFLAGS := $(SAN)
 OBJDIR  := build
 
-TESTED  := resume.c browser.c util.c subs.c approot.c
-TESTS   := test_main.c test_subs.c test_approot.c
+TESTED  := resume.c browser.c util.c subs.c approot.c clock.c
+TESTS   := test_main.c test_subs.c test_approot.c test_clock.c
 
 .PHONY: run clean
 
+# Without address randomization: ASan fails at start, now and then, on
+# kernels that randomize with 32 bits (vm.mmap_rnd_bits).
 run: $(OBJDIR)/test_main
-	./$(OBJDIR)/test_main
+	setarch $$(uname -m) -R ./$(OBJDIR)/test_main
 
 $(OBJDIR)/test_main: $(TESTS) check.h $(addprefix $(SRC)/,$(TESTED))
 	@mkdir -p $(OBJDIR)

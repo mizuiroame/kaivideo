@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "clock.h"
 
 #include <malloc.h>
 #include <stdio.h>
@@ -12,7 +13,7 @@
 
 #define IO_BUFFER (64 * 1024)
 #define BUFFER_COUNT 4
-#define BUFFER_FRAMES 2048           // About 43 ms at 48 kHz: the picture's clock moves in these steps.
+#define BUFFER_FRAMES 2048           // About 43 ms at 48 kHz: the played count moves in these steps (see clock.h).
 #define BUFFER_BYTES (BUFFER_FRAMES * 2 * sizeof(s16))
 #define FADE_FRAMES 480              // 10 ms at 48 kHz: in and out of silence without a click.
 #define BUFFER_ALIGN 0x1000
@@ -57,6 +58,7 @@ struct Audio {
     int64_t base_pts_ns;
     u64 base_played;
     u64 queued_frames;            // Frames queued since the base.
+    SmoothClock smooth;           // The clock as the picture reads it (clock.h).
 };
 
 bool audioSystemInit(void)
@@ -254,6 +256,7 @@ static void queueBuffer(Audio *a, int i, Fade fade)
         a->base_pts_ns = pts;
         a->base_played = played();
         a->queued_frames = 0;
+        smoothClockReset(&a->smooth);
     }
     a->queued_frames += BUFFER_FRAMES;
     mutexUnlock(&a->lock);
@@ -452,9 +455,13 @@ bool audioClock(Audio *a, int64_t *pts_ns)
     bool valid = a->clock_valid;
     if (valid) {
         u64 heard = played() - a->base_played;
+        bool stalled = heard >= a->queued_frames;
         if (heard > a->queued_frames)
             heard = a->queued_frames;  // Not past what was queued.
-        *pts_ns = a->base_pts_ns + (int64_t)(heard * 1000000000ull / g_out_rate);
+        int64_t raw = a->base_pts_ns + (int64_t)(heard * 1000000000ull / g_out_rate);
+        int64_t step = (int64_t)(BUFFER_FRAMES * 1000000000ull / g_out_rate);
+        *pts_ns = smoothClockRead(&a->smooth, raw, (int64_t)armTicksToNs(armGetSystemTick()), step,
+                                  !a->paused && !stalled);
     }
     mutexUnlock(&a->lock);
     return valid;
