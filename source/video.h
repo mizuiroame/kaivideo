@@ -10,6 +10,7 @@
 #include "gfx.h"
 
 #define VIDEO_QUEUE 3  // Decoded frames waiting to be shown.
+#define VIDEO_SUB_TRACKS 8  // Text subtitle tracks kept from a file.
 
 typedef struct {
     // Counted while it plays, for the log.
@@ -45,3 +46,13 @@ int64_t videoDuration(const Video *v);
 // True once every frame has been shown, or decoding failed (see error).
 bool videoFinished(Video *v, char *error, size_t error_size);
 VideoStats videoStats(const Video *v);
+
+// The file's text subtitle tracks, decoded as the file is read (so a line
+// shows once reading has passed it, which is always by its time).
+int videoSubtitleCount(const Video *v);
+// The track's title, or its language, or "Track 2".
+const char *videoSubtitleLabel(const Video *v, int track);
+// The first track marked default or forced, or -1.
+int videoSubtitlePreferred(const Video *v);
+// The track's text at pos_ns into out ('\n' between lines); false if none.
+bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size);

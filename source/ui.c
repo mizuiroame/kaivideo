@@ -11,6 +11,13 @@
 #define BAR_H 120
 #define TRACK_Y_OFFSET 60
 #define ICON 42
+#define CC_W 56                 // The subtitles button, left of the time.
+#define CC_H 30
+#define CC_X (GFX_WIDTH - MARGIN - 200 - CC_W)
+#define SUB_PX 34
+#define SUB_LINE_H 44
+#define SUB_MAX_W (GFX_WIDTH - 160)
+#define SUB_MAX_LINES 6
 
 #define COLOR_BG GFX_RGB(0x12, 0x12, 0x14)
 #define COLOR_SURFACE_HI GFX_RGB(0x2C, 0x2C, 0x34)
@@ -151,7 +158,13 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
         gfxFillRoundRect(MARGIN, y + 18, 7, 26, 2, COLOR_TEXT);
         gfxFillRoundRect(MARGIN + 13, y + 18, 7, 26, 2, COLOR_TEXT);
     }
-    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, GFX_WIDTH - 2 * MARGIN - 260, name, COLOR_TEXT);
+    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, CC_X - MARGIN - 60, name, COLOR_TEXT);
+    if (playerSubtitleCount(p) > 0) {  // CC: filled when subtitles show.
+        bool on = playerSubtitle(p) >= 0;
+        gfxFillRoundRect(CC_X, y + 14, CC_W, CC_H, 6, on ? COLOR_TEXT : COLOR_SURFACE_HI);
+        fontDrawCentered(FONT_BOLD, 18, CC_X + CC_W / 2.0f, y + 14 + CC_H / 2.0f, "CC",
+                         on ? GFX_RGB(0, 0, 0) : COLOR_DIM);
+    }
     char pos[16], len[16], time[40];
     double position = playerPosition(p) / 1e9, duration = playerDuration(p) / 1e9;
     utilFormatTime(pos, sizeof(pos), position);
@@ -166,14 +179,16 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
     gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, 8, COLOR_ACCENT);
     char info[256];
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   B back",
+    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   Y subtitles   B back",
              playerVideoInfo(p), playerAudioInfo(p));
     fontDrawClipped(FONT_REGULAR, 16, MARGIN, y + 82, track_w, info, COLOR_DIM);
 }
 
-TapTarget uiTapPlayer(int x, int y, double *fraction)
+TapTarget uiTapPlayer(int x, int y, bool has_subtitles, double *fraction)
 {
     int bar_y = GFX_HEIGHT - BAR_H;
+    if (has_subtitles && x >= CC_X - 10 && x < CC_X + CC_W + 10 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
+        return TAP_SUBTITLES;
     if (x < MARGIN + 50 && y < 80)
         return TAP_CLOSE;
     if (y >= bar_y + TRACK_Y_OFFSET - 20 && y <= bar_y + TRACK_Y_OFFSET + 26) {
@@ -184,4 +199,58 @@ TapTarget uiTapPlayer(int x, int y, double *fraction)
     if (y >= bar_y && y < bar_y + TRACK_Y_OFFSET - 20 && x < MARGIN + 40)
         return TAP_PAUSE;
     return TAP_PICTURE;
+}
+
+// --- Subtitles ---
+
+// Splits text into the lines drawn: its own lines, each wrapped at spaces to
+// SUB_MAX_W (a word wider than that stays whole). Returns how many.
+static int wrapSubtitle(const char *text, char lines[][256], int max)
+{
+    int count = 0;
+    for (const char *p = text; *p && count < max;) {
+        size_t len = strcspn(p, "\n");
+        char line[256];
+        snprintf(line, sizeof(line), "%.*s", (int)(len < sizeof(line) ? len : sizeof(line) - 1), p);
+        // Fill each drawn line with as many words as fit.
+        char *rest = line;
+        while (*rest && count < max) {
+            char *cut = NULL;
+            for (char *space = strchr(rest, ' '); space; space = strchr(space + 1, ' ')) {
+                *space = '\0';
+                bool fits = fontTextWidth(FONT_BOLD, SUB_PX, rest) <= SUB_MAX_W;
+                *space = ' ';
+                if (!fits)
+                    break;
+                cut = space;
+            }
+            if (fontTextWidth(FONT_BOLD, SUB_PX, rest) <= SUB_MAX_W || !cut)
+                cut = NULL;
+            if (cut)
+                *cut = '\0';
+            snprintf(lines[count++], 256, "%s", rest);
+            if (!cut)
+                break;
+            rest = cut + 1;
+        }
+        p += len;
+        if (*p == '\n')
+            p++;
+    }
+    return count;
+}
+
+void uiDrawSubtitles(const char *text, bool bar_shown)
+{
+    char lines[SUB_MAX_LINES][256];
+    int count = wrapSubtitle(text, lines, SUB_MAX_LINES);
+    int bottom = bar_shown ? GFX_HEIGHT - BAR_H - 70 : GFX_HEIGHT - 40;
+    int top = bottom - count * SUB_LINE_H;
+    static const int OUTLINE[8][2] = {{-2, -2}, {0, -2}, {2, -2}, {-2, 0}, {2, 0}, {-2, 2}, {0, 2}, {2, 2}};
+    for (int i = 0; i < count; i++) {
+        float cx = GFX_WIDTH / 2.0f, cy = top + i * SUB_LINE_H + SUB_LINE_H / 2.0f;
+        for (int o = 0; o < 8; o++)
+            fontDrawCentered(FONT_BOLD, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i], GFX_RGB(0, 0, 0));
+        fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], COLOR_TEXT);
+    }
 }

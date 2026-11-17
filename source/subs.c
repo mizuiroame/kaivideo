@@ -231,6 +231,38 @@ const char *subsAssText(const char *ass)
     return p;
 }
 
+const char *subsLanguageName(const char *code)
+{
+    static const struct {
+        const char *codes, *name;  // The codes: 639-2 (both forms) and 639-1, space-separated.
+    } LANGUAGES[] = {
+        {"eng en", "English"},     {"spa es", "Spanish"},     {"fre fra fr", "French"},
+        {"ger deu de", "German"},  {"ita it", "Italian"},     {"por pt", "Portuguese"},
+        {"jpn ja", "Japanese"},    {"chi zho zh", "Chinese"}, {"kor ko", "Korean"},
+        {"rus ru", "Russian"},     {"ara ar", "Arabic"},      {"dut nld nl", "Dutch"},
+        {"pol pl", "Polish"},      {"tur tr", "Turkish"},     {"swe sv", "Swedish"},
+        {"nor nob no nb", "Norwegian"}, {"dan da", "Danish"}, {"fin fi", "Finnish"},
+        {"hin hi", "Hindi"},       {"cat ca", "Catalan"},     {"gre ell el", "Greek"},
+        {"heb he", "Hebrew"},      {"ukr uk", "Ukrainian"},   {"cze ces cs", "Czech"},
+        {"hun hu", "Hungarian"},   {"rum ron ro", "Romanian"}, {"tha th", "Thai"},
+        {"vie vi", "Vietnamese"},  {"ind id", "Indonesian"},  {"may msa ms", "Malay"},
+    };
+    if (!code || !code[0])
+        return NULL;
+    size_t len = strlen(code);
+    for (size_t i = 0; i < sizeof(LANGUAGES) / sizeof(LANGUAGES[0]); i++) {
+        for (const char *p = LANGUAGES[i].codes; *p;) {
+            size_t n = strcspn(p, " ");
+            if (n == len && strncasecmp(p, code, n) == 0)
+                return LANGUAGES[i].name;
+            p += n;
+            while (*p == ' ')
+                p++;
+        }
+    }
+    return code;
+}
+
 bool subsFindFor(const char *video_path, char *out, size_t size)
 {
     char folder[512], base[256];

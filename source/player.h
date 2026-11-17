@@ -37,3 +37,13 @@ const char *playerVideoInfo(const Player *p);
 const char *playerAudioInfo(const Player *p);
 void playerSize(const Player *p, int *width, int *height, double *aspect);
 VideoStats playerStats(const Player *p);
+
+// Subtitles: an .srt next to the video (the first track, if there is one),
+// then the file's text tracks. Opens on the .srt, else a track the file
+// marks default, else none.
+int playerSubtitleCount(const Player *p);
+const char *playerSubtitleLabel(const Player *p, int track);
+int playerSubtitle(const Player *p);  // -1 for none.
+void playerSetSubtitle(Player *p, int track);
+// The text to show now ('\n' between lines); false if none.
+bool playerSubtitleText(Player *p, char *out, size_t size);

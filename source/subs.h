@@ -38,6 +38,10 @@ const char *subsAssText(const char *ass);
 // and "\n" become line breaks; spaces at the ends of lines go.
 void subsClean(char *text);
 
+// The name of a language from its ISO 639 code ("spa", "es" -> "Spanish"), for
+// the common ones; any other code comes back as it is, NULL or "" as NULL.
+const char *subsLanguageName(const char *code);
+
 // The .srt file for a video: "name.srt", else "name.<anything>.srt" (by
 // name), in its folder. False if there's none.
 bool subsFindFor(const char *video_path, char *out, size_t size);

@@ -10,15 +10,29 @@
 #include <libavformat/avformat.h>
 #include <switch.h>
 
+#include "subs.h"
+
 #define IO_BUFFER (256 * 1024)
 #define SUBMIT_TIMEOUT_NS 2000000ull
 #define SUBMIT_TRIES 2500             // About 5 seconds of retries before giving up.
 #define TAIL_TIMEOUT_NS 300000000ull  // After the last sample: how long to wait for frames.
 
+#define SUB_TEXT_MAX 1024
+#define SUB_DEFAULT_NS 4000000000ll  // A line without an end shows this long.
+
 typedef struct {
     uint8_t *y, *uv;   // NV12, width bytes a row.
     int64_t pts_ns;
 } Slot;
+
+// A text subtitle track inside the file, decoded as it is read.
+typedef struct {
+    int stream;
+    AVCodecContext *ctx;
+    SubTrack track;    // Under the Video's lock.
+    char label[64];
+    bool preferred;    // Marked default or forced in the file.
+} SubStream;
 
 struct Video {
     FILE *file;
@@ -54,6 +68,9 @@ struct Video {
     unsigned frame_id;
     VideoStats stats;
     double copy_total_ms;
+
+    SubStream subs[VIDEO_SUB_TRACKS];
+    int sub_count;
 };
 
 // --- Reading the file (FFmpeg has no file protocol in this build) ---
@@ -170,6 +187,8 @@ static void doSeek(Video *v, int64_t target_ns)
     if (v->bsf)
         av_bsf_flush(v->bsf);
     videoDecoderFlush(&v->decoder);
+    for (int i = 0; i < v->sub_count; i++)
+        avcodec_flush_buffers(v->subs[i].ctx);
     v->skip_until_ns = target_ns;
     pthread_mutex_lock(&v->lock);
     v->head = 0;
@@ -179,6 +198,54 @@ static void doSeek(Video *v, int64_t target_ns)
     pthread_mutex_unlock(&v->lock);
 }
 
+// A subtitle packet: its lines go into its track, with their times.
+static void decodeSubtitle(Video *v, SubStream *s, AVPacket *pkt)
+{
+    int64_t pts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+    AVSubtitle sub;
+    int got = 0;
+    if (pts == AV_NOPTS_VALUE || avcodec_decode_subtitle2(s->ctx, &sub, &got, pkt) < 0 || !got)
+        return;
+    AVRational tb = v->fmt->streams[s->stream]->time_base, ns = {1, 1000000000};
+    int64_t base = av_rescale_q(pts, tb, ns);
+    int64_t start = base + (int64_t)sub.start_display_time * 1000000;
+    int64_t end;
+    if (sub.end_display_time > sub.start_display_time && sub.end_display_time != UINT32_MAX)
+        end = base + (int64_t)sub.end_display_time * 1000000;
+    else if (pkt->duration > 0)
+        end = base + av_rescale_q(pkt->duration, tb, ns);
+    else
+        end = start + SUB_DEFAULT_NS;
+    char text[SUB_TEXT_MAX];
+    size_t used = 0;
+    text[0] = '\0';
+    for (unsigned i = 0; i < sub.num_rects; i++) {
+        const AVSubtitleRect *r = sub.rects[i];
+        const char *line = r->type == SUBTITLE_ASS && r->ass ? subsAssText(r->ass)
+                         : r->type == SUBTITLE_TEXT ? r->text : NULL;
+        if (!line)
+            continue;  // A picture subtitle: not drawn.
+        int n = snprintf(text + used, sizeof(text) - used, "%s%s", used ? "\\N" : "", line);
+        if (n < 0 || (size_t)n >= sizeof(text) - used)
+            break;
+        used += (size_t)n;
+    }
+    avsubtitle_free(&sub);
+    if (!used)
+        return;
+    pthread_mutex_lock(&v->lock);
+    subsAdd(&s->track, start, end, text);
+    pthread_mutex_unlock(&v->lock);
+}
+
+static SubStream *subStreamFor(Video *v, int index)
+{
+    for (int i = 0; i < v->sub_count; i++)
+        if (v->subs[i].stream == index)
+            return &v->subs[i];
+    return NULL;
+}
+
 // Reads to the end of the file: the stream's packets go to the decoder one
 // behind, so the last can say it's the last. False if interrupted or failed.
 static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
@@ -186,6 +253,9 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
     bool have_held = false;
     while (!interrupted(v) && av_read_frame(v->fmt, pkt) >= 0) {
         if (pkt->stream_index != v->stream) {
+            SubStream *s = subStreamFor(v, pkt->stream_index);
+            if (s)
+                decodeSubtitle(v, s, pkt);
             av_packet_unref(pkt);
             continue;
         }
@@ -301,6 +371,41 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     return true;
 }
 
+// The text subtitle tracks (SubRip, ASS, mov_text, WebVTT), up to
+// VIDEO_SUB_TRACKS; picture ones (DVD, Blu-ray) aren't drawn.
+static void openSubtitles(Video *v)
+{
+    for (unsigned i = 0; i < v->fmt->nb_streams && v->sub_count < VIDEO_SUB_TRACKS; i++) {
+        AVStream *st = v->fmt->streams[i];
+        const AVCodecDescriptor *desc = avcodec_descriptor_get(st->codecpar->codec_id);
+        if (st->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE || !desc || !(desc->props & AV_CODEC_PROP_TEXT_SUB))
+            continue;
+        const AVCodec *codec = avcodec_find_decoder(st->codecpar->codec_id);
+        AVCodecContext *ctx = codec ? avcodec_alloc_context3(codec) : NULL;
+        if (!ctx)
+            continue;
+        ctx->pkt_timebase = st->time_base;
+        if (avcodec_parameters_to_context(ctx, st->codecpar) < 0 || avcodec_open2(ctx, codec, NULL) < 0) {
+            avcodec_free_context(&ctx);
+            continue;
+        }
+        SubStream *s = &v->subs[v->sub_count];
+        s->stream = (int)i;
+        s->ctx = ctx;
+        s->preferred = st->disposition & (AV_DISPOSITION_DEFAULT | AV_DISPOSITION_FORCED);
+        const AVDictionaryEntry *title = av_dict_get(st->metadata, "title", NULL, 0);
+        const AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
+        const char *language = lang && strcmp(lang->value, "und") != 0 ? subsLanguageName(lang->value) : NULL;
+        if (title && title->value[0])
+            snprintf(s->label, sizeof(s->label), "%s", title->value);
+        else if (language)
+            snprintf(s->label, sizeof(s->label), "%s", language);
+        else
+            snprintf(s->label, sizeof(s->label), "Track %d", v->sub_count + 1);
+        v->sub_count++;
+    }
+}
+
 Video *videoOpen(const char *path, char *error, size_t error_size)
 {
     Video *v = calloc(1, sizeof(*v));
@@ -364,6 +469,7 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
         videoClose(v);
         return NULL;
     }
+    openSubtitles(v);
     if (pthread_create(&v->thread, NULL, decodeThread, v) != 0) {
         snprintf(error, error_size, "The decoding thread can't start.");
         videoClose(v);
@@ -387,6 +493,10 @@ void videoClose(Video *v)
     if (v->decoder_open)
         videoDecoderClose(&v->decoder);
     av_bsf_free(&v->bsf);
+    for (int i = 0; i < v->sub_count; i++) {
+        avcodec_free_context(&v->subs[i].ctx);
+        subsFree(&v->subs[i].track);
+    }
     if (v->fmt)
         avformat_close_input(&v->fmt);
     if (v->io) {
@@ -491,4 +601,34 @@ VideoStats videoStats(const Video *v)
     VideoStats s = v->stats;
     s.copy_ms = s.decoded ? v->copy_total_ms / s.decoded : 0.0;
     return s;
+}
+
+// --- Subtitles ---
+
+int videoSubtitleCount(const Video *v)
+{
+    return v->sub_count;
+}
+
+const char *videoSubtitleLabel(const Video *v, int track)
+{
+    return track >= 0 && track < v->sub_count ? v->subs[track].label : "";
+}
+
+int videoSubtitlePreferred(const Video *v)
+{
+    for (int i = 0; i < v->sub_count; i++)
+        if (v->subs[i].preferred)
+            return i;
+    return -1;
+}
+
+bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size)
+{
+    if (track < 0 || track >= v->sub_count)
+        return false;
+    pthread_mutex_lock(&v->lock);
+    bool on = subsAt(&v->subs[track].track, pos_ns, out, size);
+    pthread_mutex_unlock(&v->lock);
+    return on;
 }

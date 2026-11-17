@@ -22,6 +22,9 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *messa
 // The bar over a playing video, and the close button above it; note, if
 // any, is said above the bar ("Resumed at 12:34").
 void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
+// Subtitle text ('\n' between lines), centered at the bottom with an
+// outline, wrapped to the screen; above the bar when it shows.
+void uiDrawSubtitles(const char *text, bool bar_shown);
 
 typedef enum {
     TAP_NOTHING,
@@ -30,8 +33,10 @@ typedef enum {
     TAP_CLOSE,     // The player's close button.
     TAP_PAUSE,     // The player's play/pause button.
     TAP_SEEK,      // The progress bar: *fraction is where (0-1).
+    TAP_SUBTITLES, // The player's CC button.
     TAP_PICTURE,   // Anywhere else on a playing video.
 } TapTarget;
 
 TapTarget uiTapBrowser(const Browser *b, int x, int y, size_t *row);
-TapTarget uiTapPlayer(int x, int y, double *fraction);
+// has_subtitles: the CC button is there.
+TapTarget uiTapPlayer(int x, int y, bool has_subtitles, double *fraction);

@@ -87,8 +87,20 @@ static void testFind(void)
     CHECK(!subsFindFor(TMP_ROOT "/subs/Mov.mkv", out, sizeof(out)));  // "Movie.srt" isn't for "Mov".
 }
 
+static void testLanguages(void)
+{
+    CHECK(strcmp(subsLanguageName("spa"), "Spanish") == 0);
+    CHECK(strcmp(subsLanguageName("ES"), "Spanish") == 0);
+    CHECK(strcmp(subsLanguageName("deu"), "German") == 0 && strcmp(subsLanguageName("ger"), "German") == 0);
+    CHECK(strcmp(subsLanguageName("may"), "Malay") == 0);
+    CHECK(strcmp(subsLanguageName("xyz"), "xyz") == 0);  // Unknown: as it is.
+    CHECK(strcmp(subsLanguageName("e"), "e") == 0);      // Not a prefix match.
+    CHECK(subsLanguageName("") == NULL && subsLanguageName(NULL) == NULL);
+}
+
 void testSubs(void)
 {
+    testLanguages();
     testSrt();
     testAdd();
     testClean();

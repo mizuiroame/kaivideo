@@ -26,6 +26,7 @@
 #define OLD_CONFIG_FOLDER "sdmc:/config/kaivideo"  // Before files went next to the NRO.
 #define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
+#define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
 #define SEEK_SHORT_NS 10000000000ll
 #define SEEK_LONG_NS 60000000000ll
 #define SCREEN_W 1280
@@ -160,6 +161,9 @@ static void startVideo(App *app, uint64_t now)
         app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
     }
     logLine("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
+    for (int i = 0; i < playerSubtitleCount(app->player); i++)
+        logLine("  subtitles %d: %s%s", i + 1, playerSubtitleLabel(app->player, i),
+                i == playerSubtitle(app->player) ? " (on)" : "");
     app->overlay_until = now + OVERLAY_NS;
     app->seeks = 0;
     app->started = now;
@@ -237,6 +241,25 @@ static void browserInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t 
     }
 }
 
+// The next subtitle track (after the last: none), said in the bar.
+static void nextSubtitle(App *app, uint64_t now)
+{
+    Player *p = app->player;
+    int count = playerSubtitleCount(p);
+    if (count == 0) {
+        snprintf(app->bar_note, sizeof(app->bar_note), "This video has no subtitles.");
+    } else {
+        int next = playerSubtitle(p) + 1;
+        playerSetSubtitle(p, next < count ? next : -1);
+        if (playerSubtitle(p) < 0)
+            snprintf(app->bar_note, sizeof(app->bar_note), "Subtitles off");
+        else
+            snprintf(app->bar_note, sizeof(app->bar_note), "Subtitles: %s", playerSubtitleLabel(p, playerSubtitle(p)));
+    }
+    app->bar_note_until = now + NOTE_NS;
+    app->overlay_until = now + NOTE_NS;
+}
+
 // False when playback should end (back to the list).
 static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
@@ -248,6 +271,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         return false;
     if (pressed & HidNpadButton_A)
         playerTogglePause(p, now);
+    if (pressed & HidNpadButton_Y)
+        nextSubtitle(app, now);
     if (pressed & HidNpadButton_ZL) {  // From the start.
         playerSeekTo(p, 0, now);
         app->seeks++;
@@ -264,8 +289,9 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     }
     if (touch.type == TOUCH_TAP && overlay) {  // A first tap only shows the bar.
         double fraction = 0;
-        switch (uiTapPlayer(touch.x, touch.y, &fraction)) {
+        switch (uiTapPlayer(touch.x, touch.y, playerSubtitleCount(p) > 0, &fraction)) {
         case TAP_CLOSE: return false;
+        case TAP_SUBTITLES: nextSubtitle(app, now); break;
         case TAP_SEEK:
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
             app->seeks++;
@@ -292,7 +318,11 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     gfxClear(GFX_RGB(0, 0, 0));
     if (frame)
         gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
-    if (playerPaused(app->player) || now < app->overlay_until)
+    bool bar = playerPaused(app->player) || now < app->overlay_until;
+    char subtitle[1024];
+    if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))
+        uiDrawSubtitles(subtitle, bar);
+    if (bar)
         uiDrawPlayerBar(app->player, app->playing_name, now < app->bar_note_until ? app->bar_note : NULL);
 }
 

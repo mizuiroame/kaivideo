@@ -1,9 +1,12 @@
 #include "player.h"
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "audio.h"
+#include "subs.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
 
@@ -19,7 +22,42 @@ struct Player {
     int64_t base_pos_ns;
     uint64_t base_now_ns;
     uint64_t waiting_since_ns;  // Since when the sound's clock has been awaited (start, seek).
+
+    // Subtitles: an .srt next to the video (track 0, when there is one), then the file's own.
+    bool has_external;
+    SubTrack external;
+    char external_label[64];
+    int subtitle;  // The track shown, -1 for none.
 };
+
+// The .srt's label: its language from "name.es.srt", and that it's a file.
+static void labelExternal(Player *p, const char *srt_path)
+{
+    char lang[16] = "";
+    const char *name = strrchr(srt_path, '/');
+    name = name ? name + 1 : srt_path;
+    const char *ext = strrchr(name, '.'), *dot = ext;
+    while (dot > name && dot[-1] != '.')
+        dot--;
+    if (dot > name && ext - dot >= 2 && ext - dot <= 3) {  // "name.es.srt": "es" ("My.Movie.srt" has none).
+        memcpy(lang, dot, (size_t)(ext - dot));
+        lang[ext - dot] = '\0';
+    }
+    const char *language = subsLanguageName(lang);
+    snprintf(p->external_label, sizeof(p->external_label), "%s%s", language ? language : "Subtitles",
+             " (.srt file)");
+}
+
+static void openSubtitles(Player *p, const char *path)
+{
+    char srt[512];
+    p->has_external = subsFindFor(path, srt, sizeof(srt)) && subsLoadSrtFile(&p->external, srt);
+    if (p->has_external)
+        labelExternal(p, srt);
+    // An .srt was put there to be seen; else a track the file marks default.
+    int preferred = videoSubtitlePreferred(p->video);
+    p->subtitle = p->has_external ? 0 : preferred;
+}
 
 Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_size)
 {
@@ -42,6 +80,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     p->own_clock = !p->audio;
     p->holding = true;  // The sound starts with the first frame (it opens paused).
     p->waiting_since_ns = now_ns;
+    openSubtitles(p, path);
     return p;
 }
 
@@ -51,7 +90,39 @@ void playerClose(Player *p)
         return;
     audioClose(p->audio);
     videoClose(p->video);
+    subsFree(&p->external);
     free(p);
+}
+
+int playerSubtitleCount(const Player *p)
+{
+    return (p->has_external ? 1 : 0) + videoSubtitleCount(p->video);
+}
+
+const char *playerSubtitleLabel(const Player *p, int track)
+{
+    if (p->has_external && track == 0)
+        return p->external_label;
+    return videoSubtitleLabel(p->video, track - (p->has_external ? 1 : 0));
+}
+
+int playerSubtitle(const Player *p)
+{
+    return p->subtitle;
+}
+
+void playerSetSubtitle(Player *p, int track)
+{
+    p->subtitle = track >= 0 && track < playerSubtitleCount(p) ? track : -1;
+}
+
+bool playerSubtitleText(Player *p, char *out, size_t size)
+{
+    if (p->subtitle < 0)
+        return false;
+    if (p->has_external && p->subtitle == 0)
+        return subsAt(&p->external, p->position_ns, out, size);
+    return videoSubtitleAt(p->video, p->subtitle - (p->has_external ? 1 : 0), p->position_ns, out, size);
 }
 
 // Makes the console's clock the one from here, carrying on from position.
