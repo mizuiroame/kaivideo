@@ -30,7 +30,7 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --disable-avdevice --disable-avfilter --disable-swscale \
       --enable-avcodec --enable-avformat --enable-swresample \
       --enable-neon \
-      --enable-decoder=mp3float,mp3,aac,vorbis,opus,flac,ac3 \
+      --enable-decoder=mp3float,mp3,aac,vorbis,opus,flac,ac3,subrip,ass,ssa,movtext,webvtt \
       --enable-parser=h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3 \
       --enable-demuxer=mov,matroska \
       --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata \

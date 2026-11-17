@@ -7,8 +7,8 @@ CFLAGS  := -std=gnu11 -g -O1 -Wall -Wextra -fwrapv -I$(SRC) $(SAN)
 LDFLAGS := $(SAN)
 OBJDIR  := build
 
-TESTED  := resume.c browser.c util.c
-TESTS   := test_main.c
+TESTED  := resume.c browser.c util.c subs.c
+TESTS   := test_main.c test_subs.c
 
 .PHONY: run clean
 

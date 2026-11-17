@@ -19,3 +19,4 @@ extern int g_checks;
 
 void testResume(void);
 void testBrowser(void);
+void testSubs(void);
