@@ -10,6 +10,7 @@
 
 #include <switch.h>
 
+#include "approot.h"
 #include "audio.h"
 #include "browser.h"
 #include "buttons.h"
@@ -22,10 +23,7 @@
 #include "ui.h"
 #include "util.h"
 
-#define CONFIG_FOLDER "sdmc:/config/kaivideo"
-#define CONFIG_PATH CONFIG_FOLDER "/settings.txt"
-#define LOG_PATH CONFIG_FOLDER "/kaivideo.log"
-#define RESUME_FILE CONFIG_FOLDER "/resume.txt"
+#define OLD_CONFIG_FOLDER "sdmc:/config/kaivideo"  // Before files went next to the NRO.
 #define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define SEEK_SHORT_NS 10000000000ll
@@ -35,6 +33,14 @@
 #define PANEL_W 1920  // In case the touch panel reports its own resolution.
 
 static FILE *g_log;
+// KaiVideo's own files, next to its NRO (approot.h): settings.txt,
+// resume.txt and kaivideo.log.
+static char g_folder[APPROOT_PATH_MAX];
+
+static void configPath(char *out, size_t size, const char *name)
+{
+    snprintf(out, size, "%s/%s", g_folder, name);
+}
 
 static void logLine(const char *fmt, ...)
 {
@@ -58,7 +64,9 @@ static uint64_t nowNs(void)
 static void loadFolder(char *out, size_t size)
 {
     snprintf(out, size, "%s", BROWSER_ROOT);
-    FILE *f = fopen(CONFIG_PATH, "r");
+    char path[APPROOT_PATH_MAX + 32];
+    configPath(path, sizeof(path), "settings.txt");
+    FILE *f = fopen(path, "r");
     if (!f)
         return;
     char line[BROWSER_PATH_MAX + 16];
@@ -72,9 +80,9 @@ static void loadFolder(char *out, size_t size)
 
 static void saveFolder(const char *folder)
 {
-    mkdir("sdmc:/config", 0777);
-    mkdir(CONFIG_FOLDER, 0777);
-    FILE *f = fopen(CONFIG_PATH, "w");
+    char path[APPROOT_PATH_MAX + 32];
+    configPath(path, sizeof(path), "settings.txt");
+    FILE *f = fopen(path, "w");
     if (!f)
         return;
     if (!strpbrk(folder, "\r\n"))
@@ -163,7 +171,9 @@ static void stopVideo(App *app, const char *error, bool ended)
     // Remember where it was left (or, watched to the end, forget it).
     int64_t duration = playerDuration(app->player);
     resumeRemember(&app->resume, app->playing_path, ended ? duration : playerPosition(app->player), duration);
-    resumeSave(&app->resume, RESUME_FILE);
+    char path[APPROOT_PATH_MAX + 32];
+    configPath(path, sizeof(path), "resume.txt");
+    resumeSave(&app->resume, path);
     VideoStats s = playerStats(app->player);
     logLine("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
             error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
@@ -288,15 +298,18 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 
 int main(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
     hidInitializeTouchScreen();
-    mkdir("sdmc:/config", 0777);
-    mkdir(CONFIG_FOLDER, 0777);
-    g_log = fopen(LOG_PATH, "w");
+    // Files next to the NRO; the first time, what the old folder had is copied there.
+    bool next_to_nro = appRootFolder(argc > 0 ? argv[0] : NULL, "kaivideo", g_folder, sizeof(g_folder));
+    appRootMakeFolder(g_folder);
+    int moved = next_to_nro ? appRootMigrate(OLD_CONFIG_FOLDER, g_folder) : 0;
+    char path[APPROOT_PATH_MAX + 32];
+    configPath(path, sizeof(path), "kaivideo.log");
+    g_log = fopen(path, "w");
+    logLine("Files in %s%s", g_folder, moved ? " (copied from " OLD_CONFIG_FOLDER ")" : "");
     if (!gfxInit() || !fontInit()) {
         logLine("The GPU or the fonts couldn't start.");
         if (g_log)
@@ -309,7 +322,8 @@ int main(int argc, char **argv)
     static App app;
     char folder[BROWSER_PATH_MAX];
     loadFolder(folder, sizeof(folder));
-    resumeLoad(&app.resume, RESUME_FILE);
+    configPath(path, sizeof(path), "resume.txt");
+    resumeLoad(&app.resume, path);
     if (!browserOpen(&app.browser, folder))
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
     InputRepeat repeat;
