@@ -1,5 +1,6 @@
 #include "player.h"
 
+#include <pthread.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +10,8 @@
 #include "subs.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
+#define SWITCH_LEAD_NS 300000000ll   // A new sound track joins this far ahead of the picture.
+#define JOIN_SLACK_NS 20000000ll     // Ready this little behind the picture still joins.
 
 struct Player {
     Video *video;
@@ -24,6 +27,18 @@ struct Player {
     int64_t base_pos_ns;
     uint64_t base_now_ns;
     uint64_t waiting_since_ns;  // Since when the sound's clock has been awaited (start, seek).
+
+    // Changing the sound track: a thread closes the old one and opens the
+    // new, while the picture goes on by the console's clock. Then the new
+    // one waits, ready, for the picture to reach it (joining).
+    pthread_t swap_thread;
+    bool swapping, joining;
+    pthread_mutex_t swap_lock;
+    bool swap_done;            // Under swap_lock.
+    Audio *swap_old, *swap_new;
+    int swap_track;
+    char swap_error[160];
+    bool swap_failed;          // Taken by playerTakeAudioError.
 
     // Subtitles: an .srt next to the video (track 0, when there is one), then the file's own.
     bool has_external;
@@ -74,6 +89,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
         return NULL;
     }
     snprintf(p->path, sizeof(p->path), "%s", path);
+    pthread_mutex_init(&p->swap_lock, NULL);
     char why[160];
     p->audio = audioOpen(path, -1, why, sizeof(why));
     p->audio_track = p->audio ? audioTrack(p->audio) : -1;
@@ -92,6 +108,11 @@ void playerClose(Player *p)
 {
     if (!p)
         return;
+    if (p->swapping) {
+        pthread_join(p->swap_thread, NULL);
+        audioClose(p->swap_new);
+    }
+    pthread_mutex_destroy(&p->swap_lock);
     audioClose(p->audio);
     videoClose(p->video);
     subsFree(&p->external);
@@ -137,8 +158,13 @@ static void useOwnClock(Player *p, uint64_t now_ns)
     p->base_now_ns = now_ns;
 }
 
+static void finishSwap(Player *p);
+static void join(Player *p);
+
 const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 {
+    if (p->swapping)
+        finishSwap(p);
     if (p->holding) {
         // The first frame (after opening or a seek) is ready: time starts from
         // it, and the sound with it, so the picture isn't late from the start.
@@ -155,6 +181,8 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
     } else if (p->own_clock) {
         if (!p->paused)
             p->position_ns = p->base_pos_ns + (int64_t)(now_ns - p->base_now_ns);
+        if (p->joining)
+            join(p);
     } else {
         int64_t heard;
         if (audioClock(p->audio, &heard)) {
@@ -171,7 +199,8 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 void playerTogglePause(Player *p, uint64_t now_ns)
 {
     p->paused = !p->paused;
-    if (p->audio && !p->holding)  // While holding, the sound stays paused until the picture's ready.
+    // While holding or joining, the sound stays paused until the picture's ready for it.
+    if (p->audio && !p->holding && !p->joining)
         audioSetPaused(p->audio, p->paused);
     if (!p->paused) {
         p->base_pos_ns = p->position_ns;  // The console's clock carries on from where it stopped.
@@ -201,6 +230,7 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
         audioSetPaused(p->audio, true);
         audioSeek(p->audio, target);
         p->own_clock = false;
+        p->joining = false;
         p->waiting_since_ns = now_ns;
     }
 }
@@ -260,22 +290,94 @@ int playerAudioTrack(const Player *p)
     return p->audio_track;
 }
 
-bool playerSetAudioTrack(Player *p, int track, uint64_t now_ns, char *error, size_t error_size)
+static void *swapThread(void *arg)
 {
-    error[0] = '\0';
-    if (track < 0 || track >= playerAudioTrackCount(p))
-        return false;
-    // The old sound stops; the new one opens and, like a seek, waits for the
-    // picture at the same spot, so they stay together.
-    int64_t at = p->position_ns;
-    audioClose(p->audio);
-    p->audio = audioOpen(p->path, track, error, error_size);
+    Player *p = arg;
+    audioClose(p->swap_old);  // Fades out and plays out what it had queued.
+    char error[160];
+    Audio *a = audioOpen(p->path, p->swap_track, error, sizeof(error));  // Paused: it gets ready.
+    pthread_mutex_lock(&p->swap_lock);
+    p->swap_new = a;
+    snprintf(p->swap_error, sizeof(p->swap_error), "%s", a ? "" : error[0] ? error : "No sound");
+    p->swap_done = true;
+    pthread_mutex_unlock(&p->swap_lock);
+    return NULL;
+}
+
+void playerSetAudioTrack(Player *p, int track, uint64_t now_ns)
+{
+    if (p->swapping || track < 0 || track >= playerAudioTrackCount(p))
+        return;
+    // The picture goes on alone by the console's clock while the sound changes.
+    if (!p->own_clock && !p->holding)
+        useOwnClock(p, now_ns);
+    p->own_clock = true;
+    p->joining = false;
+    p->swap_old = p->audio;
+    p->audio = NULL;
+    p->swap_track = track;
+    p->swap_done = false;
     p->audio_track = track;
-    if (p->audio)
-        snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
-    else
-        snprintf(p->audio_info, sizeof(p->audio_info), "%s", error[0] ? error : "No sound");
-    p->own_clock = !p->audio;
-    playerSeekTo(p, at, now_ns);
-    return p->audio != NULL;
+    snprintf(p->audio_info, sizeof(p->audio_info), "Changing the sound track");
+    if (pthread_create(&p->swap_thread, NULL, swapThread, p) != 0) {
+        audioClose(p->swap_old);  // Can't happen in practice; the video goes on silent.
+        snprintf(p->audio_info, sizeof(p->audio_info), "The sound thread can't start.");
+        return;
+    }
+    p->swapping = true;
+}
+
+static void finishSwap(Player *p)
+{
+    pthread_mutex_lock(&p->swap_lock);
+    bool done = p->swap_done;
+    pthread_mutex_unlock(&p->swap_lock);
+    if (!done)
+        return;
+    pthread_join(p->swap_thread, NULL);
+    p->swapping = false;
+    p->audio = p->swap_new;
+    p->swap_new = NULL;
+    if (!p->audio) {
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", p->swap_error);
+        p->swap_failed = true;
+        return;
+    }
+    snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
+    if (p->holding) {
+        // A seek is under way: the sound waits for its first frame, as usual.
+        audioSeek(p->audio, p->position_ns);
+        p->own_clock = false;
+        return;
+    }
+    audioSeek(p->audio, p->position_ns + SWITCH_LEAD_NS);
+    p->joining = true;
+}
+
+// The new sound is ready from some time on: it starts when the picture gets
+// there, and its clock leads from then. Ready too late: it tries further on.
+static void join(Player *p)
+{
+    int64_t heard, start;
+    if (audioClock(p->audio, &heard)) {
+        p->joining = false;
+        p->own_clock = false;
+        p->waiting_since_ns = 0;
+        return;
+    }
+    if (p->paused || !audioReadyAt(p->audio, &start))
+        return;
+    if (start + JOIN_SLACK_NS < p->position_ns)
+        audioSeek(p->audio, p->position_ns + SWITCH_LEAD_NS);
+    else if (p->position_ns >= start)
+        audioSetPaused(p->audio, false);
+}
+
+bool playerTakeAudioError(Player *p, char *out, size_t size)
+{
+    if (!p->swap_failed)
+        return false;
+    p->swap_failed = false;
+    snprintf(out, size, "%s", p->swap_error);
+    return true;
 }

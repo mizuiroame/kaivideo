@@ -52,6 +52,9 @@ bool playerSubtitleText(Player *p, char *out, size_t size);
 int playerAudioTrackCount(const Player *p);
 const char *playerAudioTrackName(const Player *p, int track);
 int playerAudioTrack(const Player *p);  // -1 if none plays.
-// Plays track instead, from where playback is. False (error says why) if
-// it can't be played: the video goes on silent, another track can be chosen.
-bool playerSetAudioTrack(Player *p, int track, uint64_t now_ns, char *error, size_t error_size);
+// Plays track instead, from where playback is, without stopping the
+// picture (the change takes a moment; asked again meanwhile, it's ignored).
+void playerSetAudioTrack(Player *p, int track, uint64_t now_ns);
+// True once after a change of track that can't be played (out says why):
+// the video goes on silent, another track can be chosen.
+bool playerTakeAudioError(Player *p, char *out, size_t size);

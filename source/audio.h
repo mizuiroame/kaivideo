@@ -31,5 +31,8 @@ void audioSetPaused(Audio *a, bool paused);
 void audioSeek(Audio *a, int64_t pts_ns);
 // True once everything has been played.
 bool audioFinished(Audio *a);
+// While paused, the sound gets ready to start: true once it is, with the
+// time its sound starts from (after a seek, the target or just past it).
+bool audioReadyAt(Audio *a, int64_t *pts_ns);
 // The sound track playing (as video.h counts them).
 int audioTrack(const Audio *a);

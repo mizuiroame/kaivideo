@@ -272,13 +272,8 @@ static void nextAudioTrack(App *app, uint64_t now)
         snprintf(app->bar_note, sizeof(app->bar_note), "This video has one sound track.");
     } else {
         int next = (playerAudioTrack(p) + 1) % count;
-        char error[160];
-        if (playerSetAudioTrack(p, next, now, error, sizeof(error)))
-            snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s", playerAudioTrackName(p, next));
-        else
-            snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s. %s", playerAudioTrackName(p, next), error);
-        logLine("  sound track %d: %s", next + 1, playerAudioInfo(p));
-        app->seeks++;
+        playerSetAudioTrack(p, next, now);
+        snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s", playerAudioTrackName(p, playerAudioTrack(p)));
     }
     app->bar_note_until = now + NOTE_NS;
     app->overlay_until = now + NOTE_NS;
@@ -345,6 +340,14 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     gfxClear(GFX_RGB(0, 0, 0));
     if (frame)
         gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
+    char error[160];
+    if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.
+        snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s. %s",
+                 playerAudioTrackName(app->player, playerAudioTrack(app->player)), error);
+        app->bar_note_until = now + NOTE_NS;
+        app->overlay_until = now + NOTE_NS;
+        logLine("  sound track %d: %s", playerAudioTrack(app->player) + 1, error);
+    }
     bool bar = playerPaused(app->player) || now < app->overlay_until;
     char subtitle[1024];
     if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))

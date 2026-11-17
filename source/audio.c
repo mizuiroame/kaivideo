@@ -62,6 +62,8 @@ struct Audio {
     u64 base_played;
     u64 queued_frames;            // Frames queued since the base.
     SmoothClock smooth;           // The clock as the picture reads it (clock.h).
+    bool primed;                  // Paused with sound decoded: it starts at primed_pts.
+    int64_t primed_pts_ns;
 };
 
 bool audioSystemInit(void)
@@ -302,6 +304,7 @@ static void doSeek(Audio *a, int64_t target_ns)
     mutexLock(&a->lock);
     a->clock_valid = false;
     a->finished = false;
+    a->primed = false;
     mutexUnlock(&a->lock);
 }
 
@@ -324,6 +327,14 @@ static void audioThread(void *arg)
         if (seek) {
             doSeek(a, target);
             ended = false;
+        }
+        if (paused && !ended && a->pending_frames < BUFFER_FRAMES && !a->read_done) {
+            // Ready while paused: the first buffer decoded, so it starts at once.
+            fill(a);
+            mutexLock(&a->lock);
+            a->primed = a->pending_frames > 0 && a->skip_until_ns == 0;
+            a->primed_pts_ns = a->pending_pts_ns;
+            mutexUnlock(&a->lock);
         }
         if (paused || ended) {
             if (ended && !anyQueued(a)) {
@@ -504,6 +515,7 @@ void audioSeek(Audio *a, int64_t pts_ns)
     a->seek_requested = true;
     a->seek_ns = pts_ns;
     a->clock_valid = false;
+    a->primed = false;
     mutexUnlock(&a->lock);
 }
 
@@ -518,4 +530,13 @@ bool audioFinished(Audio *a)
 int audioTrack(const Audio *a)
 {
     return a->track;
+}
+
+bool audioReadyAt(Audio *a, int64_t *pts_ns)
+{
+    mutexLock(&a->lock);
+    bool ready = a->primed && !a->seek_requested;
+    *pts_ns = a->primed_pts_ns;
+    mutexUnlock(&a->lock);
+    return ready;
 }
