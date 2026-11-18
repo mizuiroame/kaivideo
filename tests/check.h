@@ -22,3 +22,8 @@ void testBrowser(void);
 void testSubs(void);
 void testAppRoot(void);
 void testClock(void);
+void testMenu(void);
+void testNaming(void);
+void testLibrary(void);
+void testHome(void);
+void testLibView(void);
