@@ -15,7 +15,9 @@
 #include "resume.h"
 #include "settings.h"
 #include "touch.h"
+#include "trackprefs.h"
 #include "ui.h"
+#include "watched.h"
 
 #define APP_NAME_MAX 300
 
@@ -28,7 +30,14 @@ struct App {
     Player *player;
     char playing_name[APP_NAME_MAX];
     char playing_path[BROWSER_PATH_MAX];
+    int playing_item;           // Its item in the library, or -1 (from Files).
     ResumeList resume;
+    Watched watched;            // Watched to the end, or marked by hand.
+    TrackPrefs tracks;          // The sound and subtitles chosen, by video and series.
+    bool hud_hidden;            // - hides the player's bar until pressed again.
+    int next_item;              // The episode after the one playing, or -1.
+    bool next_dismissed;        // Its card was closed: it won't play on its own.
+    bool play_next;             // ZR or a tap on the card: play it now.
     char bar_note[256];         // Said in the player's bar for a while ("Resumed at 12:34").
     uint64_t bar_note_until;
     uint64_t overlay_until;
@@ -69,6 +78,8 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now);
 void appConfigPath(char *out, size_t size, const char *name);
 void appSaveSettings(const App *app);
 void appLog(const char *fmt, ...);
+// Keeps watched.txt after app->watched changed.
+void appSaveWatched(const App *app);
 
 // app_library.c
 void appLibraryStart(App *app);  // After the settings are read.
@@ -76,6 +87,8 @@ void appLibraryExit(App *app);
 // Takes a finished scan, and works out Home again after a video.
 void appLibraryUpdate(App *app);
 void appLibraryRefreshHome(App *app);
+// Plays a film or episode of the library.
+void appLibraryPlay(App *app, int item, uint64_t now);
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appLibraryDraw(App *app, uint64_t now);
 // Looks for videos again (Settings).

@@ -7,11 +7,11 @@
 #include "theme.h"
 
 static const char *const LABELS[SETTING_COUNT] = {
-    "Library folder", "Look for new videos", "Thumbnails", "Display", "About",
+    "Library folder", "Look for new videos", "Thumbnails", "Play next episode", "Display", "About",
     "Theme", "Accent color", "Background", "Background blur", "Clock",
 };
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
-    {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_OPEN_DISPLAY, SETTING_ABOUT, SETTING_COUNT},
+    {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_AUTOPLAY, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
     {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
 };
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display"};
@@ -28,6 +28,7 @@ void configDefaults(Config *c)
     memset(c, 0, sizeof(*c));
     c->blur = BLUR_MEDIUM;
     c->thumbnails = true;
+    c->autoplay = true;
     c->subtitles = SUBTITLES_MEDIUM;
 }
 
@@ -63,6 +64,8 @@ bool configReadLine(Config *c, const char *line)
         c->clock_24h = strcmp(value, "1") == 0;
     else if (isKey(line, length, "thumbnails"))
         c->thumbnails = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "autoplay"))
+        c->autoplay = strcmp(value, "0") != 0;
     else if (isKey(line, length, "subtitles"))
         c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
     else if (isKey(line, length, "subtitle_color"))
@@ -79,7 +82,7 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "theme=%d\naccent=%d\n", c->theme, c->accent);
     if (c->background[0] && !strpbrk(c->background, "\r\n"))
         fprintf(f, "background=%s\n", c->background);
-    fprintf(f, "clock24=%d\n", c->clock_24h ? 1 : 0);
+    fprintf(f, "clock24=%d\nautoplay=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
 }
@@ -109,7 +112,7 @@ const char *settingLabel(SettingRow row)
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
-           row == SETTING_THUMBNAILS || row == SETTING_CLOCK;
+           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY;
 }
 
 static int wrap(int value, int delta, int count)
@@ -125,6 +128,7 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_BLUR: c->blur = wrap(c->blur, delta, BLUR_COUNT); break;
     case SETTING_THUMBNAILS: c->thumbnails = !c->thumbnails; break;
     case SETTING_CLOCK: c->clock_24h = !c->clock_24h; break;
+    case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     default: break;
     }
 }
@@ -138,6 +142,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_BLUR: snprintf(out, size, "%s", backgroundBlurName(c->blur)); break;
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? "On" : "Off"); break;
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? "24-hour" : "12-hour"); break;
+    case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
     default: out[0] = '\0'; break;
     }
 }

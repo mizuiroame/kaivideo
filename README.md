@@ -35,6 +35,14 @@ microSD card with the console's own hardware video decoder.
 - **Resume where you left off**: open a video you stopped halfway and it goes
   on from there (**ZL** starts it over). Videos you've started show how far
   you got.
+- **Next episode**: in an episode's last 30 seconds (the credits, usually) a
+  card on the right offers the next one; it plays on its own at the end, or
+  at once with **ZR**. The **×** on the card lets the credits run.
+- **Watched episodes** get a check mark, set when you finish one or by hand
+  (**X**, or tap the circle). **Continue watching** on Home suggests each
+  series' next episode.
+- **Your sound track and subtitles are remembered**, for each video and for
+  the rest of its series.
 - A **file browser** for the whole card (the **Files** tab): folders first,
   then videos, with their sizes.
 - Drawn on the GPU, sharp in handheld and docked. Every control works with the
@@ -68,6 +76,8 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 Press **−** (or tap **Settings**) for:
 
 - **Library folder** and **Look for new videos**, after you copy more.
+- **Play next episode**: on (the card in the last 30 seconds, and the next
+  episode at the end), or off.
 - **Theme** (Dark, Black, Midnight, Plum) and **Accent color**.
 - **Background**: put JPEG or PNG images in a `Backgrounds` folder in your
   library folder and pick one; it's blurred (**Background blur**) and
@@ -96,7 +106,8 @@ kept:
 ### Where KaiVideo keeps its files
 
 Your library folder, the list of videos found in it, where you left each
-video and a log are kept in a `config` folder next to `KaiVideo.nro`, in its own folder:
+video, what you've watched, the sound tracks and subtitles you chose and a
+log are kept in a `config` folder next to `KaiVideo.nro`, in its own folder:
 `sdmc:/switch/kaivideo/config/` (or `sdmc:/brewstore/apps/kaivideo/config/`
 when brewstore installs it). Your videos aren't touched.
 
@@ -114,7 +125,8 @@ when brewstore installs it). Your videos aren't touched.
 | **−** | Settings |
 | **+** | The menu: Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
-On a series, **◀** / **▶** change the season. Tap a tab, a card or a row to
+On a series, **◀** / **▶** change the season and **X** marks the episode
+watched or not (or tap its circle on the right). Tap a tab, a card or a row to
 open it, and drag to scroll; the **☰** before the name opens the menu. In
 **Files**, **◀** / **▶** move a page and the path at the top goes to the
 folder above. The line at the bottom of the screen always says which buttons
@@ -130,10 +142,14 @@ do what, as in KaiPlayer and KaiRadio.
 | **ZL** | Start over |
 | **X** | The list of sound tracks |
 | **Y** | The list of subtitles |
+| **−** | Hide the bar (**−** again, or a tap, shows it) |
+| **ZR** | In an episode's last 30 seconds: play the next one now |
 | **B** | Back to the library (where you were is remembered) |
 | **+** | The menu, over the video: Back to the library, Exit |
 
 In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
+The subtitles list stays open after you pick, for their size, color and style
+(**◀** / **▶**).
 Any button or tap shows the bar for a few seconds. With the bar showing, tap
 the picture or the play button to pause or play (a paused video shows a big
 play symbol), or tap or drag the progress bar to go there; **Audio** or
@@ -151,7 +167,18 @@ play symbol), or tap or drag the progress bar to go there; **Audio** or
   color. Converting them to H.264 (for example with HandBrake) makes them
   playable.
 - Not tried with 4K videos or HDR yet.
+- **Big libraries**: tried with a few dozen videos on the console (and with
+  thousands of names on a PC). With hundreds of videos, the first scan and
+  the first round of pictures take longer.
+- After a jump (**◀** / **▶**, **L** / **R**, the progress bar) the picture
+  can stutter for a moment.
 - No streaming from the network: KaiVideo plays files on the card.
+
+## Plans
+
+- **HEVC (H.265)**, as soon as libounce offers it.
+- **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
+- Smoother jumps, and checks with big libraries, 4K and HDR on the console.
 
 ## Building
 

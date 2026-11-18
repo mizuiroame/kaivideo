@@ -12,6 +12,7 @@ typedef enum {
     SETTING_LIBRARY,       // Opens the folder picker.
     SETTING_RESCAN,        // Looks for videos again.
     SETTING_THUMBNAILS,
+    SETTING_AUTOPLAY,      // Play the next episode when one ends.
     SETTING_OPEN_DISPLAY,  // Opens the Display page.
     SETTING_ABOUT,         // Opens the About page.
     SETTING_THEME,
@@ -38,6 +39,7 @@ typedef struct {
     int blur;                            // BackgroundBlur.
     bool thumbnails;                     // Pictures from the videos on their cards.
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
+    bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.

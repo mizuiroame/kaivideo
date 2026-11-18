@@ -178,6 +178,7 @@ bool thumbIsNone(const char *path, int64_t size)
 
 static Library g_lib;
 static ResumeList g_resume;
+static Watched g_watched;
 static Home g_home;
 static LibView g_view;
 
@@ -191,7 +192,15 @@ static void buildSampleLibrary(void)
     memset(&g_resume, 0, sizeof(g_resume));
     for (size_t i = 0; i < g_lib.count; i += 9)
         resumeRemember(&g_resume, g_lib.items[i].path, (int64_t)(200 + i * 13) * S, 2700 * S);
-    homeCompute(&g_home, &g_lib, &g_resume);
+    // A series' first three episodes watched: its fourth is Up next on Home.
+    watchedInit(&g_watched);
+    for (size_t s = 0; s < g_lib.show_count; s++)
+        if (strstr(g_lib.shows[s].name, "Prairie"))
+            for (int e = 0; e < 3 && e < g_lib.shows[s].count; e++)
+                watchedSet(&g_watched, g_lib.items[g_lib.shows[s].episodes[e]].path, true);
+    watchedSet(&g_watched, g_lib.items[g_lib.films[1]].path, true);
+    uiLibrarySetWatched(&g_watched);
+    homeCompute(&g_home, &g_lib, &g_resume, &g_watched);
     libviewInit(&g_view);
 }
 
@@ -274,6 +283,35 @@ static void libraryScenes(void)
         if (strstr(g_lib.shows[s].name, "Prairie"))
             libviewOpenShow(&g_view, &g_lib, (int)s, -1);
     libraryScene("thumbs_show", true, NULL, NULL);
+    // Each episode's watched circle answers a tap, on its row.
+    LibHit circle = uiLibraryTap(GFX_WIDTH - MARGIN - 12, 196 + 58 + 29);
+    if (circle.kind != LIBHIT_WATCHED || circle.a != 1) {
+        printf("TOUCH: thumbs_show: an episode's watched circle doesn't answer a tap\n");
+        g_problems++;
+    }
+
+    // The next episode, on the right of the player in the last seconds: with
+    // the bar, and with it hidden (-).
+    int next = g_lib.shows[g_view.show].episodes[3];
+    Player playing = {.paused = false, .audio = 0, .subtitle = 0, .audio_count = 1, .subtitle_count = 2};
+    for (int with_bar = 1; with_bar >= 0; with_bar--) {
+        begin();
+        drawPicture();
+        uiDrawSubtitles("No, I'm not going back there.", with_bar);
+        if (with_bar)
+            uiDrawPlayerBar(&playing, "Prairie Road \xC2\xB7 S01E03 \xC2\xB7 Texas Twister", NULL, -1);
+        uiLibraryResetHits();
+        uiDrawUpNextCard(&g_lib, next, 0.6, 18, with_bar);
+        save(with_bar ? "up_next" : "up_next_hidden");
+        // The card answers a tap (plays it), its X closes it, and the picture outside is neither.
+        int card_x = GFX_WIDTH - MARGIN - 300, bottom = with_bar ? GFX_HEIGHT - 120 - 76 : GFX_HEIGHT - 40;
+        LibHit card = uiLibraryTap(card_x + 100, bottom - 40), close = uiLibraryTap(GFX_WIDTH - MARGIN - 26,
+                                                                                       bottom - (12 + 155 + 96) + 26);
+        if (card.kind != LIBHIT_UP_NEXT || close.kind != LIBHIT_CLOSE || uiLibraryTap(300, 300).kind != LIBHIT_NONE) {
+            printf("TOUCH: up_next: the card or its close button doesn't answer as drawn\n");
+            g_problems++;
+        }
+    }
     g_view.show = -1;
     g_view.tab = TAB_HOME;
 
@@ -285,12 +323,12 @@ static void libraryScenes(void)
     themeApply(config.theme, config.accent);
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "0.3.0-beta");
+    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
     save("settings");
-    // The main page's rows: 48 high from 76 below the panel's top (5 rows, a 60 footer).
-    int top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2 + 76;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20), outside = uiLibraryTap(20, 400);
+    // The main page's rows: 48 high from 76 below the panel's top (6 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 6 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 5 * 48 + 20), outside = uiLibraryTap(20, 400);
     LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 2 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
         thumbs.kind != LIBHIT_SETTING_NEXT || thumbs.a != SETTING_THUMBNAILS) {
@@ -300,7 +338,7 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "0.3.0-beta");
+    uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_display");
     top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
@@ -310,7 +348,7 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawAbout("0.3.0-beta");
+    uiDrawAbout("1.0.0");
     uiDrawFooterHelp("[A][B] back");
     save("about");
 
@@ -318,7 +356,7 @@ static void libraryScenes(void)
     static const char *const MENU[] = {"Look for new videos", "Settings", "Exit KaiVideo"};
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawMenu("KaiVideo", "0.3.0-beta", MENU, 3, 1);
+    uiDrawMenu("KaiVideo", "1.0.0", MENU, 3, 1);
     uiDrawFooterHelp("[A] choose  [B] close  [+] exit");
     save("menu");
     LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 3 * 48 + 20)) / 2 + 76 + 2 * 48 + 20);
@@ -372,6 +410,7 @@ static void libraryScenes(void)
     }
     free(b.items);
     libraryFree(&g_lib);
+    watchedFree(&g_watched);
 }
 
 int main(int argc, char **argv)

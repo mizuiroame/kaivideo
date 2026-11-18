@@ -148,7 +148,7 @@ const char *appFooterHelp(const App *app)
         return app->library_root[0] ? "[A] open  [B] folder above  [X] use this folder  [-] cancel"
                                     : "[A] open  [B] folder above  [X] use this folder  [+] menu";
     if (app->view.show >= 0)
-        return "[A] play  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
+        return "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {
     case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";
     case TAB_FILES: return "[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu";

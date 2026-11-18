@@ -305,6 +305,17 @@ int libraryFind(const Library *lib, const char *path)
     return -1;
 }
 
+int libraryNextEpisode(const Library *lib, int item)
+{
+    if (item < 0 || (size_t)item >= lib->count || lib->items[item].show < 0)
+        return -1;
+    const LibraryShow *show = &lib->shows[lib->items[item].show];
+    for (int i = 0; i + 1 < show->count; i++)
+        if (show->episodes[i] == item)
+            return show->episodes[i + 1];
+    return -1;
+}
+
 static bool holds(const char *name, const char *query_key)
 {
     char key[NAMING_MAX];

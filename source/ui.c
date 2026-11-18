@@ -9,7 +9,7 @@
 #include "ui_style.h"
 #include "util.h"
 
-#define BAR_H 120
+#define BAR_H UI_PLAYER_BAR_H
 #define TRACK_Y_OFFSET 60
 #define ICON 42
 #define CC_W 56                 // The subtitles button, left of the time.
@@ -229,7 +229,7 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
         info_w = track_w / 3;
     fontDrawClipped(FONT_REGULAR, 16, GFX_WIDTH - MARGIN - info_w, y + 82, info_w, info, COLOR_FAINT);
     uiDrawHelp(MARGIN, (float)y + 93.0f, track_w - info_w - 24,
-               "[A] pause  [<>] 10 s  [L][R] 1 min  [ZL] start  [X] audio  [Y] subtitles  [B] back  [+] menu");
+               "[A] pause  [<>] 10 s  [L][R] 1 min  [ZL] start  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu");
 }
 
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)

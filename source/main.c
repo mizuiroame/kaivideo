@@ -3,8 +3,10 @@
 // is decoded with FFmpeg and is the clock. Choose a film or an episode in
 // the library (app_library.c), or a file in the Files tab, then A pauses,
 // left and right go 10 seconds back or forward, L and R a minute, X and Y
-// open the lists of sound tracks and subtitles, and B goes back. Every
-// control works with touch too.
+// open the lists of sound tracks and subtitles, - hides the bar, and B goes
+// back. In an episode's last 30 seconds a card offers the next one: ZR plays
+// it now, and it plays on its own at the end. Every control works with
+// touch too.
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,13 +39,14 @@
 #define SEEK_SHORT_NS 10000000000ll
 #define STALL_NS 2000000000ull       // Playing without moving this long is logged.
 #define SEEK_LONG_NS 60000000000ll
+#define UP_NEXT_NS 30000000000ll     // The next episode's card shows this long before the end.
 #define SCREEN_W 1280
 #define SCREEN_H 720
 #define PANEL_W 1920  // In case the touch panel reports its own resolution.
 
 static FILE *g_log;
 // KaiVideo's own files, next to its NRO (approot.h): settings.txt,
-// resume.txt and kaivideo.log.
+// resume.txt, watched.txt, tracks.txt and kaivideo.log.
 static char g_folder[APPROOT_PATH_MAX];
 
 void appConfigPath(char *out, size_t size, const char *name)
@@ -107,6 +110,13 @@ void appSaveSettings(const App *app)
     fclose(f);
 }
 
+void appSaveWatched(const App *app)
+{
+    char path[APPROOT_PATH_MAX + 32];
+    appConfigPath(path, sizeof(path), "watched.txt");
+    watchedSave(&app->watched, path);
+}
+
 // --- Touch ---
 
 static TouchEvent readTouch(TouchTracker *tracker, uint64_t now)
@@ -136,6 +146,45 @@ void appShowMessage(App *app, const char *message, uint64_t now)
     app->message_until = now + MESSAGE_NS;
 }
 
+// The series of the video playing, or NULL.
+static const char *playingSeries(const App *app)
+{
+    int item = app->playing_item;
+    int show = item >= 0 && (size_t)item < app->library.count ? app->library.items[item].show : -1;
+    return show >= 0 ? app->library.shows[show].name : NULL;
+}
+
+// The sound and subtitles chosen last time for this video, or its series.
+// Tracks are found by name: another episode may have them in another order.
+static void applyTrackPrefs(App *app, uint64_t now)
+{
+    Player *p = app->player;
+    const char *sound, *subs;
+    if (!trackPrefsFind(&app->tracks, app->playing_path, playingSeries(app), &sound, &subs))
+        return;
+    for (int i = 0; sound[0] && i < playerAudioTrackCount(p); i++)
+        if (strcmp(playerAudioTrackName(p, i), sound) == 0) {
+            if (i != playerAudioTrack(p))
+                playerSetAudioTrack(p, i, now);
+            break;
+        }
+    if (strcmp(subs, TRACKPREFS_OFF) == 0)
+        playerSetSubtitle(p, -1);
+    for (int i = 0; subs[0] && i < playerSubtitleCount(p); i++)
+        if (strcmp(playerSubtitleLabel(p, i), subs) == 0) {
+            playerSetSubtitle(p, i);
+            break;
+        }
+}
+
+static void rememberTracks(App *app, const char *sound, const char *subs)
+{
+    trackPrefsRemember(&app->tracks, app->playing_path, playingSeries(app), sound, subs);
+    char path[APPROOT_PATH_MAX + 32];
+    appConfigPath(path, sizeof(path), "tracks.txt");
+    trackPrefsSave(&app->tracks, path);
+}
+
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
     char error[160];
@@ -149,8 +198,14 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     }
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
+    app->playing_item = libraryFind(&app->library, path);
+    app->next_item = libraryNextEpisode(&app->library, app->playing_item);
+    app->next_dismissed = false;
+    app->play_next = false;
+    app->hud_hidden = false;
     app->bar_note[0] = '\0';
     menuClose(&app->menu);
+    applyTrackPrefs(app, now);
     int64_t resume_at;
     if (resumeFind(&app->resume, path, &resume_at, NULL)) {
         // Where it was left: go on from there, and say how to start over.
@@ -176,8 +231,12 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 static void stopVideo(App *app, const char *error, bool ended)
 {
     // Remember where it was left (or, watched to the end, forget it).
-    int64_t duration = playerDuration(app->player);
-    resumeRemember(&app->resume, app->playing_path, ended ? duration : playerPosition(app->player), duration);
+    int64_t duration = playerDuration(app->player), position = ended ? duration : playerPosition(app->player);
+    resumeRemember(&app->resume, app->playing_path, position, duration);
+    if (duration > 0 && duration - position < RESUME_END_MARGIN_NS) {  // Watched, as resuming sees it.
+        watchedSet(&app->watched, app->playing_path, true);
+        appSaveWatched(app);
+    }
     char path[APPROOT_PATH_MAX + 32];
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeSave(&app->resume, path);
@@ -225,8 +284,9 @@ static void stepOption(App *app, int row, int delta)
     appSaveSettings(app);
 }
 
-// Plays or shows the list's row, said in the bar, and closes the list; an
-// option row changes instead, and the list stays.
+// Plays or shows the list's row, said in the bar, and kept for next time.
+// The sound list closes; the subtitles' stays, for their size, color and
+// style below. An option row changes instead.
 static void chooseRow(App *app, int row, uint64_t now)
 {
     Player *p = app->player;
@@ -238,14 +298,16 @@ static void chooseRow(App *app, int row, uint64_t now)
         if (row != playerAudioTrack(p))
             playerSetAudioTrack(p, row, now);
         sayInBar(app, now, "Sound: %s", playerAudioTrackName(p, row));
+        rememberTracks(app, playerAudioTrackName(p, row), NULL);
+        menuClose(&app->menu);
     } else {
         playerSetSubtitle(p, row - 1);
         if (row == 0)
             sayInBar(app, now, "%s", "Subtitles off");
         else
             sayInBar(app, now, "Subtitles: %s", playerSubtitleLabel(p, row - 1));
+        rememberTracks(app, NULL, row == 0 ? TRACKPREFS_OFF : playerSubtitleLabel(p, row - 1));
     }
-    menuClose(&app->menu);
 }
 
 // A tap outside the open list closes it; on the other list's button, that
@@ -314,7 +376,19 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
     }
 }
 
-// False when playback should end (back to the list).
+// Whether the next episode's card shows (in the last UP_NEXT_NS), and the time left.
+static bool upNextShowing(const App *app, int64_t *left)
+{
+    if (app->next_item < 0 || !app->config.autoplay || app->next_dismissed || app->menu.open ||
+        app->app_menu != APP_MENU_NONE)
+        return false;
+    int64_t duration = playerDuration(app->player), rest = duration - playerPosition(app->player);
+    if (left)
+        *left = rest > 0 ? rest : 0;
+    return duration > UP_NEXT_NS && rest < UP_NEXT_NS;
+}
+
+// False when playback should end (back to the list, or on to the next episode).
 static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     Player *p = app->player;
@@ -328,9 +402,30 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         menuInput(app, pressed, touch, now);
         return true;
     }
-    bool overlay = playerPaused(p) || now < app->overlay_until;
+    if (upNextShowing(app, NULL)) {  // ZR or a tap on the card plays it now; its X closes it.
+        LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
+        if ((pressed & HidNpadButton_ZR) || hit.kind == LIBHIT_UP_NEXT) {
+            app->play_next = true;
+            return false;
+        }
+        if (hit.kind == LIBHIT_CLOSE) {
+            app->next_dismissed = true;
+            return true;
+        }
+    }
+    if (app->hud_hidden && (touch.type == TOUCH_TAP || (pressed & HidNpadButton_Minus))) {
+        app->hud_hidden = false;  // A tap brings the bar back, as - does.
+        app->overlay_until = now + OVERLAY_NS;
+        return true;
+    }
+    bool overlay = !app->hud_hidden && (playerPaused(p) || now < app->overlay_until);
     if (pressed || touch.type == TOUCH_TAP)
         app->overlay_until = now + OVERLAY_NS;
+    if (pressed & HidNpadButton_Minus) {
+        app->hud_hidden = true;
+        app->scrubbing = false;
+        return true;
+    }
     if (pressed & HidNpadButton_B)
         return false;
     if (pressed & HidNpadButton_Plus) {
@@ -420,6 +515,7 @@ static void watchForStall(App *app, uint64_t now)
 static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 {
     watchForStall(app, now);
+    uiLibraryResetHits();
     int w, h;
     double aspect;
     playerSize(app->player, &w, &h, &aspect);
@@ -440,16 +536,21 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         app->overlay_until = now + NOTE_NS;
         appLog("  sound track %d: %s", playerAudioTrack(app->player) + 1, error);
     }
-    bool bar = playerPaused(app->player) || now < app->overlay_until;
+    // Hidden with -, the bar shows only for an open list.
+    bool bar = app->menu.open || (!app->hud_hidden && (playerPaused(app->player) || now < app->overlay_until));
     char subtitle[1024];
     if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))
         uiDrawSubtitles(subtitle, bar);
-    if (playerPaused(app->player) && !app->menu.open)
+    if (playerPaused(app->player) && !app->menu.open && !app->hud_hidden)
         uiDrawPausedSymbol();
     if (bar)
         uiDrawPlayerBar(app->player, app->playing_name,
                         now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL,
                         app->scrubbing ? app->scrub_fraction : -1);
+    int64_t left;
+    if (upNextShowing(app, &left))
+        uiDrawUpNextCard(&app->library, app->next_item, (double)left / UP_NEXT_NS,
+                         (int)((left + 999999999) / 1000000000), bar);
     uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);
     if (app->app_menu != APP_MENU_NONE) {  // The + menu over the video.
         uiLibraryResetHits();
@@ -486,6 +587,10 @@ int main(int argc, char **argv)
     loadSettings(&app, folder, sizeof(folder));
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeLoad(&app.resume, path);
+    appConfigPath(path, sizeof(path), "watched.txt");
+    watchedLoad(&app.watched, path);
+    appConfigPath(path, sizeof(path), "tracks.txt");
+    trackPrefsLoad(&app.tracks, path);
     if (!browserOpen(&app.browser, folder))
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
     appConfigPath(path, sizeof(path), "thumbs");
@@ -518,9 +623,14 @@ int main(int argc, char **argv)
                 ended = !error[0];
             }
             if (!keep) {
+                // On to the next episode: asked for, or at the end unless its card was closed.
+                int next = app.next_item;
+                bool play_next = app.play_next || (ended && app.config.autoplay && !app.next_dismissed);
                 stopVideo(&app, error, ended);
                 if (error[0])
                     appShowMessage(&app, error, now);
+                else if (play_next && next >= 0)
+                    appLibraryPlay(&app, next, now);
                 appLibraryDraw(&app, now);
             } else {
                 drawPlayer(&app, playerUpdate(app.player, now), now);
@@ -538,6 +648,8 @@ int main(int argc, char **argv)
         stopVideo(&app, NULL, false);
     appSaveSettings(&app);
     appLibraryExit(&app);
+    watchedFree(&app.watched);
+    trackPrefsFree(&app.tracks);
     thumbsExit();
     sysinfoExit();
     browserFree(&app.browser);

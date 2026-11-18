@@ -43,7 +43,7 @@ void testLibView(void)
     CHECK(v.grid[GRID_FILMS].cursor == 11);
     LibraryRef ref;
     static Home home;
-    homeCompute(&home, &lib, NULL);
+    homeCompute(&home, &lib, NULL, NULL);
     CHECK(libviewSelected(&v, &lib, &home, &ref) && !ref.is_show && ref.index == lib.films[11]);
 
     // A series' page: seasons, and the episodes of each.
@@ -89,7 +89,7 @@ void testLibView(void)
     libraryInit(&lib, "sdmc:/V");
     libraryAdd(&lib, "sdmc:/V/Only (2000).mkv", 1, 1);
     libraryBuild(&lib);
-    homeCompute(&home, &lib, NULL);
+    homeCompute(&home, &lib, NULL, NULL);
     v.show = 0;
     libviewClamp(&v, &lib, &home);
     CHECK(v.show == -1 && v.grid[GRID_FILMS].cursor == 0 && v.result_count == 0 && v.home_row <= 1);

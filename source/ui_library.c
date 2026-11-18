@@ -7,6 +7,7 @@
 #include "font.h"
 #include "gfx.h"
 #include "thumbs.h"
+#include "ui.h"
 #include "ui_buttons.h"
 #include "ui_style.h"
 #include "util.h"
@@ -36,6 +37,11 @@
 #define SEARCH_LIST_Y 160
 #define MAX_HITS 96
 #define SERIES_PICTURE_TRIES 8  // Episodes tried for a series' picture.
+#define CHECK_R 13             // A list row's watched circle.
+#define UP_NEXT_W 300          // The next episode's card, in the player.
+#define UP_NEXT_PAD 12
+#define UP_NEXT_PIC_H ((UP_NEXT_W - 2 * UP_NEXT_PAD) * 9 / 16)
+#define UP_NEXT_TEXT_H 96
 
 // --- Touch targets, kept as they're drawn ---
 
@@ -66,10 +72,39 @@ LibHit uiLibraryTap(int x, int y)
 // --- Pieces ---
 
 static bool g_thumbnails = true;
+static const Watched *g_watched;
 
 void uiLibrarySetThumbnails(bool on)
 {
     g_thumbnails = on;
+}
+
+void uiLibrarySetWatched(const Watched *watched)
+{
+    g_watched = watched;
+}
+
+static bool seen(const Library *lib, int item)
+{
+    return g_watched && item >= 0 && watchedHas(g_watched, lib->items[item].path);
+}
+
+// A check mark centered at cx, cy, size across.
+static void drawCheckMark(float cx, float cy, float size, Color color)
+{
+    gfxLine(cx - size * 0.45f, cy, cx - size * 0.12f, cy + size * 0.32f, 3, color);
+    gfxLine(cx - size * 0.12f, cy + size * 0.32f, cx + size * 0.45f, cy - size * 0.3f, 3, color);
+}
+
+// Watched: a filled circle with a check; not, an empty ring (a list row's toggle).
+static void drawSeenCircle(float cx, float cy, float r, bool on, bool ring)
+{
+    if (on) {
+        gfxFillRoundRect((int)(cx - r), (int)(cy - r), (int)(2 * r), (int)(2 * r), (int)r, COLOR_ACCENT);
+        drawCheckMark(cx, cy, r * 1.1f, COLOR_BG);
+    } else if (ring) {
+        gfxArc(cx, cy, r - 1.5f, 2, 0, 6.2832f, COLOR_FAINT);
+    }
 }
 
 void uiDrawBackground(void)
@@ -310,7 +345,7 @@ static int drawWrappedUp(FontFace face, int px, int x, int bottom, int w, int li
 // "SERIES"), how far it was watched along the bottom, and a white ring when
 // the cursor is on it.
 static void drawCard(int x, int y, int w, int h, const char *name, const char *tag, double progress, bool focused,
-                     const uint32_t *picture)
+                     const uint32_t *picture, bool watched_badge)
 {
     if (focused)
         gfxFillRoundRect(x - 4, y - 4, w + 8, h + 8, 14, COLOR_TEXT);
@@ -339,6 +374,8 @@ static void drawCard(int x, int y, int w, int h, const char *name, const char *t
         gfxFillRoundRect(x + 14, y + h - 12, bar_w, 4, 2, GFX_RGB(0x00, 0x00, 0x00));
         gfxFillRoundRect(x + 14, y + h - 12, done > 4 ? done : 4, 4, 2, COLOR_ACCENT);
     }
+    if (watched_badge)
+        drawSeenCircle(x + w - 22.0f, y + 22.0f, 12, true, false);
 }
 
 // How far a video was watched (0-1), or -1 if it wasn't started.
@@ -390,13 +427,16 @@ static void describe(const Library *lib, LibraryRef ref, const char **name, cons
     }
 }
 
+// tag_over: a tag in place of its own ("UP NEXT"), or NULL.
 static void drawRefCard(const Library *lib, const ResumeList *resume, LibraryRef ref, int x, int y, int w, int h,
-                        bool focused)
+                        bool focused, const char *tag_over)
 {
     const char *name, *tag;
     char below[200];
     describe(lib, ref, &name, &tag, below, sizeof(below));
-    drawCard(x, y, w, h, name, tag, ref.is_show ? -1 : watched(lib, resume, ref.index), focused, pictureOf(lib, ref));
+    double progress = ref.is_show ? -1 : watched(lib, resume, ref.index);
+    drawCard(x, y, w, h, name, tag_over ? tag_over : tag, progress, focused, pictureOf(lib, ref),
+             !ref.is_show && progress < 0 && seen(lib, ref.index));
     fontDrawClipped(FONT_REGULAR, 17, x + 2, y + h + 10, w - 4, below, focused ? COLOR_TEXT : COLOR_DIM);
 }
 
@@ -432,7 +472,7 @@ static void drawHome(const LibView *v, const Library *lib, const Home *home, con
         for (int c = cols->first; c < row->count && c <= cols->first + LIBVIEW_HOME_COLS; c++) {
             int x = MARGIN + (c - cols->first) * (HOME_CARD_W + GAP);
             drawRefCard(lib, resume, row->items[c], x, y + HOME_TITLE_H, HOME_CARD_W, HOME_CARD_H,
-                        r == v->home_row && c == cols->cursor);
+                        r == v->home_row && c == cols->cursor, row->up_next[c] ? "UP NEXT" : NULL);
             int w = x + HOME_CARD_W > GFX_WIDTH ? GFX_WIDTH - x : HOME_CARD_W;
             uiLibraryAddHit(x, y + HOME_TITLE_H, w, HOME_CARD_H + 40, LIBHIT_HOME_CARD, r, c);
         }
@@ -451,7 +491,7 @@ static void drawGrid(const LibView *v, LibGrid grid, const Library *lib, const R
         int col = i % LIBVIEW_COLS, row = (i - first) / LIBVIEW_COLS;
         int x = MARGIN + col * (GRID_CARD_W + GAP), y = GRID_Y + row * GRID_ROW_H;
         LibraryRef ref = grid == GRID_FILMS ? (LibraryRef){false, lib->films[i]} : (LibraryRef){true, i};
-        drawRefCard(lib, resume, ref, x, y, GRID_CARD_W, GRID_CARD_H, i == s->cursor);
+        drawRefCard(lib, resume, ref, x, y, GRID_CARD_W, GRID_CARD_H, i == s->cursor, NULL);
         if (y < GFX_HEIGHT)
             uiLibraryAddHit(x, y, GRID_CARD_W, GRID_CARD_H + 40, LIBHIT_GRID_CARD, i, 0);
     }
@@ -461,8 +501,9 @@ static void drawGrid(const LibView *v, LibGrid grid, const Library *lib, const R
 
 // --- A series' page ---
 
+// watched: 1 or 0 draws the row's watched circle (filled, or a ring), -1 none.
 static void drawListRow(int y, bool focused, const char *number, const char *title, const char *detail,
-                        double progress, const uint32_t *picture)
+                        double progress, const uint32_t *picture, int watched_mark)
 {
     if (focused) {
         gfxFillRoundRect(MARGIN - 12, y + 2, GFX_WIDTH - 2 * (MARGIN - 12), LIST_ROW_H - 4, 10, COLOR_SURFACE_HI);
@@ -481,11 +522,17 @@ static void drawListRow(int y, bool focused, const char *number, const char *tit
             gfxFillRoundRect(x, y + 6, pic_w, LIST_ROW_H - 12, 6, COLOR_SURFACE_HI);
         x += pic_w + 18;
     }
+    int right = GFX_WIDTH - MARGIN;
+    if (watched_mark >= 0) {
+        drawSeenCircle(right - CHECK_R, y + LIST_ROW_H / 2.0f, CHECK_R, watched_mark == 1, true);
+        right -= 2 * CHECK_R + 20;
+    }
     int detail_w = detail && detail[0] ? fontTextWidth(FONT_REGULAR, 17, detail) : 0;
-    int title_w = GFX_WIDTH - MARGIN - x - (detail_w ? detail_w + 24 : 0);
-    fontDrawClipped(FONT_BOLD, 21, x, y + (LIST_ROW_H - 30) / 2, title_w, title, COLOR_TEXT);
+    int title_w = right - x - (detail_w ? detail_w + 24 : 0);
+    fontDrawClipped(FONT_BOLD, 21, x, y + (LIST_ROW_H - 30) / 2, title_w, title,
+                    watched_mark == 1 && !focused ? COLOR_DIM : COLOR_TEXT);
     if (detail_w)
-        fontDrawMiddle(FONT_REGULAR, 17, GFX_WIDTH - MARGIN - detail_w, y + LIST_ROW_H / 2.0f, detail, COLOR_DIM);
+        fontDrawMiddle(FONT_REGULAR, 17, right - detail_w, y + LIST_ROW_H / 2.0f, detail, COLOR_DIM);
     if (progress >= 0) {
         int bar_w = title_w < 220 ? title_w : 220, done = (int)(bar_w * progress);
         gfxFillRoundRect(x, y + LIST_ROW_H - 12, bar_w, 4, 2, COLOR_TRACK);
@@ -560,8 +607,11 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
             snprintf(title, sizeof(title), "Episode %d", it->name.episode);
         formatSize(it->size, size, sizeof(size));
         drawListRow(y, e == v->episodes.cursor, number, title, size, watched(lib, resume, item),
-                    pictureOf(lib, (LibraryRef){false, item}));
+                    pictureOf(lib, (LibraryRef){false, item}), seen(lib, item) ? 1 : 0);
         uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_EPISODE, e, 0);
+        // The circle on the right marks it watched or not (X).
+        uiLibraryAddHit(GFX_WIDTH - MARGIN - 2 * CHECK_R - 16, y, 2 * CHECK_R + 16 + MARGIN, LIST_ROW_H, LIBHIT_WATCHED,
+                        e, 0);
     }
     drawScrollbar(SHOW_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, v->episodes.first, LIBVIEW_LIST_ROWS, count);
 }
@@ -605,7 +655,7 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
         const char *detail = episode ? name : below;
         int y = SEARCH_LIST_Y + (i - s->first) * LIST_ROW_H;
         drawListRow(y, i == s->cursor, NULL, title, detail, ref.is_show ? -1 : watched(lib, resume, ref.index),
-                    pictureOf(lib, ref));
+                    pictureOf(lib, ref), !ref.is_show && seen(lib, ref.index) ? 1 : -1);
         uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_RESULT, i, 0);
     }
     drawScrollbar(SEARCH_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, s->first, LIBVIEW_LIST_ROWS, v->result_count);
@@ -621,6 +671,55 @@ void uiDrawToast(const char *message)
     int x = (GFX_WIDTH - w) / 2, y = UI_FOOTER_Y - 58;
     gfxFillRoundRect(x, y, w, 46, 23, COLOR_SURFACE_HI);
     fontDrawClipped(FONT_BOLD, 18, x + 24, y + 10, w - 48, message, COLOR_ERROR);
+}
+
+// --- The next episode, in the player's last seconds ---
+
+void uiDrawUpNextCard(const Library *lib, int item, double fraction_left, int seconds_left, bool bar_shown)
+{
+    const LibraryItem *it = &lib->items[item];
+    int h = UP_NEXT_PAD + UP_NEXT_PIC_H + UP_NEXT_TEXT_H;
+    int x = GFX_WIDTH - MARGIN - UP_NEXT_W;
+    int y = (bar_shown ? GFX_HEIGHT - UI_PLAYER_BAR_H - 76 : GFX_HEIGHT - 40) - h;
+    gfxFillRoundRect(x - 2, y - 2, UP_NEXT_W + 4, h + 4, 16, COLOR_SURFACE_HI);  // An edge against the picture.
+    gfxFillRoundRect(x, y, UP_NEXT_W, h, 14, COLOR_SURFACE);
+    uiLibraryAddHit(x, y, UP_NEXT_W, h, LIBHIT_UP_NEXT, 0, 0);  // The whole card plays it.
+
+    int px = x + UP_NEXT_PAD, py = y + UP_NEXT_PAD, pw = UP_NEXT_W - 2 * UP_NEXT_PAD;
+    const uint32_t *picture = pictureOf(lib, (LibraryRef){false, item});
+    if (picture) {
+        drawPicture(picture, px, py, pw, UP_NEXT_PIC_H, 8);
+    } else {
+        Color top, bottom;
+        cardColors(lib->shows[it->show].name, &top, &bottom);
+        gfxSetClipRound(px, py, pw, UP_NEXT_PIC_H, 8);
+        gfxGradientV(px, py, pw, UP_NEXT_PIC_H, top, bottom);
+        gfxResetClip();
+    }
+    float cx = px + pw / 2.0f, cy = py + UP_NEXT_PIC_H / 2.0f;
+    gfxFillCircle((int)cx, (int)cy, 24, GFX_RGB(0, 0, 0));
+    gfxTriangle(cx - 7, cy - 12, cx - 7, cy + 12, cx + 14, cy, COLOR_TEXT);
+    // The time left, as a bar along the picture's bottom.
+    int done = (int)(pw * (fraction_left < 0 ? 0 : fraction_left > 1 ? 1 : fraction_left));
+    gfxFillRect(px, py + UP_NEXT_PIC_H - 4, pw, 4, GFX_RGB(0, 0, 0));
+    gfxFillRect(px, py + UP_NEXT_PIC_H - 4, done, 4, COLOR_ACCENT);
+
+    // Close: no next episode this time (it stays on the credits).
+    float kx = x + UP_NEXT_W - 26.0f, ky = y + 26.0f;
+    gfxFillCircle((int)kx, (int)ky, 15, GFX_RGB(0, 0, 0));
+    gfxLine(kx - 5, ky - 5, kx + 5, ky + 5, 2, COLOR_TEXT);
+    gfxLine(kx - 5, ky + 5, kx + 5, ky - 5, 2, COLOR_TEXT);
+    uiLibraryAddHit((int)kx - 26, (int)ky - 26, 52, 52, LIBHIT_CLOSE, 0, 0);
+
+    int ty = py + UP_NEXT_PIC_H + 12;
+    char when[48];
+    snprintf(when, sizeof(when), "UP NEXT  \xC2\xB7  %d s", seconds_left);
+    fontDraw(FONT_BOLD, 14, px, ty, when, COLOR_ACCENT);
+    char label[200];
+    episodeLabel(it, label, sizeof(label));
+    fontDrawClipped(FONT_BOLD, 19, px, ty + 22, pw, label, COLOR_TEXT);
+    uiDrawButton(px, ty + 68.0f, "ZR", COLOR_SURFACE_HI, COLOR_TEXT);
+    fontDrawMiddle(FONT_REGULAR, 17, px + uiButtonWidth("ZR") + 10, ty + 68.0f, "play now", COLOR_DIM);
 }
 
 // --- The screen ---

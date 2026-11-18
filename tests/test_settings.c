@@ -12,9 +12,10 @@ void testSettings(void)
     Config c;
     configDefaults(&c);
     CHECK(c.thumbnails && c.subtitles == SUBTITLES_MEDIUM && c.theme == 0 && c.subtitle_style == SUBTITLE_OUTLINE);
+    CHECK(c.autoplay);  // The next episode plays on its own.
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 5 && rows[3] == SETTING_OPEN_DISPLAY);
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 6 && rows[3] == SETTING_AUTOPLAY && rows[4] == SETTING_OPEN_DISPLAY);
     CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
 
@@ -23,11 +24,15 @@ void testSettings(void)
     settingStep(&c, SETTING_ACCENT, 2);
     settingStep(&c, SETTING_THUMBNAILS, 1);
     settingStep(&c, SETTING_CLOCK, 1);
+    settingStep(&c, SETTING_AUTOPLAY, 1);
+    CHECK(!c.autoplay && settingIsChoice(SETTING_AUTOPLAY));
     snprintf(c.background, sizeof(c.background), "%s", "beach.jpg");
     char value[64];
     settingValue(&c, SETTING_ACCENT, value, sizeof(value));
     CHECK(strcmp(value, "Green") == 0);
     settingValue(&c, SETTING_THUMBNAILS, value, sizeof(value));
+    CHECK(strcmp(value, "Off") == 0);
+    settingValue(&c, SETTING_AUTOPLAY, value, sizeof(value));
     CHECK(strcmp(value, "Off") == 0);
     settingValue(&c, SETTING_ABOUT, value, sizeof(value));
     CHECK(value[0] == '\0' && !settingIsChoice(SETTING_ABOUT) && settingIsChoice(SETTING_BACKGROUND));
@@ -64,7 +69,7 @@ void testSettings(void)
     if (f)
         fclose(f);
     CHECK(back.theme == c.theme && back.accent == c.accent && !back.thumbnails && back.subtitles == SUBTITLES_LARGE &&
-          back.clock_24h && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
+          back.clock_24h && !back.autoplay && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
           strcmp(back.background, "beach.jpg") == 0);
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));
     CHECK(configReadLine(&back, "theme=99") && back.theme == 0);

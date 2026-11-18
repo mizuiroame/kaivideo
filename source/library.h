@@ -67,6 +67,9 @@ bool libraryLoad(Library *lib, const char *file);
 
 // The item with this path, or -1.
 int libraryFind(const Library *lib, const char *path);
+// The episode after item in its series (the next season's first after a
+// season's last), or -1: the last one, or a film.
+int libraryNextEpisode(const Library *lib, int item);
 
 // Series, films and episodes whose names hold the query (compared by
 // namingKey): series first, then films, then episodes. Returns how many

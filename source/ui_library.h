@@ -9,6 +9,7 @@
 #include "libview.h"
 #include "resume.h"
 #include "sysinfo.h"
+#include "watched.h"
 
 #define UI_TAB_BAR_H 64
 #define UI_FOOTER_Y 664  // The help line below it, as in KaiPlayer.
@@ -24,6 +25,7 @@ typedef enum {
     LIBHIT_BACK,        // A series' page: back to where it was opened from.
     LIBHIT_SEASON,      // a: the season (an index in its seasons).
     LIBHIT_EPISODE,     // a: the episode (an index in the season).
+    LIBHIT_WATCHED,     // a: the episode whose watched circle it is.
     LIBHIT_SEARCH_BOX,  // Type a search.
     LIBHIT_RESULT,      // a: the result.
     LIBHIT_SETTING,     // a: a row of Settings (A on it).
@@ -32,6 +34,7 @@ typedef enum {
     LIBHIT_PANEL,       // Settings or About, but not a row: nothing.
     LIBHIT_PAGE_BACK,   // A Settings page's Back: the main page.
     LIBHIT_CLOSE,       // Outside Settings or About, or their back arrow: closes.
+    LIBHIT_UP_NEXT,     // The next episode's card in the player: play it now.
 } LibHitKind;
 
 typedef struct {
@@ -43,6 +46,8 @@ typedef struct {
 void uiDrawBackground(void);
 // Cards show pictures from the videos (thumbs.h) when on.
 void uiLibrarySetThumbnails(bool on);
+// What was watched, for the marks on episodes and films (NULL: none).
+void uiLibrarySetWatched(const Watched *watched);
 // The clock and battery for the header, and how the clock reads.
 void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h);
 // Forgets the touch targets: each frame starts with none.
@@ -63,6 +68,11 @@ void uiDrawMenu(const char *title, const char *version, const char *const *items
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
                    bool folder_set, const char *status, const char *message);
 
+// The next episode (item), a card on the right of the player in an
+// episode's last seconds: its picture, what's left (fraction_left of the
+// time, seconds_left), ZR to play it now, and a close button (LIBHIT_CLOSE).
+// Above the bar when it's shown.
+void uiDrawUpNextCard(const Library *lib, int item, double fraction_left, int seconds_left, bool bar_shown);
 // A message for a while at the bottom (an error), over everything.
 void uiDrawToast(const char *message);
 // Where a tap lands on what was drawn last.

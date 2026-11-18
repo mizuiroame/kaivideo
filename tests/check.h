@@ -29,3 +29,5 @@ void testHome(void);
 void testLibView(void);
 void testSettings(void);
 void testThumbs(void);
+void testWatched(void);
+void testTrackPrefs(void);

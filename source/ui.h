@@ -16,6 +16,7 @@
 #define UI_ROW_H 58
 #define UI_ROWS 9
 #define UI_MENU_ROW_H 48  // A row of the player's drop-down lists.
+#define UI_PLAYER_BAR_H 120  // The player's bar along the bottom.
 
 // The first row shown so that the cursor stays in view.
 size_t uiFirstVisible(size_t cursor, size_t count);

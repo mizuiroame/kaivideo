@@ -16,7 +16,7 @@ void testHome(void)
     static ResumeList resume;
     memset(&resume, 0, sizeof(resume));
     static Home home;
-    homeCompute(&home, &lib, &resume);
+    homeCompute(&home, &lib, &resume, NULL);
     // Nothing started: no Continue watching row.
     CHECK(home.count == 3 && home.rows[0].kind == HOME_RECENT && home.rows[0].count == 2 &&
           home.rows[0].items[0].is_show);
@@ -27,7 +27,7 @@ void testHome(void)
     resumeRemember(&resume, "sdmc:/Videos/Quiet Harbor (2017)/harbor.mp4", 60 * S, 600 * S);
     resumeRemember(&resume, "sdmc:/Elsewhere/clip.mp4", 60 * S, 600 * S);
     resumeRemember(&resume, "sdmc:/Videos/Rook/Rook.S01E02.mkv", 60 * S, 600 * S);
-    homeCompute(&home, &lib, &resume);
+    homeCompute(&home, &lib, &resume, NULL);
     CHECK(home.count == 4 && home.rows[0].kind == HOME_CONTINUE && home.rows[0].count == 2);
     CHECK(!home.rows[0].items[0].is_show && lib.items[home.rows[0].items[0].index].name.episode == 2);
     CHECK(strcmp(homeRowTitle(HOME_CONTINUE), "Continue watching") == 0);
@@ -36,7 +36,7 @@ void testHome(void)
     static Library empty;
     libraryInit(&empty, "sdmc:/Nothing");
     libraryBuild(&empty);
-    homeCompute(&home, &empty, &resume);
+    homeCompute(&home, &empty, &resume, NULL);
     CHECK(home.count == 0);
     libraryFree(&empty);
     libraryFree(&lib);

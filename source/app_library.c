@@ -1,6 +1,6 @@
 // The library's screens: the tabs (Home, Films, Series, Search, Files), a
-// series' page, and choosing the library folder. L and R (or ZL and ZR)
-// change tab, Y searches, - chooses the folder, + exits.
+// series' page, and choosing the library folder. L and R (or ZL and ZR) change tab, Y searches, X marks an
+// episode watched, - opens Settings, + the menu.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +31,7 @@ static void cachePath(char *out, size_t size)
 
 void appLibraryRefreshHome(App *app)
 {
-    homeCompute(&app->home, &app->library, &app->resume);
+    homeCompute(&app->home, &app->library, &app->resume, &app->watched);
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -87,6 +87,10 @@ void appLibraryUpdate(App *app)
     }
     libraryFree(&app->library);
     app->library = found;
+    if (app->player) {  // The indexes were the old library's.
+        app->playing_item = libraryFind(&app->library, app->playing_path);
+        app->next_item = libraryNextEpisode(&app->library, app->playing_item);
+    }
     char path[LIBRARY_PATH_MAX];
     cachePath(path, sizeof(path));
     if (ok)
@@ -142,6 +146,23 @@ static void openRef(App *app, LibraryRef ref, uint64_t now)
     char name[APP_NAME_MAX];
     itemName(&app->library, ref.index, name, sizeof(name));
     appStartVideo(app, app->library.items[ref.index].path, name, now);
+}
+
+// Marks the episode under the cursor on a series' page watched, or not.
+static void toggleWatched(App *app)
+{
+    int item = libviewShowItem(&app->view, &app->library);
+    if (item < 0)
+        return;
+    const char *path = app->library.items[item].path;
+    watchedSet(&app->watched, path, !watchedHas(&app->watched, path));
+    appSaveWatched(app);
+    appLibraryRefreshHome(app);  // Up next changed.
+}
+
+void appLibraryPlay(App *app, int item, uint64_t now)
+{
+    openRef(app, (LibraryRef){false, item}, now);
 }
 
 static void openSelected(App *app, uint64_t now)
@@ -297,6 +318,8 @@ static void buttonInput(App *app, uint64_t pressed, uint64_t now)
     }
     if ((pressed & HidNpadButton_B) && v->show >= 0)
         v->show = -1;
+    if ((pressed & HidNpadButton_X) && v->show >= 0)
+        toggleWatched(app);
 }
 
 // --- Touch ---
@@ -325,6 +348,10 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     case LIBHIT_EPISODE:
         v->episodes.cursor = hit.a;
         openSelected(app, now);
+        break;
+    case LIBHIT_WATCHED:
+        v->episodes.cursor = hit.a;
+        toggleWatched(app);
         break;
     case LIBHIT_SEARCH_BOX: search(app, now); break;
     case LIBHIT_RESULT:
@@ -433,6 +460,7 @@ void appLibraryDraw(App *app, uint64_t now)
     bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
+    uiLibrarySetWatched(&app->watched);
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));
