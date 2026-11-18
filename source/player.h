@@ -68,6 +68,12 @@ int playerSubtitle(const Player *p);  // -1 for none.
 void playerSetSubtitle(Player *p, int track);
 // The text to show now ('\n' between lines); false if none.
 bool playerSubtitleText(Player *p, char *out, size_t size);
+// True if the subtitle color and style settings do something: the track shown
+// doesn't bring its own look or, with subtitles off, some track doesn't.
+bool playerSubtitleColorApplies(const Player *p);
+// True if the track shown is drawn with its styles (ASS): out gets its picture
+// now for this area (out->w is 0 when nothing shows).
+bool playerSubtitlePicture(Player *p, const AssArea *area, AssPicture *out);
 
 // Sound tracks: the file's, in its order.
 int playerAudioTrackCount(const Player *p);

@@ -39,6 +39,16 @@ void menuClose(Menu *m)
     m->open = false;
 }
 
+void menuSetFixed(Menu *m, int fixed)
+{
+    int list = listCount(m);
+    m->fixed = fixed < 0 ? 0 : fixed;
+    m->count = list + m->fixed;
+    if (m->cursor >= m->count)
+        m->cursor = m->count > 0 ? m->count - 1 : 0;
+    keepInView(m);
+}
+
 void menuMove(Menu *m, int delta)
 {
     if (m->count == 0)

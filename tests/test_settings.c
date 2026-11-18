@@ -49,6 +49,12 @@ void testSettings(void)
     configDefaults(&small);
     subtitleOptionStep(&small, SUBOPT_SIZE, -1);
     CHECK(settingSubtitlePx(&c) > settingSubtitlePx(&small));
+    CHECK(settingSubtitleScale(&small) < 1.0);
+    Config medium;
+    configDefaults(&medium);
+    CHECK(settingSubtitleScale(&medium) == 1.0);
+    CHECK(subtitleOptionCount(true) == SUBOPT_COUNT);
+    CHECK(subtitleOptionCount(false) == 1);  // Only the size, the first.
 
     // Written and read back; other keys and broken values are left alone.
     const char *file = TMP_ROOT "/settings_test.txt";

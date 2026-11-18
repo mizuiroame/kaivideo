@@ -61,9 +61,14 @@ void settingStep(Config *c, SettingRow row, int delta);
 // The row's value as shown ("Dark", "Medium"); "" for rows that open a page.
 void settingValue(const Config *c, SettingRow row, char *out, size_t size);
 
+// How many of the options (from the first) a list offers: subtitles with their
+// own look take only the size.
+int subtitleOptionCount(bool color_applies);
 const char *subtitleOptionLabel(SubtitleOption option);
 void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size);
 void subtitleOptionStep(Config *c, SubtitleOption option, int delta);
 // The subtitles' text size in pixels of the 1280x720 layout, and color (0xRRGGBB).
 int settingSubtitlePx(const Config *c);
+// The size chosen against Medium: for subtitles that bring their own sizes.
+double settingSubtitleScale(const Config *c);
 unsigned settingSubtitleColor(const Config *c);

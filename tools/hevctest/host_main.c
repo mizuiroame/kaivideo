@@ -4,6 +4,7 @@
 #include <time.h>
 
 #include "source/bench.h"
+#include "source/seekbench.h"
 
 static uint64_t nowNs(void)
 {
@@ -38,6 +39,17 @@ int main(int argc, char **argv)
             if (r.frames == 0)
                 failures++;
         }
+        SeekOpenResult opened;
+        SeekRunResult sought;
+        if (!seekbenchOpen(argv[i], NULL, nowNs, &opened, error, sizeof(error)) ||
+            !seekbenchRun(argv[i], THREADS[1], nowNs, NULL, NULL, &sought, error, sizeof(error))) {
+            printf("  open and seek: FAILED %s\n", error);
+            failures++;
+            continue;
+        }
+        printf("  open: headers %.1f ms, info %.1f ms, index %.1f ms\n", opened.open_ms, opened.info_ms, opened.index_ms);
+        printf("  seek: first %.1f ms, target %.1f ms, slowest %.1f ms, %.0f packets, %d seeks\n", sought.first_ms,
+               sought.target_ms, sought.worst_ms, sought.packets, sought.seeks);
     }
     return failures ? 1 : 0;
 }

@@ -146,14 +146,44 @@ void playerSetSubtitle(Player *p, int track)
     p->subtitle = track >= 0 && track < playerSubtitleCount(p) ? track : -1;
 }
 
+// The time subtitles are at: the delay moves them later.
+static int64_t subtitleTime(const Player *p)
+{
+    return p->position_ns - (int64_t)p->subtitle_delay_ms * MS_NS;
+}
+
 bool playerSubtitleText(Player *p, char *out, size_t size)
 {
     if (p->subtitle < 0)
         return false;
-    int64_t at = p->position_ns - (int64_t)p->subtitle_delay_ms * MS_NS;
+    int64_t at = subtitleTime(p);
     if (p->has_external && p->subtitle == 0)
         return subsAt(&p->external, at, out, size);
     return videoSubtitleAt(p->video, p->subtitle - (p->has_external ? 1 : 0), at, out, size);
+}
+
+// A track of the list, in the video's numbering (the .srt comes first in the list).
+static int videoTrackOf(const Player *p, int track)
+{
+    return track - (p->has_external ? 1 : 0);
+}
+
+bool playerSubtitleColorApplies(const Player *p)
+{
+    if (p->subtitle >= 0)
+        return !videoSubtitleStyled(p->video, videoTrackOf(p, p->subtitle));
+    for (int i = 0; i < playerSubtitleCount(p); i++)
+        if (!videoSubtitleStyled(p->video, videoTrackOf(p, i)))
+            return true;
+    return false;
+}
+
+bool playerSubtitlePicture(Player *p, const AssArea *area, AssPicture *out)
+{
+    int track = videoTrackOf(p, p->subtitle);
+    if (p->subtitle < 0 || track < 0)
+        return false;
+    return videoSubtitlePicture(p->video, track, subtitleTime(p), area, out);
 }
 
 // Makes the console's clock the one from here, carrying on from position.

@@ -45,7 +45,7 @@ DATA		:=	data
 INCLUDES	:=	include third_party
 APP_TITLE	:=	KaiVideo
 APP_AUTHOR	:=	Mizuiro
-APP_VERSION	:=	1.2.0
+APP_VERSION	:=	1.3.0
 #ROMFS	:=	romfs
 
 #---------------------------------------------------------------------------------
@@ -70,7 +70,8 @@ ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map) \
 			-Wl,--wrap=__syscall_thread_create
 
-LIBS	:= -lavfilter -lavformat -lavcodec -lswresample -lavutil -lz -lnx -lm
+LIBS	:= -lavfilter -lavformat -lavcodec -lswresample -lavutil \
+			-lass -lfreetype -lharfbuzz -lfreetype -lfribidi -lpng -lbz2 -lz -lnx -lm
 ifeq ($(GPU),1)
 LIBS	:= -lEGL $(LIBS)
 endif

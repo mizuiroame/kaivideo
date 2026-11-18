@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "asssubs.h"
 #include "gfx.h"
 #include "playback.h"
 
@@ -21,6 +22,7 @@ typedef struct {
     unsigned shown;      // Frames drawn.
     unsigned dropped;    // Decoded but late: skipped to keep up.
     unsigned decoded;    // Out of the decoder.
+    unsigned previews;   // Pictures shown while a seek was on its way.
     double copy_ms;      // Average time to take a frame from the decoder.
 } VideoStats;
 
@@ -40,8 +42,9 @@ const char *videoDescription(const Video *v);
 void videoSize(const Video *v, int *width, int *height, double *aspect);
 
 // The frame to show when playback is at media_ns (the file's time): the
-// latest whose time has come. NULL before the first. The frame stays valid
-// until the next call.
+// latest whose time has come; on the CPU, during a seek, the nearest picture
+// before its target until the target is ready. NULL before the first. The
+// frame stays valid until the next call.
 const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns);
 // The time of the next frame waiting to be shown; false if none is decoded yet.
 bool videoNextPts(Video *v, int64_t *pts_ns);
@@ -62,6 +65,13 @@ const char *videoSubtitleLabel(const Video *v, int track);
 int videoSubtitlePreferred(const Video *v);
 // The track's text at pos_ns into out ('\n' between lines); false if none.
 bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size);
+// True if the track brings its own look (ASS): see videoSubtitlePicture.
+bool videoSubtitleStyled(const Video *v, int track);
+// The fonts styled subtitles fall back on, kept by the caller for as long as videos open.
+void videoSetSubtitleFonts(const AssFont *fonts, int count);
+// True if the track is drawn with its styles (ASS): its picture at pos_ns for
+// this area goes in out (out->w is 0 when nothing shows).
+bool videoSubtitlePicture(Video *v, int track, int64_t pos_ns, const AssArea *area, AssPicture *out);
 
 // The file's chapters, in order of time.
 const PlaybackChapter *videoChapters(const Video *v, int *count);

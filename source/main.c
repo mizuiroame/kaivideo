@@ -20,6 +20,8 @@
 #include "browser.h"
 #include "buttons.h"
 #include "font.h"
+#include "font_bold_ttf.h"
+#include "font_regular_ttf.h"
 #include "gfx.h"
 #include "input.h"
 #include "menu.h"
@@ -260,6 +262,12 @@ static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 }
 
 // Opens the list of sound tracks or subtitles (or says there's nothing to choose).
+// The options under the subtitle list, for the track chosen now.
+static int subtitleOptionRows(const Player *p)
+{
+    return subtitleOptionCount(playerSubtitleColorApplies(p));
+}
+
 static void openMenu(App *app, UiMenuKind kind, uint64_t now)
 {
     Player *p = app->player;
@@ -274,9 +282,11 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
         sayInBar(app, now, "%s", "This video has no subtitles.");
     else if (kind == UI_MENU_AUDIO)
         menuOpen(&app->menu, playerAudioTrackCount(p), 0, playerAudioTrack(p));
-    else
-        // Row 0 is "Off"; the size, color and style follow the tracks.
-        menuOpen(&app->menu, playerSubtitleCount(p) + 1 + SUBOPT_COUNT, SUBOPT_COUNT, playerSubtitle(p) + 1);
+    else {
+        // Row 0 is "Off"; the options follow the tracks.
+        int options = subtitleOptionRows(p);
+        menuOpen(&app->menu, playerSubtitleCount(p) + 1 + options, options, playerSubtitle(p) + 1);
+    }
     app->menu_kind = kind;
     app->drag_rows = 0;
 }
@@ -333,6 +343,7 @@ static void chooseRow(App *app, int row, uint64_t now)
         menuClose(&app->menu);
     } else {
         playerSetSubtitle(p, row - 1);
+        menuSetFixed(&app->menu, subtitleOptionRows(p));
         if (row == 0)
             sayInBar(app, now, "%s", "Subtitles off");
         else
@@ -550,6 +561,35 @@ static void watchForStall(App *app, uint64_t now)
     }
 }
 
+// Subtitles with their own styles, over the bw x bh box the video is in; the
+// lines at the bottom go up if the bar would cover them. False if the track
+// shown isn't one of those.
+static bool drawStyledSubtitles(App *app, float bw, float bh, bool bar)
+{
+    static unsigned drawn_id;
+    float detail = gfxDetail();
+    float covered = gfxToFb(uiSubtitleBarLift()) - (GFX_FB_HEIGHT - bh) / 2.0f;  // Black bars help.
+    AssArea area = {
+        .width = (int)(bw * detail + 0.5f),
+        .height = (int)(bh * detail + 0.5f),
+        .font_scale = settingSubtitleScale(&app->config),
+        .lift_percent = bar && covered > 0 ? covered * 100.0 / bh : 0.0,
+    };
+    AssPicture picture;
+    if (!playerSubtitlePicture(app->player, &area, &picture))
+        return false;
+    if (picture.w > 0) {
+        if (picture.id != drawn_id) {
+            gfxImageChanged(picture.pixels);
+            drawn_id = picture.id;
+        }
+        gfxDrawImageScaledFb((GFX_FB_WIDTH - bw) / 2.0f + picture.x / detail,
+                             (GFX_FB_HEIGHT - bh) / 2.0f + picture.y / detail, picture.w / detail, picture.h / detail,
+                             picture.w, picture.h, picture.pixels);
+    }
+    return true;
+}
+
 static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 {
     watchForStall(app, now);
@@ -576,9 +616,11 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     }
     // Hidden with -, the bar shows only for an open list.
     bool bar = app->menu.open || (!app->hud_hidden && (playerPaused(app->player) || now < app->overlay_until));
-    char subtitle[1024];
-    if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))
-        uiDrawSubtitles(subtitle, bar);
+    if (!drawStyledSubtitles(app, bw, bh, bar)) {
+        char subtitle[1024];
+        if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))
+            uiDrawSubtitles(subtitle, bar);
+    }
     if (playerPaused(app->player) && !app->menu.open && !app->hud_hidden)
         uiDrawPausedSymbol();
     if (bar)
@@ -617,6 +659,10 @@ int main(int argc, char **argv)
             fclose(g_log);
         return 1;
     }
+    static AssFont subtitle_fonts[2];
+    subtitle_fonts[0] = (AssFont){"font_regular.ttf", font_regular_ttf, font_regular_ttf_size};
+    subtitle_fonts[1] = (AssFont){"font_bold.ttf", font_bold_ttf, font_bold_ttf_size};
+    videoSetSubtitleFonts(subtitle_fonts, 2);
     if (!audioSystemInit())
         appLog("The audio output couldn't start: videos play silent.");
 

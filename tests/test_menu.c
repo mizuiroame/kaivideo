@@ -41,4 +41,14 @@ void testMenu(void)
     CHECK(m.cursor == 14);
     menuMove(&m, -14);
     CHECK(m.cursor == 0 && m.first == 0);
+
+    // Fewer fixed rows: the list stays, and a cursor on a row that went comes back.
+    menuOpen(&m, 5, 3, 1);
+    menuSetFixed(&m, 1);
+    CHECK(m.count == 3 && m.fixed == 1 && m.cursor == 1 && !menuOnFixed(&m));
+    menuSetFixed(&m, 3);
+    CHECK(m.count == 5 && m.fixed == 3 && m.cursor == 1);
+    menuOpen(&m, 5, 3, 4);
+    menuSetFixed(&m, 1);
+    CHECK(m.cursor == 2 && menuOnFixed(&m));
 }

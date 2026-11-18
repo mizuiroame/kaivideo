@@ -13,6 +13,7 @@
 #include <switch.h>
 
 #include "bench.h"
+#include "seekbench.h"
 
 #define LOG_PATH "sdmc:/kaivideo-hevctest.txt"
 #define MAX_FILES 5
@@ -20,6 +21,10 @@
 #define RUN_SECONDS 12.0
 #define RUN_FRAMES 720
 #define COMFORT_MARGIN 1.25   // Spare speed wanted for sound, drawing and busy scenes.
+#define WAIT_NS 50000000ull
+// What KaiVideo's sound side allows when it opens a file (source/audio.c).
+#define AUDIO_DECODERS "aac,mp3float,mp3,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp"
+#define VIDEO_DECODERS "hevc,h264"
 
 static const char *const FOLDERS[] = {"sdmc:/kaivideo-test/hevc", "sdmc:/movies"};
 
@@ -130,6 +135,60 @@ static bool testFile(const char *path, const BenchInfo *info, const int *threads
     return true;
 }
 
+static void reportOpen(const char *path, const char *label, const char *decoders)
+{
+    SeekOpenResult r;
+    char error[96] = "";
+    say("   open, %s: ", label);
+    if (seekbenchOpen(path, decoders, nowNs, &r, error, sizeof(error)))
+        say("headers %.0f ms, stream info %.0f ms, index %.0f ms\n", r.open_ms, r.info_ms, r.index_ms);
+    else
+        say("FAILED: %s\n", error);
+}
+
+// False if the test was stopped.
+static bool seekTestFile(const char *path, const BenchInfo *info, const int *threads, int thread_steps)
+{
+    say("\n== %s\n   %dx%d, %d-bit, %.2f fps, %.0f min\n", path, info->width, info->height, info->bits, info->fps,
+        info->duration_s / 60);
+    reportOpen(path, "all decoders (the picture today)", NULL);
+    reportOpen(path, "sound decoders (the sound today)", AUDIO_DECODERS);
+    reportOpen(path, "video decoders only", VIDEO_DECODERS);
+    for (int i = 0; i < thread_steps; i++) {
+        SeekRunResult r;
+        char error[96] = "";
+        say("   seek, %d threads: ", threads[i]);
+        if (!seekbenchRun(path, threads[i], nowNs, plusPressed, NULL, &r, error, sizeof(error))) {
+            say("FAILED: %s\n", error);
+            continue;
+        }
+        if (r.cancelled) {
+            say("stopped\n");
+            return false;
+        }
+        say("first picture %.0f ms, target %.0f ms, slowest %.0f ms, %.0f packets (%d seeks)\n", r.first_ms, r.target_ms,
+            r.worst_ms, r.packets, r.seeks);
+    }
+    return true;
+}
+
+// True for the seek test (X), false for the decoding one (A).
+static bool chooseSeekTest(void)
+{
+    say("A: decoding speed.  X: opening and seeking.\n");
+    while (appletMainLoop()) {
+        padUpdate(&g_pad);
+        u64 down = padGetButtonsDown(&g_pad);
+        if (down & HidNpadButton_X)
+            return true;
+        if (down & HidNpadButton_A)
+            break;
+        consoleUpdate(NULL);
+        svcSleepThread(WAIT_NS);
+    }
+    return false;
+}
+
 int main(int argc, char **argv)
 {
     (void)argc;
@@ -141,24 +200,28 @@ int main(int argc, char **argv)
     int cores = coreCount();
     say("KaiVideo HEVC test: software decoding with FFmpeg. %d CPU cores for this app.\n", cores);
     say("OK = at least %.2fx the video's speed, and never below it. + stops.\n", COMFORT_MARGIN);
+    bool seek_test = chooseSeekTest();
     say("Looking for HEVC videos...\n");
     for (size_t i = 0; i < sizeof(FOLDERS) / sizeof(FOLDERS[0]); i++)
         scan(FOLDERS[i], 1);
 
     int threads[4] = {1, 2, 3, cores};
     int steps = cores > 3 ? 4 : cores;
+    int seek_threads[2] = {cores < 4 ? cores : 4, cores};
+    int seek_steps = cores > 4 ? 2 : 1;
     bool go_on = true;
     if (g_file_count == 0)
         say("\nNo HEVC videos found.\n");
     for (int i = 0; i < g_file_count && go_on; i++)
-        go_on = testFile(g_files[i], &g_infos[i], threads, steps);
+        go_on = seek_test ? seekTestFile(g_files[i], &g_infos[i], seek_threads, seek_steps)
+                          : testFile(g_files[i], &g_infos[i], threads, steps);
 
     say("\nDone. Results are in " LOG_PATH ". Press + to exit.\n");
     while (appletMainLoop()) {
         if (plusPressed(NULL))
             break;
         consoleUpdate(NULL);
-        svcSleepThread(50000000ull);
+        svcSleepThread(WAIT_NS);
     }
     if (g_log)
         fclose(g_log);

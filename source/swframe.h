@@ -17,8 +17,9 @@ typedef enum { SWFRAME_HARDWARE, SWFRAME_SOFTWARE, SWFRAME_UNPLAYABLE } SwframeR
 
 // The way a video goes. bits: its depth, 0 if unknown.
 SwframeRoute swframeRoute(SwframeCodec codec, int bits);
-// Decoding threads for a video this size and speed, with this many CPU cores.
-int swframeThreads(int width, int height, double fps, int cores);
+// Decoding threads with this many CPU cores. All of them, whatever the video:
+// playing they mostly wait, and after a seek they get to the target sooner.
+int swframeThreads(int cores);
 // True if a frame that nothing depends on needn't be decoded: it comes before
 // a seek's target, or playback (clock_ns) has passed it by far.
 bool swframeCanSkip(int64_t pts_ns, int64_t skip_until_ns, int64_t clock_ns);

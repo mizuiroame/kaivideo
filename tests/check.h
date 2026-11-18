@@ -33,3 +33,4 @@ void testWatched(void);
 void testTrackPrefs(void);
 void testPlayback(void);
 void testSwFrame(void);
+void testAssCompose(void);

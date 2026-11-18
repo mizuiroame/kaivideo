@@ -37,7 +37,8 @@ The screenshots show made-up films and series.
 - **HEVC (H.265)**, 8-bit and 10-bit, and **10-bit H.264**, decoded on the CPU
   with FFmpeg: the console's decoder interface doesn't offer them. Measured on
   the console, a 1080p 10-bit episode decodes at several times its speed. It
-  uses more battery than hardware decoding.
+  uses more battery than hardware decoding. A jump shows the nearest picture
+  at once, while the exact place is decoded.
 - Sound with [FFmpeg](https://ffmpeg.org/): **AAC**, **MP3**, **Opus**,
   **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
   and **Dolby TrueHD** (surround is mixed down to stereo).
@@ -47,6 +48,9 @@ The screenshots show made-up films and series.
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
   MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
   size, color and style (outline or a dark box) are at the end of that list.
+- **ASS subtitles keep their look**, drawn by [libass](https://github.com/libass/libass):
+  colors, positions, rotation, movement, fades and the fonts inside the file.
+  The list offers only their size.
 - **Playback list** (**↑**): the video's **chapters** (also marked on the
   progress bar), the **speed** from 0.5x to 2x with the voices' pitch kept,
   and **audio** and **subtitle delays** for a file that's out of sync.
@@ -167,8 +171,8 @@ do what, as in KaiPlayer and KaiRadio.
 | **+** | The menu, over the video: Back to the library, Exit |
 
 In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
-The subtitles list stays open after you pick, for their size, color and style
-(**◀** / **▶**). In the Playback list, **A** goes to a chapter and **◀** / **▶**
+The subtitles list stays open after you pick, for the options that apply to
+them (**◀** / **▶**). In the Playback list, **A** goes to a chapter and **◀** / **▶**
 change the speed and the delays (or tap the left or right half of their row).
 The speed stays for the next videos until KaiVideo closes; the delays are for
 the video playing.
@@ -184,10 +188,11 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 - **10-bit** VP9 and AV1, and **12-bit** HEVC, can't be played.
 - **HEVC** is decoded on the CPU, because the decoder interface KaiVideo uses
   ([libounce](https://github.com/ouncebrew/libounce)) doesn't offer it. 10-bit
-  video is shown in 8 bits. Very high bitrates (Blu-ray remuxes) and 4K may be
-  too heavy: frames are then skipped to keep up with the sound.
+  video is shown in 8 bits.
+- **4K HEVC** is too heavy for the CPU: measured on the console, 10-bit 4K
+  decoded at 21 frames per second at 16 Mb/s and at 15 at 68 Mb/s, so frames
+  are skipped to keep up with the sound.
 - **HDR** isn't converted: HDR videos play, with washed-out colors.
-- Not tried with 4K videos yet.
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
@@ -198,8 +203,9 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
+- **Jellyfin**: browsing a server and playing what the console can handle.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
-- Smoother jumps, and checks with big libraries, 4K and HDR on the console.
+- Smoother jumps, and checks with big libraries on the console.
 
 ## Building
 
@@ -235,9 +241,10 @@ decodes HEVC and 10-bit H.264.
 - **No circumvention.** KaiVideo does not circumvent any technical protection
   measure. It doesn't play DRM-protected video, and it doesn't download from
   streaming sites. It plays the files that users put on their own card.
-- **FFmpeg.** KaiVideo uses FFmpeg, built under the LGPL 2.1 (no GPL or
-  non-free parts). The script that builds it is in this repository, so it can
-  be rebuilt, changed and relinked.
+- **FFmpeg and FriBidi.** KaiVideo uses FFmpeg, built under the LGPL 2.1 (no
+  GPL or non-free parts), and FriBidi, under the same license. The script that
+  builds FFmpeg is in this repository and FriBidi comes with the devkit, so
+  KaiVideo can be rebuilt, changed and relinked.
 - **User responsibility.** Only play videos you have the right to watch.
   Running homebrew (kaiHEN) can put your console at risk, can affect its
   warranty and can go against the manufacturer's terms of service. You do it at
@@ -254,4 +261,11 @@ under the LGPL 2.1 ([third_party/FFmpeg-LGPL-2.1.txt](third_party/FFmpeg-LGPL-2.
 The fonts are Noto Sans, under the SIL Open Font License
 ([third_party/NotoSans-OFL.txt](third_party/NotoSans-OFL.txt)), and images and
 fonts are read, and thumbnails written, with [stb](https://github.com/nothings/stb)
-(public domain).
+(public domain). Styled subtitles use [libass](https://github.com/libass/libass)
+([ISC](third_party/libass-ISC.txt)), [FreeType](https://freetype.org/)
+([FTL](third_party/FreeType-FTL.txt); portions of this software are copyright
+The FreeType Project, all rights reserved),
+[HarfBuzz](https://github.com/harfbuzz/harfbuzz) ([MIT](third_party/HarfBuzz-MIT.txt)),
+[FriBidi](https://github.com/fribidi/fribidi) ([LGPL 2.1](third_party/FriBidi-LGPL-2.1.txt)),
+[libpng](third_party/libpng-LICENSE.txt), [bzip2](third_party/bzip2-LICENSE.txt)
+and [zlib](third_party/zlib-LICENSE.txt).

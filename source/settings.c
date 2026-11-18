@@ -147,6 +147,11 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     }
 }
 
+int subtitleOptionCount(bool color_applies)
+{
+    return color_applies ? SUBOPT_COUNT : SUBOPT_SIZE + 1;
+}
+
 const char *subtitleOptionLabel(SubtitleOption option)
 {
     return option >= 0 && option < SUBOPT_COUNT ? OPTION_LABELS[option] : "";
@@ -180,6 +185,11 @@ void subtitleOptionStep(Config *c, SubtitleOption option, int delta)
 int settingSubtitlePx(const Config *c)
 {
     return SIZE_PX[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)];
+}
+
+double settingSubtitleScale(const Config *c)
+{
+    return (double)settingSubtitlePx(c) / SIZE_PX[SUBTITLES_MEDIUM];
 }
 
 unsigned settingSubtitleColor(const Config *c)

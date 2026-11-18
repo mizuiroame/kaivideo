@@ -20,6 +20,9 @@ typedef struct {
 // current (kept within the rows).
 void menuOpen(Menu *m, int count, int fixed, int current);
 void menuClose(Menu *m);
+// Changes how many fixed rows follow the list; the list and the cursor stay
+// (a cursor on a row that went moves to the last one).
+void menuSetFixed(Menu *m, int fixed);
 // Moves the cursor by delta rows (stopping at the ends), keeping it in view.
 void menuMove(Menu *m, int delta);
 // List rows in view (at most MENU_ROWS), not counting the fixed ones.

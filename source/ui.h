@@ -42,12 +42,14 @@ void uiDrawSubtitles(const char *text, bool bar_shown);
 // The subtitles' text size (layout pixels), color (0xRRGGBB), and a dark
 // box behind them instead of an outline.
 void uiSetSubtitleStyle(int px, unsigned rgb, bool box);
+// How far (layout pixels) subtitles go up while the player's bar shows.
+int uiSubtitleBarLift(void);
 // A paused video: a big play symbol in the middle (a tap there plays on).
 void uiDrawPausedSymbol(void);
 
 typedef enum {
     UI_MENU_AUDIO,      // The sound tracks.
-    UI_MENU_SUBTITLES,  // "Off", the subtitle tracks, then their options (size, color, style).
+    UI_MENU_SUBTITLES,  // "Off", the subtitle tracks, then the options that apply to them.
     UI_MENU_PLAYBACK,   // The chapters, then the speed and the sync delays.
 } UiMenuKind;
 

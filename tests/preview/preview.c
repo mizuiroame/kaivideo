@@ -462,6 +462,12 @@ int main(int argc, char **argv)
     p.paused = false;
     playerScene("menu_subtitles", &p, UI_MENU_SUBTITLES, &subs, "No, I'm not going back there.", NULL);
     checkMenuTaps("menu_subtitles", UI_MENU_SUBTITLES, &subs);
+    // With a track that brings its own look, only the size is offered.
+    Menu styled;
+    int styled_options = subtitleOptionCount(false);
+    menuOpen(&styled, p.subtitle_count + 1 + styled_options, styled_options, p.subtitle + 1);
+    playerScene("menu_subtitles_styled", &p, UI_MENU_SUBTITLES, &styled, NULL, NULL);
+    checkMenuTaps("menu_subtitles_styled", UI_MENU_SUBTITLES, &styled);
     // The options under the list: each answers a tap with its own row.
     for (int i = 0; i < SUBOPT_COUNT; i++) {
         int row = -1, want = subs.count - SUBOPT_COUNT + i, hit = -1;

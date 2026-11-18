@@ -24,6 +24,8 @@
 #define SUB_LINE_H (g_sub_px * 13 / 10)
 #define SUB_MAX_W (GFX_WIDTH - 160)
 #define SUB_MAX_LINES 6
+#define SUB_BOTTOM 40             // Above the screen's edge.
+#define SUB_BOTTOM_BAR (BAR_H + 70)  // Above it with the bar showing.
 #define PAUSED_R 64             // The big play symbol of a paused video.
 #define MENU_W 400              // The drop-down lists.
 #define MENU_HEAD 50
@@ -305,11 +307,16 @@ static int wrapSubtitle(const char *text, char lines[][256], int max)
     return count;
 }
 
+int uiSubtitleBarLift(void)
+{
+    return SUB_BOTTOM_BAR - SUB_BOTTOM;
+}
+
 void uiDrawSubtitles(const char *text, bool bar_shown)
 {
     char lines[SUB_MAX_LINES][256];
     int count = wrapSubtitle(text, lines, SUB_MAX_LINES);
-    int bottom = bar_shown ? GFX_HEIGHT - BAR_H - 70 : GFX_HEIGHT - 40;
+    int bottom = GFX_HEIGHT - (bar_shown ? SUB_BOTTOM_BAR : SUB_BOTTOM);
     int top = bottom - count * SUB_LINE_H;
     static const int OUTLINE[8][2] = {{-2, -2}, {0, -2}, {2, -2}, {-2, 0}, {2, 0}, {-2, 2}, {0, 2}, {2, 2}};
     for (int i = 0; i < count; i++) {

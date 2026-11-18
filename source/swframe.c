@@ -2,9 +2,7 @@
 
 #include <string.h>
 
-#define EASY_PIXEL_RATE (1920.0 * 1080.0 * 30.5)  // Up to 1080p30: fewer threads are plenty.
-#define EASY_THREADS 4
-#define TEN_TO_EIGHT 2                            // Bits dropped from a 10-bit sample.
+#define TEN_TO_EIGHT 2  // Bits dropped from a 10-bit sample.
 
 SwframeRoute swframeRoute(SwframeCodec codec, int bits)
 {
@@ -23,12 +21,9 @@ SwframeRoute swframeRoute(SwframeCodec codec, int bits)
     }
 }
 
-int swframeThreads(int width, int height, double fps, int cores)
+int swframeThreads(int cores)
 {
-    double rate = (double)width * height * (fps > 0 ? fps : 24.0);
-    int wanted = rate <= EASY_PIXEL_RATE ? EASY_THREADS : SWFRAME_MAX_THREADS;
-    if (wanted > cores)
-        wanted = cores;
+    int wanted = cores < SWFRAME_MAX_THREADS ? cores : SWFRAME_MAX_THREADS;
     return wanted > 0 ? wanted : 1;
 }
 

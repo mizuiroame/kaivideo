@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/bsf.h>
@@ -23,6 +24,9 @@
 #define SUB_DEFAULT_NS 4000000000ll  // A line without an end shows this long.
 #define DEFAULT_FRAME_NS 41666667ll  // Between frames, when a file doesn't say.
 #define MAX_RECEIVE_ERRORS 64        // In a row: decoding has failed for good.
+#define SUB_MAX_FONTS 64             // Fonts for styled subtitles, the file's included.
+#define SUB_MAX_FONT_BYTES (48 * 1024 * 1024)
+#define NO_STYLED_TRACK (-1)
 
 typedef struct {
     uint8_t *y, *uv;   // NV12, width bytes a row.
@@ -32,7 +36,8 @@ typedef struct {
 // A text subtitle track inside the file, decoded as it is read.
 typedef struct {
     int stream;
-    AVCodecContext *ctx;
+    AVCodecContext *ctx;   // NULL for a styled track, which libass reads as it is.
+    int styled_track;      // Its number in the Video's AssSubs, or NO_STYLED_TRACK.
     SubTrack track;    // Under the Video's lock.
     char label[64];
     bool preferred;    // Marked default or forced in the file.
@@ -72,6 +77,10 @@ struct Video {
     bool seek_requested;
     int64_t seek_ns;
     int64_t skip_until_ns;         // After a seek: frames before this aren't kept.
+    // On the CPU, a seek's first picture, shown while the target is decoded.
+    Slot preview;                  // The decoding thread's until preview_ready; then the window's.
+    bool preview_wanted;           // Only the decoding thread uses it.
+    bool preview_ready;
     // The latest time of the video sent to the decoder since the last seek:
     // a frame later than it was decoded before the seek (the decoder hands a
     // few of those out after its flush) and isn't kept. Seeking back, they
@@ -87,6 +96,7 @@ struct Video {
 
     SubStream subs[VIDEO_SUB_TRACKS];
     int sub_count;
+    AssSubs *styled;               // Only if the file has ASS tracks.
     char audio_names[VIDEO_AUDIO_TRACKS][64];
     int audio_count;
     PlaybackChapter chapters[VIDEO_CHAPTERS];
@@ -174,17 +184,9 @@ static int softwareBits(int format)
     }
 }
 
-// A decoded frame into the queue, as NV12. False when interrupted or failed.
-static bool queueSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
+// A decoded frame into a slot, as NV12. The time it took in copy_ms.
+static void convertSoftwareFrame(const Video *v, const AVFrame *f, int bits, Slot *s, int64_t pts_ns, double *copy_ms)
 {
-    int bits = softwareBits(f->format);
-    if (!bits) {
-        fail(v, "This video's picture format can't be shown.");
-        return false;
-    }
-    Slot *s = waitForSlot(v);
-    if (!s)
-        return false;
     int width = f->width < v->width ? f->width & ~1 : v->width;
     int height = f->height < v->height ? f->height & ~1 : v->height;
     const uint8_t *const planes[3] = {f->data[0], f->data[1], f->data[2]};
@@ -192,7 +194,47 @@ static bool queueSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
     u64 t0 = armGetSystemTick();
     swframeToNv12(planes, lines, width, height, bits, s->y, s->uv, v->width);
     s->pts_ns = pts_ns;
-    return commitSlot(v, armTicksToNs(armGetSystemTick() - t0) / 1e6);
+    *copy_ms = armTicksToNs(armGetSystemTick() - t0) / 1e6;
+}
+
+// A decoded frame into the queue. False when interrupted or failed.
+static bool queueSoftwareFrame(Video *v, const AVFrame *f, int bits, int64_t pts_ns)
+{
+    Slot *s = waitForSlot(v);
+    if (!s)
+        return false;
+    double copy_ms;
+    convertSoftwareFrame(v, f, bits, s, pts_ns, &copy_ms);
+    return commitSlot(v, copy_ms);
+}
+
+// The seek's first picture: for showing until the target is ready.
+static void keepPreview(Video *v, const AVFrame *f, int bits, int64_t pts_ns)
+{
+    double copy_ms;
+    v->preview_wanted = false;
+    convertSoftwareFrame(v, f, bits, &v->preview, pts_ns, &copy_ms);
+    pthread_mutex_lock(&v->lock);
+    v->preview_ready = !v->seek_requested;
+    pthread_mutex_unlock(&v->lock);
+}
+
+// A frame out of FFmpeg: queued, or it's from before a seek's target. False
+// when interrupted or failed.
+static bool handleSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
+{
+    int bits = softwareBits(f->format);
+    if (!bits) {
+        fail(v, "This video's picture format can't be shown.");
+        return false;
+    }
+    if (pts_ns >= v->skip_until_ns) {
+        v->preview_wanted = false;
+        return queueSoftwareFrame(v, f, bits, pts_ns);
+    }
+    if (v->preview_wanted)
+        keepPreview(v, f, bits, pts_ns);
+    return true;
 }
 
 // Takes every frame FFmpeg has ready. False when interrupted or failed.
@@ -215,8 +257,7 @@ static bool takeSoftwareFrames(Video *v)
         int64_t pts_ns = pts != AV_NOPTS_VALUE ? av_rescale_q(pts, v->time_base, (AVRational){1, 1000000000})
                                                : v->software_last_ns + v->frame_ns;
         v->software_last_ns = pts_ns;
-        bool keep = pts_ns >= v->skip_until_ns;
-        bool ok = !keep || queueSoftwareFrame(v, f, pts_ns);
+        bool ok = handleSoftwareFrame(v, f, pts_ns);
         av_frame_unref(f);
         if (!ok)
             return false;
@@ -320,13 +361,16 @@ static void doSeek(Video *v, int64_t target_ns)
         videoDecoderFlush(&v->decoder);
     }
     for (int i = 0; i < v->sub_count; i++)
-        avcodec_flush_buffers(v->subs[i].ctx);
+        if (v->subs[i].ctx)
+            avcodec_flush_buffers(v->subs[i].ctx);
     v->skip_until_ns = target_ns;
     v->submitted_max_ns = INT64_MIN;
+    v->preview_wanted = v->preview.y != NULL;
     pthread_mutex_lock(&v->lock);
     v->head = 0;
     v->count = 0;
     v->done = false;
+    v->preview_ready = false;
     pthread_cond_broadcast(&v->wake);
     pthread_mutex_unlock(&v->lock);
 }
@@ -371,6 +415,18 @@ static void decodeSubtitle(Video *v, SubStream *s, AVPacket *pkt)
     pthread_mutex_unlock(&v->lock);
 }
 
+// A styled line goes to libass as the file holds it, with its times.
+static void addStyledLine(Video *v, const SubStream *s, const AVPacket *pkt)
+{
+    int64_t pts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+    if (pts == AV_NOPTS_VALUE || !pkt->data || pkt->size <= 0)
+        return;
+    AVRational tb = v->fmt->streams[s->stream]->time_base, ms = {1, 1000};
+    int64_t duration = pkt->duration > 0 ? av_rescale_q(pkt->duration, tb, ms) : SUB_DEFAULT_NS / 1000000;
+    assSubsAddEvent(v->styled, s->styled_track, (const char *)pkt->data, (size_t)pkt->size, av_rescale_q(pts, tb, ms),
+                    duration);
+}
+
 static SubStream *subStreamFor(Video *v, int index)
 {
     for (int i = 0; i < v->sub_count; i++)
@@ -387,7 +443,9 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
     while (!interrupted(v) && av_read_frame(v->fmt, pkt) >= 0) {
         if (pkt->stream_index != v->stream) {
             SubStream *s = subStreamFor(v, pkt->stream_index);
-            if (s)
+            if (s && s->styled_track != NO_STYLED_TRACK)
+                addStyledLine(v, s, pkt);
+            else if (s)
                 decodeSubtitle(v, s, pkt);
             av_packet_unref(pkt);
             continue;
@@ -487,7 +545,7 @@ static bool openSoftware(Video *v, AVStream *st, double fps, char *error, size_t
         snprintf(error, error_size, "This %s video can't be decoded.", codecName(par->codec_id));
         return false;
     }
-    int threads = swframeThreads(par->width, par->height, fps, cpuCores());
+    int threads = swframeThreads(cpuCores());
     v->software->thread_count = v->max_threads > 0 && v->max_threads < threads ? v->max_threads : threads;
     v->software->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     v->software->pkt_timebase = st->time_base;
@@ -572,27 +630,99 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     }
 }
 
+static const AssFont *g_subtitle_fonts;
+static int g_subtitle_font_count;
+
+void videoSetSubtitleFonts(const AssFont *fonts, int count)
+{
+    g_subtitle_fonts = fonts;
+    g_subtitle_font_count = count;
+}
+
+static bool isStyledSubtitle(const AVStream *st)
+{
+    return st->codecpar->codec_type == AVMEDIA_TYPE_SUBTITLE &&
+           (st->codecpar->codec_id == AV_CODEC_ID_ASS || st->codecpar->codec_id == AV_CODEC_ID_SSA);
+}
+
+// A font the file carries for its subtitles.
+static bool isFontAttachment(const AVStream *st, const char **name)
+{
+    if (st->codecpar->codec_type != AVMEDIA_TYPE_ATTACHMENT || !st->codecpar->extradata ||
+        st->codecpar->extradata_size <= 0)
+        return false;
+    const AVDictionaryEntry *file = av_dict_get(st->metadata, "filename", NULL, 0);
+    const AVDictionaryEntry *type = av_dict_get(st->metadata, "mimetype", NULL, 0);
+    *name = file ? file->value : "attachment";
+    const char *dot = file ? strrchr(file->value, '.') : NULL;
+    bool font_name = dot && (!strcasecmp(dot, ".ttf") || !strcasecmp(dot, ".otf") || !strcasecmp(dot, ".ttc"));
+    bool font_type = type && (strstr(type->value, "font") || strstr(type->value, "truetype") ||
+                              strstr(type->value, "opentype"));
+    return font_name || font_type;
+}
+
+// Starts libass if the file has ASS tracks, with our fonts and the file's.
+static void openStyledSubtitles(Video *v)
+{
+    bool wanted = false;
+    for (unsigned i = 0; i < v->fmt->nb_streams; i++)
+        wanted = wanted || isStyledSubtitle(v->fmt->streams[i]);
+    if (!wanted)
+        return;
+    AssFont fonts[SUB_MAX_FONTS];
+    int count = 0;
+    size_t bytes = 0;
+    for (; count < g_subtitle_font_count && count < SUB_MAX_FONTS; count++)
+        fonts[count] = g_subtitle_fonts[count];
+    for (unsigned i = 0; i < v->fmt->nb_streams && count < SUB_MAX_FONTS; i++) {
+        const AVStream *st = v->fmt->streams[i];
+        const char *name;
+        if (!isFontAttachment(st, &name) || bytes + (size_t)st->codecpar->extradata_size > SUB_MAX_FONT_BYTES)
+            continue;
+        bytes += (size_t)st->codecpar->extradata_size;
+        fonts[count++] = (AssFont){name, st->codecpar->extradata, (size_t)st->codecpar->extradata_size};
+    }
+    v->styled = assSubsCreate(v->width, v->height, fonts, count);
+}
+
+// Prepares s for this stream. False if it can't be read.
+static bool openSubStream(Video *v, SubStream *s, AVStream *st)
+{
+    s->styled_track = NO_STYLED_TRACK;
+    if (v->styled && isStyledSubtitle(st)) {
+        s->styled_track = assSubsAddTrack(v->styled, (const char *)st->codecpar->extradata,
+                                          (size_t)st->codecpar->extradata_size);
+        if (s->styled_track != NO_STYLED_TRACK)
+            return true;
+    }
+    const AVCodec *codec = avcodec_find_decoder(st->codecpar->codec_id);
+    AVCodecContext *ctx = codec ? avcodec_alloc_context3(codec) : NULL;
+    if (!ctx)
+        return false;
+    ctx->pkt_timebase = st->time_base;
+    if (avcodec_parameters_to_context(ctx, st->codecpar) < 0 || avcodec_open2(ctx, codec, NULL) < 0) {
+        avcodec_free_context(&ctx);
+        return false;
+    }
+    s->ctx = ctx;
+    return true;
+}
+
 // The text subtitle tracks (SubRip, ASS, mov_text, WebVTT), up to
 // VIDEO_SUB_TRACKS; picture ones (DVD, Blu-ray) aren't drawn.
 static void openSubtitles(Video *v)
 {
+    if (!v->max_threads)  // Not for thumbnails.
+        openStyledSubtitles(v);
     for (unsigned i = 0; i < v->fmt->nb_streams && v->sub_count < VIDEO_SUB_TRACKS; i++) {
         AVStream *st = v->fmt->streams[i];
         const AVCodecDescriptor *desc = avcodec_descriptor_get(st->codecpar->codec_id);
         if (st->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE || !desc || !(desc->props & AV_CODEC_PROP_TEXT_SUB))
             continue;
-        const AVCodec *codec = avcodec_find_decoder(st->codecpar->codec_id);
-        AVCodecContext *ctx = codec ? avcodec_alloc_context3(codec) : NULL;
-        if (!ctx)
-            continue;
-        ctx->pkt_timebase = st->time_base;
-        if (avcodec_parameters_to_context(ctx, st->codecpar) < 0 || avcodec_open2(ctx, codec, NULL) < 0) {
-            avcodec_free_context(&ctx);
-            continue;
-        }
         SubStream *s = &v->subs[v->sub_count];
+        if (!openSubStream(v, s, st))
+            continue;
         s->stream = (int)i;
-        s->ctx = ctx;
         s->preferred = st->disposition & (AV_DISPOSITION_DEFAULT | AV_DISPOSITION_FORCED);
         const AVDictionaryEntry *title = av_dict_get(st->metadata, "title", NULL, 0);
         const AVDictionaryEntry *lang = av_dict_get(st->metadata, "language", NULL, 0);
@@ -613,6 +743,19 @@ static void openChapters(Video *v)
         snprintf(out->title, sizeof(out->title), "%s", title ? title->value : "");
     }
     playbackChaptersPrepare(v->chapters, v->chapter_count);
+}
+
+// Without the memory, seeks just don't show a picture on the way. Not for
+// thumbnails (max_threads), which want the target itself.
+static void allocatePreview(Video *v)
+{
+    v->preview.y = malloc((size_t)v->width * v->height);
+    v->preview.uv = malloc((size_t)v->width * v->height / 2);
+    if (!v->preview.y || !v->preview.uv) {
+        free(v->preview.y);
+        free(v->preview.uv);
+        v->preview = (Slot){0};
+    }
 }
 
 Video *videoOpen(const char *path, char *error, size_t error_size)
@@ -685,6 +828,8 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
         videoClose(v);
         return NULL;
     }
+    if (v->software && !max_threads)
+        allocatePreview(v);
     openSubtitles(v);
     openChapters(v);
     for (unsigned i = 0; i < v->fmt->nb_streams && v->audio_count < VIDEO_AUDIO_TRACKS; i++) {
@@ -726,6 +871,7 @@ void videoClose(Video *v)
         avcodec_free_context(&v->subs[i].ctx);
         subsFree(&v->subs[i].track);
     }
+    assSubsClose(v->styled);
     if (v->fmt)
         avformat_close_input(&v->fmt);
     if (v->io) {
@@ -739,6 +885,8 @@ void videoClose(Video *v)
         free(s->y);
         free(s->uv);
     }
+    free(v->preview.y);
+    free(v->preview.uv);
     pthread_cond_destroy(&v->wake);
     pthread_mutex_destroy(&v->lock);
     free(v);
@@ -765,7 +913,7 @@ int64_t videoDuration(const Video *v)
 
 const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
 {
-    bool taken = false;
+    bool taken = false, previewed = false;
     pthread_mutex_lock(&v->lock);
     v->clock_ns = media_ns;
     // Every frame whose time has come: the latest is shown, the others were late.
@@ -782,9 +930,16 @@ const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
     if (taken) {
         v->stats.shown++;
         pthread_cond_signal(&v->wake);
+    } else if (v->preview_ready) {
+        Slot picture = v->preview;
+        v->preview = v->shown;
+        v->shown = picture;
+        v->stats.previews++;
+        previewed = true;
     }
+    v->preview_ready = false;
     pthread_mutex_unlock(&v->lock);
-    if (taken) {
+    if (taken || previewed) {
         v->frame = (GfxVideoFrame){
             .width = v->width, .height = v->height, .y = v->shown.y, .uv = v->shown.uv,
             .y_pitch = v->width, .uv_pitch = v->width, .id = ++v->frame_id,
@@ -810,6 +965,7 @@ void videoSeek(Video *v, int64_t pts_ns)
     v->seek_requested = true;
     v->seek_ns = pts_ns < 0 ? 0 : pts_ns;
     v->clock_ns = SWFRAME_NO_CLOCK;
+    v->preview_ready = false;
     v->count = 0;  // What's queued is from before; the thread empties it properly too.
     pthread_cond_broadcast(&v->wake);
     pthread_mutex_unlock(&v->lock);
@@ -862,6 +1018,18 @@ bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size
     bool on = subsAt(&v->subs[track].track, pos_ns, out, size);
     pthread_mutex_unlock(&v->lock);
     return on;
+}
+
+bool videoSubtitleStyled(const Video *v, int track)
+{
+    return track >= 0 && track < v->sub_count && v->subs[track].styled_track != NO_STYLED_TRACK;
+}
+
+bool videoSubtitlePicture(Video *v, int track, int64_t pos_ns, const AssArea *area, AssPicture *out)
+{
+    if (!videoSubtitleStyled(v, track))
+        return false;
+    return assSubsRender(v->styled, v->subs[track].styled_track, pos_ns / 1000000, area, out);
 }
 
 // --- Chapters ---

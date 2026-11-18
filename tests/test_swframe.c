@@ -30,14 +30,10 @@ static void testRoute(void)
 
 static void testThreads(void)
 {
-    CHECK(swframeThreads(1920, 1080, 23.976, 6) == 4);
-    CHECK(swframeThreads(1920, 1080, 30, 6) == 4);
-    CHECK(swframeThreads(1920, 1080, 60, 6) == 6);
-    CHECK(swframeThreads(3840, 2160, 24, 6) == 6);
-    CHECK(swframeThreads(1920, 1080, 24, 2) == 2);
-    CHECK(swframeThreads(1920, 1080, 60, 16) == SWFRAME_MAX_THREADS);
-    CHECK(swframeThreads(1920, 1080, 0, 6) == 4);   // Unknown frame rate.
-    CHECK(swframeThreads(1920, 1080, 24, 0) == 1);  // Unknown cores.
+    CHECK(swframeThreads(6) == 6);
+    CHECK(swframeThreads(2) == 2);
+    CHECK(swframeThreads(16) == SWFRAME_MAX_THREADS);
+    CHECK(swframeThreads(0) == 1);  // Unknown cores.
 }
 
 static void testSkipping(void)
