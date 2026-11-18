@@ -19,7 +19,20 @@ typedef struct {
     int64_t size;
     int64_t added;  // The file's time (seconds since 1970), 0 if unknown.
     int show;       // Its series (an index in shows), or -1 for a film.
+    // For a video on a server (the name then comes from it, not from the path):
+    bool named;
+    char *overview;      // Its summary, or NULL.
+    char *series_art;    // Where its series' picture comes from, or NULL.
+    int64_t runtime_ns;  // 0 if unknown.
+    int blocked;         // Why the console can't play it (JfPlayability), 0 if it can.
 } LibraryItem;
+
+// What a server says of a video besides its name.
+typedef struct {
+    const char *overview, *series_art;
+    int64_t runtime_ns;
+    int blocked;
+} LibraryRemote;
 
 typedef struct {
     char name[NAMING_MAX];  // The way most of its files spell it.
@@ -53,6 +66,9 @@ void libraryFree(Library *lib);
 
 // Adds a video (not yet sorted or grouped). False if out of memory.
 bool libraryAdd(Library *lib, const char *path, int64_t size, int64_t added);
+// Adds a video that comes with its name.
+bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int64_t size, int64_t added,
+                      const LibraryRemote *remote);
 // Names, sorts and groups what was added.
 void libraryBuild(Library *lib);
 

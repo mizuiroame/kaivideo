@@ -22,6 +22,8 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns);
 
 void playerTogglePause(Player *p, uint64_t now_ns);
 bool playerPaused(const Player *p);
+// True until the first frame after opening or a jump has come.
+bool playerWaitingForPicture(const Player *p);
 // Goes delta_ns from where playback is (kept within the file).
 void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns);
 // Goes to target_ns (kept within the file): a tap on the progress bar.

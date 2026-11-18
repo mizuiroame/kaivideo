@@ -15,7 +15,9 @@ void testSettings(void)
     CHECK(c.autoplay);  // The next episode plays on its own.
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 6 && rows[3] == SETTING_AUTOPLAY && rows[4] == SETTING_OPEN_DISPLAY);
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 7 && rows[1] == SETTING_OPEN_JELLYFIN &&
+          rows[4] == SETTING_AUTOPLAY && rows[5] == SETTING_OPEN_DISPLAY);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, rows) == 4 && rows[0] == SETTING_JF_SOURCE);
     CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
 

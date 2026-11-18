@@ -114,6 +114,7 @@ static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu
         uiDrawSubtitles(subtitle, true);
     if (p->paused && !m->open)
         uiDrawPausedSymbol();
+    uiDrawPlayerStatus();
     uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", m->open ? NULL : note, -1);
     uiDrawTrackMenu(p, kind, m, &g_config);
     save(name);
@@ -177,6 +178,13 @@ const uint32_t *thumbGet(const char *path, int64_t size)
     for (const char *p = path; *p; p++)
         h = h * 31 + (unsigned char)*p;
     return h % 5 == 0 ? NULL : g_fake[h % FAKE_THUMBS];  // Some still being made.
+}
+
+const uint32_t *thumbGetLarge(const char *path, int64_t size)
+{
+    (void)path;
+    (void)size;
+    return NULL;  // The panel then shows the card's picture.
 }
 
 bool thumbIsNone(const char *path, int64_t size)
@@ -348,10 +356,10 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
     save("settings");
-    // The main page's rows: 48 high from 76 below the panel's top (6 rows, a 60 footer).
-    int top = (GFX_HEIGHT - (76 + 6 * 48 + 60)) / 2 + 76;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 5 * 48 + 20), outside = uiLibraryTap(20, 400);
-    LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 2 * 48 + 20);
+    // The main page's rows: 48 high from 76 below the panel's top (7 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 6 * 48 + 20), outside = uiLibraryTap(20, 400);
+    LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 3 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
         thumbs.kind != LIBHIT_SETTING_NEXT || thumbs.a != SETTING_THUMBNAILS) {
         printf("TOUCH: settings: a row, its arrow or the outside doesn't answer as drawn (%d %d %d)\n", about.kind,
@@ -366,6 +374,51 @@ static void libraryScenes(void)
     top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
     if (uiLibraryTap((GFX_WIDTH - 760) / 2 + 60, top + 33).kind != LIBHIT_PAGE_BACK) {
         printf("TOUCH: settings_display: Back doesn't answer a tap\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiSettingsSetJellyfin("192.168.0.10:8096", "Sign in");
+    uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_ACCOUNT, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    save("settings_jellyfin");
+    top = (GFX_HEIGHT - (76 + 4 * 48 + 60)) / 2 + 76;
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 2 * 48 + 20);
+    if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_ACCOUNT) {
+        printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawJellyfinCode("482913", "192.168.0.10:8096");
+    uiDrawFooterHelp("[B] cancel");
+    save("jellyfin_code");
+    begin();
+    uiDrawLoading("Paper Lanterns (1998)", 1.0f, false);
+    uiDrawFooterHelp("[B] cancel");
+    save("loading");
+    begin();
+    uiLibrarySetSource("Jellyfin");
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    bool source = false;
+    for (int x = 0; x < GFX_WIDTH / 2; x += 4)
+        source = source || uiLibraryTap(x, 30).kind == LIBHIT_SOURCE;
+    if (!source) {
+        printf("TOUCH: home: the library's source doesn't answer a tap\n");
+        g_problems++;
+    }
+    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "");
+    uiDrawFooterHelp("[A] play  [X] watched  [B] back");
+    save("details");
+    bool played = false, marked = false;
+    for (int y = 0; y < GFX_HEIGHT; y += 4)
+        for (int x = 0; x < GFX_WIDTH; x += 8) {
+            LibHitKind kind = uiLibraryTap(x, y).kind;
+            played = played || kind == LIBHIT_DETAILS_PLAY;
+            marked = marked || kind == LIBHIT_DETAILS_WATCHED;
+        }
+    if (!played || !marked || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: details: a button or the outside doesn't answer a tap\n");
         g_problems++;
     }
     begin();

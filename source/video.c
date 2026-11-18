@@ -12,6 +12,7 @@
 #include <libavutil/pixdesc.h>
 #include <switch.h>
 
+#include "mediafile.h"
 #include "subs.h"
 #include "swframe.h"
 
@@ -44,7 +45,7 @@ typedef struct {
 } SubStream;
 
 struct Video {
-    FILE *file;
+    MediaFile *file;
     AVFormatContext *fmt;
     AVIOContext *io;
     AVBSFContext *bsf;
@@ -102,27 +103,6 @@ struct Video {
     PlaybackChapter chapters[VIDEO_CHAPTERS];
     int chapter_count;
 };
-
-// --- Reading the file (FFmpeg has no file protocol in this build) ---
-
-static int readFile(void *opaque, uint8_t *buf, int size)
-{
-    size_t n = fread(buf, 1, (size_t)size, (FILE *)opaque);
-    return n > 0 ? (int)n : AVERROR_EOF;
-}
-
-static int64_t seekFile(void *opaque, int64_t offset, int whence)
-{
-    FILE *f = opaque;
-    if (whence & AVSEEK_SIZE) {
-        long here = ftell(f);
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, here, SEEK_SET);
-        return size;
-    }
-    return fseek(f, (long)offset, whence & ~AVSEEK_FORCE) == 0 ? ftell(f) : -1;
-}
 
 // --- The decoding thread ---
 
@@ -467,6 +447,11 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
         }
         av_packet_unref(pkt);
     }
+    if (!interrupted(v) && mediaFileFailed(v->file)) {  // Not the end: the network went.
+        av_packet_unref(held);
+        fail(v, "The connection to the server was lost.");
+        return false;
+    }
     bool ok = !interrupted(v) && (!have_held || submit(v, held, true));
     av_packet_unref(held);
     return ok && takeFrames(v, TAIL_TIMEOUT_NS);
@@ -774,14 +759,14 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     pthread_cond_init(&v->wake, NULL);
     v->clock_ns = SWFRAME_NO_CLOCK;
     v->max_threads = max_threads;
-    v->file = fopen(path, "rb");
+    v->file = mediaFileOpen(path);
     if (!v->file) {
         snprintf(error, error_size, "The file can't be opened.");
         videoClose(v);
         return NULL;
     }
     uint8_t *buffer = av_malloc(IO_BUFFER);
-    v->io = buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, v->file, readFile, NULL, seekFile) : NULL;
+    v->io = buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, v->file, mediaFileRead, NULL, mediaFileSeek) : NULL;
     v->fmt = avformat_alloc_context();
     if (!v->io || !v->fmt) {
         if (!v->io)
@@ -878,8 +863,7 @@ void videoClose(Video *v)
         av_freep(&v->io->buffer);
         avio_context_free(&v->io);
     }
-    if (v->file)
-        fclose(v->file);
+    mediaFileClose(v->file);
     for (int i = 0; i <= VIDEO_QUEUE; i++) {
         Slot *s = i < VIDEO_QUEUE ? &v->slots[i] : &v->shown;
         free(s->y);

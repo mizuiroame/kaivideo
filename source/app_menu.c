@@ -139,6 +139,8 @@ const char *appFooterHelp(const App *app)
         return "[A] choose  [B] cancel  [+] exit";
     if (app->app_menu == APP_MENU_MAIN)
         return "[A] choose  [B] close  [+] exit";
+    if (app->settings_open && app->jf_signing)
+        return "[B] cancel";
     if (app->settings_open && app->about_open)
         return "[A][B] back";
     if (app->settings_open)
@@ -147,6 +149,8 @@ const char *appFooterHelp(const App *app)
     if (app->picking)
         return app->library_root[0] ? "[A] open  [B] folder above  [X] use this folder  [-] cancel"
                                     : "[A] open  [B] folder above  [X] use this folder  [+] menu";
+    if (app->view.details >= 0)
+        return "[A] play  [Y] from the start  [X] watched  [B] back";
     if (app->view.show >= 0)
         return "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {

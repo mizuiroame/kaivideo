@@ -13,6 +13,7 @@
 #include "gfx.h"
 #include "keyboard_system.h"
 #include "libscan.h"
+#include "thumbs.h"
 #include "ui_library.h"
 #include "ui_style.h"
 
@@ -43,9 +44,9 @@ static void startScan(App *app)
         appLog("The library scan couldn't start.");
 }
 
-void appLibraryStart(App *app)
+// The card's library: what was found last time at once, and a new scan.
+static void loadCardLibrary(App *app)
 {
-    libviewInit(&app->view);
     if (!app->library_root[0]) {
         libraryInit(&app->library, "");
         app->picking = browserOpen(&app->picker, BROWSER_ROOT);  // The first run: choose a folder.
@@ -62,6 +63,72 @@ void appLibraryStart(App *app)
     startScan(app);
 }
 
+void appLibraryStart(App *app)
+{
+    libviewInit(&app->view);
+    if (app->config.use_jellyfin && appJellyfinEnsure(app)) {
+        libraryInit(&app->library, JF_ROOT);
+        appLibraryRefreshHome(app);
+        return;
+    }
+    app->config.use_jellyfin = false;
+    loadCardLibrary(app);
+}
+
+void appLibrarySetSource(App *app, bool jellyfin)
+{
+    libscanStop();
+    app->config.use_jellyfin = jellyfin;
+    appSaveSettings(app);
+    libraryFree(&app->library);
+    libviewInit(&app->view);
+    if (jellyfin) {
+        libraryInit(&app->library, JF_ROOT);
+        appLibraryRefreshHome(app);
+        jfSyncRefresh();
+    } else {
+        loadCardLibrary(app);
+    }
+}
+
+void appLibraryToggleSource(App *app, uint64_t now)
+{
+    if (app->config.use_jellyfin) {
+        appLibrarySetSource(app, false);
+        return;
+    }
+    if (appJellyfinEnsure(app))
+        jfSyncGetStatus(&app->jf);
+    if (app->jf.state == JF_SIGNED_IN)
+        appLibrarySetSource(app, true);
+    else
+        appOpenJellyfinSettings(app, now);
+}
+
+// What's on screen follows the library: indexes change with it.
+static void afterNewLibrary(App *app, const char *details_path)
+{
+    if (app->player) {
+        app->playing_item = libraryFind(&app->library, app->playing_path);
+        app->next_item = libraryNextEpisode(&app->library, app->playing_item);
+    }
+    app->view.details = details_path[0] ? libraryFind(&app->library, details_path) : -1;
+    appLibraryRefreshHome(app);
+}
+
+void appLibraryInstallCatalog(App *app, JfCatalog *c)
+{
+    char details[LIBRARY_PATH_MAX] = "";
+    if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
+        snprintf(details, sizeof(details), "%s", app->library.items[app->view.details].path);
+    jfMergeUserData(c, &app->resume, &app->watched);
+    libraryFree(&app->library);
+    app->library = c->library;
+    libraryInit(&c->library, JF_ROOT);  // The library is the app's now.
+    thumbsRetryMissing();
+    afterNewLibrary(app, details);
+}
+
 void appLibraryExit(App *app)
 {
     libscanStop();
@@ -73,7 +140,7 @@ void appLibraryUpdate(App *app)
 {
     Library found;
     bool ok;
-    if (!libscanTake(&found, &ok))
+    if (app->config.use_jellyfin || !libscanTake(&found, &ok))
         return;
     if (strcmp(found.root, app->library_root) != 0) {  // An old folder's scan.
         libraryFree(&found);
@@ -87,15 +154,11 @@ void appLibraryUpdate(App *app)
     }
     libraryFree(&app->library);
     app->library = found;
-    if (app->player) {  // The indexes were the old library's.
-        app->playing_item = libraryFind(&app->library, app->playing_path);
-        app->next_item = libraryNextEpisode(&app->library, app->playing_item);
-    }
     char path[LIBRARY_PATH_MAX];
     cachePath(path, sizeof(path));
     if (ok)
         librarySave(&app->library, path);
-    appLibraryRefreshHome(app);
+    afterNewLibrary(app, "");
 }
 
 static void useFolder(App *app, const char *folder)
@@ -103,6 +166,7 @@ static void useFolder(App *app, const char *folder)
     app->config.background[0] = '\0';  // Its images were in the old folder.
     backgroundLoad(folder, "", app->config.blur);
     libscanStop();
+    app->config.use_jellyfin = false;  // A folder on the card was chosen: the library is there.
     snprintf(app->library_root, sizeof(app->library_root), "%s", folder);
     appSaveSettings(app);
     libraryFree(&app->library);
@@ -137,32 +201,78 @@ static void itemName(const Library *lib, int item, char *out, size_t size)
         snprintf(out, size, "%s \xC2\xB7 S%02dE%02d", lib->shows[it->show].name, it->name.season, it->name.episode);
 }
 
-static void openRef(App *app, LibraryRef ref, uint64_t now)
+static void playItem(App *app, int item, uint64_t now)
 {
-    if (ref.is_show) {
-        libviewOpenShow(&app->view, &app->library, ref.index, -1);
+    const LibraryItem *it = &app->library.items[item];
+    if (it->blocked) {
+        appShowMessage(app, jfPlayabilityMessage((JfPlayability)it->blocked), now);
         return;
     }
     char name[APP_NAME_MAX];
-    itemName(&app->library, ref.index, name, sizeof(name));
-    appStartVideo(app, app->library.items[ref.index].path, name, now);
+    itemName(&app->library, item, name, sizeof(name));
+    appStartVideo(app, it->path, name, now);
+}
+
+// A series opens its page; a video on the server its details; one on the card plays.
+static void openRef(App *app, LibraryRef ref, uint64_t now)
+{
+    if (ref.is_show)
+        libviewOpenShow(&app->view, &app->library, ref.index, -1);
+    else if (jfIsLocation(app->library.items[ref.index].path))
+        app->view.details = ref.index;
+    else
+        playItem(app, ref.index, now);
+}
+
+static void setWatched(App *app, int item)
+{
+    const char *path = app->library.items[item].path;
+    bool watched = !watchedHas(&app->watched, path);
+    watchedSet(&app->watched, path, watched);
+    appSaveWatched(app);
+    if (jfIsLocation(path))
+        jfSyncSetPlayed(path, watched);
+    appLibraryRefreshHome(app);  // Up next changed.
 }
 
 // Marks the episode under the cursor on a series' page watched, or not.
 static void toggleWatched(App *app)
 {
     int item = libviewShowItem(&app->view, &app->library);
-    if (item < 0)
-        return;
-    const char *path = app->library.items[item].path;
-    watchedSet(&app->watched, path, !watchedHas(&app->watched, path));
-    appSaveWatched(app);
-    appLibraryRefreshHome(app);  // Up next changed.
+    if (item >= 0)
+        setWatched(app, item);
 }
 
 void appLibraryPlay(App *app, int item, uint64_t now)
 {
-    openRef(app, (LibraryRef){false, item}, now);
+    playItem(app, item, now);
+}
+
+static bool hasResume(const App *app, int item)
+{
+    int64_t at;
+    return resumeFind(&app->resume, app->library.items[item].path, &at, NULL);
+}
+
+static void detailsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+{
+    LibView *v = &app->view;
+    int item = v->details;
+    LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
+    if ((pressed & HidNpadButton_X) || hit.kind == LIBHIT_DETAILS_WATCHED) {
+        setWatched(app, item);
+    } else if ((pressed & HidNpadButton_A) || hit.kind == LIBHIT_DETAILS_PLAY) {
+        v->details = -1;
+        playItem(app, item, now);
+    } else if (((pressed & HidNpadButton_Y) && hasResume(app, item)) || hit.kind == LIBHIT_DETAILS_START) {
+        v->details = -1;
+        app->open_from_start = true;
+        playItem(app, item, now);
+        if (!app->opening)
+            app->open_from_start = false;  // It didn't start.
+    } else if ((pressed & HidNpadButton_B) || hit.kind == LIBHIT_CLOSE) {
+        v->details = -1;
+    }
 }
 
 static void openSelected(App *app, uint64_t now)
@@ -333,6 +443,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
         v->show = -1;
         break;
     case LIBHIT_MENU: appOpenMenu(app); break;
+    case LIBHIT_SOURCE: appLibraryToggleSource(app, now); break;
     case LIBHIT_HOME_CARD:
         v->home_row = hit.a;
         v->home_cols[hit.a].cursor = hit.b;
@@ -414,6 +525,10 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     LibView *v = &app->view;
+    if (v->details >= 0) {
+        detailsInput(app, pressed, touch, now);
+        return;
+    }
     if (pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)) {
         libviewNextTab(v, (pressed & BUTTONS_TAB_LEFT) ? -1 : 1);
         return;  // A tap this frame was aimed at the old tab.
@@ -426,9 +541,13 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         search(app, now);
         return;
     }
+    if ((pressed & HidNpadButton_X) && v->show < 0) {
+        appLibraryToggleSource(app, now);
+        return;
+    }
     LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
     if (v->tab == TAB_FILES && v->show < 0) {
-        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU)
+        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU || hit.kind == LIBHIT_SOURCE)
             tapInput(app, hit, now);
         else if (!(pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)))
             folderInput(app, &app->browser, false, pressed, touch, now);
@@ -445,7 +564,9 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 
 void appLibraryRescan(App *app, uint64_t now)
 {
-    if (!app->library_root[0]) {
+    if (app->config.use_jellyfin) {
+        jfSyncRefresh();
+    } else if (!app->library_root[0]) {
         appShowMessage(app, "Choose the library folder first.", now);
     } else if (libscanBusy(NULL)) {
         appShowMessage(app, "Already looking for videos.", now);
@@ -461,6 +582,7 @@ void appLibraryDraw(App *app, uint64_t now)
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
+    uiLibrarySetSource(app->config.use_jellyfin ? "Jellyfin" : "SD card");
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));
@@ -475,7 +597,9 @@ void appLibraryDraw(App *app, uint64_t now)
     }
     char status[64] = "";
     size_t found;
-    if (libscanBusy(&found))
+    if (app->config.use_jellyfin && app->jf.refreshing)
+        snprintf(status, sizeof(status), "Updating from Jellyfin... %d", app->jf.loaded);
+    else if (libscanBusy(&found))
         snprintf(status, sizeof(status), "Looking for videos... %zu", found);
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
         uiDrawBackground();
@@ -484,9 +608,12 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawFooterStrip();
         uiDrawToast(under);
     } else {
-        uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume, app->library_root[0] != '\0', status,
-                      under);
+        uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
+                      app->library_root[0] != '\0' || app->config.use_jellyfin, status, under);
     }
+    if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
+        uiDrawDetails(&app->library, app->view.details, &app->resume,
+                      jfPlayabilityMessage((JfPlayability)app->library.items[app->view.details].blocked));
     appSettingsDraw(app);
     appMenuDraw(app);
     if (overlay)

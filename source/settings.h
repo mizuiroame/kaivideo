@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #define SETTINGS_NAME_MAX 128
-#define SETTINGS_PAGE_MAX_ROWS 6
+#define SETTINGS_PAGE_MAX_ROWS 7
 
 typedef enum {
     SETTING_LIBRARY,       // Opens the folder picker.
@@ -20,11 +20,16 @@ typedef enum {
     SETTING_BACKGROUND,
     SETTING_BLUR,
     SETTING_CLOCK,
+    SETTING_OPEN_JELLYFIN,  // Opens the Jellyfin page.
+    SETTING_JF_SOURCE,      // Where the library comes from.
+    SETTING_JF_SERVER,      // Types the server's address.
+    SETTING_JF_ACCOUNT,     // Signs in or out.
+    SETTING_JF_REFRESH,     // Reads the library again.
     SETTING_COUNT,
 } SettingRow;
 
 // Settings opens on the main page; Display holds the looks.
-typedef enum { SETTINGS_PAGE_MAIN, SETTINGS_PAGE_DISPLAY, SETTINGS_PAGE_COUNT } SettingsPage;
+typedef enum { SETTINGS_PAGE_MAIN, SETTINGS_PAGE_DISPLAY, SETTINGS_PAGE_JELLYFIN, SETTINGS_PAGE_COUNT } SettingsPage;
 
 typedef enum { SUBTITLES_SMALL, SUBTITLES_MEDIUM, SUBTITLES_LARGE, SUBTITLES_SIZE_COUNT } SubtitleSize;
 typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleStyle;
@@ -40,6 +45,7 @@ typedef struct {
     bool thumbnails;                     // Pictures from the videos on their cards.
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
+    bool use_jellyfin;                   // The library comes from the Jellyfin server.
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.

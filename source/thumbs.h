@@ -16,8 +16,12 @@ void thumbsExit(void);
 // pixels (0xAABBGGRR), or NULL while there's none (yet). Asks for it to be
 // made, and reads at most a couple from the card per frame.
 const uint32_t *thumbGet(const char *path, int64_t size);
+// The same, THUMB_LARGE_W x THUMB_LARGE_H, for showing it big. One is kept at a time.
+const uint32_t *thumbGetLarge(const char *path, int64_t size);
 // True if the video has no picture: it can't be decoded (or reading it failed).
 bool thumbIsNone(const char *path, int64_t size);
+// Videos that got no picture are looked at again: the server may answer now.
+void thumbsRetryMissing(void);
 // Once a frame: takes the pictures made meanwhile.
 void thumbsUpdate(void);
 // While a video plays, nothing is made (the decoder is the player's).

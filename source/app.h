@@ -3,11 +3,13 @@
 // the library folder).
 #pragma once
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 
 #include "browser.h"
 #include "home.h"
+#include "jfsync.h"
 #include "library.h"
 #include "libview.h"
 #include "menu.h"
@@ -28,6 +30,14 @@ typedef struct App App;
 struct App {
     Browser browser;            // The Files tab.
     Player *player;
+    // A video being opened by a thread, while the loading screen shows.
+    bool opening, open_cancelled;
+    bool open_from_start;       // Not from where it was left.
+    pthread_t open_thread;
+    volatile bool open_done;
+    Player *open_result;
+    char open_error[160];
+    uint64_t waiting_since;     // The picture has been awaited since then (0: it's there).
     char playing_name[APP_NAME_MAX];
     char playing_path[BROWSER_PATH_MAX];
     int playing_item;           // Its item in the library, or -1 (from Files).
@@ -69,11 +79,18 @@ struct App {
     bool settings_open, about_open;
     int settings_page;          // SettingsPage.
     int settings_cursor;        // The SettingRow under the cursor.
+
+    // Jellyfin (app_jellyfin.c).
+    JfStatus jf;
+    bool jf_signing;            // The sign-in panel is up.
+    char jf_last_error[128];
+    uint64_t jf_last_refresh, jf_last_report;
 };
 
 // main.c
 void appShowMessage(App *app, const char *message, uint64_t now);
-// Plays path, named name in the player's bar. False (with a message) if it can't.
+// Starts opening path, named name in the player's bar; the loading screen
+// shows until it plays. False (with a message) if it can't even start.
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now);
 // Builds a file's path in KaiVideo's own folder.
 void appConfigPath(char *out, size_t size, const char *name);
@@ -95,6 +112,21 @@ void appLibraryDraw(App *app, uint64_t now);
 // Looks for videos again (Settings).
 void appLibraryRescan(App *app, uint64_t now);
 void appOpenPicker(App *app);
+// Between the card and Jellyfin; to Jellyfin's settings if it isn't set up.
+void appLibraryToggleSource(App *app, uint64_t now);
+// Switches the library between the card and the Jellyfin server.
+void appLibrarySetSource(App *app, bool jellyfin);
+// Puts a library read from the server in place (taking it from c) with what it says was watched.
+void appLibraryInstallCatalog(App *app, JfCatalog *c);
+
+// app_jellyfin.c
+// Starts the connection if it isn't running. False if the network can't be used.
+bool appJellyfinEnsure(App *app);
+// Once a frame: sign-in results, a new library, a refresh now and then.
+void appJellyfinUpdate(App *app, uint64_t now);
+void appJellyfinPlaybackStarted(App *app, uint64_t now);
+void appJellyfinPlaybackTick(App *app, uint64_t now);
+void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
 
 // app_menu.c
 void appOpenMenu(App *app);
@@ -109,5 +141,6 @@ void appSettingsStart(App *app);
 // Applies the subtitles' size, color and style (changed in the player).
 void appApplySubtitleStyle(const App *app);
 void appOpenSettings(App *app);
+void appOpenJellyfinSettings(App *app, uint64_t now);
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appSettingsDraw(const App *app);

@@ -23,6 +23,7 @@ void libviewInit(LibView *v)
 {
     memset(v, 0, sizeof(*v));
     v->show = -1;
+    v->details = -1;
 }
 
 void libviewNextTab(LibView *v, int delta)
@@ -165,6 +166,8 @@ void libviewResultsMove(LibView *v, int dy)
 
 void libviewClamp(LibView *v, const Library *lib, const Home *home)
 {
+    if (v->details >= 0 && (size_t)v->details >= lib->count)
+        v->details = -1;
     // The open series may have moved in the list, or be gone.
     if (v->show >= 0) {
         int found = -1;

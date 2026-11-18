@@ -1,6 +1,7 @@
 #include "library.h"
 
 #include <dirent.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,8 +32,11 @@ static void freeBuilt(Library *lib)
 void libraryFree(Library *lib)
 {
     freeBuilt(lib);
-    for (size_t i = 0; i < lib->count; i++)
+    for (size_t i = 0; i < lib->count; i++) {
         free(lib->items[i].path);
+        free(lib->items[i].overview);
+        free(lib->items[i].series_art);
+    }
     free(lib->items);
     lib->items = NULL;
     lib->count = lib->capacity = 0;
@@ -60,6 +64,21 @@ bool libraryAdd(Library *lib, const char *path, int64_t size, int64_t added)
     return true;
 }
 
+bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int64_t size, int64_t added,
+                      const LibraryRemote *remote)
+{
+    if (!libraryAdd(lib, path, size, added))
+        return false;
+    LibraryItem *item = &lib->items[lib->count - 1];
+    item->named = true;
+    item->name = *name;
+    item->runtime_ns = remote->runtime_ns;
+    item->blocked = remote->blocked;
+    item->overview = remote->overview && remote->overview[0] ? strdup(remote->overview) : NULL;
+    item->series_art = remote->series_art && remote->series_art[0] ? strdup(remote->series_art) : NULL;
+    return true;
+}
+
 // --- Building ---
 
 typedef struct {
@@ -68,6 +87,7 @@ typedef struct {
 } Keyed;
 
 static const Library *g_sorting;  // qsort has no context: the library being sorted.
+static pthread_mutex_t g_sorting_lock = PTHREAD_MUTEX_INITIALIZER;  // Libraries are built in several threads.
 
 static int compareEpisodes(const void *pa, const void *pb)
 {
@@ -151,7 +171,7 @@ static void buildShows(Library *lib, Keyed *episodes, size_t count)
     }
 }
 
-void libraryBuild(Library *lib)
+static void buildLocked(Library *lib)
 {
     freeBuilt(lib);
     g_sorting = lib;
@@ -164,7 +184,8 @@ void libraryBuild(Library *lib)
     size_t episode_count = 0;
     for (size_t i = 0; i < lib->count; i++) {
         LibraryItem *item = &lib->items[i];
-        namingParse(item->path, lib->root, &item->name);
+        if (!item->named)
+            namingParse(item->path, lib->root, &item->name);
         item->show = -1;
         if (item->name.is_episode) {
             episodes[episode_count].item = (int)i;
@@ -195,6 +216,13 @@ void libraryBuild(Library *lib)
         }
         lib->recent[j] = r;
     }
+}
+
+void libraryBuild(Library *lib)
+{
+    pthread_mutex_lock(&g_sorting_lock);
+    buildLocked(lib);
+    pthread_mutex_unlock(&g_sorting_lock);
 }
 
 // --- Scanning the card ---

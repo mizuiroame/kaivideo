@@ -52,6 +52,14 @@ static void rowHighlight(int x, int y, int w, int h)
     gfxFillRect(x, y + 10, 3, h - 20, COLOR_ACCENT);
 }
 
+static const char *g_jf_server = "", *g_jf_account = "";
+
+void uiSettingsSetJellyfin(const char *server, const char *account)
+{
+    g_jf_server = server;
+    g_jf_account = account;
+}
+
 // What a row shows on its right: a choice's value, the folder's name, the version.
 static void rowValue(SettingRow row, const Config *c, const char *library_root, const char *version, char *out,
                      size_t size)
@@ -61,6 +69,10 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", !library_root[0] ? "Not chosen" : slash && slash[1] ? slash + 1 : library_root);
     } else if (row == SETTING_ABOUT) {
         snprintf(out, size, "KaiVideo %s", version);
+    } else if (row == SETTING_JF_SERVER) {
+        snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : "Not set");
+    } else if (row == SETTING_JF_ACCOUNT) {
+        snprintf(out, size, "%s", g_jf_account);
     } else {
         settingValue(c, row, out, size);
     }
@@ -83,7 +95,8 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
     for (int n = 0; n < count; n++) {
         SettingRow row = rows[n];
         int row_y = y + HEAD_H + n * ROW_H;
-        bool selected = (int)row == cursor, choice = settingIsChoice(row), opens = row == SETTING_OPEN_DISPLAY;
+        bool selected = (int)row == cursor, choice = settingIsChoice(row);
+        bool opens = row == SETTING_OPEN_DISPLAY || row == SETTING_OPEN_JELLYFIN;
         if (selected)
             rowHighlight(x + 16, row_y, SETTINGS_W - 32, ROW_H - 6);
         fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, x + PANEL_PAD, row_y + 8, settingLabel(row), COLOR_TEXT);
@@ -125,13 +138,30 @@ static void drawMark(int x, int y, int size)
     gfxTriangle(cx - 9, cy - 11, cx - 9, cy + 11, cx + 11, cy, COLOR_SURFACE);
 }
 
+void uiDrawJellyfinCode(const char *code, const char *server)
+{
+    int w = 680, h = 340, x = (GFX_WIDTH - w) / 2, y = (GFX_HEIGHT - h) / 2;
+    dimScreen();
+    panel(x, y, w, h);
+    fontDraw(FONT_BOLD, 26, x + PANEL_PAD, y + 26, "Sign in to Jellyfin", COLOR_TEXT);
+    fontDrawClipped(FONT_REGULAR, 18, x + PANEL_PAD, y + 62, w - 2 * PANEL_PAD, server, COLOR_DIM);
+    if (!code[0]) {
+        fontDraw(FONT_REGULAR, 21, x + PANEL_PAD, y + 150, "Contacting the server...", COLOR_TEXT);
+        return;
+    }
+    int code_w = fontTextWidth(FONT_BOLD, 64, code);
+    fontDraw(FONT_BOLD, 64, x + (w - code_w) / 2, y + 104, code, COLOR_ACCENT);
+    fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, y + 216, "In Jellyfin on your phone or computer, open your", COLOR_TEXT);
+    fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, y + 244, "profile, choose Quick Connect and enter this code.", COLOR_TEXT);
+}
+
 void uiDrawAbout(const char *version)
 {
     static const char *const LINES[] = {
         "A video player for Switch 2 homebrew on kaiHEN.",
-        "Plays MP4, MKV and WebM from your SD card with the console's video",
-        "decoder, with sound tracks, subtitles and a library of your films",
-        "and series.",
+        "Plays MP4, MKV and WebM from your SD card or a Jellyfin server, with",
+        "sound tracks, subtitles and a library of your films and series.",
+        "",
         "",
         "Free and open source under the MIT license; FFmpeg under the LGPL.",
         "Not affiliated with or endorsed by Nintendo.",

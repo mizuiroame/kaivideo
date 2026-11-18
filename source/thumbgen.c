@@ -6,6 +6,10 @@
 
 #include <switch.h>
 
+#include "image_config.h"
+#include "jfsync.h"
+#include "net.h"
+#include "stb_image.h"
 #include "stb_image_write.h"
 #include "video.h"
 
@@ -19,10 +23,15 @@
 #define MAX_POINT_NS 600000000000ll   // Never further in than 10 minutes.
 #define DARK_LUMA 28                  // Darker than this on average: try later in the video.
 #define JPEG_QUALITY 85
+#define IMAGE_MAX_BYTES (8u * 1024 * 1024)
+#define IMAGE_TIMEOUT_S 20L
+#define FETCH_SCALE 2
+#define IMAGE_MAX_PIXELS (16 * 1000 * 1000)
 
 typedef struct {
     char path[PATH_MAX_LEN], jpg[PATH_MAX_LEN];
     uint64_t key;
+    bool large;
 } Request;
 
 static Thread g_thread;
@@ -35,6 +44,8 @@ static uint64_t g_done[QUEUE_MAX];
 static int g_done_count;
 static volatile bool g_stop, g_paused;
 static volatile bool g_busy;         // Using the decoder.
+static NetClient *g_net;             // Only this thread uses it.
+static volatile bool g_net_abort;    // Paused or stopping: no waiting for the server.
 
 // Waits for a frame at or after the point, or gives up (paused, stopped,
 // the video ended or failed). The frame stays valid until v is used again.
@@ -53,9 +64,76 @@ static const GfxVideoFrame *frameAt(Video *v, int64_t point_ns)
     return NULL;
 }
 
+static void markNone(const char *jpg)
+{
+    FILE *none = fopen(jpg, "wb");  // The mark: this video has no picture.
+    if (none) {
+        fwrite(THUMB_NONE_MARK, 1, THUMB_NONE_MARK_SIZE, none);
+        fclose(none);
+    }
+}
+
+// One of the item's pictures from the server, as RGB (free with stbi_image_free).
+static uint8_t *fetchPicture(const char *location, const char *kind, int max_width, int *w, int *h, long *status)
+{
+    char url[JF_URL_MAX], auth[JF_AUTH_MAX];
+    if (!jfSyncImageRequest(location, kind, max_width, url, sizeof(url), auth, sizeof(auth)))
+        return NULL;
+    if (!g_net && !(g_net = netClientOpen()))
+        return NULL;
+    NetRequest request = {.url = url, .authorization = auth, .cancel = &g_net_abort, .timeout_s = IMAGE_TIMEOUT_S};
+    NetResponse answer;
+    bool ok = netFetchText(g_net, &request, IMAGE_MAX_BYTES, &answer);
+    *status = answer.status;
+    if (!ok)
+        return NULL;
+    int channels;
+    const stbi_uc *data = (const stbi_uc *)answer.data;
+    bool fits = stbi_info_from_memory(data, (int)answer.size, w, h, &channels) && *w > 0 && *h > 0 &&
+                (long long)*w * *h <= IMAGE_MAX_PIXELS;
+    uint8_t *rgb = fits ? stbi_load_from_memory(data, (int)answer.size, w, h, &channels, 3) : NULL;
+    netResponseFree(&answer);
+    return rgb;
+}
+
+// A picture from the server: its own or, for a poster, the wide one if there is one.
+static void makeRemote(const Request *r)
+{
+    int w = 0, h = 0, wide_w = 0, wide_h = 0;
+    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    int fetch_w = out_w * FETCH_SCALE;  // A little more than needed: it's cropped and averaged down.
+    long status = 0, wide_status = 0;
+    uint8_t *rgb = fetchPicture(r->path, "Primary", fetch_w, &w, &h, &status);
+    if (!rgb || h > w) {
+        uint8_t *wide = fetchPicture(r->path, "Backdrop", fetch_w, &wide_w, &wide_h, &wide_status);
+        if (wide) {
+            if (rgb)
+                stbi_image_free(rgb);
+            rgb = wide;
+            w = wide_w;
+            h = wide_h;
+        }
+    }
+    uint8_t *out = rgb ? malloc((size_t)out_w * out_h * 3) : NULL;
+    if (out) {
+        thumbgenFit(rgb, w, h, out, out_w, out_h);
+        if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, out, JPEG_QUALITY))
+            remove(r->jpg);
+        free(out);
+    } else if (status == 404 && (wide_status == 404 || wide_status == 0)) {
+        markNone(r->jpg);  // The server has none. Without an answer, it's tried again next time.
+    }
+    if (rgb)
+        stbi_image_free(rgb);
+}
+
 // Makes one picture. False only when paused or stopped meanwhile (asked again later).
 static bool make(const Request *r)
 {
+    if (jfIsLocation(r->path)) {
+        makeRemote(r);
+        return !g_stop && !g_paused;
+    }
     char error[160];
     Video *v = videoOpenLimited(r->path, DECODE_THREADS, error, sizeof(error));
     const GfxVideoFrame *f = NULL;
@@ -75,19 +153,16 @@ static bool make(const Request *r)
         }
     }
     bool interrupted = g_stop || g_paused;
-    uint8_t *rgb = f && !interrupted ? malloc(THUMB_W * THUMB_H * 3) : NULL;
+    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    uint8_t *rgb = f && !interrupted ? malloc((size_t)out_w * out_h * 3) : NULL;
     if (rgb) {
         thumbgenConvert(f->y, f->uv, f->width, f->height, f->y_pitch, f->uv_pitch, f->bt709, f->full_range, rgb,
-                        THUMB_W, THUMB_H);
-        if (!stbi_write_jpg(r->jpg, THUMB_W, THUMB_H, 3, rgb, JPEG_QUALITY))
+                        out_w, out_h);
+        if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, rgb, JPEG_QUALITY))
             remove(r->jpg);
         free(rgb);
     } else if (!interrupted) {
-        FILE *none = fopen(r->jpg, "wb");  // The mark: this video has no picture (not decodable).
-        if (none) {
-            fwrite(THUMB_NONE_MARK, 1, THUMB_NONE_MARK_SIZE, none);
-            fclose(none);
-        }
+        markNone(r->jpg);  // It can't be decoded.
     }
     if (v)
         videoClose(v);
@@ -126,6 +201,7 @@ bool thumbgenStart(void)
     mutexInit(&g_lock);
     condvarInit(&g_wake);
     g_stop = false;
+    g_net_abort = false;
     if (R_FAILED(threadCreate(&g_thread, thumbThread, NULL, NULL, STACK_SIZE, PRIORITY, -2)))
         return false;
     if (R_FAILED(threadStart(&g_thread))) {
@@ -142,14 +218,17 @@ void thumbgenStop(void)
         return;
     mutexLock(&g_lock);
     g_stop = true;
+    g_net_abort = true;
     condvarWakeAll(&g_wake);
     mutexUnlock(&g_lock);
     threadWaitForExit(&g_thread);
     threadClose(&g_thread);
+    netClientClose(g_net);
+    g_net = NULL;
     g_started = false;
 }
 
-void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key)
+void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool large)
 {
     if (!g_started || strlen(path) >= PATH_MAX_LEN || strlen(jpg_path) >= PATH_MAX_LEN)
         return;
@@ -171,6 +250,7 @@ void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key)
     snprintf(r->path, sizeof(r->path), "%s", path);
     snprintf(r->jpg, sizeof(r->jpg), "%s", jpg_path);
     r->key = key;
+    r->large = large;
     condvarWakeAll(&g_wake);
     mutexUnlock(&g_lock);
 }
@@ -193,6 +273,7 @@ void thumbgenPause(bool paused)
         return;
     mutexLock(&g_lock);
     g_paused = paused;
+    g_net_abort = paused;
     condvarWakeAll(&g_wake);
     while (paused && g_busy)  // Until it has let go of the decoder.
         condvarWait(&g_wake, &g_lock);

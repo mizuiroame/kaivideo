@@ -9,12 +9,15 @@
 static const char *const LABELS[SETTING_COUNT] = {
     "Library folder", "Look for new videos", "Thumbnails", "Play next episode", "Display", "About",
     "Theme", "Accent color", "Background", "Background blur", "Clock",
+    "Jellyfin", "Library from", "Server", "Account", "Update the library now",
 };
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
-    {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_AUTOPLAY, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
+    {SETTING_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_AUTOPLAY, SETTING_OPEN_DISPLAY,
+     SETTING_ABOUT},
     {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
+    {SETTING_JF_SOURCE, SETTING_JF_SERVER, SETTING_JF_ACCOUNT, SETTING_JF_REFRESH, SETTING_COUNT},
 };
-static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display"};
+static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "Jellyfin"};
 
 static const char *const SIZE_NAMES[SUBTITLES_SIZE_COUNT] = {"Small", "Medium", "Large"};
 static const int SIZE_PX[SUBTITLES_SIZE_COUNT] = {28, 34, 42};
@@ -66,6 +69,8 @@ bool configReadLine(Config *c, const char *line)
         c->thumbnails = strcmp(value, "0") != 0;
     else if (isKey(line, length, "autoplay"))
         c->autoplay = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "jellyfin"))
+        c->use_jellyfin = strcmp(value, "1") == 0;
     else if (isKey(line, length, "subtitles"))
         c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
     else if (isKey(line, length, "subtitle_color"))
@@ -82,7 +87,8 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "theme=%d\naccent=%d\n", c->theme, c->accent);
     if (c->background[0] && !strpbrk(c->background, "\r\n"))
         fprintf(f, "background=%s\n", c->background);
-    fprintf(f, "clock24=%d\nautoplay=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0);
+    fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
+            c->use_jellyfin ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
 }
@@ -112,7 +118,7 @@ const char *settingLabel(SettingRow row)
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
-           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY;
+           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_SOURCE;
 }
 
 static int wrap(int value, int delta, int count)
@@ -143,6 +149,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? "On" : "Off"); break;
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? "24-hour" : "12-hour"); break;
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
+    case SETTING_JF_SOURCE: snprintf(out, size, "%s", c->use_jellyfin ? "Jellyfin" : "SD card"); break;
     default: out[0] = '\0'; break;
     }
 }

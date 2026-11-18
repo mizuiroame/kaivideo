@@ -24,6 +24,7 @@
 #include "font_regular_ttf.h"
 #include "gfx.h"
 #include "input.h"
+#include "mediafile.h"
 #include "menu.h"
 #include "playback.h"
 #include "player.h"
@@ -41,11 +42,15 @@
 #define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
 #define SEEK_SHORT_NS 10000000000ll
 #define STALL_NS 2000000000ull       // Playing without moving this long is logged.
+#define WAITING_NS 1000000000ull     // Without moving this long, the wait is shown.
 #define SEEK_LONG_NS 60000000000ll
 #define UP_NEXT_NS 30000000000ll     // The next episode's card shows this long before the end.
 #define SCREEN_W 1280
 #define SCREEN_H 720
 #define PANEL_W 1920  // In case the touch panel reports its own resolution.
+
+#define SPINNER_TURN_NS 1000000000ull
+#define SPINNER_DELAY_NS 400000000ull  // Quick waits show nothing.
 
 static FILE *g_log;
 // KaiVideo's own files, next to its NRO (approot.h): settings.txt,
@@ -188,19 +193,38 @@ static void rememberTracks(App *app, const char *sound, const char *subs)
     trackPrefsSave(&app->tracks, path);
 }
 
+static void *openThread(void *arg)
+{
+    App *app = arg;
+    app->open_result = playerOpen(app->playing_path, nowNs(), app->open_error, sizeof(app->open_error));
+    app->open_done = true;
+    return NULL;
+}
+
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
-    char error[160];
-    thumbsPause(true);  // The decoder is the player's now.
-    app->player = playerOpen(path, now, error, sizeof(error));
-    if (!app->player) {
-        thumbsPause(false);
-        appLog("%s: %s", path, error);
-        appShowMessage(app, error, now);
+    if (app->opening)
         return false;
-    }
+    thumbsPause(true);  // The decoder is the player's now.
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
+    app->open_done = false;
+    app->open_cancelled = false;
+    app->open_error[0] = '\0';
+    app->open_result = NULL;
+    app->opening = pthread_create(&app->open_thread, NULL, openThread, app) == 0;
+    if (!app->opening) {
+        thumbsPause(false);
+        appShowMessage(app, "The video can't be opened now.", now);
+    }
+    return app->opening;
+}
+
+// The video is open: everything that goes with starting it.
+static void beginPlaying(App *app, uint64_t now)
+{
+    const char *path = app->playing_path;
+    app->waiting_since = now;
     app->playing_item = libraryFind(&app->library, path);
     app->next_item = libraryNextEpisode(&app->library, app->playing_item);
     app->next_dismissed = false;
@@ -211,7 +235,9 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     playerSetSpeed(app->player, playbackSpeedPermille(app->speed_index), now);
     applyTrackPrefs(app, now);
     int64_t resume_at;
-    if (resumeFind(&app->resume, path, &resume_at, NULL)) {
+    bool from_start = app->open_from_start;
+    app->open_from_start = false;
+    if (!from_start && resumeFind(&app->resume, path, &resume_at, NULL)) {
         // Where it was left: go on from there, and say how to start over.
         playerSeekTo(app->player, resume_at, now);
         char at[16];
@@ -229,7 +255,34 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     app->overlay_until = now + OVERLAY_NS;
     app->seeks = 0;
     app->started = now;
-    return true;
+    appJellyfinPlaybackStarted(app, now);
+}
+
+// Takes the opening thread's result once it has finished.
+static void finishOpening(App *app, uint64_t now)
+{
+    pthread_join(app->open_thread, NULL);
+    app->opening = false;
+    app->player = app->open_result;
+    if (app->player && app->open_cancelled) {
+        playerClose(app->player);
+        app->player = NULL;
+        thumbsPause(false);
+    } else if (app->player) {
+        beginPlaying(app, now);
+    } else {
+        thumbsPause(false);
+        appLog("%s: %s", app->playing_path, app->open_error);
+        if (!app->open_cancelled)
+            appShowMessage(app, jfIsLocation(app->playing_path) ? "The video couldn't be loaded from Jellyfin."
+                                                                : app->open_error, now);
+    }
+}
+
+// A turn of the loading symbol, from the time.
+static float spinnerAngle(uint64_t now)
+{
+    return (float)((now % SPINNER_TURN_NS) * (2.0 * 3.14159265) / SPINNER_TURN_NS);
 }
 
 static void stopVideo(App *app, const char *error, bool ended)
@@ -237,21 +290,34 @@ static void stopVideo(App *app, const char *error, bool ended)
     // Remember where it was left (or, watched to the end, forget it).
     int64_t duration = playerDuration(app->player), position = ended ? duration : playerPosition(app->player);
     resumeRemember(&app->resume, app->playing_path, position, duration);
-    if (duration > 0 && duration - position < RESUME_END_MARGIN_NS) {  // Watched, as resuming sees it.
+    bool finished = duration > 0 && duration - position < RESUME_END_MARGIN_NS;
+    if (finished) {  // Watched, as resuming sees it.
         watchedSet(&app->watched, app->playing_path, true);
         appSaveWatched(app);
     }
+    appJellyfinPlaybackStopped(app, position, finished);
     char path[APPROOT_PATH_MAX + 32];
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeSave(&app->resume, path);
+    char state[256];
+    playerDescribe(app->player, state, sizeof(state));
+    appLog("  at the end: %s", state);
     VideoStats s = playerStats(app->player);
     appLog("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
             error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
             s.dropped);
+    mediaFileInterruptAll();  // Nothing waits for the network now.
     playerClose(app->player);
     app->player = NULL;
     thumbsPause(false);
     appLibraryRefreshHome(app);  // Continue watching changed.
+}
+
+// True if playback really got to the end, and didn't just stop reading.
+static bool reachedEnd(const Player *p)
+{
+    int64_t duration = playerDuration(p);
+    return duration <= 0 || duration - playerPosition(p) <= RESUME_END_MARGIN_NS;
 }
 
 static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
@@ -540,8 +606,9 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
 }
 
 // Logs the player's state once when it should be playing but its position
-// hasn't moved for STALL_NS: what it waits for.
-static void watchForStall(App *app, uint64_t now)
+// hasn't moved for STALL_NS: what it waits for. True while it hasn't moved for
+// WAITING_NS.
+static bool watchForStall(App *app, uint64_t now)
 {
     static int64_t last_pos = -1;
     static uint64_t moved_at;
@@ -551,7 +618,7 @@ static void watchForStall(App *app, uint64_t now)
         last_pos = pos;
         moved_at = now;
         logged = false;
-        return;
+        return false;
     }
     if (!logged && now - moved_at > STALL_NS) {
         char state[256];
@@ -559,6 +626,7 @@ static void watchForStall(App *app, uint64_t now)
         appLog("  stuck for 2 s: %s", state);
         logged = true;
     }
+    return now - moved_at > WAITING_NS;
 }
 
 // Subtitles with their own styles, over the bw x bh box the video is in; the
@@ -592,7 +660,7 @@ static bool drawStyledSubtitles(App *app, float bw, float bh, bool bar)
 
 static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 {
-    watchForStall(app, now);
+    bool stalled = watchForStall(app, now);
     uiLibraryResetHits();
     int w, h;
     double aspect;
@@ -606,6 +674,15 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     gfxClear(GFX_RGB(0, 0, 0));
     if (frame)
         gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
+    // Waiting for the picture (the start, a jump): the symbol, if it takes a moment.
+    if (!playerWaitingForPicture(app->player))
+        app->waiting_since = 0;
+    else if (!app->waiting_since)
+        app->waiting_since = now;
+    if (app->waiting_since && now - app->waiting_since > SPINNER_DELAY_NS)
+        uiDrawSpinner(GFX_WIDTH / 2.0f, GFX_HEIGHT / 2.0f, spinnerAngle(now));
+    else if (stalled && jfIsLocation(app->playing_path))
+        uiDrawWaiting(spinnerAngle(now), "Waiting for the server...");
     char error[160];
     if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.
         snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s. %s",
@@ -623,6 +700,8 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     }
     if (playerPaused(app->player) && !app->menu.open && !app->hud_hidden)
         uiDrawPausedSymbol();
+    if (bar)
+        uiDrawPlayerStatus();
     if (bar)
         uiDrawPlayerBar(app->player, app->playing_name,
                         now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL,
@@ -694,18 +773,31 @@ int main(int argc, char **argv)
         uint64_t pressed = inputRepeatUpdate(&repeat, padGetButtonsDown(&pad), padGetButtons(&pad), now);
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
+        appJellyfinUpdate(&app, now);
         thumbsUpdate();
         SysInfo sys;
         sysinfoGet(&sys, now);
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
-        if (app.player) {
+        if (app.opening) {
+            if ((pressed & HidNpadButton_B) && !app.open_cancelled) {
+                app.open_cancelled = true;
+                mediaFileInterruptAll();
+            }
+            pressed = 0;  // Not for the video that's about to show.
+            if (app.open_done)
+                finishOpening(&app, now);
+        }
+        if (app.opening) {
+            uiDrawLoading(app.playing_name, spinnerAngle(now), app.open_cancelled);
+            uiDrawFooterHelp("[B] cancel");
+        } else if (app.player) {
             char error[160] = "";
             bool keep = playerInput(&app, pressed, t, now);
             bool ended = false;
             if (keep && playerFinished(app.player, error, sizeof(error))) {
                 keep = false;
-                ended = !error[0];
+                ended = !error[0] && reachedEnd(app.player);
             }
             if (!keep) {
                 // On to the next episode: asked for, or at the end unless its card was closed.
@@ -718,6 +810,7 @@ int main(int argc, char **argv)
                     appLibraryPlay(&app, next, now);
                 appLibraryDraw(&app, now);
             } else {
+                appJellyfinPlaybackTick(&app, now);
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             }
         } else {
@@ -729,6 +822,11 @@ int main(int argc, char **argv)
         }
         gfxEnd();
     }
+    if (app.opening) {
+        app.open_cancelled = true;
+        mediaFileInterruptAll();
+        finishOpening(&app, nowNs());
+    }
     if (app.player)
         stopVideo(&app, NULL, false);
     appSaveSettings(&app);
@@ -736,6 +834,7 @@ int main(int argc, char **argv)
     watchedFree(&app.watched);
     trackPrefsFree(&app.tracks);
     thumbsExit();
+    jfSyncStop();
     sysinfoExit();
     browserFree(&app.browser);
     appLog("Done.");

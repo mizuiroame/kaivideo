@@ -37,6 +37,9 @@
 #define SEARCH_LIST_Y 160
 #define MAX_HITS 96
 #define SERIES_PICTURE_TRIES 8  // Episodes tried for a series' picture.
+#define PLAYER_FADE_BANDS 12
+#define PLAYER_FADE_BAND_H 6
+#define PLAYER_FADE_ALPHA 190
 #define CHECK_R 13             // A list row's watched circle.
 #define UP_NEXT_W 300          // The next episode's card, in the player.
 #define UP_NEXT_PAD 12
@@ -73,6 +76,7 @@ LibHit uiLibraryTap(int x, int y)
 
 static bool g_thumbnails = true;
 static const Watched *g_watched;
+static const char *g_source_label = "";
 
 void uiLibrarySetThumbnails(bool on)
 {
@@ -123,8 +127,15 @@ static const uint32_t *pictureOf(const Library *lib, LibraryRef ref)
         return NULL;
     if (!ref.is_show)
         return thumbGet(lib->items[ref.index].path, lib->items[ref.index].size);
-    // A series: its first episode that has one (one that can't be decoded has none: the next).
+    // A series: the server's picture for it, or its first episode that has one
+    // (one that can't be decoded has none: the next).
     const LibraryShow *show = &lib->shows[ref.index];
+    const char *art = show->count ? lib->items[show->episodes[0]].series_art : NULL;
+    if (art) {
+        const uint32_t *pixels = thumbGet(art, 0);
+        if (pixels || !thumbIsNone(art, 0))
+            return pixels;
+    }
     for (int i = 0; i < show->count && i < SERIES_PICTURE_TRIES; i++) {
         const LibraryItem *item = &lib->items[show->episodes[i]];
         const uint32_t *pixels = thumbGet(item->path, item->size);
@@ -135,12 +146,17 @@ static const uint32_t *pictureOf(const Library *lib, LibraryRef ref)
 }
 
 // Draws a picture into a layout box with round corners.
-static void drawPicture(const uint32_t *pixels, int x, int y, int w, int h, int radius)
+static void drawImage(const uint32_t *pixels, int image_w, int image_h, int x, int y, int w, int h, int radius)
 {
     gfxSetClipRound(x, y, w, h, radius);
-    gfxDrawImageScaledFb((float)gfxToFb(x), (float)gfxToFb(y), (float)gfxToFb(w), (float)gfxToFb(h), THUMB_W, THUMB_H,
+    gfxDrawImageScaledFb((float)gfxToFb(x), (float)gfxToFb(y), (float)gfxToFb(w), (float)gfxToFb(h), image_w, image_h,
                          pixels);
     gfxResetClip();
+}
+
+static void drawPicture(const uint32_t *pixels, int x, int y, int w, int h, int radius)
+{
+    drawImage(pixels, THUMB_W, THUMB_H, x, y, w, h, radius);
 }
 
 static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files"};
@@ -152,6 +168,11 @@ void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h)
 {
     g_sys = *sys;
     g_clock_24h = clock_24h;
+}
+
+void uiLibrarySetSource(const char *label)
+{
+    g_source_label = label;
 }
 
 void uiLibraryResetHits(void)
@@ -225,6 +246,14 @@ static void drawStatus(const char *status)
     }
 }
 
+void uiDrawPlayerStatus(void)
+{
+    for (int i = 0; i < PLAYER_FADE_BANDS; i++)  // A fade from the top, so they read over any picture.
+        gfxBlendRect(0, i * PLAYER_FADE_BAND_H, GFX_WIDTH, PLAYER_FADE_BAND_H, GFX_RGB(0, 0, 0),
+                     (unsigned)(PLAYER_FADE_ALPHA - i * PLAYER_FADE_ALPHA / PLAYER_FADE_BANDS));
+    drawStatus(NULL);
+}
+
 // Three bars before the name: the touch way into the + menu.
 static void drawMenuButton(void)
 {
@@ -237,6 +266,14 @@ void uiDrawTabBar(LibTab active, const char *status)
     drawMenuButton();
     int title_w = fontDraw(FONT_BOLD, 26, MARGIN + 36, 16, "KaiVideo", COLOR_ACCENT);
     uiLibraryAddHit(0, 0, MARGIN + 36 + title_w + 12, UI_TAB_BAR_H, LIBHIT_MENU, 0, 0);
+    if (g_source_label[0]) {  // Where the library comes from: X changes it.
+        int x = MARGIN + 36 + title_w + 18, key_w = uiButtonWidth("X");
+        int w = key_w + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
+        gfxFillRoundRect(x, 15, w, 32, 16, COLOR_SURFACE_HI);
+        uiDrawButton(x + 8, 31.0f, "X", COLOR_SURFACE, COLOR_TEXT);
+        fontDrawMiddle(FONT_BOLD, 17, x + 16 + key_w, 31.0f, g_source_label, COLOR_TEXT);
+        uiLibraryAddHit(x - 4, 4, w + 8, UI_TAB_BAR_H - 8, LIBHIT_SOURCE, 0, 0);
+    }
     drawTabs(active);
     drawStatus(status);
 }
@@ -298,40 +335,61 @@ static void cardColors(const char *name, Color *top, Color *bottom)
     *bottom = GFX_RGB(pair[1] >> 16, (pair[1] >> 8) & 0xFF, pair[1] & 0xFF);
 }
 
+#define WRAP_LINE_MAX 160
+
+// How much of p goes on a line of width w: as many words as fit; a last line
+// takes the rest. The line goes in out (WRAP_LINE_MAX bytes).
+static size_t wrapLine(FontFace face, int px, int w, const char *p, bool last, char *out)
+{
+    char line[WRAP_LINE_MAX];
+    size_t best = 0, len = 0;
+    while (p[len] && len + 1 < sizeof(line)) {
+        size_t next = len;
+        while (p[next] == ' ')
+            next++;
+        while (p[next] && p[next] != ' ')
+            next++;
+        if (next >= sizeof(line))
+            break;
+        snprintf(line, sizeof(line), "%.*s", (int)next, p);
+        if (fontTextWidth(face, px, line) > w && best > 0)
+            break;
+        best = next;
+        len = next;
+        if (!p[len])
+            break;
+    }
+    if (best == 0 || last)
+        best = strlen(p) < sizeof(line) - 1 ? strlen(p) : sizeof(line) - 1;
+    snprintf(out, WRAP_LINE_MAX, "%.*s", (int)best, p);
+    return best;
+}
+
+// Draws text wrapped at spaces from top, at most max_lines lines.
+static void drawWrappedDown(FontFace face, int px, int x, int top, int w, int line_h, int max_lines, const char *text,
+                            Color color)
+{
+    const char *p = text;
+    for (int i = 0; *p && i < max_lines; i++) {
+        char line[WRAP_LINE_MAX];
+        p += wrapLine(face, px, w, p, i == max_lines - 1, line);
+        fontDrawClipped(face, px, x, top + i * line_h, w, line, color);
+        while (*p == ' ')
+            p++;
+    }
+}
+
 // Draws text wrapped at spaces into at most max_lines lines of width w,
 // the last cut with an ellipsis, bottom-aligned at bottom. Returns the top.
 static int drawWrappedUp(FontFace face, int px, int x, int bottom, int w, int line_h, int max_lines, const char *text,
                          Color color)
 {
-    char lines[4][160];
+    char lines[4][WRAP_LINE_MAX];
     int count = 0;
     const char *p = text;
     while (*p && count < max_lines) {
-        // As many words as fit; the last line takes the rest.
-        char line[160];
-        size_t best = 0, len = 0;
-        while (p[len] && len + 1 < sizeof(line)) {
-            size_t next = len;
-            while (p[next] == ' ')
-                next++;
-            while (p[next] && p[next] != ' ')
-                next++;
-            if (next >= sizeof(line))
-                break;
-            snprintf(line, sizeof(line), "%.*s", (int)next, p);
-            if (fontTextWidth(face, px, line) > w && best > 0)
-                break;
-            best = next;
-            len = next;
-            if (!p[len])
-                break;
-        }
-        if (best == 0)
-            best = strlen(p) < sizeof(line) - 1 ? strlen(p) : sizeof(line) - 1;
-        if (count == max_lines - 1)
-            best = strlen(p) < sizeof(line) - 1 ? strlen(p) : sizeof(line) - 1;
-        snprintf(lines[count++], sizeof(lines[0]), "%.*s", (int)best, p);
-        p += best;
+        p += wrapLine(face, px, w, p, count == max_lines - 1, lines[count]);
+        count++;
         while (*p == ' ')
             p++;
     }
@@ -720,6 +778,100 @@ void uiDrawUpNextCard(const Library *lib, int item, double fraction_left, int se
     fontDrawClipped(FONT_BOLD, 19, px, ty + 22, pw, label, COLOR_TEXT);
     uiDrawButton(px, ty + 68.0f, "ZR", COLOR_SURFACE_HI, COLOR_TEXT);
     fontDrawMiddle(FONT_REGULAR, 17, px + uiButtonWidth("ZR") + 10, ty + 68.0f, "play now", COLOR_DIM);
+}
+
+// --- A video's details ---
+
+#define DETAILS_W 1040
+#define DETAILS_H 393
+#define DETAILS_PAD 32
+#define DETAILS_PIC_W 460
+#define DETAILS_PIC_H 259
+#define DETAILS_BUTTON_H 46
+#define OVERVIEW_LINES 8
+#define DETAILS_BUTTON_GAP 12
+#define OVERVIEW_LINE_H 27
+
+// "1998  ·  1 h 52 min", or "Season 2, episode 5  ·  22 min".
+static void detailsLine(const LibraryItem *it, char *out, size_t size)
+{
+    char first[48] = "", length[32] = "";
+    if (it->show >= 0)
+        snprintf(first, sizeof(first), "Season %d, episode %d", it->name.season, it->name.episode);
+    else if (it->name.year)
+        snprintf(first, sizeof(first), "%d", it->name.year);
+    int minutes = (int)(it->runtime_ns / 60000000000ll);
+    if (minutes >= 60)
+        snprintf(length, sizeof(length), "%d h %d min", minutes / 60, minutes % 60);
+    else if (minutes > 0)
+        snprintf(length, sizeof(length), "%d min", minutes);
+    snprintf(out, size, "%s%s%s", first, first[0] && length[0] ? "  \xC2\xB7  " : "", length);
+}
+
+// A pill with a button's letter and its label. Returns its width.
+static int detailsButton(int x, int y, const char *key, const char *label, LibHitKind hit)
+{
+    int w = uiButtonWidth(key) + fontTextWidth(FONT_BOLD, 19, label) + 38;
+    gfxFillRoundRect(x, y, w, DETAILS_BUTTON_H, DETAILS_BUTTON_H / 2, COLOR_SURFACE_HI);
+    uiDrawButton(x + 14, y + DETAILS_BUTTON_H / 2.0f, key, COLOR_SURFACE, COLOR_TEXT);
+    fontDrawMiddle(FONT_BOLD, 19, x + 24 + uiButtonWidth(key), y + DETAILS_BUTTON_H / 2.0f, label, COLOR_TEXT);
+    uiLibraryAddHit(x, y, w, DETAILS_BUTTON_H, hit, 0, 0);
+    return w;
+}
+
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *blocked)
+{
+    const LibraryItem *it = &lib->items[item];
+    int x = (GFX_WIDTH - DETAILS_W) / 2, y = (UI_FOOTER_Y + UI_TAB_BAR_H - DETAILS_H) / 2;
+    gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), UI_DIM_ALPHA);
+    uiLibraryAddHit(0, 0, GFX_WIDTH, GFX_HEIGHT, LIBHIT_CLOSE, 0, 0);
+    gfxFillRoundRect(x, y, DETAILS_W, DETAILS_H, 16, COLOR_SURFACE);
+    uiLibraryAddHit(x, y, DETAILS_W, DETAILS_H, LIBHIT_PANEL, 0, 0);
+
+    int px = x + DETAILS_PAD, py = y + DETAILS_PAD;
+    // The sharp picture, and the card's until it comes.
+    const uint32_t *large = g_thumbnails ? thumbGetLarge(it->path, it->size) : NULL;
+    const uint32_t *picture = large ? NULL : pictureOf(lib, (LibraryRef){false, item});
+    if (large)
+        drawImage(large, THUMB_LARGE_W, THUMB_LARGE_H, px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10);
+    else if (picture)
+        drawPicture(picture, px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10);
+    else
+        gfxFillRoundRect(px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10, COLOR_SURFACE_HI);
+    double progress = watched(lib, resume, item);
+    if (progress >= 0) {
+        int done = (int)((DETAILS_PIC_W - 28) * (progress > 1 ? 1 : progress));
+        gfxFillRoundRect(px + 14, py + DETAILS_PIC_H - 14, DETAILS_PIC_W - 28, 4, 2, GFX_RGB(0, 0, 0));
+        gfxFillRoundRect(px + 14, py + DETAILS_PIC_H - 14, done > 4 ? done : 4, 4, 2, COLOR_ACCENT);
+    }
+    int tx = px + DETAILS_PIC_W + 28, tw = x + DETAILS_W - DETAILS_PAD - tx, ty = py;
+    if (it->show >= 0) {
+        fontDrawClipped(FONT_BOLD, 18, tx, ty, tw, lib->shows[it->show].name, COLOR_ACCENT);
+        ty += 28;
+    }
+    int title_lines_top = ty;
+    drawWrappedDown(FONT_BOLD, 28, tx, title_lines_top, tw, 36, 2, it->name.title, COLOR_TEXT);
+    ty += fontTextWidth(FONT_BOLD, 28, it->name.title) > tw ? 76 : 42;
+    char line[96];
+    detailsLine(it, line, sizeof(line));
+    fontDrawClipped(FONT_REGULAR, 18, tx, ty, tw, line, COLOR_DIM);
+    int text_top = ty + 36, bottom = y + DETAILS_H - DETAILS_PAD;
+    if (blocked[0]) {  // Why it can't be played takes the place of the play button's promise.
+        fontDrawClipped(FONT_BOLD, 18, tx, text_top, tw, blocked, COLOR_ERROR);
+        text_top += 32;
+    }
+    int lines = (bottom - text_top) / OVERVIEW_LINE_H;
+    drawWrappedDown(FONT_REGULAR, 19, tx, text_top, tw, OVERVIEW_LINE_H, lines < OVERVIEW_LINES ? lines : OVERVIEW_LINES,
+                    it->overview ? it->overview : "", COLOR_TEXT);
+
+    int bx = px, by = py + DETAILS_PIC_H + 24;
+    if (!blocked[0]) {
+        bx += detailsButton(bx, by, "A", progress >= 0 ? "Resume" : "Play", LIBHIT_DETAILS_PLAY) +
+              DETAILS_BUTTON_GAP;
+        if (progress >= 0)
+            bx += detailsButton(bx, by, "Y", "From start", LIBHIT_DETAILS_START) + DETAILS_BUTTON_GAP;
+    }
+    detailsButton(bx, by, "X", seen(lib, item) ? "Unwatched" : "Watched", LIBHIT_DETAILS_WATCHED);
 }
 
 // --- The screen ---

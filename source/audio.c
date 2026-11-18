@@ -1,3 +1,4 @@
+#include "mediafile.h"
 #include "audio.h"
 #include "clock.h"
 #include "playback.h"
@@ -14,6 +15,7 @@
 #include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
+#include <libavutil/dict.h>
 #include <libswresample/swresample.h>
 #include <switch.h>
 
@@ -28,12 +30,23 @@
 #define THREAD_PRIORITY 0x2B
 // Only these are opened while reading the file's format: not the video decoders.
 #define AUDIO_DECODERS "aac,mp3float,mp3,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp"
+#define NO_TRACK (-1)
+#define RING_PACKETS 1024             // Of each sound track, the latest kept for changing to it.
+#define RING_SECONDS 8
+#define NS_TIME_BASE ((AVRational){1, 1000000000})
 
 static u32 g_out_rate;
 static bool g_ready;
 
+// The latest packets read of a sound track, playing or not: changing to it
+// starts from these instead of going back in the file.
+typedef struct {
+    AVPacket *items[RING_PACKETS];
+    int head, count;
+} PacketRing;
+
 struct Audio {
-    FILE *file;
+    MediaFile *file;
     AVFormatContext *fmt;
     AVIOContext *io;
     AVCodecContext *codec;
@@ -51,6 +64,8 @@ struct Audio {
     char description[64];
     int tracks[VIDEO_AUDIO_TRACKS];  // The file's sound streams, in order.
     int track_count, track;          // track: the one playing, an index into tracks.
+    PacketRing rings[VIDEO_AUDIO_TRACKS];  // Only the sound thread touches these.
+    int replay_index, replay_left;   // Kept packets of the track to decode before reading on.
 
     AudioOutBuffer buffers[BUFFER_COUNT];
     bool queued[BUFFER_COUNT];
@@ -78,9 +93,13 @@ struct Audio {
     bool seek_requested;
     bool seek_pending;            // Asked for and not finished: what's queued meanwhile is from before it.
     int64_t seek_ns;
+    int track_wanted;             // A track to change to, or NO_TRACK. Under lock, with track_from_ns.
+    int64_t track_from_ns;
+    char switch_error[96];        // Why the last change failed. Under lock.
     int64_t skip_until_ns;        // After a seek: sound before this is dropped.
     int speed, speed_wanted;      // Thousandths; speed changes with a seek, under lock.
     bool read_done, finished;
+    bool read_failed;             // The network went. Under lock.
 
     // The clock: base_pts is the time of the first frame queued since the
     // last flush, base_played the output's played count when it was queued.
@@ -113,25 +132,6 @@ void audioSystemExit(void)
     audoutStopAudioOut();
     audoutExit();
     g_ready = false;
-}
-
-static int readFile(void *opaque, uint8_t *buf, int size)
-{
-    size_t n = fread(buf, 1, (size_t)size, (FILE *)opaque);
-    return n > 0 ? (int)n : AVERROR_EOF;
-}
-
-static int64_t seekFile(void *opaque, int64_t offset, int whence)
-{
-    FILE *f = opaque;
-    if (whence & AVSEEK_SIZE) {
-        long here = ftell(f);
-        fseek(f, 0, SEEK_END);
-        long size = ftell(f);
-        fseek(f, here, SEEK_SET);
-        return size;
-    }
-    return fseek(f, (long)offset, whence & ~AVSEEK_FORCE) == 0 ? ftell(f) : -1;
 }
 
 static u64 played(void)
@@ -338,6 +338,82 @@ static void addFrame(Audio *a, AVFrame *f)
         tempoFeed(a);
 }
 
+// --- The packets kept of each track ---
+
+static AVPacket *ringAt(PacketRing *r, int index)
+{
+    return r->items[(r->head + index) % RING_PACKETS];
+}
+
+static void ringDropOldest(PacketRing *r)
+{
+    av_packet_unref(r->items[r->head]);
+    r->head = (r->head + 1) % RING_PACKETS;
+    r->count--;
+}
+
+static int64_t packetTime(const AVPacket *p)
+{
+    return p->pts != AV_NOPTS_VALUE ? p->pts : p->dts;
+}
+
+static int trackOfStream(const Audio *a, int stream)
+{
+    for (int i = 0; i < a->track_count; i++)
+        if (a->tracks[i] == stream)
+            return i;
+    return NO_TRACK;
+}
+
+static void ringKeep(Audio *a, const AVPacket *p)
+{
+    int track = trackOfStream(a, p->stream_index);
+    if (track == NO_TRACK)
+        return;
+    PacketRing *r = &a->rings[track];
+    AVRational tb = a->fmt->streams[p->stream_index]->time_base;
+    int64_t window = av_rescale_q(RING_SECONDS, (AVRational){1, 1}, tb), now = packetTime(p);
+    while (r->count && (r->count == RING_PACKETS || (now != AV_NOPTS_VALUE && now - packetTime(ringAt(r, 0)) > window)))
+        ringDropOldest(r);
+    int slot = (r->head + r->count) % RING_PACKETS;
+    if (!r->items[slot])
+        r->items[slot] = av_packet_alloc();
+    if (r->items[slot] && av_packet_ref(r->items[slot], p) >= 0)
+        r->count++;
+}
+
+static void ringsClear(Audio *a)
+{
+    for (int t = 0; t < VIDEO_AUDIO_TRACKS; t++)
+        while (a->rings[t].count)
+            ringDropOldest(&a->rings[t]);
+    a->replay_left = 0;
+}
+
+static void ringsFree(Audio *a)
+{
+    for (int t = 0; t < VIDEO_AUDIO_TRACKS; t++)
+        for (int i = 0; i < RING_PACKETS; i++)
+            av_packet_free(&a->rings[t].items[i]);
+}
+
+// From the packet before the one holding from_ns: a decoder needs one to start well.
+static void replayFrom(Audio *a, int64_t from_ns)
+{
+    PacketRing *r = &a->rings[a->track];
+    AVRational tb = a->fmt->streams[a->stream]->time_base;
+    int64_t from = av_rescale_q(from_ns, NS_TIME_BASE, tb);
+    int first = 0;
+    for (int i = 0; i < r->count; i++) {
+        const AVPacket *p = ringAt(r, i);
+        if (packetTime(p) + p->duration > from)
+            break;
+        first = i;
+    }
+    a->replay_index = first;
+    a->replay_left = r->count - first;
+}
+
 // Decodes until pending holds a buffer's worth, or the file ends. False at the end.
 static bool fill(Audio *a)
 {
@@ -351,11 +427,20 @@ static bool fill(Audio *a)
             tempoDrain(a);
             return a->pending_frames > 0;
         }
+        if (a->replay_left > 0) {
+            avcodec_send_packet(a->codec, ringAt(&a->rings[a->track], a->replay_index++));
+            a->replay_left--;
+            continue;
+        }
         if (av_read_frame(a->fmt, a->pkt) < 0) {
             a->read_done = true;
+            mutexLock(&a->lock);
+            a->read_failed = mediaFileFailed(a->file);
+            mutexUnlock(&a->lock);
             avcodec_send_packet(a->codec, NULL);  // Drain what's left.
             continue;
         }
+        ringKeep(a, a->pkt);
         if (a->pkt->stream_index == a->stream)
             avcodec_send_packet(a->codec, a->pkt);
         av_packet_unref(a->pkt);
@@ -437,12 +522,38 @@ static void fadeOut(Audio *a)
         reap(a);
 }
 
-static void doSeek(Audio *a, int64_t target_ns)
+// Opens the decoder for a stream. NULL, with a reason, if it can't be.
+static AVCodecContext *openDecoder(const AVStream *st, char *error, size_t error_size)
 {
-    flushOutput(a);  // Already faded out and played out: nothing is cut.
-    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, a->seek_time_base);
-    av_seek_frame(a->fmt, a->seek_stream, ts, AVSEEK_FLAG_BACKWARD);
-    avcodec_flush_buffers(a->codec);
+    const AVCodec *decoder = avcodec_find_decoder(st->codecpar->codec_id);
+    if (!decoder) {
+        snprintf(error, error_size, "This video's sound (%s) can't be played.", avcodec_get_name(st->codecpar->codec_id));
+        return NULL;
+    }
+    AVCodecContext *codec = avcodec_alloc_context3(decoder);
+    AVDictionary *options = NULL;
+    if (st->codecpar->codec_id == AV_CODEC_ID_DTS)  // The output is stereo: the lossless layer would only cost time.
+        av_dict_set(&options, "core_only", "1", 0);
+    bool ok = codec && avcodec_parameters_to_context(codec, st->codecpar) >= 0 &&
+              avcodec_open2(codec, decoder, &options) >= 0;
+    av_dict_free(&options);
+    if (!ok) {
+        snprintf(error, error_size, "This video's sound can't be played.");
+        avcodec_free_context(&codec);
+    }
+    return codec;
+}
+
+static void describeSound(Audio *a, const AVStream *st)
+{
+    snprintf(a->description, sizeof(a->description), "%s, %d kHz, %d channel%s", avcodec_get_name(st->codecpar->codec_id),
+             st->codecpar->sample_rate / 1000, st->codecpar->ch_layout.nb_channels,
+             st->codecpar->ch_layout.nb_channels == 1 ? "" : "s");
+}
+
+// Sound starts anew from target_ns, with nothing of what came before.
+static void restartFrom(Audio *a, int64_t target_ns)
+{
     a->pending_frames = 0;
     a->read_done = false;
     a->skip_until_ns = target_ns > 0 ? target_ns : 0;
@@ -459,6 +570,44 @@ static void doSeek(Audio *a, int64_t target_ns)
     mutexUnlock(&a->lock);
 }
 
+static void doSeek(Audio *a, int64_t target_ns)
+{
+    flushOutput(a);  // Already faded out and played out: nothing is cut.
+    int64_t ts = av_rescale_q(target_ns, NS_TIME_BASE, a->seek_time_base);
+    av_seek_frame(a->fmt, a->seek_stream, ts, AVSEEK_FLAG_BACKWARD);
+    avcodec_flush_buffers(a->codec);
+    ringsClear(a);  // What was kept is from another part of the file.
+    restartFrom(a, target_ns);
+}
+
+// Another track of the same file: its kept packets first, then reading goes
+// on from where it is, so nothing has to be read again.
+static void switchTrack(Audio *a, int track, int64_t from_ns)
+{
+    char error[sizeof(a->switch_error)] = "";
+    flushOutput(a);
+    AVStream *st = track >= 0 && track < a->track_count ? a->fmt->streams[a->tracks[track]] : NULL;
+    AVCodecContext *codec = st ? openDecoder(st, error, sizeof(error)) : NULL;
+    if (codec) {
+        avcodec_free_context(&a->codec);
+        swr_free(&a->swr);
+        a->codec = codec;
+        a->stream = st->index;
+        a->time_base = st->time_base;
+    } else {
+        avcodec_flush_buffers(a->codec);
+    }
+    mutexLock(&a->lock);
+    if (codec) {
+        a->track = track;
+        describeSound(a, st);
+    }
+    snprintf(a->switch_error, sizeof(a->switch_error), "%s", codec ? "" : error[0] ? error : "That track can't be played.");
+    mutexUnlock(&a->lock);
+    restartFrom(a, from_ns);
+    replayFrom(a, from_ns);
+}
+
 static void audioThread(void *arg)
 {
     Audio *a = arg;
@@ -466,15 +615,21 @@ static void audioThread(void *arg)
     while (true) {
         mutexLock(&a->lock);
         bool stop = a->stop, paused = a->paused, seek = a->seek_requested;
-        int64_t target = a->seek_ns;
+        int64_t target = a->seek_ns, track_from = a->track_from_ns;
+        int track = a->track_wanted;
         a->seek_requested = false;
+        a->track_wanted = NO_TRACK;
         mutexUnlock(&a->lock);
-        if ((stop || paused || seek) && !silent && !ended) {
+        if ((stop || paused || seek || track != NO_TRACK) && !silent && !ended) {
             fadeOut(a);
             silent = true;
         }
         if (stop)
             break;
+        if (track != NO_TRACK) {
+            switchTrack(a, track, track_from);
+            ended = false;
+        }
         if (seek) {
             doSeek(a, target);
             ended = false;
@@ -536,9 +691,10 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     if (!a)
         return NULL;
     mutexInit(&a->lock);
-    a->file = fopen(path, "rb");
+    a->track_wanted = NO_TRACK;
+    a->file = mediaFileOpen(path);
     uint8_t *buffer = av_malloc(IO_BUFFER);
-    a->io = a->file && buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, a->file, readFile, NULL, seekFile) : NULL;
+    a->io = a->file && buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, a->file, mediaFileRead, NULL, mediaFileSeek) : NULL;
     a->fmt = avformat_alloc_context();
     a->pkt = av_packet_alloc();
     a->frame = av_frame_alloc();
@@ -571,14 +727,8 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
         if (a->tracks[i] == a->stream)
             a->track = i;
     AVStream *st = a->fmt->streams[a->stream];
-    if (!decoder) {
-        snprintf(error, error_size, "This video's sound (%s) can't be played.", avcodec_get_name(st->codecpar->codec_id));
-        audioClose(a);
-        return NULL;
-    }
-    a->codec = avcodec_alloc_context3(decoder);
-    if (!a->codec || avcodec_parameters_to_context(a->codec, st->codecpar) < 0 || avcodec_open2(a->codec, decoder, NULL) < 0) {
-        snprintf(error, error_size, "This video's sound can't be played.");
+    a->codec = openDecoder(st, error, error_size);
+    if (!a->codec) {
         audioClose(a);
         return NULL;
     }
@@ -587,9 +737,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     if (a->seek_stream < 0)
         a->seek_stream = a->stream;  // Sound only: its own.
     a->seek_time_base = a->fmt->streams[a->seek_stream]->time_base;
-    snprintf(a->description, sizeof(a->description), "%s, %d kHz, %d channel%s", decoder->long_name ? decoder->name : "",
-             st->codecpar->sample_rate / 1000, st->codecpar->ch_layout.nb_channels,
-             st->codecpar->ch_layout.nb_channels == 1 ? "" : "s");
+    describeSound(a, st);
     for (int i = 0; i < BUFFER_COUNT; i++) {
         a->buffers[i].buffer = memalign(BUFFER_ALIGN, BUFFER_BYTES);
         a->buffers[i].buffer_size = BUFFER_BYTES;
@@ -631,14 +779,14 @@ void audioClose(Audio *a)
     avcodec_free_context(&a->codec);
     av_packet_free(&a->pkt);
     av_frame_free(&a->frame);
+    ringsFree(a);
     if (a->fmt)
         avformat_close_input(&a->fmt);
     if (a->io) {
         av_freep(&a->io->buffer);
         avio_context_free(&a->io);
     }
-    if (a->file)
-        fclose(a->file);
+    mediaFileClose(a->file);
     free(a);
 }
 
@@ -650,9 +798,9 @@ const char *audioDescription(const Audio *a)
 bool audioClock(Audio *a, int64_t *pts_ns)
 {
     mutexLock(&a->lock);
-    bool valid = a->clock_valid;
+    u64 heard = a->clock_valid ? played() - a->base_played : 0;
+    bool valid = heard > 0;  // Not before sound is really coming out: the picture starts with it.
     if (valid) {
-        u64 heard = played() - a->base_played;
         bool stalled = heard >= a->queued_frames;
         if (heard > a->queued_frames)
             heard = a->queued_frames;  // Not past what was queued.
@@ -684,6 +832,29 @@ void audioSeek(Audio *a, int64_t pts_ns)
     mutexUnlock(&a->lock);
 }
 
+void audioSwitchTrack(Audio *a, int track, int64_t from_ns)
+{
+    mutexLock(&a->lock);
+    a->track_wanted = track;
+    a->track_from_ns = from_ns;
+    a->seek_pending = true;
+    a->clock_valid = false;
+    a->primed = false;
+    mutexUnlock(&a->lock);
+}
+
+bool audioTakeSwitchError(Audio *a, char *out, size_t size)
+{
+    mutexLock(&a->lock);
+    bool failed = a->switch_error[0] != '\0';
+    if (failed) {
+        snprintf(out, size, "%s", a->switch_error);
+        a->switch_error[0] = '\0';
+    }
+    mutexUnlock(&a->lock);
+    return failed;
+}
+
 void audioSetSpeed(Audio *a, int permille)
 {
     mutexLock(&a->lock);
@@ -699,6 +870,14 @@ int audioSpeed(Audio *a)
     return speed;
 }
 
+bool audioReadFailed(Audio *a)
+{
+    mutexLock(&a->lock);
+    bool failed = a->read_failed;
+    mutexUnlock(&a->lock);
+    return failed;
+}
+
 bool audioFinished(Audio *a)
 {
     mutexLock(&a->lock);
@@ -707,15 +886,18 @@ bool audioFinished(Audio *a)
     return finished;
 }
 
-int audioTrack(const Audio *a)
+int audioTrack(Audio *a)
 {
-    return a->track;
+    mutexLock(&a->lock);
+    int track = a->track;
+    mutexUnlock(&a->lock);
+    return track;
 }
 
 bool audioReadyAt(Audio *a, int64_t *pts_ns)
 {
     mutexLock(&a->lock);
-    bool ready = a->primed && !a->seek_requested;
+    bool ready = a->primed && !a->seek_requested && a->track_wanted == NO_TRACK;
     *pts_ns = a->primed_pts_ns;
     mutexUnlock(&a->lock);
     return ready;

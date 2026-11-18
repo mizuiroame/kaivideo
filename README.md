@@ -31,6 +31,9 @@ The screenshots show made-up films and series.
   video**, taken by the console's decoder in the background the first time.
 - **Settings**: themes and accent colors, your own **background** image,
   and an About page.
+- **Jellyfin**: browse your server with the same screens, sign in with Quick
+  Connect, and play its videos over your network. What you watch stays in sync
+  with your other devices. See [Jellyfin](#jellyfin).
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
@@ -43,7 +46,7 @@ The screenshots show made-up films and series.
   **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
   and **Dolby TrueHD** (surround is mixed down to stereo).
 - **Sound tracks**: a film with several (languages, commentary) lets you
-  pick one from a list (**X**), without stopping the picture.
+  pick one from a list (**X**); the picture waits a moment for the new sound.
 - **Subtitles**: an `.srt` file next to the video (`Film.srt` or
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
   MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
@@ -125,6 +128,25 @@ kept:
 > means restarting the console, and kaiHEN has to be started again after
 > that.
 
+### Jellyfin
+
+1. In **Settings** (**−**), open **Jellyfin** and type your server's address
+   under **Server**, like `192.168.0.10:8096`.
+2. Choose **Account**: a code appears. In Jellyfin on your phone or computer,
+   open your profile, choose **Quick Connect** and enter it.
+3. Your library appears. **X** on the library's screens, or the button next
+   to KaiVideo's name, changes between Jellyfin and the SD card.
+
+Films and episodes open a panel with their summary: **A** plays or resumes,
+**Y** starts from the beginning and **X** marks them watched. Where you left a
+video and what you've watched go to the server and come back from it.
+
+KaiVideo plays the server's original files and doesn't ask it to convert them,
+so 4K, HDR, bitrates over 25 Mb/s and formats the console can't play show as
+unavailable. Subtitles inside the file work; separate subtitle files on the
+server aren't shown yet. The sign-in is kept in `config/jellyfin.txt` on the
+card: **Account** signs out and ends it on the server.
+
 ### Where KaiVideo keeps its files
 
 Your library folder, the list of videos found in it, where you left each
@@ -198,12 +220,14 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
   the first round of pictures take longer.
 - After a jump (**◀** / **▶**, **L** / **R**, the progress bar) the picture
   can stutter for a moment.
-- No streaming from the network: KaiVideo plays files on the card.
+- **Jellyfin** plays original files only: nothing is converted by the server.
+  It has been tried on a home network; signing in from outside it hasn't.
 
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
-- **Jellyfin**: browsing a server and playing what the console can handle.
+- **Jellyfin**: 4K and HDR through the server's conversion, and separate
+  subtitle files.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
 - Smoother jumps, and checks with big libraries on the console.
 
@@ -215,7 +239,8 @@ KaiVideo is built in Docker, on top of the
 ```sh
 docker build -t kaivideo-devkit ffmpeg   # once: the devkit plus FFmpeg (LGPL)
 docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make          # KaiVideo.nro
-docker run --rm -v "$PWD:/w" -w /w/tests kairadio-host make run  # host tests
+docker build -t kaivideo-host tests      # once: what the host tests need
+docker run --rm --security-opt seccomp=unconfined -v "$PWD:/w" -w /w/tests kaivideo-host make run  # host tests
 docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make -C tests/preview  # screenshots
 ```
 
@@ -268,4 +293,6 @@ The FreeType Project, all rights reserved),
 [HarfBuzz](https://github.com/harfbuzz/harfbuzz) ([MIT](third_party/HarfBuzz-MIT.txt)),
 [FriBidi](https://github.com/fribidi/fribidi) ([LGPL 2.1](third_party/FriBidi-LGPL-2.1.txt)),
 [libpng](third_party/libpng-LICENSE.txt), [bzip2](third_party/bzip2-LICENSE.txt)
-and [zlib](third_party/zlib-LICENSE.txt).
+and [zlib](third_party/zlib-LICENSE.txt). The network and Jellyfin use
+[curl](https://curl.se/) ([license](third_party/curl-LICENSE.txt)) and
+[Jansson](https://github.com/akheron/jansson) ([MIT](third_party/Jansson-MIT.txt)).

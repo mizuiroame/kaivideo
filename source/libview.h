@@ -39,6 +39,7 @@ typedef struct {
     Scroll grid[GRID_COUNT];            // first is a row of cards here.
     // A series' page, over the tab it was opened from (-1: none).
     int show;
+    int details;  // The item whose details are open over the screen, or -1.
     char show_name[NAMING_MAX];  // To find it again after a new scan.
     int season;  // An index in its seasons.
     Scroll episodes;

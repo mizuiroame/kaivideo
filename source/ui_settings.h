@@ -8,3 +8,7 @@
 // none chosen. version: KaiVideo's, for About.
 void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *library_root, const char *version);
 void uiDrawAbout(const char *version);
+// What the Jellyfin page's rows say: the server's address and the account.
+void uiSettingsSetJellyfin(const char *server, const char *account);
+// Signing in: the code to approve on another device ("" while it's asked for).
+void uiDrawJellyfinCode(const char *code, const char *server);

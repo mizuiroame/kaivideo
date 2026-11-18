@@ -38,6 +38,12 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
 double uiSeekFraction(int x);
 // Subtitle text ('\n' between lines), centered at the bottom with an
 // outline, wrapped to the screen; above the bar when it shows.
+// The loading symbol, turned by angle (radians), over whatever is there.
+void uiDrawSpinner(float cx, float cy, float angle);
+// The same with a line under it, over the video.
+void uiDrawWaiting(float angle, const char *text);
+// The screen while a video opens.
+void uiDrawLoading(const char *name, float angle, bool cancelling);
 void uiDrawSubtitles(const char *text, bool bar_shown);
 // The subtitles' text size (layout pixels), color (0xRRGGBB), and a dark
 // box behind them instead of an outline.

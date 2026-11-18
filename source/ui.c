@@ -27,6 +27,9 @@
 #define SUB_BOTTOM 40             // Above the screen's edge.
 #define SUB_BOTTOM_BAR (BAR_H + 70)  // Above it with the bar showing.
 #define PAUSED_R 64             // The big play symbol of a paused video.
+#define SPINNER_R 30
+#define SPINNER_FULL 6.2832f
+#define SPINNER_ARC 1.8f
 #define MENU_W 400              // The drop-down lists.
 #define MENU_HEAD 50
 #define MENU_ROW_H UI_MENU_ROW_H
@@ -331,6 +334,33 @@ void uiDrawSubtitles(const char *text, bool bar_shown)
         }
         fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], g_sub_color);
     }
+}
+
+void uiDrawSpinner(float cx, float cy, float angle)
+{
+    gfxFillCircle((int)cx, (int)cy, SPINNER_R + 16, GFX_RGB(0, 0, 0));
+    gfxArc(cx, cy, SPINNER_R, 5, 0, SPINNER_FULL, COLOR_TRACK);
+    gfxArc(cx, cy, SPINNER_R, 5, angle, angle + SPINNER_ARC, COLOR_ACCENT);
+}
+
+void uiDrawWaiting(float angle, const char *text)
+{
+    float cx = GFX_WIDTH / 2.0f, cy = GFX_HEIGHT / 2.0f;
+    uiDrawSpinner(cx, cy, angle);
+    int w = fontTextWidth(FONT_BOLD, 19, text) + 36;
+    gfxFillRoundRect((GFX_WIDTH - w) / 2, (int)cy + 58, w, 38, 19, GFX_RGB(0, 0, 0));
+    fontDrawCentered(FONT_BOLD, 19, cx, cy + 77, text, COLOR_TEXT);
+}
+
+void uiDrawLoading(const char *name, float angle, bool cancelling)
+{
+    float cx = GFX_WIDTH / 2.0f, cy = GFX_HEIGHT / 2.0f - 30;
+    gfxClear(GFX_RGB(0, 0, 0));
+    uiDrawSpinner(cx, cy, angle);
+    int w = fontTextWidth(FONT_BOLD, 24, name), max = GFX_WIDTH - 160;
+    w = w < max ? w : max;
+    fontDrawClipped(FONT_BOLD, 24, (GFX_WIDTH - w) / 2, (int)cy + 70, w, name, COLOR_TEXT);
+    fontDrawCentered(FONT_REGULAR, 19, cx, cy + 124, cancelling ? "Cancelling..." : "Loading...", COLOR_DIM);
 }
 
 void uiDrawPausedSymbol(void)

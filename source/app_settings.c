@@ -10,6 +10,7 @@
 #include "app.h"
 #include "background.h"
 #include "buttons.h"
+#include "keyboard_system.h"
 #include "theme.h"
 #include "ui.h"
 #include "ui_library.h"
@@ -18,6 +19,8 @@
 #ifndef KAIVIDEO_VERSION
 #define KAIVIDEO_VERSION "dev"
 #endif
+
+#define HTTP_PREFIX "http://"
 
 void appApplySubtitleStyle(const App *app)
 {
@@ -61,8 +64,8 @@ static void back(App *app)
     if (app->settings_page == SETTINGS_PAGE_MAIN) {
         app->settings_open = false;
     } else {
+        app->settings_cursor = app->settings_page == SETTINGS_PAGE_JELLYFIN ? SETTING_OPEN_JELLYFIN : SETTING_OPEN_DISPLAY;
         app->settings_page = SETTINGS_PAGE_MAIN;
-        app->settings_cursor = SETTING_OPEN_DISPLAY;
     }
 }
 
@@ -93,9 +96,75 @@ static void stepBackground(App *app, int delta, uint64_t now)
     }
 }
 
+static bool signedIn(const App *app)
+{
+    return app->jf.state == JF_SIGNED_IN;
+}
+
+static void openJellyfin(App *app, uint64_t now)
+{
+    if (!appJellyfinEnsure(app)) {
+        appShowMessage(app, "The network can't be used.", now);
+        return;
+    }
+    jfSyncGetStatus(&app->jf);
+    openPage(app, SETTINGS_PAGE_JELLYFIN);
+}
+
+void appOpenJellyfinSettings(App *app, uint64_t now)
+{
+    app->settings_open = true;
+    app->about_open = false;
+    openPage(app, SETTINGS_PAGE_MAIN);
+    app->settings_cursor = SETTING_OPEN_JELLYFIN;
+    openJellyfin(app, now);
+}
+
+static void typeServer(App *app, uint64_t now)
+{
+    if (signedIn(app)) {
+        appShowMessage(app, "Sign out first to change the server.", now);
+        return;
+    }
+    char text[JF_SERVER_MAX];
+    const char *initial = app->jf.server;
+    if (!strncmp(initial, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
+        initial += sizeof(HTTP_PREFIX) - 1;
+    SystemKeyboardResult result = systemKeyboardInput("Jellyfin server, like 192.168.0.10:8096", initial, text,
+                                                      sizeof(text), JF_SERVER_MAX - 1);
+    if (result == SYSTEM_KEYBOARD_UNAVAILABLE)
+        appShowMessage(app, "The keyboard couldn't open.", now);
+    else if (result == SYSTEM_KEYBOARD_OK && !jfSyncSetServer(text))
+        appShowMessage(app, "That isn't a server's address.", now);
+}
+
+static void accountAction(App *app, uint64_t now)
+{
+    if (signedIn(app)) {
+        if (app->config.use_jellyfin)
+            appLibrarySetSource(app, false);
+        jfSyncSignOut();
+    } else if (!app->jf.server[0]) {
+        appShowMessage(app, "Enter the server's address first.", now);
+    } else {
+        app->jf_signing = true;
+        jfSyncSignIn();
+    }
+}
+
+static void stepSource(App *app, uint64_t now)
+{
+    if (!signedIn(app) && !app->config.use_jellyfin)
+        appShowMessage(app, "Sign in to Jellyfin first.", now);
+    else
+        appLibrarySetSource(app, !app->config.use_jellyfin);
+}
+
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_BACKGROUND) {
+    if (row == SETTING_JF_SOURCE) {
+        stepSource(app, now);
+    } else if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
     } else {
         settingStep(&app->config, row, delta);
@@ -118,6 +187,15 @@ static void activate(App *app, SettingRow row, uint64_t now)
         appLibraryRescan(app, now);
         break;
     case SETTING_OPEN_DISPLAY: openPage(app, SETTINGS_PAGE_DISPLAY); break;
+    case SETTING_OPEN_JELLYFIN: openJellyfin(app, now); break;
+    case SETTING_JF_SERVER: typeServer(app, now); break;
+    case SETTING_JF_ACCOUNT: accountAction(app, now); break;
+    case SETTING_JF_REFRESH:
+        if (signedIn(app))
+            jfSyncRefresh();
+        else
+            appShowMessage(app, "Sign in to Jellyfin first.", now);
+        break;
     case SETTING_ABOUT: app->about_open = true; break;
     default: change(app, row, 1, now); break;
     }
@@ -169,6 +247,14 @@ void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
         aboutInput(app, pressed, touch);
         return;
     }
+    if (app->jf_signing) {  // Only cancelling, while the code shows.
+        LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
+        if ((pressed & HidNpadButton_B) || hit.kind == LIBHIT_CLOSE) {
+            app->jf_signing = false;
+            jfSyncCancelSignIn();
+        }
+        return;
+    }
     SettingRow row = (SettingRow)app->settings_cursor;
     if (pressed & BUTTONS_UP)
         moveCursor(app, -1);
@@ -178,7 +264,7 @@ void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
         change(app, row, -1, now);
     if ((pressed & BUTTONS_RIGHT) && settingIsChoice(row))
         change(app, row, 1, now);
-    if ((pressed & BUTTONS_RIGHT) && row == SETTING_OPEN_DISPLAY)
+    if ((pressed & BUTTONS_RIGHT) && (row == SETTING_OPEN_DISPLAY || row == SETTING_OPEN_JELLYFIN))
         activate(app, row, now);
     if (pressed & HidNpadButton_A)
         activate(app, row, now);
@@ -194,7 +280,13 @@ void appSettingsDraw(const App *app)
 {
     if (!app->settings_open)
         return;
-    if (app->about_open)
+    const char *server = app->jf.server;
+    if (!strncmp(server, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
+        server += sizeof(HTTP_PREFIX) - 1;
+    uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "Sign in");
+    if (app->jf_signing)
+        uiDrawJellyfinCode(app->jf.code, server);
+    else if (app->about_open)
         uiDrawAbout(KAIVIDEO_VERSION);
     else
         uiDrawSettings(&app->config, (SettingsPage)app->settings_page, app->settings_cursor, app->library_root,

@@ -7,10 +7,15 @@
 #include <string.h>
 
 #include "audio.h"
+#include "jellyfin.h"
 #include "subs.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
 #define SWITCH_LEAD_NS 300000000ll   // A new sound track joins this far ahead of the picture.
+#define REMOTE_LEAD_NS 2000000000ll  // Over the network it takes longer to get ready.
+#define MAX_LEAD_NS 16000000000ll    // Each time it arrives late, the lead doubles up to this.
+#define SWITCH_GAP_NS 700000000ll    // A new track starting further on than this is sought instead.
+#define SWITCH_WAIT_NS 10000000000ull // The picture waits this long for a new track, at most.
 #define JOIN_SLACK_NS 20000000ll     // Ready this little behind the picture still joins.
 #define MS_NS 1000000ll
 
@@ -37,6 +42,12 @@ struct Player {
     // one waits, ready, for the picture to reach it (joining).
     pthread_t swap_thread;
     bool swapping, joining;
+    int64_t join_lead_ns;      // How far ahead sound is asked to be ready (at normal speed).
+    int join_retries;          // Times it arrived late, for the log.
+    // Changing track on the open file: the picture waits for the new sound.
+    bool switching, switch_sought;
+    uint64_t switch_since_ns;
+    int last_switch_ms;        // How long the last one took, for the log.
     pthread_mutex_t swap_lock;
     bool swap_done;            // Under swap_lock.
     Audio *swap_old, *swap_new;
@@ -94,6 +105,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     }
     snprintf(p->path, sizeof(p->path), "%s", path);
     p->speed = PLAYBACK_PERMILLE;
+    p->join_lead_ns = jfIsLocation(path) ? REMOTE_LEAD_NS : SWITCH_LEAD_NS;
     pthread_mutex_init(&p->swap_lock, NULL);
     char why[160];
     p->audio = audioOpen(path, -1, why, sizeof(why));
@@ -196,12 +208,20 @@ static void useOwnClock(Player *p, uint64_t now_ns)
 
 static void finishSwap(Player *p);
 static void join(Player *p);
+static void startJoining(Player *p);
+static void updateSwitch(Player *p, uint64_t now_ns);
 
 const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 {
     if (p->swapping)
         finishSwap(p);
-    if (p->holding) {
+    if (p->audio && audioTakeSwitchError(p->audio, p->swap_error, sizeof(p->swap_error))) {
+        p->swap_failed = true;  // The old track goes on: the lists say so.
+        p->audio_track = audioTrack(p->audio);
+    }
+    if (p->switching) {
+        updateSwitch(p, now_ns);
+    } else if (p->holding) {
         // The first frame (after opening or a seek) is ready: time starts from
         // it, and the sound with it, so the picture isn't late from the start.
         int64_t first;
@@ -226,9 +246,11 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
             p->position_ns = heard;
             p->waiting_since_ns = 0;
             p->speed = audioSpeed(p->audio);  // Normal if the one asked for couldn't be set up.
-        } else if (audioFinished(p->audio) ||
-                   (!p->paused && p->waiting_since_ns && now_ns - p->waiting_since_ns > AUDIO_WAIT_NS)) {
-            useOwnClock(p, now_ns);  // The sound ended, or never came: the picture goes on alone.
+        } else if (audioFinished(p->audio)) {
+            useOwnClock(p, now_ns);  // The sound ended: the picture goes on alone.
+        } else if (!p->paused && p->waiting_since_ns && now_ns - p->waiting_since_ns > AUDIO_WAIT_NS) {
+            useOwnClock(p, now_ns);  // It's late: the picture goes on, and it joins when it can.
+            startJoining(p);
         }
     }
     // Sound later than the picture: the picture is that far ahead of what's heard.
@@ -243,12 +265,19 @@ void playerTogglePause(Player *p, uint64_t now_ns)
 {
     p->paused = !p->paused;
     // While holding or joining, the sound stays paused until the picture's ready for it.
-    if (p->audio && !p->holding && !p->joining)
+    if (p->audio && !p->holding && !p->joining && !p->switching)
         audioSetPaused(p->audio, p->paused);
     if (!p->paused) {
         p->base_pos_ns = p->position_ns;  // The console's clock carries on from where it stopped.
         p->base_now_ns = now_ns;
+        if (p->waiting_since_ns)
+            p->waiting_since_ns = now_ns;  // The sound couldn't start while paused.
     }
+}
+
+bool playerWaitingForPicture(const Player *p)
+{
+    return p->holding || p->switching;
 }
 
 bool playerPaused(const Player *p)
@@ -264,6 +293,7 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
     if (target < 0)
         target = 0;
     videoSeek(p->video, target);
+    p->switching = false;
     p->position_ns = target;
     p->first_frame_ns = target;
     p->base_pos_ns = target;
@@ -287,13 +317,23 @@ void playerSeekTo(Player *p, int64_t target_ns, uint64_t now_ns)
 // How far ahead of the picture sound joins: the same wait at any speed.
 static int64_t joinLead(const Player *p)
 {
-    return playbackScaled(SWITCH_LEAD_NS, p->speed);
+    return playbackScaled(p->join_lead_ns, p->speed);
+}
+
+// The sound gets ready a little ahead of the picture, paused, to start there.
+static void startJoining(Player *p)
+{
+    audioSetPaused(p->audio, true);
+    audioSeek(p->audio, p->position_ns + joinLead(p));
+    p->waiting_since_ns = 0;
+    p->joining = true;
 }
 
 void playerSetSpeed(Player *p, int permille, uint64_t now_ns)
 {
     if (permille == p->speed)
         return;
+    p->switching = false;
     if (!p->holding)
         useOwnClock(p, now_ns);  // The picture goes on by the console's clock meanwhile.
     p->speed = permille;
@@ -304,9 +344,7 @@ void playerSetSpeed(Player *p, int permille, uint64_t now_ns)
         audioSeek(p->audio, p->position_ns);  // Waits for the first frame, as usual.
         return;
     }
-    audioSetPaused(p->audio, true);
-    audioSeek(p->audio, p->position_ns + joinLead(p));
-    p->joining = true;
+    startJoining(p);
 }
 
 int playerSpeed(const Player *p)
@@ -374,6 +412,10 @@ int64_t playerDuration(const Player *p)
 
 bool playerFinished(Player *p, char *error, size_t error_size)
 {
+    if (p->audio && audioReadFailed(p->audio)) {
+        snprintf(error, error_size, "The connection to the server was lost.");
+        return true;
+    }
     return videoFinished(p->video, error, error_size);
 }
 
@@ -404,9 +446,10 @@ void playerDescribe(Player *p, char *out, size_t size)
     char error[64] = "";
     bool finished = videoFinished(p->video, error, sizeof(error));
     snprintf(out, size,
-             "paused=%d holding=%d own_clock=%d joining=%d swapping=%d pos=%.3f audio=%s clock=%s%.3f "
-             "next_frame=%s%.3f finished=%d%s%s",
-             p->paused, p->holding, p->own_clock, p->joining, p->swapping, p->position_ns / 1e9,
+             "paused=%d holding=%d own_clock=%d joining=%d (late %d) switching=%d (last %d ms, sought %d) swapping=%d "
+             "pos=%.3f audio=%s clock=%s%.3f next_frame=%s%.3f finished=%d%s%s",
+             p->paused, p->holding, p->own_clock, p->joining, p->join_retries, p->switching, p->last_switch_ms,
+             p->switch_sought, p->swapping, p->position_ns / 1e9,
              p->audio ? (audioFinished(p->audio) ? "ended" : "open") : "none", clock ? "" : "invalid ", heard / 1e9,
              have_next ? "" : "none ", next / 1e9, finished, error[0] ? " " : "", error);
 }
@@ -440,10 +483,54 @@ static void *swapThread(void *arg)
     return NULL;
 }
 
+// The new track, on the open file: it starts when it's ready, and the picture with it.
+static void updateSwitch(Player *p, uint64_t now_ns)
+{
+    int64_t start;
+    if (audioFinished(p->audio)) {
+        p->switching = false;
+        useOwnClock(p, now_ns);
+    } else if (now_ns - p->switch_since_ns > SWITCH_WAIT_NS) {
+        p->switching = false;
+        useOwnClock(p, now_ns);
+        startJoining(p);
+    } else if (!p->paused && audioReadyAt(p->audio, &start)) {
+        if (start > p->position_ns + SWITCH_GAP_NS && !p->switch_sought) {
+            p->switch_sought = true;  // Its sound for here was already passed in the file.
+            audioSeek(p->audio, p->position_ns);
+            return;
+        }
+        if (start > p->position_ns)
+            p->position_ns = start;
+        p->switching = false;
+        p->own_clock = false;
+        p->waiting_since_ns = now_ns;
+        p->last_switch_ms = (int)((now_ns - p->switch_since_ns) / 1000000);
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
+        audioSetPaused(p->audio, false);
+    }
+}
+
 void playerSetAudioTrack(Player *p, int track, uint64_t now_ns)
 {
     if (p->swapping || track < 0 || track >= playerAudioTrackCount(p))
         return;
+    if (p->audio) {
+        audioSetPaused(p->audio, true);
+        audioSwitchTrack(p->audio, track, p->position_ns);
+        p->audio_track = track;
+        p->joining = false;
+        snprintf(p->audio_info, sizeof(p->audio_info), "Changing the sound track");
+        if (p->holding) {  // Opening or a jump is under way: the sound follows it as usual.
+            audioSeek(p->audio, p->position_ns);
+            p->own_clock = false;
+            return;
+        }
+        p->switching = true;
+        p->switch_sought = false;
+        p->switch_since_ns = now_ns;
+        return;
+    }
     // The picture goes on alone by the console's clock while the sound changes.
     if (!p->own_clock && !p->holding)
         useOwnClock(p, now_ns);
@@ -487,8 +574,7 @@ static void finishSwap(Player *p)
         p->own_clock = false;
         return;
     }
-    audioSeek(p->audio, p->position_ns + joinLead(p));
-    p->joining = true;
+    startJoining(p);
 }
 
 // The new sound is ready from some time on: it starts when the picture gets
@@ -508,9 +594,11 @@ static void join(Player *p)
     }
     if (p->paused || !audioReadyAt(p->audio, &start))
         return;
-    if (start + JOIN_SLACK_NS < p->position_ns)
+    if (start + JOIN_SLACK_NS < p->position_ns) {  // Late: further ahead this time.
+        p->join_lead_ns = p->join_lead_ns * 2 < MAX_LEAD_NS ? p->join_lead_ns * 2 : MAX_LEAD_NS;
+        p->join_retries++;
         audioSeek(p->audio, p->position_ns + joinLead(p));
-    else if (p->position_ns >= start)
+    } else if (p->position_ns >= start)
         audioSetPaused(p->audio, false);
 }
 

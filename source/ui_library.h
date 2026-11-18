@@ -35,6 +35,10 @@ typedef enum {
     LIBHIT_PAGE_BACK,   // A Settings page's Back: the main page.
     LIBHIT_CLOSE,       // Outside Settings or About, or their back arrow: closes.
     LIBHIT_UP_NEXT,     // The next episode's card in the player: play it now.
+    LIBHIT_DETAILS_PLAY,     // The details panel's play button.
+    LIBHIT_DETAILS_WATCHED,  // Its watched button.
+    LIBHIT_DETAILS_START,    // Its button to play from the start.
+    LIBHIT_SOURCE,           // The header's pill: where the library comes from.
 } LibHitKind;
 
 typedef struct {
@@ -52,10 +56,14 @@ void uiLibrarySetWatched(const Watched *watched);
 void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h);
 // Forgets the touch targets: each frame starts with none.
 void uiLibraryResetHits(void);
+// The header's pill says this ("SD card", "Jellyfin"); "" leaves it out.
+void uiLibrarySetSource(const char *label);
 // The header: the menu button and name, the tabs between ZL and ZR, and
 // status (a scan's progress, or NULL) left of the clock and battery. The
 // Files tab draws the folder list under it.
 void uiDrawTabBar(LibTab active, const char *status);
+// The time and the battery at the top right, over the video.
+void uiDrawPlayerStatus(void);
 // The help line's strip at the bottom (before overlays dim the screen), and
 // the help line itself, "[A] open  [B] back" (after them).
 void uiDrawFooterStrip(void);
@@ -67,6 +75,10 @@ void uiDrawMenu(const char *title, const char *version, const char *const *items
 // it draws too. folder_set: false before a library folder is chosen.
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
                    bool folder_set, const char *status, const char *message);
+
+// A film or episode's details over the screen: picture, title, summary, and
+// its buttons. blocked: why it can't be played, or "".
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *blocked);
 
 // The next episode (item), a card on the right of the player in an
 // episode's last seconds: its picture, what's left (fraction_left of the
