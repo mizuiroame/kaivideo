@@ -33,6 +33,12 @@ struct Audio {
     SwrContext *swr;
     int stream;
     AVRational time_base;
+    // Seeks go by this stream: the video's, which the file's index (MKV cues)
+    // always covers. Seeking by the sound's own stream, often left out of
+    // the index, reads the file up to the target: the longer the jump, the
+    // longer the wait. The sound then skips what comes before the target.
+    int seek_stream;
+    AVRational seek_time_base;
     AVPacket *pkt;
     AVFrame *frame;
     char description[64];
@@ -295,8 +301,8 @@ static void fadeOut(Audio *a)
 static void doSeek(Audio *a, int64_t target_ns)
 {
     flushOutput(a);  // Already faded out and played out: nothing is cut.
-    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, a->time_base);
-    av_seek_frame(a->fmt, a->stream, ts, AVSEEK_FLAG_BACKWARD);
+    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, a->seek_time_base);
+    av_seek_frame(a->fmt, a->seek_stream, ts, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(a->codec);
     a->pending_frames = 0;
     a->read_done = false;
@@ -428,6 +434,10 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
         return NULL;
     }
     a->time_base = st->time_base;
+    a->seek_stream = av_find_best_stream(a->fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+    if (a->seek_stream < 0)
+        a->seek_stream = a->stream;  // Sound only: its own.
+    a->seek_time_base = a->fmt->streams[a->seek_stream]->time_base;
     snprintf(a->description, sizeof(a->description), "%s, %d kHz, %d channel%s", decoder->long_name ? decoder->name : "",
              st->codecpar->sample_rate / 1000, st->codecpar->ch_layout.nb_channels,
              st->codecpar->ch_layout.nb_channels == 1 ? "" : "s");
