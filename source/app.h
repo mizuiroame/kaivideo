@@ -43,6 +43,8 @@ struct App {
     AppMenu app_menu;           // The + menu, or its exit question (app_menu.c).
     int app_menu_cursor;
     bool stop_requested;        // "Back to the library" from the + menu over a video.
+    bool scrubbing;             // A finger drags the progress bar.
+    double scrub_fraction;
 
     // The library (app_library.c).
     char library_root[LIBRARY_PATH_MAX];  // "" until one is chosen.

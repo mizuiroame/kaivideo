@@ -37,6 +37,8 @@ const char *playerVideoInfo(const Player *p);
 const char *playerAudioInfo(const Player *p);
 void playerSize(const Player *p, int *width, int *height, double *aspect);
 VideoStats playerStats(const Player *p);
+// Its state for the log, when playback seems stuck: "paused=0 holding=1 ...".
+void playerDescribe(Player *p, char *out, size_t size);
 
 // Subtitles: an .srt next to the video (the first track, if there is one),
 // then the file's text tracks. Opens on the .srt, else a track the file

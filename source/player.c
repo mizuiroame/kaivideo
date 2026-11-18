@@ -275,6 +275,20 @@ VideoStats playerStats(const Player *p)
     return videoStats(p->video);
 }
 
+void playerDescribe(Player *p, char *out, size_t size)
+{
+    int64_t heard = 0, next = 0;
+    bool clock = p->audio && audioClock(p->audio, &heard), have_next = videoNextPts(p->video, &next);
+    char error[64] = "";
+    bool finished = videoFinished(p->video, error, sizeof(error));
+    snprintf(out, size,
+             "paused=%d holding=%d own_clock=%d joining=%d swapping=%d pos=%.3f audio=%s clock=%s%.3f "
+             "next_frame=%s%.3f finished=%d%s%s",
+             p->paused, p->holding, p->own_clock, p->joining, p->swapping, p->position_ns / 1e9,
+             p->audio ? (audioFinished(p->audio) ? "ended" : "open") : "none", clock ? "" : "invalid ", heard / 1e9,
+             have_next ? "" : "none ", next / 1e9, finished, error[0] ? " " : "", error);
+}
+
 int playerAudioTrackCount(const Player *p)
 {
     return videoAudioTrackCount(p->video);

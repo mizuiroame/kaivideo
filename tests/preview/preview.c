@@ -102,7 +102,7 @@ static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu
         uiDrawSubtitles(subtitle, true);
     if (p->paused && !m->open)
         uiDrawPausedSymbol();
-    uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", m->open ? NULL : note);
+    uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", m->open ? NULL : note, -1);
     uiDrawTrackMenu(p, kind, m, &g_config);
     save(name);
 }

@@ -30,7 +30,11 @@ typedef enum {
 void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode);
 // The bar over a playing video, and the close button above it; note, if
 // any, is said above the bar ("Resumed at 12:34").
-void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
+// scrub: where a finger drags the progress bar (0-1), shown instead of the
+// playing position; -1 when it isn't.
+void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double scrub);
+// Where x falls along the progress bar (0-1): dragging it.
+double uiSeekFraction(int x);
 // Subtitle text ('\n' between lines), centered at the bottom with an
 // outline, wrapped to the screen; above the bar when it shows.
 void uiDrawSubtitles(const char *text, bool bar_shown);

@@ -170,7 +170,13 @@ TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *
 
 // --- The player's bar ---
 
-void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
+double uiSeekFraction(int x)
+{
+    double f = (double)(x - MARGIN) / (GFX_WIDTH - 2 * MARGIN);
+    return f < 0 ? 0 : f > 1 ? 1 : f;
+}
+
+void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double scrub)
 {
     // The close button, top left.
     gfxFillCircle(MARGIN + 14, 36, 22, GFX_RGB(0, 0, 0));
@@ -202,7 +208,8 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
                          on ? GFX_RGB(0, 0, 0) : COLOR_DIM);
     }
     char pos[16], len[16], time[40];
-    double position = playerPosition(p) / 1e9, duration = playerDuration(p) / 1e9;
+    double duration = playerDuration(p) / 1e9;
+    double position = scrub >= 0 ? scrub * duration : playerPosition(p) / 1e9;
     utilFormatTime(pos, sizeof(pos), position);
     utilFormatTime(len, sizeof(len), duration);
     snprintf(time, sizeof(time), "%s / %s", pos, len);
@@ -213,7 +220,7 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
     gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, track_w, 6, 3, COLOR_TRACK);
     if (done > 0)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
-    gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, 8, COLOR_ACCENT);
+    gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, scrub >= 0 ? 12 : 8, COLOR_ACCENT);  // Bigger under a finger.
     char info[256];
     // The buttons, as the other screens' help line, and the video's format on the right.
     snprintf(info, sizeof(info), "%s  \xC2\xB7  %s", playerVideoInfo(p), playerAudioInfo(p));
@@ -235,8 +242,7 @@ TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double 
     if (x < MARGIN + 50 && y < 80)
         return TAP_CLOSE;
     if (y >= bar_y + TRACK_Y_OFFSET - 20 && y <= bar_y + TRACK_Y_OFFSET + 26) {
-        double f = (double)(x - MARGIN) / (GFX_WIDTH - 2 * MARGIN);
-        *fraction = f < 0 ? 0 : f > 1 ? 1 : f;
+        *fraction = uiSeekFraction(x);
         return TAP_SEEK;
     }
     if (y >= bar_y && y < bar_y + TRACK_Y_OFFSET - 20 && x < MARGIN + 40)

@@ -35,6 +35,7 @@
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
 #define SEEK_SHORT_NS 10000000000ll
+#define STALL_NS 2000000000ull       // Playing without moving this long is logged.
 #define SEEK_LONG_NS 60000000000ll
 #define SCREEN_W 1280
 #define SCREEN_H 720
@@ -336,8 +337,10 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         appOpenMenu(app);
         return true;
     }
-    if (pressed & HidNpadButton_A)
+    if (pressed & HidNpadButton_A) {
         playerTogglePause(p, now);
+        appLog("  A: %s at %.1f s", playerPaused(p) ? "pause" : "play", playerPosition(p) / 1e9);
+    }
     if (pressed & HidNpadButton_Y)
         openMenu(app, UI_MENU_SUBTITLES, now);
     if (pressed & HidNpadButton_X)
@@ -356,26 +359,67 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         playerSeekBy(p, seek, now);
         app->seeks++;
     }
+    // A finger on the progress bar drags along it; the video goes there when it lets go.
+    double fraction = 0;
+    if (touch.type == TOUCH_DRAG && overlay &&
+        (app->scrubbing || uiTapPlayer(touch.start_x, touch.start_y, playerSubtitleCount(p) > 0,
+                                       playerAudioTrackCount(p) > 1, &fraction) == TAP_SEEK)) {
+        app->scrubbing = true;
+        app->scrub_fraction = uiSeekFraction(touch.x);
+        app->overlay_until = now + OVERLAY_NS;
+    } else if (touch.type == TOUCH_DRAG_END && app->scrubbing) {
+        app->scrubbing = false;
+        int64_t target = (int64_t)(app->scrub_fraction * playerDuration(p));
+        appLog("  seek to %.1f s (drag)", target / 1e9);
+        playerSeekTo(p, target, now);
+        app->seeks++;
+    }
     if (touch.type == TOUCH_TAP && overlay) {  // A first tap only shows the bar.
-        double fraction = 0;
         switch (uiTapPlayer(touch.x, touch.y, playerSubtitleCount(p) > 0, playerAudioTrackCount(p) > 1, &fraction)) {
         case TAP_CLOSE: return false;
         case TAP_SUBTITLES: openMenu(app, UI_MENU_SUBTITLES, now); break;
         case TAP_AUDIO: openMenu(app, UI_MENU_AUDIO, now); break;
         case TAP_SEEK:
+            appLog("  seek to %.1f s (tap)", fraction * playerDuration(p) / 1e9);
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
             app->seeks++;
             break;
         case TAP_PAUSE:
-        case TAP_PICTURE: playerTogglePause(p, now); break;
+        case TAP_PICTURE:
+            playerTogglePause(p, now);
+            appLog("  tap: %s at %.1f s", playerPaused(p) ? "pause" : "play", playerPosition(p) / 1e9);
+            break;
         default: break;
         }
     }
     return true;
 }
 
+// Logs the player's state once when it should be playing but its position
+// hasn't moved for STALL_NS: what it waits for.
+static void watchForStall(App *app, uint64_t now)
+{
+    static int64_t last_pos = -1;
+    static uint64_t moved_at;
+    static bool logged;
+    int64_t pos = playerPosition(app->player);
+    if (playerPaused(app->player) || pos != last_pos) {
+        last_pos = pos;
+        moved_at = now;
+        logged = false;
+        return;
+    }
+    if (!logged && now - moved_at > STALL_NS) {
+        char state[256];
+        playerDescribe(app->player, state, sizeof(state));
+        appLog("  stuck for 2 s: %s", state);
+        logged = true;
+    }
+}
+
 static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 {
+    watchForStall(app, now);
     int w, h;
     double aspect;
     playerSize(app->player, &w, &h, &aspect);
@@ -404,7 +448,8 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         uiDrawPausedSymbol();
     if (bar)
         uiDrawPlayerBar(app->player, app->playing_name,
-                        now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL);
+                        now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL,
+                        app->scrubbing ? app->scrub_fraction : -1);
     uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);
     if (app->app_menu != APP_MENU_NONE) {  // The + menu over the video.
         uiLibraryResetHits();
