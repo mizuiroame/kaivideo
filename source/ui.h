@@ -6,38 +6,64 @@
 #include <stdint.h>
 
 #include "browser.h"
+#include "menu.h"
 #include "player.h"
 #include "resume.h"
 
-#define UI_LIST_Y 76
+#define UI_HEADER_Y 72  // The folder list: its path, under the tab bar.
+#define UI_LIST_Y 128
 #define UI_ROW_H 58
-#define UI_ROWS 10
+#define UI_ROWS 9
+#define UI_MENU_ROW_H 48  // A row of the player's drop-down lists.
 
 // The first row shown so that the cursor stays in view.
 size_t uiFirstVisible(size_t cursor, size_t count);
 
-// The folder list, with how far each video has been watched; message (an
-// error, for a while) replaces the help line.
-void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message);
+// The folder list under the tab bar, with how far each video has been
+// watched; message (an error, for a while) replaces the help line.
+typedef enum {
+    BROWSE_FILES,      // The Files tab.
+    BROWSE_PICK,       // Choosing the library folder: a title, Use and Cancel buttons.
+    BROWSE_PICK_FIRST, // The same the first time, without Cancel.
+} BrowseMode;
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message, BrowseMode mode);
 // The bar over a playing video, and the close button above it; note, if
 // any, is said above the bar ("Resumed at 12:34").
 void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
 // Subtitle text ('\n' between lines), centered at the bottom with an
 // outline, wrapped to the screen; above the bar when it shows.
 void uiDrawSubtitles(const char *text, bool bar_shown);
+// A paused video: a big play symbol in the middle (a tap there plays on).
+void uiDrawPausedSymbol(void);
+
+typedef enum {
+    UI_MENU_AUDIO,      // The sound tracks.
+    UI_MENU_SUBTITLES,  // "Off", then the subtitle tracks.
+} UiMenuKind;
+
+// The drop-down list above the bar's Audio or CC button, with the track
+// playing (or shown) checked and the cursor's row lit.
+void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m);
 
 typedef enum {
     TAP_NOTHING,
     TAP_UP,        // The path at the top: the folder above.
+    TAP_USE_FOLDER, // Choosing the library folder: use this one.
+    TAP_CANCEL,     // Choosing the library folder: keep the one there was.
     TAP_ROW,       // A row: *row is its index.
     TAP_CLOSE,     // The player's close button.
     TAP_PAUSE,     // The player's play/pause button.
     TAP_SEEK,      // The progress bar: *fraction is where (0-1).
-    TAP_SUBTITLES, // The player's CC button.
-    TAP_AUDIO,     // The player's Audio button (next sound track).
+    TAP_SUBTITLES, // The player's CC button (the list of subtitles).
+    TAP_AUDIO,     // The player's Audio button (the list of sound tracks).
     TAP_PICTURE,   // Anywhere else on a playing video.
+    TAP_MENU_ROW,  // A row of the open drop-down list: *row is its index.
+    TAP_MENU_BOX,  // The list, but not a row (its title).
+    TAP_OUTSIDE,   // Outside the open list: it closes.
 } TapTarget;
 
-TapTarget uiTapBrowser(const Browser *b, int x, int y, size_t *row);
+// Taps on the tab bar (y < UI_HEADER_Y) are the library's, but picking's button.
+TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *row);
 // has_subtitles, has_tracks: the CC and Audio buttons are there.
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction);
+TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row);

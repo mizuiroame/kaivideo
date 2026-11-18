@@ -11,6 +11,11 @@ microSD card with the console's own hardware video decoder.
 
 ## What it does
 
+- A **library** of your **films and series**: choose the folder with your
+  videos once, and KaiVideo finds them in it and its folders. **Home** shows
+  what you were watching, what's newest, your series and your films; **Films**
+  and **Series** show them all, a series opens on its seasons and episodes,
+  and **Search** finds a title by name.
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second. A video the
@@ -19,15 +24,15 @@ microSD card with the console's own hardware video decoder.
   **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
   and **Dolby TrueHD** (surround is mixed down to stereo).
 - **Sound tracks**: a film with several (languages, commentary) lets you
-  change between them with **X**, without stopping the picture.
+  pick one from a list (**X**), without stopping the picture.
 - **Subtitles**: an `.srt` file next to the video (`Film.srt` or
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
-  MKV, mov_text in MP4, WebVTT). **Y** changes between them or turns them off.
+  MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none.
 - **Resume where you left off**: open a video you stopped halfway and it goes
   on from there (**ZL** starts it over). Videos you've started show how far
-  you got in the list.
-- A **file browser** for your card: folders first, then videos, with their
-  sizes.
+  you got.
+- A **file browser** for the whole card (the **Files** tab): folders first,
+  then videos, with their sizes.
 - Drawn on the GPU, sharp in handheld and docked. Every control works with the
   buttons and the touch screen.
 
@@ -45,13 +50,27 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 3. Connect to it from your PC, make a `kaivideo` folder inside the `switch`
    folder and copy `KaiVideo.nro` into it, so it is
    `sdmc:/switch/kaivideo/KaiVideo.nro`. (Straight in `switch` works too.)
-4. Copy your videos anywhere on the card, for example a `Videos` folder.
-5. Open hbmenu and select **KaiVideo**.
+4. Copy your videos to a folder on the card, for example `Videos`.
+5. Open hbmenu and select **KaiVideo**. The first time, choose the folder with
+   your videos: open it and press **X** (or tap **Use this folder**).
 
 > **File names with accents or other non-ASCII characters** (á, ñ, ’,
 > Japanese) are hidden by the console's file system, in every app. Rename
 > those files, or upload them with [KaiDrop](https://github.com/mizuiroame/kaidrop),
 > which gives the copies plain names.
+
+### How films and series are found
+
+KaiVideo goes by file and folder names, the way most media libraries are
+kept:
+
+- **Series**: files named with the season and episode, like
+  `Rook.S01E03.Lamentia.1080p.mkv` or `Rook 1x03.mkv` (or `Rook - 03` for
+  anime). A folder named after the series (`TV/Rook/`, `Rook/Season 1/`) gives
+  it its name; otherwise the file's name does.
+- **Films**: every other video. A `Title (Year)` folder gives the film its
+  name (`Movies/Paper Moon (1998)/anything.mkv`); otherwise the file's name
+  does, without tags like `1080p`, `BluRay` or `x264`.
 
 > **Don't take the microSD card out while kaiHEN is running.** Removing it
 > means restarting the console, and kaiHEN has to be started again after
@@ -59,25 +78,28 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 
 ### Where KaiVideo keeps its files
 
-The folder you were in, where you left each video and a log are kept in a
-`config` folder next to `KaiVideo.nro`, in its own folder:
+Your library folder, the list of videos found in it, where you left each
+video and a log are kept in a `config` folder next to `KaiVideo.nro`, in its own folder:
 `sdmc:/switch/kaivideo/config/` (or `sdmc:/brewstore/apps/kaivideo/config/`
 when brewstore installs it). Your videos aren't touched.
 
 ## Controls
 
-**In the list:**
+**In the library:**
 
 | Button | What it does |
 |--------|--------------|
-| **↑** / **↓** | Move |
-| **◀** / **▶** | A page up or down |
-| **A** | Open the folder, or play the video |
-| **B** | The folder above |
+| **L** / **R** (or **ZL** / **ZR**) | The tab before or after: Home, Films, Series, Search, Files |
+| **↑** **↓** **◀** **▶** | Move |
+| **A** | Play the film or episode, or open the series |
+| **B** | Back from a series (in Files: the folder above) |
+| **Y** | Search |
+| **−** | Choose the library folder |
 | **+** | Exit |
 
-Tap a row to open it, drag the list to scroll it, and tap the path at the
-top for the folder above.
+On a series, **◀** / **▶** change the season. Tap a tab, a card or a row to
+open it, and drag to scroll. In **Files**, **◀** / **▶** move a page and the
+path at the top goes to the folder above.
 
 **While a video plays:**
 
@@ -87,14 +109,15 @@ top for the folder above.
 | **◀** / **▶** | Back or forward 10 seconds |
 | **L** / **R** | Back or forward 1 minute |
 | **ZL** | Start over |
-| **X** | The next sound track |
-| **Y** | The next subtitles, or none |
-| **B** / **+** | Back to the list (where you were is remembered) |
+| **X** | The list of sound tracks |
+| **Y** | The list of subtitles |
+| **B** / **+** | Back to the library (where you were is remembered) |
 
+In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
 Any button or tap shows the bar for a few seconds. With the bar showing, tap
-the picture or the play button to pause or play, the progress bar to go
-there, **CC** for the next subtitles, **Audio** for the next sound track, and
-the **×** at the top left to go back to the list.
+the picture or the play button to pause or play (a paused video shows a big
+play symbol), the progress bar to go there, **Audio** or **CC** for their
+lists, and the **×** at the top left to go back.
 
 ## Limitations
 
@@ -116,6 +139,7 @@ KaiVideo is built in Docker, on top of the
 docker build -t kaivideo-devkit ffmpeg   # once: the devkit plus FFmpeg (LGPL)
 docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make          # KaiVideo.nro
 docker run --rm -v "$PWD:/w" -w /w/tests kairadio-host make run  # host tests
+docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make -C tests/preview  # screenshots
 ```
 
 `ffmpeg/Dockerfile` builds FFmpeg 7.1 from its release tarball (checked by

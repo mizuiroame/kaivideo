@@ -1,8 +1,10 @@
 // KaiVideo: a video player for Switch 2 homebrew (kaiHEN + libounce). Video
 // is decoded by the console's hardware decoder and drawn with the GPU; sound
-// is decoded with FFmpeg and is the clock. Choose a video on the card, then
-// A pauses, left and right go 10 seconds back or forward, L and R a minute,
-// and B goes back to the list. Every control works with touch too.
+// is decoded with FFmpeg and is the clock. Choose a film or an episode in
+// the library (app_library.c), or a file in the Files tab, then A pauses,
+// left and right go 10 seconds back or forward, L and R a minute, X and Y
+// open the lists of sound tracks and subtitles, and B goes back. Every
+// control works with touch too.
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +12,7 @@
 
 #include <switch.h>
 
+#include "app.h"
 #include "approot.h"
 #include "audio.h"
 #include "browser.h"
@@ -17,6 +20,7 @@
 #include "font.h"
 #include "gfx.h"
 #include "input.h"
+#include "menu.h"
 #include "player.h"
 #include "resume.h"
 #include "touch.h"
@@ -38,12 +42,12 @@ static FILE *g_log;
 // resume.txt and kaivideo.log.
 static char g_folder[APPROOT_PATH_MAX];
 
-static void configPath(char *out, size_t size, const char *name)
+void appConfigPath(char *out, size_t size, const char *name)
 {
     snprintf(out, size, "%s/%s", g_folder, name);
 }
 
-static void logLine(const char *fmt, ...)
+void appLog(const char *fmt, ...)
 {
     if (!g_log)
         return;
@@ -60,34 +64,38 @@ static uint64_t nowNs(void)
     return armTicksToNs(armGetSystemTick());
 }
 
-// --- The folder kept between runs ---
+// --- Settings kept between runs: the library folder and the Files tab's ---
 
-static void loadFolder(char *out, size_t size)
+static void loadSettings(App *app, char *folder, size_t size)
 {
-    snprintf(out, size, "%s", BROWSER_ROOT);
+    snprintf(folder, size, "%s", BROWSER_ROOT);
     char path[APPROOT_PATH_MAX + 32];
-    configPath(path, sizeof(path), "settings.txt");
+    appConfigPath(path, sizeof(path), "settings.txt");
     FILE *f = fopen(path, "r");
     if (!f)
         return;
-    char line[BROWSER_PATH_MAX + 16];
+    char line[BROWSER_PATH_MAX];
     while (fgets(line, sizeof(line), f)) {
         line[strcspn(line, "\r\n")] = '\0';
         if (strncmp(line, "folder=sdmc:/", 13) == 0)
-            snprintf(out, size, "%s", line + 7);
+            snprintf(folder, size, "%s", line + 7);
+        else if (strncmp(line, "library=sdmc:/", 14) == 0)
+            snprintf(app->library_root, sizeof(app->library_root), "%s", line + 8);
     }
     fclose(f);
 }
 
-static void saveFolder(const char *folder)
+void appSaveSettings(const App *app)
 {
     char path[APPROOT_PATH_MAX + 32];
-    configPath(path, sizeof(path), "settings.txt");
+    appConfigPath(path, sizeof(path), "settings.txt");
     FILE *f = fopen(path, "w");
     if (!f)
         return;
-    if (!strpbrk(folder, "\r\n"))
-        fprintf(f, "folder=%s\n", folder);
+    if (!strpbrk(app->browser.path, "\r\n"))
+        fprintf(f, "folder=%s\n", app->browser.path);
+    if (app->library_root[0] && !strpbrk(app->library_root, "\r\n"))
+        fprintf(f, "library=%s\n", app->library_root);
     fclose(f);
 }
 
@@ -112,45 +120,27 @@ static TouchEvent readTouch(TouchTracker *tracker, uint64_t now)
     return touchUpdate(tracker, touching, x, y, now);
 }
 
-// --- The app ---
+// --- Playing ---
 
-typedef struct {
-    Browser browser;
-    Player *player;
-    char playing_name[BROWSER_NAME_MAX];
-    char playing_path[BROWSER_PATH_MAX];
-    ResumeList resume;
-    char bar_note[256];         // Said in the player's bar for a while ("Resumed at 12:34").
-    uint64_t bar_note_until;
-    uint64_t overlay_until;
-    unsigned seeks;
-    uint64_t started;
-    char message[200];
-    uint64_t message_until;
-    int drag_rows;
-    bool quit;
-} App;
-
-static void showMessage(App *app, const char *message, uint64_t now)
+void appShowMessage(App *app, const char *message, uint64_t now)
 {
     snprintf(app->message, sizeof(app->message), "%s", message);
     app->message_until = now + MESSAGE_NS;
 }
 
-static void startVideo(App *app, uint64_t now)
+bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
-    char path[BROWSER_PATH_MAX], error[160];
-    if (!browserSelectedPath(&app->browser, path, sizeof(path)))
-        return;
+    char error[160];
     app->player = playerOpen(path, now, error, sizeof(error));
     if (!app->player) {
-        logLine("%s: %s", path, error);
-        showMessage(app, error, now);
-        return;
+        appLog("%s: %s", path, error);
+        appShowMessage(app, error, now);
+        return false;
     }
-    snprintf(app->playing_name, sizeof(app->playing_name), "%s", app->browser.items[app->browser.cursor].name);
+    snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
     app->bar_note[0] = '\0';
+    menuClose(&app->menu);
     int64_t resume_at;
     if (resumeFind(&app->resume, path, &resume_at, NULL)) {
         // Where it was left: go on from there, and say how to start over.
@@ -160,17 +150,17 @@ static void startVideo(App *app, uint64_t now)
         snprintf(app->bar_note, sizeof(app->bar_note), "Resumed at %s  \xC2\xB7  ZL from the start", at);
         app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
     }
-    logLine("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
+    appLog("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
     for (int i = 0; i < playerAudioTrackCount(app->player); i++)
-        logLine("  sound %d: %s%s", i + 1, playerAudioTrackName(app->player, i),
-                i == playerAudioTrack(app->player) ? " (on)" : "");
+        appLog("  sound %d: %s%s", i + 1, playerAudioTrackName(app->player, i),
+               i == playerAudioTrack(app->player) ? " (on)" : "");
     for (int i = 0; i < playerSubtitleCount(app->player); i++)
-        logLine("  subtitles %d: %s%s", i + 1, playerSubtitleLabel(app->player, i),
-                i == playerSubtitle(app->player) ? " (on)" : "");
+        appLog("  subtitles %d: %s%s", i + 1, playerSubtitleLabel(app->player, i),
+               i == playerSubtitle(app->player) ? " (on)" : "");
     app->overlay_until = now + OVERLAY_NS;
     app->seeks = 0;
     app->started = now;
-    saveFolder(app->browser.path);
+    return true;
 }
 
 static void stopVideo(App *app, const char *error, bool ended)
@@ -179,110 +169,126 @@ static void stopVideo(App *app, const char *error, bool ended)
     int64_t duration = playerDuration(app->player);
     resumeRemember(&app->resume, app->playing_path, ended ? duration : playerPosition(app->player), duration);
     char path[APPROOT_PATH_MAX + 32];
-    configPath(path, sizeof(path), "resume.txt");
+    appConfigPath(path, sizeof(path), "resume.txt");
     resumeSave(&app->resume, path);
     VideoStats s = playerStats(app->player);
-    logLine("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
+    appLog("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
             error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
             s.dropped);
     playerClose(app->player);
     app->player = NULL;
+    appLibraryRefreshHome(app);  // Continue watching changed.
 }
 
-// Opens the entry under the cursor: a folder, or a video.
-static void openSelected(App *app, uint64_t now)
+static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 {
-    if (app->browser.cursor >= app->browser.count)
-        return;
-    if (app->browser.items[app->browser.cursor].is_dir) {
-        if (!browserEnter(&app->browser))
-            showMessage(app, "That folder can't be opened.", now);
+    snprintf(app->bar_note, sizeof(app->bar_note), fmt, arg);
+    app->bar_note_until = now + NOTE_NS;
+    app->overlay_until = now + NOTE_NS;
+}
+
+// Opens the list of sound tracks or subtitles (or says there's nothing to choose).
+static void openMenu(App *app, UiMenuKind kind, uint64_t now)
+{
+    Player *p = app->player;
+    menuClose(&app->menu);
+    if (kind == UI_MENU_AUDIO && playerAudioTrackCount(p) < 2)
+        sayInBar(app, now, "%s", "This video has one sound track.");
+    else if (kind == UI_MENU_SUBTITLES && playerSubtitleCount(p) == 0)
+        sayInBar(app, now, "%s", "This video has no subtitles.");
+    else if (kind == UI_MENU_AUDIO)
+        menuOpen(&app->menu, playerAudioTrackCount(p), playerAudioTrack(p));
+    else
+        menuOpen(&app->menu, playerSubtitleCount(p) + 1, playerSubtitle(p) + 1);  // Row 0 is "Off".
+    app->menu_kind = kind;
+    app->drag_rows = 0;
+}
+
+// Plays or shows the list's row, said in the bar, and closes the list.
+static void chooseRow(App *app, int row, uint64_t now)
+{
+    Player *p = app->player;
+    if (app->menu_kind == UI_MENU_AUDIO) {
+        if (row != playerAudioTrack(p))
+            playerSetAudioTrack(p, row, now);
+        sayInBar(app, now, "Sound: %s", playerAudioTrackName(p, row));
     } else {
-        startVideo(app, now);
+        playerSetSubtitle(p, row - 1);
+        if (row == 0)
+            sayInBar(app, now, "%s", "Subtitles off");
+        else
+            sayInBar(app, now, "Subtitles: %s", playerSubtitleLabel(p, row - 1));
     }
+    menuClose(&app->menu);
 }
 
-static void moveCursor(Browser *b, long delta)
+// A tap outside the open list closes it; on the other list's button, that
+// list opens instead.
+static void tapOutsideMenu(App *app, int x, int y, uint64_t now)
 {
-    if (b->count == 0)
-        return;
-    long next = (long)b->cursor + delta;
-    b->cursor = next < 0 ? 0 : next >= (long)b->count ? b->count - 1 : (size_t)next;
+    Player *p = app->player;
+    double fraction;
+    TapTarget target = uiTapPlayer(x, y, playerSubtitleCount(p) > 0, playerAudioTrackCount(p) > 1, &fraction);
+    if (target == TAP_AUDIO && app->menu_kind != UI_MENU_AUDIO)
+        openMenu(app, UI_MENU_AUDIO, now);
+    else if (target == TAP_SUBTITLES && app->menu_kind != UI_MENU_SUBTITLES)
+        openMenu(app, UI_MENU_SUBTITLES, now);
+    else
+        menuClose(&app->menu);
 }
 
-static void browserInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+// The open list takes the buttons and touches: up and down move, A
+// chooses, B closes; X and Y go to their list (or close it if it's open).
+static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
-    if (pressed & HidNpadButton_Plus) {
-        app->quit = true;
+    Menu *m = &app->menu;
+    app->overlay_until = now + OVERLAY_NS;  // The bar stays while the list is open.
+    if (pressed & BUTTONS_UP) menuMove(m, -1);
+    if (pressed & BUTTONS_DOWN) menuMove(m, 1);
+    if (pressed & HidNpadButton_A) {
+        chooseRow(app, m->cursor, now);
         return;
     }
-    if (pressed & BUTTONS_UP) moveCursor(&app->browser, -1);
-    if (pressed & BUTTONS_DOWN) moveCursor(&app->browser, 1);
-    if (pressed & BUTTONS_PAGE_UP) moveCursor(&app->browser, -UI_ROWS);
-    if (pressed & BUTTONS_PAGE_DOWN) moveCursor(&app->browser, UI_ROWS);
-    if (pressed & HidNpadButton_A) openSelected(app, now);
-    if (pressed & HidNpadButton_B) browserUp(&app->browser);
+    if (pressed & (HidNpadButton_B | HidNpadButton_Plus)) {
+        menuClose(m);
+        return;
+    }
+    if (pressed & (HidNpadButton_X | HidNpadButton_Y)) {
+        UiMenuKind kind = (pressed & HidNpadButton_X) ? UI_MENU_AUDIO : UI_MENU_SUBTITLES;
+        if (kind == app->menu_kind)
+            menuClose(m);
+        else
+            openMenu(app, kind, now);
+        return;
+    }
+    int row;
     if (touch.type == TOUCH_TAP) {
-        size_t row;
-        switch (uiTapBrowser(&app->browser, touch.x, touch.y, &row)) {
-        case TAP_UP: browserUp(&app->browser); break;
-        case TAP_ROW:
-            app->browser.cursor = row;
-            openSelected(app, now);
-            break;
-        default: break;
-        }
-    } else if (touch.type == TOUCH_DRAG && touch.start_y >= UI_LIST_Y) {
-        // Dragging up shows the rows below, as on a phone.
+        TapTarget target = uiTapTrackMenu(app->menu_kind, m, touch.x, touch.y, &row);
+        if (target == TAP_MENU_ROW)
+            chooseRow(app, row, now);
+        else if (target == TAP_OUTSIDE)
+            tapOutsideMenu(app, touch.x, touch.y, now);
+    } else if (touch.type == TOUCH_DRAG &&
+               uiTapTrackMenu(app->menu_kind, m, touch.start_x, touch.start_y, &row) != TAP_OUTSIDE) {
+        // Dragging scrolls a long list, as on a phone.
         app->drag_rows -= touch.dy;
-        for (; app->drag_rows >= UI_ROW_H; app->drag_rows -= UI_ROW_H)
-            moveCursor(&app->browser, 1);
-        for (; app->drag_rows <= -UI_ROW_H; app->drag_rows += UI_ROW_H)
-            moveCursor(&app->browser, -1);
+        for (; app->drag_rows >= UI_MENU_ROW_H; app->drag_rows -= UI_MENU_ROW_H)
+            menuMove(m, 1);
+        for (; app->drag_rows <= -UI_MENU_ROW_H; app->drag_rows += UI_MENU_ROW_H)
+            menuMove(m, -1);
     } else if (touch.type == TOUCH_DRAG_END) {
         app->drag_rows = 0;
     }
-}
-
-// The next subtitle track (after the last: none), said in the bar.
-static void nextSubtitle(App *app, uint64_t now)
-{
-    Player *p = app->player;
-    int count = playerSubtitleCount(p);
-    if (count == 0) {
-        snprintf(app->bar_note, sizeof(app->bar_note), "This video has no subtitles.");
-    } else {
-        int next = playerSubtitle(p) + 1;
-        playerSetSubtitle(p, next < count ? next : -1);
-        if (playerSubtitle(p) < 0)
-            snprintf(app->bar_note, sizeof(app->bar_note), "Subtitles off");
-        else
-            snprintf(app->bar_note, sizeof(app->bar_note), "Subtitles: %s", playerSubtitleLabel(p, playerSubtitle(p)));
-    }
-    app->bar_note_until = now + NOTE_NS;
-    app->overlay_until = now + NOTE_NS;
-}
-
-// The next sound track (after the last: the first), said in the bar.
-static void nextAudioTrack(App *app, uint64_t now)
-{
-    Player *p = app->player;
-    int count = playerAudioTrackCount(p);
-    if (count < 2) {
-        snprintf(app->bar_note, sizeof(app->bar_note), "This video has one sound track.");
-    } else {
-        int next = (playerAudioTrack(p) + 1) % count;
-        playerSetAudioTrack(p, next, now);
-        snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s", playerAudioTrackName(p, playerAudioTrack(p)));
-    }
-    app->bar_note_until = now + NOTE_NS;
-    app->overlay_until = now + NOTE_NS;
 }
 
 // False when playback should end (back to the list).
 static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     Player *p = app->player;
+    if (app->menu.open) {
+        menuInput(app, pressed, touch, now);
+        return true;
+    }
     bool overlay = playerPaused(p) || now < app->overlay_until;
     if (pressed || touch.type == TOUCH_TAP)
         app->overlay_until = now + OVERLAY_NS;
@@ -291,9 +297,9 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     if (pressed & HidNpadButton_A)
         playerTogglePause(p, now);
     if (pressed & HidNpadButton_Y)
-        nextSubtitle(app, now);
+        openMenu(app, UI_MENU_SUBTITLES, now);
     if (pressed & HidNpadButton_X)
-        nextAudioTrack(app, now);
+        openMenu(app, UI_MENU_AUDIO, now);
     if (pressed & HidNpadButton_ZL) {  // From the start.
         playerSeekTo(p, 0, now);
         app->seeks++;
@@ -312,8 +318,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         double fraction = 0;
         switch (uiTapPlayer(touch.x, touch.y, playerSubtitleCount(p) > 0, playerAudioTrackCount(p) > 1, &fraction)) {
         case TAP_CLOSE: return false;
-        case TAP_SUBTITLES: nextSubtitle(app, now); break;
-        case TAP_AUDIO: nextAudioTrack(app, now); break;
+        case TAP_SUBTITLES: openMenu(app, UI_MENU_SUBTITLES, now); break;
+        case TAP_AUDIO: openMenu(app, UI_MENU_AUDIO, now); break;
         case TAP_SEEK:
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
             app->seeks++;
@@ -346,14 +352,18 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
                  playerAudioTrackName(app->player, playerAudioTrack(app->player)), error);
         app->bar_note_until = now + NOTE_NS;
         app->overlay_until = now + NOTE_NS;
-        logLine("  sound track %d: %s", playerAudioTrack(app->player) + 1, error);
+        appLog("  sound track %d: %s", playerAudioTrack(app->player) + 1, error);
     }
     bool bar = playerPaused(app->player) || now < app->overlay_until;
     char subtitle[1024];
     if (playerSubtitleText(app->player, subtitle, sizeof(subtitle)))
         uiDrawSubtitles(subtitle, bar);
+    if (playerPaused(app->player) && !app->menu.open)
+        uiDrawPausedSymbol();
     if (bar)
-        uiDrawPlayerBar(app->player, app->playing_name, now < app->bar_note_until ? app->bar_note : NULL);
+        uiDrawPlayerBar(app->player, app->playing_name,
+                        now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL);
+    uiDrawTrackMenu(app->player, app->menu_kind, &app->menu);
 }
 
 int main(int argc, char **argv)
@@ -367,25 +377,26 @@ int main(int argc, char **argv)
     appRootMakeFolder(g_folder);
     int moved = next_to_nro ? appRootMigrate(OLD_CONFIG_FOLDER, g_folder) : 0;
     char path[APPROOT_PATH_MAX + 32];
-    configPath(path, sizeof(path), "kaivideo.log");
+    appConfigPath(path, sizeof(path), "kaivideo.log");
     g_log = fopen(path, "w");
-    logLine("Files in %s%s", g_folder, moved ? " (copied from " OLD_CONFIG_FOLDER ")" : "");
+    appLog("Files in %s%s", g_folder, moved ? " (copied from " OLD_CONFIG_FOLDER ")" : "");
     if (!gfxInit() || !fontInit()) {
-        logLine("The GPU or the fonts couldn't start.");
+        appLog("The GPU or the fonts couldn't start.");
         if (g_log)
             fclose(g_log);
         return 1;
     }
     if (!audioSystemInit())
-        logLine("The audio output couldn't start: videos play silent.");
+        appLog("The audio output couldn't start: videos play silent.");
 
     static App app;
     char folder[BROWSER_PATH_MAX];
-    loadFolder(folder, sizeof(folder));
-    configPath(path, sizeof(path), "resume.txt");
+    loadSettings(&app, folder, sizeof(folder));
+    appConfigPath(path, sizeof(path), "resume.txt");
     resumeLoad(&app.resume, path);
     if (!browserOpen(&app.browser, folder))
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
+    appLibraryStart(&app);
     InputRepeat repeat;
     inputRepeatInit(&repeat, BUTTONS_REPEATING);
     TouchTracker touch;
@@ -396,6 +407,7 @@ int main(int argc, char **argv)
         uint64_t now = nowNs();
         uint64_t pressed = inputRepeatUpdate(&repeat, padGetButtonsDown(&pad), padGetButtons(&pad), now);
         TouchEvent t = readTouch(&touch, now);
+        appLibraryUpdate(&app);
         gfxBegin();
         if (app.player) {
             char error[160] = "";
@@ -408,25 +420,26 @@ int main(int argc, char **argv)
             if (!keep) {
                 stopVideo(&app, error, ended);
                 if (error[0])
-                    showMessage(&app, error, now);
-                uiDrawBrowser(&app.browser, &app.resume, now < app.message_until ? app.message : NULL);
+                    appShowMessage(&app, error, now);
+                appLibraryDraw(&app, now);
             } else {
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             }
         } else {
-            browserInput(&app, pressed, t, now);
+            appLibraryInput(&app, pressed, t, now);
             if (app.player)
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             else
-                uiDrawBrowser(&app.browser, &app.resume, now < app.message_until ? app.message : NULL);
+                appLibraryDraw(&app, now);
         }
         gfxEnd();
     }
     if (app.player)
         stopVideo(&app, NULL, false);
-    saveFolder(app.browser.path);
+    appSaveSettings(&app);
+    appLibraryExit(&app);
     browserFree(&app.browser);
-    logLine("Done.");
+    appLog("Done.");
     audioSystemExit();
     fontExit();
     gfxExit();

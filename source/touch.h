@@ -11,7 +11,7 @@
 typedef enum {
     TOUCH_NONE,
     TOUCH_TAP,   // Released where it started: x, y.
-    TOUCH_DRAG,  // Moving: dy since the last frame; start_x/start_y where it began.
+    TOUCH_DRAG,  // Moving: dx, dy since the last frame; start_x/start_y where it began.
     TOUCH_DRAG_END,  // Released after a drag, at x, y.
 } TouchEventType;
 
@@ -20,6 +20,7 @@ typedef struct {
     int x, y;
     int start_x, start_y;
     int dy;
+    int dx;
 } TouchEvent;
 
 typedef struct {

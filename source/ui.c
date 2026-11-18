@@ -5,9 +5,9 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "ui_style.h"
 #include "util.h"
 
-#define MARGIN 32
 #define BAR_H 120
 #define TRACK_Y_OFFSET 60
 #define ICON 42
@@ -20,15 +20,12 @@
 #define SUB_LINE_H 44
 #define SUB_MAX_W (GFX_WIDTH - 160)
 #define SUB_MAX_LINES 6
+#define PAUSED_R 64             // The big play symbol of a paused video.
+#define MENU_W 400              // The drop-down lists.
+#define MENU_HEAD 50
+#define MENU_ROW_H UI_MENU_ROW_H
+#define MENU_PAD 8
 
-#define COLOR_BG GFX_RGB(0x12, 0x12, 0x14)
-#define COLOR_SURFACE_HI GFX_RGB(0x2C, 0x2C, 0x34)
-#define COLOR_TEXT GFX_RGB(0xF2, 0xF2, 0xF5)
-#define COLOR_DIM GFX_RGB(0xA4, 0xA4, 0xB0)
-#define COLOR_FAINT GFX_RGB(0x5E, 0x5E, 0x6A)
-#define COLOR_TRACK GFX_RGB(0x40, 0x40, 0x48)
-#define COLOR_ACCENT GFX_RGB(0xFF, 0x6B, 0x9A)  // KaiPlayer's pink.
-#define COLOR_ERROR GFX_RGB(0xFF, 0x8A, 0x5C)
 
 size_t uiFirstVisible(size_t cursor, size_t count)
 {
@@ -63,19 +60,35 @@ static void formatSize(int64_t bytes, char *out, size_t size)
         snprintf(out, size, "%.0f MB", bytes / 1048576.0);
 }
 
-void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message)
+#define USE_W 190  // Choosing the library folder: the Use button, top right.
+#define USE_H 40
+#define USE_X (GFX_WIDTH - MARGIN - USE_W)
+#define USE_Y 14
+#define CANCEL_W 120  // Left of Use.
+#define CANCEL_X (USE_X - 12 - CANCEL_W)
+
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message, BrowseMode mode)
 {
-    gfxClear(COLOR_BG);
-    int title_w = fontDraw(FONT_BOLD, 26, MARGIN, 18, "KaiVideo", COLOR_ACCENT);
+    bool picking = mode != BROWSE_FILES;
+    if (mode == BROWSE_PICK) {
+        gfxFillRoundRect(CANCEL_X, USE_Y, CANCEL_W, USE_H, USE_H / 2, COLOR_SURFACE_HI);
+        fontDrawCentered(FONT_BOLD, 19, CANCEL_X + CANCEL_W / 2.0f, USE_Y + USE_H / 2.0f, "Cancel", COLOR_TEXT);
+    }
+    if (picking) {
+        fontDraw(FONT_BOLD, 26, MARGIN, 18, "Choose the folder with your videos", COLOR_TEXT);
+        gfxFillRoundRect(USE_X, USE_Y, USE_W, USE_H, USE_H / 2, COLOR_ACCENT);
+        fontDrawCentered(FONT_BOLD, 19, USE_X + USE_W / 2.0f, USE_Y + USE_H / 2.0f, "Use this folder",
+                         GFX_RGB(0x12, 0x12, 0x14));
+    }
     // The folder, with an arrow back up when there's one above.
-    int x = MARGIN + title_w + 28;
+    int x = MARGIN, y = UI_HEADER_Y + 14;
     bool can_go_up = strcmp(b->path, BROWSER_ROOT) != 0;
     if (can_go_up) {
-        gfxLine((float)x + 10, 26, (float)x + 3, 33, 3, COLOR_TEXT);
-        gfxLine((float)x + 3, 33, (float)x + 10, 40, 3, COLOR_TEXT);
+        gfxLine((float)x + 10, y + 4, (float)x + 3, y + 11, 3, COLOR_TEXT);
+        gfxLine((float)x + 3, y + 11, (float)x + 10, y + 18, 3, COLOR_TEXT);
         x += 22;
     }
-    fontDrawClipped(FONT_REGULAR, 19, x, 22, GFX_WIDTH - MARGIN - x, b->path, can_go_up ? COLOR_TEXT : COLOR_DIM);
+    fontDrawClipped(FONT_REGULAR, 19, x, y, GFX_WIDTH - MARGIN - x, b->path, can_go_up ? COLOR_TEXT : COLOR_DIM);
 
     if (b->count == 0) {
         fontDrawCentered(FONT_BOLD, 24, GFX_WIDTH / 2.0f, 300, "No videos or folders here.", COLOR_TEXT);
@@ -121,14 +134,24 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *messa
         gfxFillRoundRect(GFX_WIDTH - 12, UI_LIST_Y, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(GFX_WIDTH - 12, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
-    const char *help = message && message[0] ? message : "A  open      B  folder above      +  exit";
+    const char *help = message && message[0] ? message
+                       : mode == BROWSE_PICK ? "A  open      B  folder above      X  use this folder      -  cancel"
+                       : picking ? "A  open      B  folder above      X  use this folder      +  exit"
+                                 : "A  open      B  folder above      +  exit";
     fontDrawClipped(FONT_REGULAR, 18, MARGIN, GFX_HEIGHT - 36, GFX_WIDTH - 2 * MARGIN, help,
                     message && message[0] ? COLOR_ERROR : COLOR_DIM);
 }
 
-TapTarget uiTapBrowser(const Browser *b, int x, int y, size_t *row)
+TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *row)
 {
-    (void)x;
+    bool picking = mode != BROWSE_FILES;
+    if (mode == BROWSE_PICK && x >= CANCEL_X - 8 && x < CANCEL_X + CANCEL_W + 6 && y >= USE_Y - 8 &&
+        y < USE_Y + USE_H + 8)
+        return TAP_CANCEL;
+    if (picking && x >= USE_X - 6 && x < USE_X + USE_W + 8 && y >= USE_Y - 8 && y < USE_Y + USE_H + 8)
+        return TAP_USE_FOLDER;
+    if (y < UI_HEADER_Y)
+        return TAP_NOTHING;
     if (y < UI_LIST_Y)
         return strcmp(b->path, BROWSER_ROOT) != 0 ? TAP_UP : TAP_NOTHING;
     size_t first = uiFirstVisible(b->cursor, b->count), index = first + (size_t)((y - UI_LIST_Y) / UI_ROW_H);
@@ -261,4 +284,85 @@ void uiDrawSubtitles(const char *text, bool bar_shown)
             fontDrawCentered(FONT_BOLD, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i], GFX_RGB(0, 0, 0));
         fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], COLOR_TEXT);
     }
+}
+
+void uiDrawPausedSymbol(void)
+{
+    float cx = GFX_WIDTH / 2.0f, cy = GFX_HEIGHT / 2.0f;
+    gfxFillCircle((int)cx, (int)cy, PAUSED_R, GFX_RGB(0x16, 0x16, 0x1A));
+    gfxArc(cx, cy, PAUSED_R - 2, 3, 0, 6.2832f, COLOR_TEXT);
+    // A triangle a little right of center, so it looks centered.
+    gfxTriangle(cx - 20, cy - 32, cx - 20, cy + 32, cx + 34, cy, COLOR_TEXT);
+}
+
+// --- The drop-down lists of sound tracks and subtitles ---
+
+static int menuRight(UiMenuKind kind)
+{
+    return kind == UI_MENU_AUDIO ? AUDIO_X + AUDIO_W : CC_X + CC_W;
+}
+
+static void menuBox(UiMenuKind kind, const Menu *m, int *x, int *y, int *w, int *h)
+{
+    *w = MENU_W;
+    *h = MENU_HEAD + menuVisible(m) * MENU_ROW_H + MENU_PAD;
+    *x = menuRight(kind) - MENU_W;
+    *y = GFX_HEIGHT - BAR_H - 6 - *h;
+}
+
+static const char *menuLabel(const Player *p, UiMenuKind kind, int row)
+{
+    if (kind == UI_MENU_AUDIO)
+        return playerAudioTrackName(p, row);
+    return row == 0 ? "Off" : playerSubtitleLabel(p, row - 1);
+}
+
+static void drawCheck(float x, float cy, Color color)
+{
+    gfxLine(x, cy, x + 6, cy + 6, 3, color);
+    gfxLine(x + 6, cy + 6, x + 18, cy - 7, 3, color);
+}
+
+void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m)
+{
+    if (!m->open)
+        return;
+    int x, y, w, h;
+    menuBox(kind, m, &x, &y, &w, &h);
+    gfxFillRoundRect(x - 2, y - 2, w + 4, h + 4, 14, COLOR_SURFACE_HI);  // An edge against the picture.
+    gfxFillRoundRect(x, y, w, h, 12, GFX_RGB(0x1A, 0x1A, 0x1F));
+    fontDrawMiddle(FONT_BOLD, 20, x + 20, y + MENU_HEAD / 2.0f + 2, kind == UI_MENU_AUDIO ? "Audio" : "Subtitles",
+                   COLOR_DIM);
+    int current = kind == UI_MENU_AUDIO ? playerAudioTrack(p) : playerSubtitle(p) + 1;
+    for (int i = 0; i < menuVisible(m); i++) {
+        int row = m->first + i, ry = y + MENU_HEAD + i * MENU_ROW_H;
+        if (row == m->cursor) {
+            gfxFillRoundRect(x + 8, ry + 2, w - 16, MENU_ROW_H - 4, 8, COLOR_SURFACE_HI);
+            gfxFillRect(x + 8, ry + 12, 3, MENU_ROW_H - 24, COLOR_ACCENT);
+        }
+        float cy = ry + MENU_ROW_H / 2.0f;
+        if (row == current)
+            drawCheck(x + 22, cy, COLOR_ACCENT);
+        fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, w - 52 - 24, menuLabel(p, kind, row),
+                        row == current ? COLOR_TEXT : COLOR_DIM);
+    }
+    if (m->count > MENU_ROWS) {  // A scrollbar.
+        int track_h = MENU_ROWS * MENU_ROW_H - 8, thumb_h = track_h * MENU_ROWS / m->count;
+        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (m->count - MENU_ROWS);
+        gfxFillRoundRect(x + w - 10, y + MENU_HEAD + 4, 4, track_h, 2, COLOR_TRACK);
+        gfxFillRoundRect(x + w - 10, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
+    }
+}
+
+TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
+{
+    int bx, by, bw, bh;
+    menuBox(kind, m, &bx, &by, &bw, &bh);
+    if (x < bx || x >= bx + bw || y < by || y >= by + bh)
+        return TAP_OUTSIDE;
+    int i = (y - by - MENU_HEAD) / MENU_ROW_H;
+    if (y < by + MENU_HEAD || i >= menuVisible(m))
+        return TAP_MENU_BOX;
+    *row = m->first + i;
+    return TAP_MENU_ROW;
 }

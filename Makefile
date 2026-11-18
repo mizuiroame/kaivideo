@@ -45,7 +45,7 @@ DATA		:=	data
 INCLUDES	:=	include third_party
 APP_TITLE	:=	KaiVideo
 APP_AUTHOR	:=	Mizuiro
-APP_VERSION	:=	0.1.1-beta
+APP_VERSION	:=	0.2.0-beta
 #ROMFS	:=	romfs
 
 #---------------------------------------------------------------------------------

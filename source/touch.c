@@ -19,7 +19,7 @@ TouchEvent touchUpdate(TouchTracker *t, bool touching, int x, int y, uint64_t no
         if (!t->dragging && (abs(x - t->start_x) > TOUCH_TAP_SLOP || abs(y - t->start_y) > TOUCH_TAP_SLOP))
             t->dragging = true;
         if (t->dragging) {
-            e = (TouchEvent){TOUCH_DRAG, x, y, t->start_x, t->start_y, y - t->last_y};
+            e = (TouchEvent){TOUCH_DRAG, x, y, t->start_x, t->start_y, y - t->last_y, x - t->last_x};
         }
         t->last_x = x;
         t->last_y = y;
