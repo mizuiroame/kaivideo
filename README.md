@@ -106,17 +106,19 @@ when brewstore installs it). Your videos aren't touched.
 
 | Button | What it does |
 |--------|--------------|
-| **L** / **R** (or **ZL** / **ZR**) | The tab before or after: Home, Films, Series, Search, Files |
+| **ZL** / **ZR** (or **L** / **R**) | The tab before or after: Home, Films, Series, Search, Files |
 | **↑** **↓** **◀** **▶** | Move |
 | **A** | Play the film or episode, or open the series |
 | **B** | Back from a series (in Files: the folder above) |
 | **Y** | Search |
-| **−** | Settings (and the library folder) |
-| **+** | Exit |
+| **−** | Settings |
+| **+** | The menu: Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
 On a series, **◀** / **▶** change the season. Tap a tab, a card or a row to
-open it, and drag to scroll. In **Files**, **◀** / **▶** move a page and the
-path at the top goes to the folder above.
+open it, and drag to scroll; the **☰** before the name opens the menu. In
+**Files**, **◀** / **▶** move a page and the path at the top goes to the
+folder above. The line at the bottom of the screen always says which buttons
+do what, as in KaiPlayer and KaiRadio.
 
 **While a video plays:**
 
@@ -128,13 +130,14 @@ path at the top goes to the folder above.
 | **ZL** | Start over |
 | **X** | The list of sound tracks |
 | **Y** | The list of subtitles |
-| **B** / **+** | Back to the library (where you were is remembered) |
+| **B** | Back to the library (where you were is remembered) |
+| **+** | The menu, over the video: Back to the library, Exit |
 
 In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
 Any button or tap shows the bar for a few seconds. With the bar showing, tap
 the picture or the play button to pause or play (a paused video shows a big
-play symbol), the progress bar to go there, **Audio** or **CC** for their
-lists, and the **×** at the top left to go back.
+play symbol), or tap or drag the progress bar to go there; **Audio** or
+**CC** open their lists, and the **×** at the top left goes back.
 
 ## Limitations
 
@@ -143,7 +146,10 @@ lists, and the **×** at the top left to go back.
 - **10-bit** H.264 (Hi10P) and 10-bit AV1 videos can't be played.
 - **HEVC (H.265)** videos can't be played: the decoder interface KaiVideo
   uses ([libounce](https://github.com/ouncebrew/libounce)) offers H.264, VP9,
-  AV1 and VP8.
+  AV1 and VP8, not HEVC. Many recent rips (often named `x265` or `HEVC`) are
+  HEVC; KaiVideo says so when you open one, and their cards keep a plain
+  color. Converting them to H.264 (for example with HandBrake) makes them
+  playable.
 - Not tried with 4K videos or HDR yet.
 - No streaming from the network: KaiVideo plays files on the card.
 
