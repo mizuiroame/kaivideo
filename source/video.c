@@ -62,6 +62,11 @@ struct Video {
     bool seek_requested;
     int64_t seek_ns;
     int64_t skip_until_ns;         // After a seek: frames before this aren't kept.
+    // The latest time of the video sent to the decoder since the last seek:
+    // a frame later than it was decoded before the seek (the decoder hands a
+    // few of those out after its flush) and isn't kept. Seeking back, they
+    // would wait in the queue for a time that never comes.
+    int64_t submitted_max_ns;
     bool done;                     // The thread has decoded all there is.
     bool failed;
     char error[128];
@@ -125,7 +130,8 @@ static bool takeFrames(Video *v, u64 timeout_ns)
     VideoFrame f;
     while (R_SUCCEEDED(videoDecoderGetFrame(&v->decoder, &f, timeout_ns))) {
         timeout_ns = 0;
-        if (f.timestamp_ns < v->skip_until_ns) {  // Before a seek's target: decoded only to get there.
+        if (f.timestamp_ns < v->skip_until_ns || f.timestamp_ns > v->submitted_max_ns) {
+            // Before a seek's target (decoded only to get there), or from before the seek.
             videoDecoderReleaseFrame(&v->decoder, &f);
             continue;
         }
@@ -164,6 +170,8 @@ static bool submit(Video *v, const AVPacket *p, bool last)
 {
     int64_t ts = p->pts != AV_NOPTS_VALUE ? p->pts : p->dts != AV_NOPTS_VALUE ? p->dts : 0;
     s64 ns = av_rescale_q(ts, v->time_base, (AVRational){1, 1000000000});
+    if (ns > v->submitted_max_ns)
+        v->submitted_max_ns = ns;
     for (int tries = 0; tries < SUBMIT_TRIES; tries++) {
         if (!takeFrames(v, 0))
             return false;
@@ -193,6 +201,7 @@ static void doSeek(Video *v, int64_t target_ns)
     for (int i = 0; i < v->sub_count; i++)
         avcodec_flush_buffers(v->subs[i].ctx);
     v->skip_until_ns = target_ns;
+    v->submitted_max_ns = INT64_MIN;
     pthread_mutex_lock(&v->lock);
     v->head = 0;
     v->count = 0;
