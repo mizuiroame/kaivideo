@@ -150,6 +150,12 @@ const uint32_t *thumbGet(const char *path, int64_t size)
     return e->state == THUMB_LOADED ? e->pixels : NULL;
 }
 
+bool thumbIsNone(const char *path, int64_t size)
+{
+    Entry *e = find(keyOf(path, size), false);
+    return e && e->state == THUMB_NONE;
+}
+
 void thumbsUpdate(void)
 {
     g_frame++;

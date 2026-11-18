@@ -50,7 +50,8 @@ struct App {
     // Settings (app_settings.c).
     Config config;
     bool settings_open, about_open;
-    int settings_cursor;
+    int settings_page;          // SettingsPage.
+    int settings_cursor;        // The SettingRow under the cursor.
 };
 
 // main.c
@@ -77,6 +78,8 @@ void appOpenPicker(App *app);
 // app_settings.c
 // Applies the settings read at start: theme, background, thumbnails, subtitles.
 void appSettingsStart(App *app);
+// Applies the subtitles' size, color and style (changed in the player).
+void appApplySubtitleStyle(const App *app);
 void appOpenSettings(App *app);
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appSettingsDraw(const App *app);

@@ -4,6 +4,7 @@
 
 #include "settings.h"
 
-// cursor: the selected row (SettingRow). library_root: "" if none chosen.
-void uiDrawSettings(const Config *c, int cursor, const char *library_root);
+// cursor: the selected row (a SettingRow on page). library_root: "" if
+// none chosen. version: KaiVideo's, for About.
+void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *library_root, const char *version);
 void uiDrawAbout(const char *version);

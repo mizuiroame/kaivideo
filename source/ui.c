@@ -25,13 +25,18 @@
 #define MENU_HEAD 50
 #define MENU_ROW_H UI_MENU_ROW_H
 #define MENU_PAD 8
+#define MENU_DIVIDER 14         // Between a list and its options.
 
 
 static int g_sub_px = 34;
+static Color g_sub_color = GFX_RGB(0xF2, 0xF2, 0xF5);
+static bool g_sub_box;
 
-void uiSetSubtitlePx(int px)
+void uiSetSubtitleStyle(int px, unsigned rgb, bool box)
 {
     g_sub_px = px;
+    g_sub_color = GFX_RGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    g_sub_box = box;
 }
 
 size_t uiFirstVisible(size_t cursor, size_t count)
@@ -287,9 +292,15 @@ void uiDrawSubtitles(const char *text, bool bar_shown)
     static const int OUTLINE[8][2] = {{-2, -2}, {0, -2}, {2, -2}, {-2, 0}, {2, 0}, {-2, 2}, {0, 2}, {2, 2}};
     for (int i = 0; i < count; i++) {
         float cx = GFX_WIDTH / 2.0f, cy = top + i * SUB_LINE_H + SUB_LINE_H / 2.0f;
-        for (int o = 0; o < 8; o++)
-            fontDrawCentered(FONT_BOLD, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i], GFX_RGB(0, 0, 0));
-        fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], COLOR_TEXT);
+        if (g_sub_box) {  // A dark box behind the line.
+            int w = fontTextWidth(FONT_BOLD, SUB_PX, lines[i]) + SUB_PX;
+            gfxBlendRect((int)cx - w / 2, (int)cy - SUB_LINE_H / 2, w, SUB_LINE_H, GFX_RGB(0, 0, 0), 175);
+        } else {
+            for (int o = 0; o < 8; o++)
+                fontDrawCentered(FONT_BOLD, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i],
+                                 GFX_RGB(0, 0, 0));
+        }
+        fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], g_sub_color);
     }
 }
 
@@ -309,10 +320,15 @@ static int menuRight(UiMenuKind kind)
     return kind == UI_MENU_AUDIO ? AUDIO_X + AUDIO_W : CC_X + CC_W;
 }
 
+static int fixedHeight(const Menu *m)
+{
+    return m->fixed ? MENU_DIVIDER + m->fixed * MENU_ROW_H : 0;
+}
+
 static void menuBox(UiMenuKind kind, const Menu *m, int *x, int *y, int *w, int *h)
 {
     *w = MENU_W;
-    *h = MENU_HEAD + menuVisible(m) * MENU_ROW_H + MENU_PAD;
+    *h = MENU_HEAD + menuVisible(m) * MENU_ROW_H + fixedHeight(m) + MENU_PAD;
     *x = menuRight(kind) - MENU_W;
     *y = GFX_HEIGHT - BAR_H - 6 - *h;
 }
@@ -330,7 +346,33 @@ static void drawCheck(float x, float cy, Color color)
     gfxLine(x + 6, cy + 6, x + 18, cy - 7, 3, color);
 }
 
-void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m)
+static void drawRowCursor(int x, int ry, int w)
+{
+    gfxFillRoundRect(x + 8, ry + 2, w - 16, MENU_ROW_H - 4, 8, COLOR_SURFACE_HI);
+    gfxFillRect(x + 8, ry + 12, 3, MENU_ROW_H - 24, COLOR_ACCENT);
+}
+
+// The subtitles' options under their list: "Size  < Medium >".
+static void drawOptions(const Menu *m, const Config *config, int x, int y, int w)
+{
+    gfxFillRect(x + 20, y + MENU_DIVIDER / 2, w - 40, 1, COLOR_TRACK);
+    char value[32];
+    for (int i = 0; i < m->fixed && i < SUBOPT_COUNT; i++) {
+        int row = m->count - m->fixed + i, ry = y + MENU_DIVIDER + i * MENU_ROW_H;
+        bool on = row == m->cursor;
+        if (on)
+            drawRowCursor(x, ry, w);
+        float cy = ry + MENU_ROW_H / 2.0f;
+        fontDrawMiddle(FONT_REGULAR, 19, x + 52, cy, subtitleOptionLabel((SubtitleOption)i), COLOR_DIM);
+        subtitleOptionValue(config, (SubtitleOption)i, value, sizeof(value));
+        int value_w = fontTextWidth(FONT_BOLD, 19, value), right = x + w - 24;
+        gfxFillTriangleRight(right - 9, (int)cy - 7, 9, 14, on ? COLOR_TEXT : COLOR_FAINT);
+        fontDrawMiddle(FONT_BOLD, 19, right - 20 - value_w, cy, value, COLOR_ACCENT);
+        gfxFillTriangleLeft(right - 40 - value_w, (int)cy - 7, 9, 14, on ? COLOR_TEXT : COLOR_FAINT);
+    }
+}
+
+void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Config *config)
 {
     if (!m->open)
         return;
@@ -343,22 +385,23 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m)
     int current = kind == UI_MENU_AUDIO ? playerAudioTrack(p) : playerSubtitle(p) + 1;
     for (int i = 0; i < menuVisible(m); i++) {
         int row = m->first + i, ry = y + MENU_HEAD + i * MENU_ROW_H;
-        if (row == m->cursor) {
-            gfxFillRoundRect(x + 8, ry + 2, w - 16, MENU_ROW_H - 4, 8, COLOR_SURFACE_HI);
-            gfxFillRect(x + 8, ry + 12, 3, MENU_ROW_H - 24, COLOR_ACCENT);
-        }
+        if (row == m->cursor)
+            drawRowCursor(x, ry, w);
         float cy = ry + MENU_ROW_H / 2.0f;
         if (row == current)
             drawCheck(x + 22, cy, COLOR_ACCENT);
         fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, w - 52 - 24, menuLabel(p, kind, row),
                         row == current ? COLOR_TEXT : COLOR_DIM);
     }
-    if (m->count > MENU_ROWS) {  // A scrollbar.
-        int track_h = MENU_ROWS * MENU_ROW_H - 8, thumb_h = track_h * MENU_ROWS / m->count;
-        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (m->count - MENU_ROWS);
+    int list = m->count - m->fixed;
+    if (list > MENU_ROWS) {  // A scrollbar.
+        int track_h = MENU_ROWS * MENU_ROW_H - 8, thumb_h = track_h * MENU_ROWS / list;
+        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (list - MENU_ROWS);
         gfxFillRoundRect(x + w - 10, y + MENU_HEAD + 4, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(x + w - 10, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
+    if (m->fixed && config)
+        drawOptions(m, config, x, y + MENU_HEAD + menuVisible(m) * MENU_ROW_H, w);
 }
 
 TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
@@ -367,9 +410,16 @@ TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
     menuBox(kind, m, &bx, &by, &bw, &bh);
     if (x < bx || x >= bx + bw || y < by || y >= by + bh)
         return TAP_OUTSIDE;
-    int i = (y - by - MENU_HEAD) / MENU_ROW_H;
-    if (y < by + MENU_HEAD || i >= menuVisible(m))
+    int list_bottom = by + MENU_HEAD + menuVisible(m) * MENU_ROW_H;
+    if (y < by + MENU_HEAD)
         return TAP_MENU_BOX;
-    *row = m->first + i;
+    if (y < list_bottom) {
+        *row = m->first + (y - by - MENU_HEAD) / MENU_ROW_H;
+        return TAP_MENU_ROW;
+    }
+    int i = (y - list_bottom - MENU_DIVIDER) / MENU_ROW_H;
+    if (y < list_bottom + MENU_DIVIDER || i >= m->fixed)
+        return TAP_MENU_BOX;
+    *row = m->count - m->fixed + i;
     return TAP_MENU_ROW;
 }

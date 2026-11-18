@@ -1,22 +1,31 @@
 #include "menu.h"
 
+static int listCount(const Menu *m)
+{
+    return m->count - m->fixed;
+}
+
 static void keepInView(Menu *m)
 {
-    if (m->cursor < m->first)
-        m->first = m->cursor;
-    if (m->cursor >= m->first + MENU_ROWS)
-        m->first = m->cursor - MENU_ROWS + 1;
-    int last_first = m->count > MENU_ROWS ? m->count - MENU_ROWS : 0;
+    int list = listCount(m);
+    if (m->cursor < list) {  // The fixed rows at the bottom don't scroll the list.
+        if (m->cursor < m->first)
+            m->first = m->cursor;
+        if (m->cursor >= m->first + MENU_ROWS)
+            m->first = m->cursor - MENU_ROWS + 1;
+    }
+    int last_first = list > MENU_ROWS ? list - MENU_ROWS : 0;
     if (m->first > last_first)
         m->first = last_first;
     if (m->first < 0)
         m->first = 0;
 }
 
-void menuOpen(Menu *m, int count, int current)
+void menuOpen(Menu *m, int count, int fixed, int current)
 {
-    m->open = count > 0;
     m->count = count > 0 ? count : 0;
+    m->fixed = fixed < 0 ? 0 : fixed > m->count ? m->count : fixed;
+    m->open = m->count > 0;
     m->cursor = current < 0 ? 0 : current >= m->count ? m->count - 1 : current;
     if (m->cursor < 0)
         m->cursor = 0;
@@ -41,5 +50,10 @@ void menuMove(Menu *m, int delta)
 
 int menuVisible(const Menu *m)
 {
-    return m->count < MENU_ROWS ? m->count : MENU_ROWS;
+    return listCount(m) < MENU_ROWS ? listCount(m) : MENU_ROWS;
+}
+
+bool menuOnFixed(const Menu *m)
+{
+    return m->cursor >= listCount(m);
 }

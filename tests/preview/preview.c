@@ -90,6 +90,8 @@ static void drawPicture(void)
         gfxFillCircle(i * 260 - 40, 760, 220 - (i % 2) * 40, GFX_RGB(0x1B, 0x1F, 0x2E));
 }
 
+static Config g_config;  // The subtitles' options shown in their list.
+
 static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu *m, const char *subtitle,
                         const char *note)
 {
@@ -100,7 +102,7 @@ static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu
     if (p->paused && !m->open)
         uiDrawPausedSymbol();
     uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", m->open ? NULL : note);
-    uiDrawTrackMenu(p, kind, m);
+    uiDrawTrackMenu(p, kind, m, &g_config);
     save(name);
 }
 
@@ -162,6 +164,13 @@ const uint32_t *thumbGet(const char *path, int64_t size)
     for (const char *p = path; *p; p++)
         h = h * 31 + (unsigned char)*p;
     return h % 5 == 0 ? NULL : g_fake[h % FAKE_THUMBS];  // Some still being made.
+}
+
+bool thumbIsNone(const char *path, int64_t size)
+{
+    (void)path;
+    (void)size;
+    return false;
 }
 
 // --- The library's screens ---
@@ -270,15 +279,25 @@ static void libraryScenes(void)
     themeApply(config.theme, config.accent);
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTING_THEME, "sdmc:/Media");
+    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "0.3.0-beta");
     save("settings");
-    int row_y = (GFX_HEIGHT - (76 + SETTING_COUNT * 52 + 52)) / 2 + 76 + SETTING_ABOUT * 52 + 26;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, row_y), outside = uiLibraryTap(20, 400);
-    LibHit next = uiLibraryTap((GFX_WIDTH + 780) / 2 - 40, row_y - (SETTING_ABOUT - SETTING_THEME) * 52);
+    // The main page's rows: 48 high from 76 below the panel's top (5 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20), outside = uiLibraryTap(20, 400);
+    LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 2 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
-        next.kind != LIBHIT_SETTING_NEXT || next.a != SETTING_THEME) {
+        thumbs.kind != LIBHIT_SETTING_NEXT || thumbs.a != SETTING_THUMBNAILS) {
         printf("TOUCH: settings: a row, its arrow or the outside doesn't answer as drawn (%d %d %d)\n", about.kind,
-               next.kind, outside.kind);
+               thumbs.kind, outside.kind);
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "0.3.0-beta");
+    save("settings_display");
+    top = (GFX_HEIGHT - (76 + 4 * 48 + 60)) / 2;
+    if (uiLibraryTap((GFX_WIDTH - 760) / 2 + 60, top + 33).kind != LIBHIT_PAGE_BACK) {
+        printf("TOUCH: settings_display: Back doesn't answer a tap\n");
         g_problems++;
     }
     begin();
@@ -339,16 +358,37 @@ int main(int argc, char **argv)
     playerScene("player_paused", &p, UI_MENU_AUDIO, &closed, NULL, NULL);
 
     Menu audio;
-    menuOpen(&audio, p.audio_count, p.audio);
+    menuOpen(&audio, p.audio_count, 0, p.audio);
     menuMove(&audio, 1);
     playerScene("menu_audio", &p, UI_MENU_AUDIO, &audio, NULL, NULL);
     checkMenuTaps("menu_audio", UI_MENU_AUDIO, &audio);
 
     Menu subs;
-    menuOpen(&subs, p.subtitle_count + 1, p.subtitle + 1);
+    configDefaults(&g_config);
+    menuOpen(&subs, p.subtitle_count + 1 + SUBOPT_COUNT, SUBOPT_COUNT, p.subtitle + 1);
     p.paused = false;
     playerScene("menu_subtitles", &p, UI_MENU_SUBTITLES, &subs, "No, I'm not going back there.", NULL);
     checkMenuTaps("menu_subtitles", UI_MENU_SUBTITLES, &subs);
+    // The options under the list: each answers a tap with its own row.
+    for (int i = 0; i < SUBOPT_COUNT; i++) {
+        int row = -1, want = subs.count - SUBOPT_COUNT + i, hit = -1;
+        for (int y = 0; y < GFX_HEIGHT && hit < 0; y += 4)
+            if (uiTapTrackMenu(UI_MENU_SUBTITLES, &subs, 1000, y, &row) == TAP_MENU_ROW && row == want)
+                hit = y;
+        if (hit < 0) {
+            printf("TOUCH: menu_subtitles: option %d doesn't answer a tap\n", i);
+            g_problems++;
+        }
+    }
+    // Large yellow subtitles on a dark box, with the cursor on Style.
+    g_config.subtitles = SUBTITLES_LARGE;
+    g_config.subtitle_color = 1;
+    g_config.subtitle_style = SUBTITLE_BOX;
+    uiSetSubtitleStyle(settingSubtitlePx(&g_config), settingSubtitleColor(&g_config), true);
+    menuMove(&subs, 99);
+    playerScene("menu_subtitle_style", &p, UI_MENU_SUBTITLES, &subs, "No, I'm not going back there.\nNot ever.",
+                NULL);
+    uiSetSubtitleStyle(34, 0xF2F2F5, false);
 
     libraryScenes();
     fontExit();

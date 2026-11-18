@@ -26,6 +26,7 @@ typedef enum {
     LIBHIT_SETTING_PREV, // a: a choice's left arrow.
     LIBHIT_SETTING_NEXT, // a: a choice's right arrow.
     LIBHIT_PANEL,       // Settings or About, but not a row: nothing.
+    LIBHIT_PAGE_BACK,   // A Settings page's Back: the main page.
     LIBHIT_CLOSE,       // Outside Settings or About, or their back arrow: closes.
 } LibHitKind;
 

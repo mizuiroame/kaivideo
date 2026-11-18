@@ -7,11 +7,21 @@
 #include "theme.h"
 
 static const char *const LABELS[SETTING_COUNT] = {
-    "Library folder", "Look for new videos", "Theme", "Accent color", "Background",
-    "Background blur", "Thumbnails", "Subtitle size", "About KaiVideo",
+    "Library folder", "Look for new videos", "Thumbnails", "Display", "About",
+    "Theme", "Accent color", "Background", "Background blur",
 };
-static const char *const SUBTITLE_NAMES[SUBTITLES_COUNT] = {"Small", "Medium", "Large"};
-static const int SUBTITLE_PX[SUBTITLES_COUNT] = {28, 34, 42};
+static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
+    {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_OPEN_DISPLAY, SETTING_ABOUT, SETTING_COUNT},
+    {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_COUNT},
+};
+static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display"};
+
+static const char *const SIZE_NAMES[SUBTITLES_SIZE_COUNT] = {"Small", "Medium", "Large"};
+static const int SIZE_PX[SUBTITLES_SIZE_COUNT] = {28, 34, 42};
+static const char *const COLOR_NAMES[SUBTITLE_COLOR_COUNT] = {"White", "Yellow", "Cyan", "Green"};
+static const unsigned COLORS[SUBTITLE_COLOR_COUNT] = {0xF2F2F5, 0xFFE45C, 0x6CE4FF, 0x7CF29A};
+static const char *const STYLE_NAMES[SUBTITLE_STYLE_COUNT] = {"Outline", "Dark box"};
+static const char *const OPTION_LABELS[SUBOPT_COUNT] = {"Size", "Color", "Style"};
 
 void configDefaults(Config *c)
 {
@@ -52,7 +62,11 @@ bool configReadLine(Config *c, const char *line)
     else if (isKey(line, length, "thumbnails"))
         c->thumbnails = strcmp(value, "0") != 0;
     else if (isKey(line, length, "subtitles"))
-        c->subtitles = readChoice(value, SUBTITLES_COUNT, SUBTITLES_MEDIUM);
+        c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
+    else if (isKey(line, length, "subtitle_color"))
+        c->subtitle_color = readChoice(value, SUBTITLE_COLOR_COUNT, 0);
+    else if (isKey(line, length, "subtitle_style"))
+        c->subtitle_style = readChoice(value, SUBTITLE_STYLE_COUNT, SUBTITLE_OUTLINE);
     else
         return false;
     return true;
@@ -63,7 +77,25 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "theme=%d\naccent=%d\n", c->theme, c->accent);
     if (c->background[0] && !strpbrk(c->background, "\r\n"))
         fprintf(f, "background=%s\n", c->background);
-    fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\n", c->blur, c->thumbnails ? 1 : 0, c->subtitles);
+    fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
+            c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
+}
+
+int settingsPageRows(SettingsPage page, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
+{
+    int n = 0;
+    if (page < 0 || page >= SETTINGS_PAGE_COUNT)
+        return 0;
+    while (n < SETTINGS_PAGE_MAX_ROWS && PAGE_ROWS[page][n] != SETTING_COUNT) {
+        rows[n] = PAGE_ROWS[page][n];
+        n++;
+    }
+    return n;
+}
+
+const char *settingsPageTitle(SettingsPage page)
+{
+    return page >= 0 && page < SETTINGS_PAGE_COUNT ? PAGE_TITLES[page] : "";
 }
 
 const char *settingLabel(SettingRow row)
@@ -74,7 +106,7 @@ const char *settingLabel(SettingRow row)
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
-           row == SETTING_THUMBNAILS || row == SETTING_SUBTITLES;
+           row == SETTING_THUMBNAILS;
 }
 
 static int wrap(int value, int delta, int count)
@@ -89,7 +121,6 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_ACCENT: c->accent = wrap(c->accent, delta, THEME_ACCENT_COUNT); break;
     case SETTING_BLUR: c->blur = wrap(c->blur, delta, BLUR_COUNT); break;
     case SETTING_THUMBNAILS: c->thumbnails = !c->thumbnails; break;
-    case SETTING_SUBTITLES: c->subtitles = wrap(c->subtitles, delta, SUBTITLES_COUNT); break;
     default: break;
     }
 }
@@ -102,15 +133,46 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_BACKGROUND: snprintf(out, size, "%s", c->background[0] ? c->background : "None"); break;
     case SETTING_BLUR: snprintf(out, size, "%s", backgroundBlurName(c->blur)); break;
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? "On" : "Off"); break;
-    case SETTING_SUBTITLES:
-        snprintf(out, size, "%s", SUBTITLE_NAMES[c->subtitles >= 0 && c->subtitles < SUBTITLES_COUNT ? c->subtitles
-                                                                                                   : SUBTITLES_MEDIUM]);
-        break;
     default: out[0] = '\0'; break;
     }
 }
 
-int settingSubtitlePx(int size)
+const char *subtitleOptionLabel(SubtitleOption option)
 {
-    return SUBTITLE_PX[size >= 0 && size < SUBTITLES_COUNT ? size : SUBTITLES_MEDIUM];
+    return option >= 0 && option < SUBOPT_COUNT ? OPTION_LABELS[option] : "";
+}
+
+static int inRange(int value, int count)
+{
+    return value >= 0 && value < count ? value : 0;
+}
+
+void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size)
+{
+    switch (option) {
+    case SUBOPT_SIZE: snprintf(out, size, "%s", SIZE_NAMES[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)]); break;
+    case SUBOPT_COLOR: snprintf(out, size, "%s", COLOR_NAMES[inRange(c->subtitle_color, SUBTITLE_COLOR_COUNT)]); break;
+    case SUBOPT_STYLE: snprintf(out, size, "%s", STYLE_NAMES[inRange(c->subtitle_style, SUBTITLE_STYLE_COUNT)]); break;
+    default: out[0] = '\0'; break;
+    }
+}
+
+void subtitleOptionStep(Config *c, SubtitleOption option, int delta)
+{
+    switch (option) {
+    case SUBOPT_SIZE: c->subtitles = wrap(c->subtitles, delta, SUBTITLES_SIZE_COUNT); break;
+    case SUBOPT_COLOR: c->subtitle_color = wrap(c->subtitle_color, delta, SUBTITLE_COLOR_COUNT); break;
+    case SUBOPT_STYLE: c->subtitle_style = wrap(c->subtitle_style, delta, SUBTITLE_STYLE_COUNT); break;
+    default: break;
+    }
+}
+
+int settingSubtitlePx(const Config *c)
+{
+    return SIZE_PX[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)];
+}
+
+unsigned settingSubtitleColor(const Config *c)
+{
+    return COLORS[inRange(c->subtitle_color, SUBTITLE_COLOR_COUNT)];
 }

@@ -31,6 +31,7 @@
 #define SEARCH_BOX_H 56
 #define SEARCH_LIST_Y 160
 #define MAX_HITS 96
+#define SERIES_PICTURE_TRIES 8  // Episodes tried for a series' picture.
 
 // --- Touch targets, kept as they're drawn ---
 
@@ -81,8 +82,17 @@ static const uint32_t *pictureOf(const Library *lib, LibraryRef ref)
 {
     if (!g_thumbnails)
         return NULL;
-    int item = ref.is_show ? (lib->shows[ref.index].count ? lib->shows[ref.index].episodes[0] : -1) : ref.index;
-    return item >= 0 ? thumbGet(lib->items[item].path, lib->items[item].size) : NULL;
+    if (!ref.is_show)
+        return thumbGet(lib->items[ref.index].path, lib->items[ref.index].size);
+    // A series: its first episode that has one (an HEVC one has none: the next).
+    const LibraryShow *show = &lib->shows[ref.index];
+    for (int i = 0; i < show->count && i < SERIES_PICTURE_TRIES; i++) {
+        const LibraryItem *item = &lib->items[show->episodes[i]];
+        const uint32_t *pixels = thumbGet(item->path, item->size);
+        if (pixels || !thumbIsNone(item->path, item->size))
+            return pixels;  // Its picture, or NULL while it's made.
+    }
+    return NULL;
 }
 
 // Draws a picture into a layout box with round corners.

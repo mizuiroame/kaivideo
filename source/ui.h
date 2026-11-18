@@ -9,6 +9,7 @@
 #include "menu.h"
 #include "player.h"
 #include "resume.h"
+#include "settings.h"
 
 #define UI_HEADER_Y 72  // The folder list: its path, under the tab bar.
 #define UI_LIST_Y 128
@@ -33,19 +34,21 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
 // Subtitle text ('\n' between lines), centered at the bottom with an
 // outline, wrapped to the screen; above the bar when it shows.
 void uiDrawSubtitles(const char *text, bool bar_shown);
-// The subtitles' text size (Settings), in layout pixels.
-void uiSetSubtitlePx(int px);
+// The subtitles' text size (layout pixels), color (0xRRGGBB), and a dark
+// box behind them instead of an outline.
+void uiSetSubtitleStyle(int px, unsigned rgb, bool box);
 // A paused video: a big play symbol in the middle (a tap there plays on).
 void uiDrawPausedSymbol(void);
 
 typedef enum {
     UI_MENU_AUDIO,      // The sound tracks.
-    UI_MENU_SUBTITLES,  // "Off", then the subtitle tracks.
+    UI_MENU_SUBTITLES,  // "Off", the subtitle tracks, then their options (size, color, style).
 } UiMenuKind;
 
 // The drop-down list above the bar's Audio or CC button, with the track
 // playing (or shown) checked and the cursor's row lit.
-void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m);
+// config: the subtitles' options' values (fixed rows), or NULL.
+void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Config *config);
 
 typedef enum {
     TAP_NOTHING,

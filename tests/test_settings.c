@@ -1,4 +1,5 @@
-// Settings: stepping choices and keeping them in settings.txt.
+// Settings: its pages, stepping choices, the player's subtitle options, and
+// keeping them in settings.txt.
 #include <stdio.h>
 #include <string.h>
 
@@ -10,12 +11,17 @@ void testSettings(void)
 {
     Config c;
     configDefaults(&c);
-    CHECK(c.thumbnails && c.subtitles == SUBTITLES_MEDIUM && c.theme == 0);
+    CHECK(c.thumbnails && c.subtitles == SUBTITLES_MEDIUM && c.theme == 0 && c.subtitle_style == SUBTITLE_OUTLINE);
+
+    SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 5 && rows[3] == SETTING_OPEN_DISPLAY);
+    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 4 && rows[0] == SETTING_THEME);
+    CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
+
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.
     CHECK(c.theme == THEME_COUNT - 1);
     settingStep(&c, SETTING_ACCENT, 2);
     settingStep(&c, SETTING_THUMBNAILS, 1);
-    settingStep(&c, SETTING_SUBTITLES, 1);
     snprintf(c.background, sizeof(c.background), "%s", "beach.jpg");
     char value[64];
     settingValue(&c, SETTING_ACCENT, value, sizeof(value));
@@ -24,7 +30,19 @@ void testSettings(void)
     CHECK(strcmp(value, "Off") == 0);
     settingValue(&c, SETTING_ABOUT, value, sizeof(value));
     CHECK(value[0] == '\0' && !settingIsChoice(SETTING_ABOUT) && settingIsChoice(SETTING_BACKGROUND));
-    CHECK(settingSubtitlePx(SUBTITLES_LARGE) > settingSubtitlePx(SUBTITLES_SMALL));
+
+    // The player's subtitle options.
+    subtitleOptionStep(&c, SUBOPT_SIZE, 1);
+    subtitleOptionStep(&c, SUBOPT_COLOR, -1);
+    subtitleOptionStep(&c, SUBOPT_STYLE, 1);
+    subtitleOptionValue(&c, SUBOPT_COLOR, value, sizeof(value));
+    CHECK(strcmp(value, "Green") == 0 && settingSubtitleColor(&c) != 0xF2F2F5);
+    subtitleOptionValue(&c, SUBOPT_STYLE, value, sizeof(value));
+    CHECK(strcmp(value, "Dark box") == 0);
+    Config small;
+    configDefaults(&small);
+    subtitleOptionStep(&small, SUBOPT_SIZE, -1);
+    CHECK(settingSubtitlePx(&c) > settingSubtitlePx(&small));
 
     // Written and read back; other keys and broken values are left alone.
     const char *file = TMP_ROOT "/settings_test.txt";
@@ -45,6 +63,7 @@ void testSettings(void)
     if (f)
         fclose(f);
     CHECK(back.theme == c.theme && back.accent == c.accent && !back.thumbnails && back.subtitles == SUBTITLES_LARGE &&
+          back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
           strcmp(back.background, "beach.jpg") == 0);
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));
     CHECK(configReadLine(&back, "theme=99") && back.theme == 0);

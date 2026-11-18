@@ -205,17 +205,32 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
     else if (kind == UI_MENU_SUBTITLES && playerSubtitleCount(p) == 0)
         sayInBar(app, now, "%s", "This video has no subtitles.");
     else if (kind == UI_MENU_AUDIO)
-        menuOpen(&app->menu, playerAudioTrackCount(p), playerAudioTrack(p));
+        menuOpen(&app->menu, playerAudioTrackCount(p), 0, playerAudioTrack(p));
     else
-        menuOpen(&app->menu, playerSubtitleCount(p) + 1, playerSubtitle(p) + 1);  // Row 0 is "Off".
+        // Row 0 is "Off"; the size, color and style follow the tracks.
+        menuOpen(&app->menu, playerSubtitleCount(p) + 1 + SUBOPT_COUNT, SUBOPT_COUNT, playerSubtitle(p) + 1);
     app->menu_kind = kind;
     app->drag_rows = 0;
 }
 
-// Plays or shows the list's row, said in the bar, and closes the list.
+// Changes one of the subtitles' options (the list's fixed rows) and keeps it.
+static void stepOption(App *app, int row, int delta)
+{
+    SubtitleOption option = (SubtitleOption)(row - (app->menu.count - app->menu.fixed));
+    subtitleOptionStep(&app->config, option, delta);
+    appApplySubtitleStyle(app);
+    appSaveSettings(app);
+}
+
+// Plays or shows the list's row, said in the bar, and closes the list; an
+// option row changes instead, and the list stays.
 static void chooseRow(App *app, int row, uint64_t now)
 {
     Player *p = app->player;
+    if (row >= app->menu.count - app->menu.fixed) {
+        stepOption(app, row, 1);
+        return;
+    }
     if (app->menu_kind == UI_MENU_AUDIO) {
         if (row != playerAudioTrack(p))
             playerSetAudioTrack(p, row, now);
@@ -253,6 +268,8 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
     app->overlay_until = now + OVERLAY_NS;  // The bar stays while the list is open.
     if (pressed & BUTTONS_UP) menuMove(m, -1);
     if (pressed & BUTTONS_DOWN) menuMove(m, 1);
+    if (menuOnFixed(m) && (pressed & (BUTTONS_LEFT | BUTTONS_RIGHT)))
+        stepOption(app, m->cursor, (pressed & BUTTONS_LEFT) ? -1 : 1);
     if (pressed & HidNpadButton_A) {
         chooseRow(app, m->cursor, now);
         return;
@@ -371,7 +388,7 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     if (bar)
         uiDrawPlayerBar(app->player, app->playing_name,
                         now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL);
-    uiDrawTrackMenu(app->player, app->menu_kind, &app->menu);
+    uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);
 }
 
 int main(int argc, char **argv)

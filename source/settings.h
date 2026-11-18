@@ -1,27 +1,35 @@
-// The Settings page's rows and the choices kept in settings.txt: theme,
-// accent color, background image and its blur, thumbnails and the size of
-// subtitles. Pure logic.
+// The Settings pages' rows, the subtitle options of the player's Subtitles
+// list, and the choices kept in settings.txt. Pure logic.
 #pragma once
 
 #include <stdbool.h>
 #include <stdio.h>
 
 #define SETTINGS_NAME_MAX 128
+#define SETTINGS_PAGE_MAX_ROWS 6
 
 typedef enum {
-    SETTING_LIBRARY,     // Opens the folder picker.
-    SETTING_RESCAN,      // Looks for videos again.
+    SETTING_LIBRARY,       // Opens the folder picker.
+    SETTING_RESCAN,        // Looks for videos again.
+    SETTING_THUMBNAILS,
+    SETTING_OPEN_DISPLAY,  // Opens the Display page.
+    SETTING_ABOUT,         // Opens the About page.
     SETTING_THEME,
     SETTING_ACCENT,
     SETTING_BACKGROUND,
     SETTING_BLUR,
-    SETTING_THUMBNAILS,
-    SETTING_SUBTITLES,
-    SETTING_ABOUT,       // Opens the About page.
     SETTING_COUNT,
 } SettingRow;
 
-typedef enum { SUBTITLES_SMALL, SUBTITLES_MEDIUM, SUBTITLES_LARGE, SUBTITLES_COUNT } SubtitleSize;
+// Settings opens on the main page; Display holds the looks.
+typedef enum { SETTINGS_PAGE_MAIN, SETTINGS_PAGE_DISPLAY, SETTINGS_PAGE_COUNT } SettingsPage;
+
+typedef enum { SUBTITLES_SMALL, SUBTITLES_MEDIUM, SUBTITLES_LARGE, SUBTITLES_SIZE_COUNT } SubtitleSize;
+typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleStyle;
+#define SUBTITLE_COLOR_COUNT 4
+
+// The player's Subtitles list ends with these, changed with left and right.
+typedef enum { SUBOPT_SIZE, SUBOPT_COLOR, SUBOPT_STYLE, SUBOPT_COUNT } SubtitleOption;
 
 typedef struct {
     int theme, accent;
@@ -29,6 +37,8 @@ typedef struct {
     int blur;                            // BackgroundBlur.
     bool thumbnails;                     // Pictures from the videos on their cards.
     int subtitles;                       // SubtitleSize.
+    int subtitle_color;                  // White, Yellow, Cyan, Green.
+    int subtitle_style;                  // SubtitleStyle.
 } Config;
 
 void configDefaults(Config *c);
@@ -36,12 +46,20 @@ void configDefaults(Config *c);
 bool configReadLine(Config *c, const char *line);
 void configWrite(const Config *c, FILE *f);
 
+// The rows of a page, in order. Returns how many.
+int settingsPageRows(SettingsPage page, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
+const char *settingsPageTitle(SettingsPage page);
 const char *settingLabel(SettingRow row);
 // Rows changed with left and right (the others open something with A).
 bool settingIsChoice(SettingRow row);
 // Steps a choice by delta, wrapping (not the background: it needs the list of images).
 void settingStep(Config *c, SettingRow row, int delta);
-// The row's value as shown ("Dark", "Medium"); "" for rows that open something.
+// The row's value as shown ("Dark", "Medium"); "" for rows that open a page.
 void settingValue(const Config *c, SettingRow row, char *out, size_t size);
-// The subtitles' text size for SubtitleSize, in pixels of the 1280x720 layout.
-int settingSubtitlePx(int size);
+
+const char *subtitleOptionLabel(SubtitleOption option);
+void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size);
+void subtitleOptionStep(Config *c, SubtitleOption option, int delta);
+// The subtitles' text size in pixels of the 1280x720 layout, and color (0xRRGGBB).
+int settingSubtitlePx(const Config *c);
+unsigned settingSubtitleColor(const Config *c);
