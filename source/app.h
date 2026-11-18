@@ -13,6 +13,7 @@
 #include "menu.h"
 #include "player.h"
 #include "resume.h"
+#include "settings.h"
 #include "touch.h"
 #include "ui.h"
 
@@ -45,6 +46,11 @@ struct App {
     LibView view;
     bool picking;               // Choosing the library folder.
     Browser picker;
+
+    // Settings (app_settings.c).
+    Config config;
+    bool settings_open, about_open;
+    int settings_cursor;
 };
 
 // main.c
@@ -64,3 +70,13 @@ void appLibraryUpdate(App *app);
 void appLibraryRefreshHome(App *app);
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appLibraryDraw(App *app, uint64_t now);
+// Looks for videos again (Settings).
+void appLibraryRescan(App *app, uint64_t now);
+void appOpenPicker(App *app);
+
+// app_settings.c
+// Applies the settings read at start: theme, background, thumbnails, subtitles.
+void appSettingsStart(App *app);
+void appOpenSettings(App *app);
+void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appSettingsDraw(const App *app);

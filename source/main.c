@@ -23,6 +23,7 @@
 #include "menu.h"
 #include "player.h"
 #include "resume.h"
+#include "thumbs.h"
 #include "touch.h"
 #include "ui.h"
 #include "util.h"
@@ -69,6 +70,7 @@ static uint64_t nowNs(void)
 static void loadSettings(App *app, char *folder, size_t size)
 {
     snprintf(folder, size, "%s", BROWSER_ROOT);
+    configDefaults(&app->config);
     char path[APPROOT_PATH_MAX + 32];
     appConfigPath(path, sizeof(path), "settings.txt");
     FILE *f = fopen(path, "r");
@@ -81,6 +83,8 @@ static void loadSettings(App *app, char *folder, size_t size)
             snprintf(folder, size, "%s", line + 7);
         else if (strncmp(line, "library=sdmc:/", 14) == 0)
             snprintf(app->library_root, sizeof(app->library_root), "%s", line + 8);
+        else
+            configReadLine(&app->config, line);
     }
     fclose(f);
 }
@@ -96,6 +100,7 @@ void appSaveSettings(const App *app)
         fprintf(f, "folder=%s\n", app->browser.path);
     if (app->library_root[0] && !strpbrk(app->library_root, "\r\n"))
         fprintf(f, "library=%s\n", app->library_root);
+    configWrite(&app->config, f);
     fclose(f);
 }
 
@@ -131,8 +136,10 @@ void appShowMessage(App *app, const char *message, uint64_t now)
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
     char error[160];
+    thumbsPause(true);  // The decoder is the player's now.
     app->player = playerOpen(path, now, error, sizeof(error));
     if (!app->player) {
+        thumbsPause(false);
         appLog("%s: %s", path, error);
         appShowMessage(app, error, now);
         return false;
@@ -177,6 +184,7 @@ static void stopVideo(App *app, const char *error, bool ended)
             s.dropped);
     playerClose(app->player);
     app->player = NULL;
+    thumbsPause(false);
     appLibraryRefreshHome(app);  // Continue watching changed.
 }
 
@@ -396,6 +404,9 @@ int main(int argc, char **argv)
     resumeLoad(&app.resume, path);
     if (!browserOpen(&app.browser, folder))
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
+    appConfigPath(path, sizeof(path), "thumbs");
+    thumbsInit(path);
+    appSettingsStart(&app);
     appLibraryStart(&app);
     InputRepeat repeat;
     inputRepeatInit(&repeat, BUTTONS_REPEATING);
@@ -408,6 +419,7 @@ int main(int argc, char **argv)
         uint64_t pressed = inputRepeatUpdate(&repeat, padGetButtonsDown(&pad), padGetButtons(&pad), now);
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
+        thumbsUpdate();
         gfxBegin();
         if (app.player) {
             char error[160] = "";
@@ -438,6 +450,7 @@ int main(int argc, char **argv)
         stopVideo(&app, NULL, false);
     appSaveSettings(&app);
     appLibraryExit(&app);
+    thumbsExit();
     browserFree(&app.browser);
     appLog("Done.");
     audioSystemExit();

@@ -15,7 +15,10 @@ microSD card with the console's own hardware video decoder.
   videos once, and KaiVideo finds them in it and its folders. **Home** shows
   what you were watching, what's newest, your series and your films; **Films**
   and **Series** show them all, a series opens on its seasons and episodes,
-  and **Search** finds a title by name.
+  and **Search** finds a title by name. Cards show a **picture from the
+  video**, taken by the console's decoder in the background the first time.
+- **Settings**: themes and accent colors, your own **background** image,
+  subtitle size, and an About page.
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second. A video the
@@ -59,6 +62,20 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 > those files, or upload them with [KaiDrop](https://github.com/mizuiroame/kaidrop),
 > which gives the copies plain names.
 
+### Settings
+
+Press **−** (or tap **Settings**) for:
+
+- **Library folder** and **Look for new videos**, after you copy more.
+- **Theme** (Dark, Black, Midnight, Plum) and **Accent color**.
+- **Background**: put JPEG or PNG images in a `Backgrounds` folder in your
+  library folder and pick one; it's blurred (**Background blur**) and
+  darkened so text stays readable.
+- **Thumbnails**: pictures from the videos on their cards, or plain colors.
+  They're made a few at a time while nothing plays, and kept in
+  `config/thumbs`. Videos KaiVideo can't play (HEVC) keep their color.
+- **Subtitle size**: Small, Medium or Large.
+
 ### How films and series are found
 
 KaiVideo goes by file and folder names, the way most media libraries are
@@ -94,7 +111,7 @@ when brewstore installs it). Your videos aren't touched.
 | **A** | Play the film or episode, or open the series |
 | **B** | Back from a series (in Files: the folder above) |
 | **Y** | Search |
-| **−** | Choose the library folder |
+| **−** | Settings (and the library folder) |
 | **+** | Exit |
 
 On a series, **◀** / **▶** change the season. Tap a tab, a card or a row to
@@ -181,4 +198,5 @@ KaiVideo is released under the [MIT License](LICENSE). FFmpeg is released
 under the LGPL 2.1 ([third_party/FFmpeg-LGPL-2.1.txt](third_party/FFmpeg-LGPL-2.1.txt)).
 The fonts are Noto Sans, under the SIL Open Font License
 ([third_party/NotoSans-OFL.txt](third_party/NotoSans-OFL.txt)), and images and
-fonts are read with [stb](https://github.com/nothings/stb) (public domain).
+fonts are read, and thumbnails written, with [stb](https://github.com/nothings/stb)
+(public domain).

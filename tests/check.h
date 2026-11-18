@@ -27,3 +27,5 @@ void testNaming(void);
 void testLibrary(void);
 void testHome(void);
 void testLibView(void);
+void testSettings(void);
+void testThumbs(void);

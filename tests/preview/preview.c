@@ -16,6 +16,10 @@
 #include "resume.h"
 #include "ui.h"
 #include "ui_library.h"
+#include "settings.h"
+#include "theme.h"
+#include "thumbs.h"
+#include "ui_settings.h"
 #include "ui_style.h"
 #include "sample_paths.h"
 
@@ -123,6 +127,43 @@ static void checkMenuTaps(const char *name, UiMenuKind kind, const Menu *m)
     }
 }
 
+// --- Stand-ins for the console's thumbnails: a made-up frame per video ---
+
+#define FAKE_THUMBS 8
+static uint32_t g_fake[FAKE_THUMBS][THUMB_W * THUMB_H];
+
+static void makeFakeThumbs(void)
+{
+    static const uint32_t SKY[FAKE_THUMBS][2] = {
+        {0x2B3A6B, 0xE08A5A}, {0x0E2236, 0x4DA3FF}, {0x1F2E11, 0x9AC45A}, {0x33200E, 0xFFB86B},
+        {0x2A102A, 0xC85AA0}, {0x101C2B, 0x7AB8D8}, {0x241710, 0xD89A6A}, {0x0F2A23, 0x5AD8B0},
+    };
+    for (int t = 0; t < FAKE_THUMBS; t++) {
+        uint32_t a = SKY[t][0], b = SKY[t][1];
+        for (int y = 0; y < THUMB_H; y++) {
+            unsigned k = (unsigned)(y * 255 / THUMB_H);
+            unsigned r = (((a >> 16) & 0xFF) * (255 - k) + ((b >> 16) & 0xFF) * k) / 255;
+            unsigned g = (((a >> 8) & 0xFF) * (255 - k) + ((b >> 8) & 0xFF) * k) / 255;
+            unsigned bl = ((a & 0xFF) * (255 - k) + (b & 0xFF) * k) / 255;
+            for (int x = 0; x < THUMB_W; x++) {
+                int dx = x - (60 + t * 37) % THUMB_W, dy = y - 70, hill = 150 + (int)(30 * ((x / 40 + t) % 3));
+                bool sun = dx * dx + dy * dy < 900, ground = y > hill;
+                g_fake[t][y * THUMB_W + x] = ground ? GFX_RGB(20, 22, 30) : sun ? GFX_RGB(255, 220, 150)
+                                                                             : GFX_RGB(r, g, bl);
+            }
+        }
+    }
+}
+
+const uint32_t *thumbGet(const char *path, int64_t size)
+{
+    (void)size;
+    unsigned h = 0;
+    for (const char *p = path; *p; p++)
+        h = h * 31 + (unsigned char)*p;
+    return h % 5 == 0 ? NULL : g_fake[h % FAKE_THUMBS];  // Some still being made.
+}
+
 // --- The library's screens ---
 
 static Library g_lib;
@@ -159,7 +200,7 @@ static void checkTabTaps(const char *name)
         LibHit hit = uiLibraryTap(x, 34);
         if (hit.kind == LIBHIT_TAB)
             found |= 1 << hit.a;
-        else if (hit.kind == LIBHIT_FOLDER)
+        else if (hit.kind == LIBHIT_SETTINGS)
             found |= 1 << TAB_COUNT;
     }
     if (found != (1 << (TAB_COUNT + 1)) - 1) {
@@ -170,6 +211,8 @@ static void checkTabTaps(const char *name)
 
 static void libraryScenes(void)
 {
+    makeFakeThumbs();
+    uiLibrarySetThumbnails(false);  // The color cards first.
     buildSampleLibrary();
     libraryScene("lib_home", true, NULL, NULL);
     checkTabTaps("lib_home");
@@ -207,6 +250,43 @@ static void libraryScenes(void)
     libraryScene("lib_search_none", true, NULL, NULL);
 
     g_view.tab = TAB_HOME;
+    g_view.show = -1;
+    uiLibrarySetThumbnails(true);
+    libraryScene("thumbs_home", true, NULL, NULL);
+    g_view.tab = TAB_FILMS;
+    libraryScene("thumbs_films", true, NULL, NULL);
+    for (size_t s = 0; s < g_lib.show_count; s++)
+        if (strstr(g_lib.shows[s].name, "Prairie"))
+            libviewOpenShow(&g_view, &g_lib, (int)s, -1);
+    libraryScene("thumbs_show", true, NULL, NULL);
+    g_view.show = -1;
+    g_view.tab = TAB_HOME;
+
+    // Settings and About over Home, in another theme.
+    Config config;
+    configDefaults(&config);
+    config.theme = 2;
+    config.accent = 1;
+    themeApply(config.theme, config.accent);
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSettings(&config, SETTING_THEME, "sdmc:/Media");
+    save("settings");
+    int row_y = (GFX_HEIGHT - (76 + SETTING_COUNT * 52 + 52)) / 2 + 76 + SETTING_ABOUT * 52 + 26;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, row_y), outside = uiLibraryTap(20, 400);
+    LibHit next = uiLibraryTap((GFX_WIDTH + 780) / 2 - 40, row_y - (SETTING_ABOUT - SETTING_THEME) * 52);
+    if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
+        next.kind != LIBHIT_SETTING_NEXT || next.a != SETTING_THEME) {
+        printf("TOUCH: settings: a row, its arrow or the outside doesn't answer as drawn (%d %d %d)\n", about.kind,
+               next.kind, outside.kind);
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawAbout("0.3.0-beta");
+    save("about");
+    themeApply(0, 0);
+
     libraryScene("lib_no_folder", false, NULL, NULL);
     libraryScene("lib_message", true, NULL, "The keyboard couldn't open.");
 

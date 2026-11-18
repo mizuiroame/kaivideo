@@ -16,8 +16,8 @@
 #define CC_X (GFX_WIDTH - MARGIN - 200 - CC_W)
 #define AUDIO_W 76              // The sound track button, left of CC.
 #define AUDIO_X (CC_X - 12 - AUDIO_W)
-#define SUB_PX 34
-#define SUB_LINE_H 44
+#define SUB_PX g_sub_px           // Settings > Subtitle size.
+#define SUB_LINE_H (g_sub_px * 13 / 10)
 #define SUB_MAX_W (GFX_WIDTH - 160)
 #define SUB_MAX_LINES 6
 #define PAUSED_R 64             // The big play symbol of a paused video.
@@ -26,6 +26,13 @@
 #define MENU_ROW_H UI_MENU_ROW_H
 #define MENU_PAD 8
 
+
+static int g_sub_px = 34;
+
+void uiSetSubtitlePx(int px)
+{
+    g_sub_px = px;
+}
 
 size_t uiFirstVisible(size_t cursor, size_t count)
 {
@@ -78,7 +85,7 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *messa
         fontDraw(FONT_BOLD, 26, MARGIN, 18, "Choose the folder with your videos", COLOR_TEXT);
         gfxFillRoundRect(USE_X, USE_Y, USE_W, USE_H, USE_H / 2, COLOR_ACCENT);
         fontDrawCentered(FONT_BOLD, 19, USE_X + USE_W / 2.0f, USE_Y + USE_H / 2.0f, "Use this folder",
-                         GFX_RGB(0x12, 0x12, 0x14));
+                         COLOR_BG);
     }
     // The folder, with an arrow back up when there's one above.
     int x = MARGIN, y = UI_HEADER_Y + 14;
@@ -289,7 +296,7 @@ void uiDrawSubtitles(const char *text, bool bar_shown)
 void uiDrawPausedSymbol(void)
 {
     float cx = GFX_WIDTH / 2.0f, cy = GFX_HEIGHT / 2.0f;
-    gfxFillCircle((int)cx, (int)cy, PAUSED_R, GFX_RGB(0x16, 0x16, 0x1A));
+    gfxFillCircle((int)cx, (int)cy, PAUSED_R, COLOR_BG);
     gfxArc(cx, cy, PAUSED_R - 2, 3, 0, 6.2832f, COLOR_TEXT);
     // A triangle a little right of center, so it looks centered.
     gfxTriangle(cx - 20, cy - 32, cx - 20, cy + 32, cx + 34, cy, COLOR_TEXT);
@@ -330,7 +337,7 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m)
     int x, y, w, h;
     menuBox(kind, m, &x, &y, &w, &h);
     gfxFillRoundRect(x - 2, y - 2, w + 4, h + 4, 14, COLOR_SURFACE_HI);  // An edge against the picture.
-    gfxFillRoundRect(x, y, w, h, 12, GFX_RGB(0x1A, 0x1A, 0x1F));
+    gfxFillRoundRect(x, y, w, h, 12, COLOR_SURFACE);
     fontDrawMiddle(FONT_BOLD, 20, x + 20, y + MENU_HEAD / 2.0f + 2, kind == UI_MENU_AUDIO ? "Audio" : "Subtitles",
                    COLOR_DIM);
     int current = kind == UI_MENU_AUDIO ? playerAudioTrack(p) : playerSubtitle(p) + 1;

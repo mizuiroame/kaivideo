@@ -1,16 +1,19 @@
 #include "ui_library.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "background.h"
 #include "font.h"
 #include "gfx.h"
+#include "thumbs.h"
 #include "ui_style.h"
 
 #define TAB_X 210              // The first tab, right of the name.
 #define TAB_H 40
 #define TAB_Y 14
-#define FOLDER_W 112           // The Folder button, top right.
+#define FOLDER_W 132           // The Settings button, top right.
 #define FOLDER_X (GFX_WIDTH - MARGIN - FOLDER_W)
 #define GAP 16
 #define HOME_Y 80              // Home's first row.
@@ -39,7 +42,7 @@ typedef struct {
 static HitRegion g_hits[MAX_HITS];
 static int g_hit_count;
 
-static void addHit(int x, int y, int w, int h, LibHitKind kind, int a, int b)
+void uiLibraryAddHit(int x, int y, int w, int h, LibHitKind kind, int a, int b)
 {
     if (g_hit_count < MAX_HITS)
         g_hits[g_hit_count++] = (HitRegion){x, y, w, h, {kind, a, b}};
@@ -57,13 +60,51 @@ LibHit uiLibraryTap(int x, int y)
 
 // --- Pieces ---
 
-static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files"};
+static bool g_thumbnails = true;
 
-static void drawFolderIcon(int x, int y, Color color)
+void uiLibrarySetThumbnails(bool on)
 {
-    gfxFillRoundRect(x, y, 9, 5, 2, color);
-    gfxFillRoundRect(x, y + 3, 22, 14, 3, color);
+    g_thumbnails = on;
 }
+
+void uiDrawBackground(void)
+{
+    const uint32_t *pixels = backgroundPixels();
+    if (pixels)
+        gfxCopyFrame(pixels);
+    else
+        gfxClear(COLOR_BG);
+}
+
+// The picture for a film or episode (item), or a series (its first episode).
+static const uint32_t *pictureOf(const Library *lib, LibraryRef ref)
+{
+    if (!g_thumbnails)
+        return NULL;
+    int item = ref.is_show ? (lib->shows[ref.index].count ? lib->shows[ref.index].episodes[0] : -1) : ref.index;
+    return item >= 0 ? thumbGet(lib->items[item].path, lib->items[item].size) : NULL;
+}
+
+// Draws a picture into a layout box with round corners.
+static void drawPicture(const uint32_t *pixels, int x, int y, int w, int h, int radius)
+{
+    gfxSetClipRound(x, y, w, h, radius);
+    gfxDrawImageScaledFb((float)gfxToFb(x), (float)gfxToFb(y), (float)gfxToFb(w), (float)gfxToFb(h), THUMB_W, THUMB_H,
+                         pixels);
+    gfxResetClip();
+}
+
+static void drawGearIcon(float cx, float cy, Color color)
+{
+    for (int i = 0; i < 6; i++) {  // Six teeth, then the ring over them.
+        float a = i * 1.0472f;
+        gfxLine(cx, cy, cx + 10.5f * cosf(a), cy + 10.5f * sinf(a), 4, color);
+    }
+    gfxFillCircle((int)cx, (int)cy, 8, color);
+    gfxFillCircle((int)cx, (int)cy, 3, COLOR_SURFACE);
+}
+
+static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files"};
 
 void uiDrawTabBar(LibTab active, const char *status)
 {
@@ -78,18 +119,18 @@ void uiDrawTabBar(LibTab active, const char *status)
         fontDrawCentered(FONT_BOLD, 19, x + w / 2.0f, TAB_Y + TAB_H / 2.0f, TAB_NAMES[t], on ? COLOR_TEXT : COLOR_DIM);
         if (on)
             gfxFillRoundRect(x + w / 2 - 12, TAB_Y + TAB_H + 4, 24, 3, 1, COLOR_ACCENT);
-        addHit(x, 0, w, UI_TAB_BAR_H, LIBHIT_TAB, t, 0);
+        uiLibraryAddHit(x, 0, w, UI_TAB_BAR_H, LIBHIT_TAB, t, 0);
         x += w + 6;
     }
     // L and R change tab: said once, left of the Folder button.
-    const char *hint = status && status[0] ? status : "L R  tabs     Y  search";
+    const char *hint = status && status[0] ? status : "L R  tabs     Y  search     -  settings";
     int hint_w = fontTextWidth(FONT_REGULAR, 16, hint);
     fontDrawMiddle(FONT_REGULAR, 16, FOLDER_X - 20 - hint_w, TAB_Y + TAB_H / 2.0f, hint,
                    status && status[0] ? COLOR_ACCENT : COLOR_FAINT);
     gfxFillRoundRect(FOLDER_X, TAB_Y, FOLDER_W, TAB_H, TAB_H / 2, COLOR_SURFACE);
-    drawFolderIcon(FOLDER_X + 16, TAB_Y + 11, COLOR_DIM);
-    fontDrawMiddle(FONT_BOLD, 17, FOLDER_X + 46, TAB_Y + TAB_H / 2.0f, "Folder", COLOR_DIM);
-    addHit(FOLDER_X, 0, FOLDER_W, UI_TAB_BAR_H, LIBHIT_FOLDER, 0, 0);
+    drawGearIcon(FOLDER_X + 26, TAB_Y + TAB_H / 2.0f, COLOR_DIM);
+    fontDrawMiddle(FONT_BOLD, 17, FOLDER_X + 46, TAB_Y + TAB_H / 2.0f, "Settings", COLOR_DIM);
+    uiLibraryAddHit(FOLDER_X, 0, FOLDER_W, UI_TAB_BAR_H, LIBHIT_SETTINGS, 0, 0);
 }
 
 // A card's colors, the same for the same name every time.
@@ -154,15 +195,26 @@ static int drawWrappedUp(FontFace face, int px, int x, int bottom, int w, int li
 // A card: a colored tile with the name in it (and a tag above it, like
 // "SERIES"), how far it was watched along the bottom, and a white ring when
 // the cursor is on it.
-static void drawCard(int x, int y, int w, int h, const char *name, const char *tag, double progress, bool focused)
+static void drawCard(int x, int y, int w, int h, const char *name, const char *tag, double progress, bool focused,
+                     const uint32_t *picture)
 {
     if (focused)
         gfxFillRoundRect(x - 4, y - 4, w + 8, h + 8, 14, COLOR_TEXT);
-    Color top, bottom;
-    cardColors(name, &top, &bottom);
-    gfxSetClipRound(x, y, w, h, 10);
-    gfxGradientV(x, y, w, h, top, bottom);
-    gfxResetClip();
+    if (picture) {
+        // The frame, darkened toward the bottom so the name reads over it.
+        drawPicture(picture, x, y, w, h, 10);
+        gfxSetClipRound(x, y, w, h, 10);
+        int fade_y = y + h / 3, fade_h = h - h / 3;  // Two pixels a step: no bands show.
+        for (int i = 0; i < fade_h; i += 2)
+            gfxBlendRect(x, fade_y + i, w, 2, GFX_RGB(0, 0, 0), (unsigned)(20 + 200 * i / fade_h));
+        gfxResetClip();
+    } else {
+        Color top, bottom;
+        cardColors(name, &top, &bottom);
+        gfxSetClipRound(x, y, w, h, 10);
+        gfxGradientV(x, y, w, h, top, bottom);
+        gfxResetClip();
+    }
     int text_bottom = y + h - (progress >= 0 ? 18 : 12);
     int name_top = drawWrappedUp(FONT_BOLD, 21, x + 14, text_bottom, w - 28, 26, 3, name, COLOR_TEXT);
     if (tag && tag[0])
@@ -230,7 +282,7 @@ static void drawRefCard(const Library *lib, const ResumeList *resume, LibraryRef
     const char *name, *tag;
     char below[200];
     describe(lib, ref, &name, &tag, below, sizeof(below));
-    drawCard(x, y, w, h, name, tag, ref.is_show ? -1 : watched(lib, resume, ref.index), focused);
+    drawCard(x, y, w, h, name, tag, ref.is_show ? -1 : watched(lib, resume, ref.index), focused, pictureOf(lib, ref));
     fontDrawClipped(FONT_REGULAR, 17, x + 2, y + h + 10, w - 4, below, focused ? COLOR_TEXT : COLOR_DIM);
 }
 
@@ -268,7 +320,7 @@ static void drawHome(const LibView *v, const Library *lib, const Home *home, con
             drawRefCard(lib, resume, row->items[c], x, y + HOME_TITLE_H, HOME_CARD_W, HOME_CARD_H,
                         r == v->home_row && c == cols->cursor);
             int w = x + HOME_CARD_W > GFX_WIDTH ? GFX_WIDTH - x : HOME_CARD_W;
-            addHit(x, y + HOME_TITLE_H, w, HOME_CARD_H + 40, LIBHIT_HOME_CARD, r, c);
+            uiLibraryAddHit(x, y + HOME_TITLE_H, w, HOME_CARD_H + 40, LIBHIT_HOME_CARD, r, c);
         }
     }
 }
@@ -287,7 +339,7 @@ static void drawGrid(const LibView *v, LibGrid grid, const Library *lib, const R
         LibraryRef ref = grid == GRID_FILMS ? (LibraryRef){false, lib->films[i]} : (LibraryRef){true, i};
         drawRefCard(lib, resume, ref, x, y, GRID_CARD_W, GRID_CARD_H, i == s->cursor);
         if (y < GFX_HEIGHT)
-            addHit(x, y, GRID_CARD_W, GRID_CARD_H + 40, LIBHIT_GRID_CARD, i, 0);
+            uiLibraryAddHit(x, y, GRID_CARD_W, GRID_CARD_H + 40, LIBHIT_GRID_CARD, i, 0);
     }
     int rows = (count + LIBVIEW_COLS - 1) / LIBVIEW_COLS;
     drawScrollbar(GRID_Y, LIBVIEW_GRID_ROWS * GRID_ROW_H - 20, s->first, LIBVIEW_GRID_ROWS, rows);
@@ -296,7 +348,7 @@ static void drawGrid(const LibView *v, LibGrid grid, const Library *lib, const R
 // --- A series' page ---
 
 static void drawListRow(int y, bool focused, const char *number, const char *title, const char *detail,
-                        double progress)
+                        double progress, const uint32_t *picture)
 {
     if (focused) {
         gfxFillRoundRect(MARGIN - 12, y + 2, GFX_WIDTH - 2 * (MARGIN - 12), LIST_ROW_H - 4, 10, COLOR_SURFACE_HI);
@@ -306,6 +358,14 @@ static void drawListRow(int y, bool focused, const char *number, const char *tit
     if (number) {
         fontDrawMiddle(FONT_BOLD, 19, x, y + LIST_ROW_H / 2.0f, number, COLOR_FAINT);
         x += 56;
+    }
+    if (g_thumbnails) {  // A picture, or its place while it's made (or if there's none).
+        int pic_w = (LIST_ROW_H - 12) * 16 / 9;
+        if (picture)
+            drawPicture(picture, x, y + 6, pic_w, LIST_ROW_H - 12, 6);
+        else
+            gfxFillRoundRect(x, y + 6, pic_w, LIST_ROW_H - 12, 6, COLOR_SURFACE_HI);
+        x += pic_w + 18;
     }
     int detail_w = detail && detail[0] ? fontTextWidth(FONT_REGULAR, 17, detail) : 0;
     int title_w = GFX_WIDTH - MARGIN - x - (detail_w ? detail_w + 24 : 0);
@@ -352,7 +412,7 @@ static void drawSeasonChips(const LibView *v, const Library *lib)
         bool on = i == v->season;
         gfxFillRoundRect(x, y, widths[i], 38, 19, on ? COLOR_TEXT : COLOR_SURFACE_HI);
         fontDrawCentered(FONT_BOLD, 18, x + widths[i] / 2.0f, y + 19, label, on ? COLOR_BG : COLOR_DIM);
-        addHit(x, y - 6, widths[i], 50, LIBHIT_SEASON, i, 0);
+        uiLibraryAddHit(x, y - 6, widths[i], 50, LIBHIT_SEASON, i, 0);
         x += widths[i] + 8;
     }
 }
@@ -363,7 +423,7 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
     // Back, and the series' name.
     gfxLine(MARGIN + 12, 92, MARGIN + 2, 103, 3, COLOR_TEXT);
     gfxLine(MARGIN + 2, 103, MARGIN + 12, 114, 3, COLOR_TEXT);
-    addHit(0, UI_TAB_BAR_H, 90, 64, LIBHIT_BACK, 0, 0);
+    uiLibraryAddHit(0, UI_TAB_BAR_H, 90, 64, LIBHIT_BACK, 0, 0);
     int name_w = fontTextWidth(FONT_BOLD, 30, show->name);
     fontDrawClipped(FONT_BOLD, 30, MARGIN + 30, 84, GFX_WIDTH - 2 * MARGIN - 330, show->name, COLOR_TEXT);
     char info[64];
@@ -385,8 +445,9 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
         else
             snprintf(title, sizeof(title), "Episode %d", it->name.episode);
         formatSize(it->size, size, sizeof(size));
-        drawListRow(y, e == v->episodes.cursor, number, title, size, watched(lib, resume, item));
-        addHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_EPISODE, e, 0);
+        drawListRow(y, e == v->episodes.cursor, number, title, size, watched(lib, resume, item),
+                    pictureOf(lib, (LibraryRef){false, item}));
+        uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_EPISODE, e, 0);
     }
     drawScrollbar(SHOW_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, v->episodes.first, LIBVIEW_LIST_ROWS, count);
 }
@@ -407,7 +468,7 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
     bool typed = v->query[0] != '\0';
     fontDrawClipped(FONT_REGULAR, 21, MARGIN + 62, SEARCH_BOX_Y + 13, w - 90,
                     typed ? v->query : "Search films, series and episodes  (A or Y)", typed ? COLOR_TEXT : COLOR_FAINT);
-    addHit(MARGIN, SEARCH_BOX_Y - 6, w, SEARCH_BOX_H + 12, LIBHIT_SEARCH_BOX, 0, 0);
+    uiLibraryAddHit(MARGIN, SEARCH_BOX_Y - 6, w, SEARCH_BOX_H + 12, LIBHIT_SEARCH_BOX, 0, 0);
     if (!typed)
         return;
     if (v->result_count == 0) {
@@ -429,10 +490,23 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
             snprintf(title, sizeof(title), "%s", name);
         const char *detail = episode ? name : below;
         int y = SEARCH_LIST_Y + (i - s->first) * LIST_ROW_H;
-        drawListRow(y, i == s->cursor, NULL, title, detail, ref.is_show ? -1 : watched(lib, resume, ref.index));
-        addHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_RESULT, i, 0);
+        drawListRow(y, i == s->cursor, NULL, title, detail, ref.is_show ? -1 : watched(lib, resume, ref.index),
+                    pictureOf(lib, ref));
+        uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_RESULT, i, 0);
     }
     drawScrollbar(SEARCH_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, s->first, LIBVIEW_LIST_ROWS, v->result_count);
+}
+
+void uiDrawToast(const char *message)
+{
+    if (!message || !message[0])
+        return;
+    int w = fontTextWidth(FONT_BOLD, 18, message) + 48;
+    if (w > GFX_WIDTH - 2 * MARGIN)
+        w = GFX_WIDTH - 2 * MARGIN;
+    int x = (GFX_WIDTH - w) / 2, y = GFX_HEIGHT - 70;
+    gfxFillRoundRect(x, y, w, 46, 23, COLOR_SURFACE_HI);
+    fontDrawClipped(FONT_BOLD, 18, x + 24, y + 10, w - 48, message, COLOR_ERROR);
 }
 
 // --- The screen ---
@@ -440,11 +514,11 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
                    bool folder_set, const char *status, const char *message)
 {
-    gfxClear(COLOR_BG);
+    uiDrawBackground();
     uiDrawTabBar(v->tab, status);
     if (!folder_set) {
         drawCentered("Choose the folder with your videos",
-                     "KaiVideo finds the films and series in it and in its folders. Press - or tap Folder.");
+                     "KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.");
     } else if (v->show >= 0 && (size_t)v->show < lib->show_count) {
         drawShow(v, lib, resume);
     } else if (v->tab == TAB_SEARCH) {
@@ -461,12 +535,5 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     } else if (v->tab == TAB_FILMS || v->tab == TAB_SERIES) {
         drawGrid(v, v->tab == TAB_FILMS ? GRID_FILMS : GRID_SERIES, lib, resume);
     }
-    if (message && message[0]) {
-        int w = fontTextWidth(FONT_BOLD, 18, message) + 48;
-        if (w > GFX_WIDTH - 2 * MARGIN)
-            w = GFX_WIDTH - 2 * MARGIN;
-        int x = (GFX_WIDTH - w) / 2, y = GFX_HEIGHT - 70;
-        gfxFillRoundRect(x, y, w, 46, 23, COLOR_SURFACE_HI);
-        fontDrawClipped(FONT_BOLD, 18, x + 24, y + 10, w - 48, message, COLOR_ERROR);
-    }
+    uiDrawToast(message);
 }

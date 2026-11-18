@@ -2,6 +2,7 @@
 
 #include <ctype.h>
 #include <stdio.h>
+#include <string.h>
 
 int utilCompareNames(const char *a, const char *b)
 {
@@ -91,4 +92,24 @@ bool utilUrlEscape(const char *text, char *out, size_t size)
         return false;
     out[o] = '\0';
     return true;
+}
+
+bool utilHasExtension(const char *path, const char *ext)
+{
+    const char *dot = strrchr(utilFileName(path), '.');
+    return dot && utilCompareNames(dot + 1, ext) == 0;
+}
+
+const char *utilFileName(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+    return slash ? slash + 1 : path;
+}
+
+bool utilJoinPath(char *out, size_t size, const char *dir, const char *name)
+{
+    size_t len = strlen(dir);
+    const char *sep = (len > 0 && dir[len - 1] == '/') ? "" : "/";
+    int written = snprintf(out, size, "%s%s%s", dir, sep, name);
+    return written >= 0 && (size_t)written < size;
 }

@@ -8,6 +8,7 @@
 #include <switch.h>
 
 #include "app.h"
+#include "background.h"
 #include "buttons.h"
 #include "gfx.h"
 #include "keyboard_system.h"
@@ -95,6 +96,8 @@ void appLibraryUpdate(App *app)
 
 static void useFolder(App *app, const char *folder)
 {
+    app->config.background[0] = '\0';  // Its images were in the old folder.
+    backgroundLoad(folder, "", app->config.blur);
     libscanStop();
     snprintf(app->library_root, sizeof(app->library_root), "%s", folder);
     appSaveSettings(app);
@@ -106,7 +109,7 @@ static void useFolder(App *app, const char *folder)
     startScan(app);
 }
 
-static void openPicker(App *app)
+void appOpenPicker(App *app)
 {
     const char *start = app->library_root[0] ? app->library_root : BROWSER_ROOT;
     if (browserOpen(&app->picker, start) || browserOpen(&app->picker, BROWSER_ROOT))
@@ -306,7 +309,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
         v->tab = (LibTab)hit.a;
         v->show = -1;
         break;
-    case LIBHIT_FOLDER: openPicker(app); break;
+    case LIBHIT_SETTINGS: appOpenSettings(app); break;
     case LIBHIT_HOME_CARD:
         v->home_row = hit.a;
         v->home_cols[hit.a].cursor = hit.b;
@@ -367,6 +370,10 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         app->quit = true;
         return;
     }
+    if (app->settings_open) {
+        appSettingsInput(app, pressed, touch, now);
+        return;
+    }
     if (app->picking) {
         // Leaving without choosing goes back to the folder there was.
         if ((pressed & HidNpadButton_Minus) && app->library_root[0])
@@ -381,7 +388,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;  // A tap this frame was aimed at the old tab.
     }
     if (pressed & HidNpadButton_Minus) {
-        openPicker(app);
+        appOpenSettings(app);
         return;
     }
     if (pressed & HidNpadButton_Y) {
@@ -390,7 +397,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     }
     LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
     if (v->tab == TAB_FILES && v->show < 0) {
-        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_FOLDER)
+        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_SETTINGS)
             tapInput(app, hit, now);
         else if (!(pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)))
             folderInput(app, &app->browser, false, pressed, touch, now);
@@ -405,11 +412,23 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 
 // --- Drawing ---
 
+void appLibraryRescan(App *app, uint64_t now)
+{
+    if (!app->library_root[0]) {
+        appShowMessage(app, "Choose the library folder first.", now);
+    } else if (libscanBusy(NULL)) {
+        appShowMessage(app, "Already looking for videos.", now);
+    } else {
+        startScan(app);
+    }
+}
+
 void appLibraryDraw(App *app, uint64_t now)
 {
     const char *message = now < app->message_until ? app->message : NULL;
+    const char *under = app->settings_open ? NULL : message;  // With Settings open, said over it.
     if (app->picking) {
-        gfxClear(COLOR_BG);
+        uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, message, pickMode(app));
         return;
     }
@@ -418,11 +437,14 @@ void appLibraryDraw(App *app, uint64_t now)
     if (libscanBusy(&found))
         snprintf(status, sizeof(status), "Looking for videos... %zu", found);
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
-        gfxClear(COLOR_BG);
+        uiDrawBackground();
         uiDrawTabBar(TAB_FILES, status);
-        uiDrawBrowser(&app->browser, &app->resume, message, BROWSE_FILES);
-        return;
+        uiDrawBrowser(&app->browser, &app->resume, under, BROWSE_FILES);
+    } else {
+        uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume, app->library_root[0] != '\0', status,
+                      under);
     }
-    uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume, app->library_root[0] != '\0', status,
-                  message);
+    appSettingsDraw(app);
+    if (app->settings_open)
+        uiDrawToast(message);
 }

@@ -33,6 +33,8 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note);
 // Subtitle text ('\n' between lines), centered at the bottom with an
 // outline, wrapped to the screen; above the bar when it shows.
 void uiDrawSubtitles(const char *text, bool bar_shown);
+// The subtitles' text size (Settings), in layout pixels.
+void uiSetSubtitlePx(int px);
 // A paused video: a big play symbol in the middle (a tap there plays on).
 void uiDrawPausedSymbol(void);
 
