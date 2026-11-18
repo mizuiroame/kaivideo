@@ -16,7 +16,8 @@ microSD card with the console's own hardware video decoder.
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second. A video the
   decoder can't play says so instead of stuttering.
 - Sound with [FFmpeg](https://ffmpeg.org/): **AAC**, **MP3**, **Opus**,
-  **Vorbis**, **FLAC** and **AC-3** (surround is mixed down to stereo).
+  **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
+  and **Dolby TrueHD** (surround is mixed down to stereo).
 - **Sound tracks**: a film with several (languages, commentary) lets you
   change between them with **X**, without stopping the picture.
 - **Subtitles**: an `.srt` file next to the video (`Film.srt` or
@@ -99,8 +100,7 @@ the **×** at the top left to go back to the list.
 
 - **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown; text ones
   are.
-- **DTS**, **E-AC-3** and **TrueHD** sound can't be played: the video plays
-  silent, and another track can be chosen with **X**.
+- **10-bit** H.264 (Hi10P) and 10-bit AV1 videos can't be played.
 - **HEVC (H.265)** videos can't be played: the decoder interface KaiVideo
   uses ([libounce](https://github.com/ouncebrew/libounce)) offers H.264, VP9,
   AV1 and VP8.

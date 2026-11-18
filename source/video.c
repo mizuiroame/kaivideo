@@ -8,6 +8,7 @@
 #include <libavcodec/avcodec.h>
 #include <libavcodec/bsf.h>
 #include <libavformat/avformat.h>
+#include <libavutil/pixdesc.h>
 #include <switch.h>
 
 #include "subs.h"
@@ -322,6 +323,8 @@ static const char *codecName(enum AVCodecID id)
     case AV_CODEC_ID_VP9: return "VP9";
     case AV_CODEC_ID_AV1: return "AV1";
     case AV_CODEC_ID_VP8: return "VP8";
+    case AV_CODEC_ID_HEVC: return "HEVC (H.265)";
+    case AV_CODEC_ID_MPEG4: return "MPEG-4 Part 2";
     default: return avcodec_get_name(id);
     }
 }
@@ -337,8 +340,15 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     case AV_CODEC_ID_AV1: codec = ViddecCodec_Av1; break;
     case AV_CODEC_ID_VP8: codec = ViddecCodec_Vp8; break;
     default:
-        snprintf(error, error_size, "%s video can't be played: the console decodes H.264, VP9, AV1 and VP8.",
+        snprintf(error, error_size, "%s video can't be played: KaiVideo plays H.264, VP9, AV1 and VP8.",
                  codecName(par->codec_id));
+        return false;
+    }
+    // The decoder's output is 8-bit NV12: 10-bit video isn't sent to it.
+    const AVPixFmtDescriptor *pix = av_pix_fmt_desc_get((enum AVPixelFormat)par->format);
+    if (pix && pix->comp[0].depth > 8) {
+        snprintf(error, error_size, "%d-bit %s video can't be played: KaiVideo plays 8-bit video.",
+                 pix->comp[0].depth, codecName(par->codec_id));
         return false;
     }
     if (filter) {
