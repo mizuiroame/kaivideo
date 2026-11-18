@@ -4,7 +4,8 @@ An **open-source video player** for **Switch 2** running
 [kaiHEN](https://github.com/ouncebrew/kaihen), in the spirit of
 [KaiPlayer](https://github.com/mizuiroame/kaiplayer) and
 [KaiRadio](https://github.com/mizuiroame/kairadio). Play the videos on your
-microSD card with the console's own hardware video decoder.
+microSD card or your **[Jellyfin](https://jellyfin.org/) server**, as a library
+of films and series, with the console's own hardware video decoder.
 
 ![Home](docs/screenshots/home.png)
 
@@ -12,9 +13,9 @@ microSD card with the console's own hardware video decoder.
 |----------|--------------|-----------|
 | ![A series' page](docs/screenshots/series.png) | ![The next episode's card](docs/screenshots/up_next.png) | ![The subtitles list](docs/screenshots/subtitles.png) |
 
-| Films | Settings |
-|-------|----------|
-| ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) |
+| Films | Settings | A video on Jellyfin |
+|-------|----------|---------------------|
+| ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) | ![A video's details](docs/screenshots/details.png) |
 
 The screenshots show made-up films and series.
 
