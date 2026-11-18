@@ -309,7 +309,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
         v->tab = (LibTab)hit.a;
         v->show = -1;
         break;
-    case LIBHIT_SETTINGS: appOpenSettings(app); break;
+    case LIBHIT_MENU: appOpenMenu(app); break;
     case LIBHIT_HOME_CARD:
         v->home_row = hit.a;
         v->home_cols[hit.a].cursor = hit.b;
@@ -366,12 +366,16 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     if (touch.type == TOUCH_DRAG_END || touch.type == TOUCH_NONE)
         app->drag_rows = app->drag_cols = 0;
-    if (pressed & HidNpadButton_Plus) {
-        app->quit = true;
+    if (app->app_menu != APP_MENU_NONE) {
+        appMenuInput(app, pressed, touch, now);
         return;
     }
     if (app->settings_open) {
         appSettingsInput(app, pressed, touch, now);
+        return;
+    }
+    if (pressed & HidNpadButton_Plus) {
+        appOpenMenu(app);
         return;
     }
     if (app->picking) {
@@ -397,7 +401,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     }
     LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
     if (v->tab == TAB_FILES && v->show < 0) {
-        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_SETTINGS)
+        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU)
             tapInput(app, hit, now);
         else if (!(pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)))
             folderInput(app, &app->browser, false, pressed, touch, now);
@@ -426,10 +430,19 @@ void appLibraryRescan(App *app, uint64_t now)
 void appLibraryDraw(App *app, uint64_t now)
 {
     const char *message = now < app->message_until ? app->message : NULL;
-    const char *under = app->settings_open ? NULL : message;  // With Settings open, said over it.
+    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
+    const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
+    uiLibraryResetHits();
     if (app->picking) {
         uiDrawBackground();
-        uiDrawBrowser(&app->picker, &app->resume, message, pickMode(app));
+        uiDrawBrowser(&app->picker, &app->resume, pickMode(app));
+        uiDrawFooterStrip();
+        uiDrawToast(under);
+        appSettingsDraw(app);
+        appMenuDraw(app);
+        if (overlay)
+            uiDrawToast(message);
+        uiDrawFooterHelp(appFooterHelp(app));
         return;
     }
     char status[64] = "";
@@ -439,12 +452,16 @@ void appLibraryDraw(App *app, uint64_t now)
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
         uiDrawBackground();
         uiDrawTabBar(TAB_FILES, status);
-        uiDrawBrowser(&app->browser, &app->resume, under, BROWSE_FILES);
+        uiDrawBrowser(&app->browser, &app->resume, BROWSE_FILES);
+        uiDrawFooterStrip();
+        uiDrawToast(under);
     } else {
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume, app->library_root[0] != '\0', status,
                       under);
     }
     appSettingsDraw(app);
-    if (app->settings_open)
+    appMenuDraw(app);
+    if (overlay)
         uiDrawToast(message);
+    uiDrawFooterHelp(appFooterHelp(app));
 }

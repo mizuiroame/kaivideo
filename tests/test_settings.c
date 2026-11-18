@@ -15,13 +15,14 @@ void testSettings(void)
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
     CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 5 && rows[3] == SETTING_OPEN_DISPLAY);
-    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 4 && rows[0] == SETTING_THEME);
+    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
 
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.
     CHECK(c.theme == THEME_COUNT - 1);
     settingStep(&c, SETTING_ACCENT, 2);
     settingStep(&c, SETTING_THUMBNAILS, 1);
+    settingStep(&c, SETTING_CLOCK, 1);
     snprintf(c.background, sizeof(c.background), "%s", "beach.jpg");
     char value[64];
     settingValue(&c, SETTING_ACCENT, value, sizeof(value));
@@ -63,7 +64,7 @@ void testSettings(void)
     if (f)
         fclose(f);
     CHECK(back.theme == c.theme && back.accent == c.accent && !back.thumbnails && back.subtitles == SUBTITLES_LARGE &&
-          back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
+          back.clock_24h && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
           strcmp(back.background, "beach.jpg") == 0);
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));
     CHECK(configReadLine(&back, "theme=99") && back.theme == 0);

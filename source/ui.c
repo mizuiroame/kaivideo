@@ -5,6 +5,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "ui_buttons.h"
 #include "ui_style.h"
 #include "util.h"
 
@@ -79,7 +80,7 @@ static void formatSize(int64_t bytes, char *out, size_t size)
 #define CANCEL_W 120  // Left of Use.
 #define CANCEL_X (USE_X - 12 - CANCEL_W)
 
-void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message, BrowseMode mode)
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
 {
     bool picking = mode != BROWSE_FILES;
     if (mode == BROWSE_PICK) {
@@ -146,12 +147,6 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *messa
         gfxFillRoundRect(GFX_WIDTH - 12, UI_LIST_Y, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(GFX_WIDTH - 12, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
-    const char *help = message && message[0] ? message
-                       : mode == BROWSE_PICK ? "A  open      B  folder above      X  use this folder      -  cancel"
-                       : picking ? "A  open      B  folder above      X  use this folder      +  exit"
-                                 : "A  open      B  folder above      +  exit";
-    fontDrawClipped(FONT_REGULAR, 18, MARGIN, GFX_HEIGHT - 36, GFX_WIDTH - 2 * MARGIN, help,
-                    message && message[0] ? COLOR_ERROR : COLOR_DIM);
 }
 
 TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *row)
@@ -220,9 +215,14 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
     gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, 8, COLOR_ACCENT);
     char info[256];
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s      A pause   Left Right 10 s   L R 1 min   ZL start   X sound   Y subtitles   B back",
-             playerVideoInfo(p), playerAudioInfo(p));
-    fontDrawClipped(FONT_REGULAR, 16, MARGIN, y + 82, track_w, info, COLOR_DIM);
+    // The buttons, as the other screens' help line, and the video's format on the right.
+    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s", playerVideoInfo(p), playerAudioInfo(p));
+    int info_w = fontTextWidth(FONT_REGULAR, 16, info);
+    if (info_w > track_w / 3)
+        info_w = track_w / 3;
+    fontDrawClipped(FONT_REGULAR, 16, GFX_WIDTH - MARGIN - info_w, y + 82, info_w, info, COLOR_FAINT);
+    uiDrawHelp(MARGIN, (float)y + 93.0f, track_w - info_w - 24,
+               "[A] pause  [<>] 10 s  [L][R] 1 min  [ZL] start  [X] audio  [Y] subtitles  [B] back  [+] menu");
 }
 
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)

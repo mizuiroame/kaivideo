@@ -18,6 +18,7 @@ typedef enum {
     SETTING_ACCENT,
     SETTING_BACKGROUND,
     SETTING_BLUR,
+    SETTING_CLOCK,
     SETTING_COUNT,
 } SettingRow;
 
@@ -36,6 +37,7 @@ typedef struct {
     char background[SETTINGS_NAME_MAX];  // A file in <library>/Backgrounds, or "" for none.
     int blur;                            // BackgroundBlur.
     bool thumbnails;                     // Pictures from the videos on their cards.
+    bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.

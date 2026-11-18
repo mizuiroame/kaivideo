@@ -19,6 +19,8 @@
 
 #define APP_NAME_MAX 300
 
+typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT } AppMenu;
+
 typedef struct App App;
 
 struct App {
@@ -38,6 +40,9 @@ struct App {
     uint64_t message_until;
     int drag_rows, drag_cols;
     bool quit;
+    AppMenu app_menu;           // The + menu, or its exit question (app_menu.c).
+    int app_menu_cursor;
+    bool stop_requested;        // "Back to the library" from the + menu over a video.
 
     // The library (app_library.c).
     char library_root[LIBRARY_PATH_MAX];  // "" until one is chosen.
@@ -74,6 +79,13 @@ void appLibraryDraw(App *app, uint64_t now);
 // Looks for videos again (Settings).
 void appLibraryRescan(App *app, uint64_t now);
 void appOpenPicker(App *app);
+
+// app_menu.c
+void appOpenMenu(App *app);
+void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appMenuDraw(const App *app);
+// The help line for the library's screens and overlays: "[A] open  [+] menu".
+const char *appFooterHelp(const App *app);
 
 // app_settings.c
 // Applies the settings read at start: theme, background, thumbnails, subtitles.

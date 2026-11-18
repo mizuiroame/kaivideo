@@ -1,6 +1,6 @@
 // Settings and About, drawn over the library's screens the way KaiPlayer
-// draws its own: a plain panel, a Back pill on a page, and a help line with
-// the console's buttons at the bottom of the screen.
+// draws its own: a plain panel and a Back pill on a page (the help line at
+// the bottom is the app's).
 #include "ui_settings.h"
 
 #include <stdio.h>
@@ -19,13 +19,11 @@
 #define FOOT_H 60
 #define ABOUT_W 700
 #define ABOUT_H 470
-#define DIM_ALPHA 160
-#define HELP_Y (GFX_HEIGHT - 28)
 
 // Darkens what's behind, and makes a tap there close the panel.
 static void dimScreen(void)
 {
-    gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), DIM_ALPHA);
+    gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), UI_DIM_ALPHA);
     uiLibraryAddHit(0, 0, GFX_WIDTH, GFX_HEIGHT, LIBHIT_CLOSE, 0, 0);
 }
 
@@ -116,9 +114,6 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
     }
     fontDrawClipped(FONT_REGULAR, 16, x + PANEL_PAD, y + h - 40, SETTINGS_W - 2 * PANEL_PAD,
                     "Open source (MIT)  \xC2\xB7  github.com/mizuiroame/kaivideo", COLOR_FAINT);
-    uiDrawHelp(MARGIN, HELP_Y, GFX_WIDTH - 2 * MARGIN,
-               page == SETTINGS_PAGE_MAIN ? "[^v] choose  [>][A] open  [B] close"
-                                          : "[^v] choose  [<>][A] change  [B] back");
 }
 
 // A screen with a play symbol: KaiVideo's mark.
@@ -157,5 +152,4 @@ void uiDrawAbout(const char *version)
     for (size_t i = 0; i < sizeof(LINES) / sizeof(LINES[0]); i++, line_y += 28)
         fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, line_y, LINES[i], COLOR_TEXT);
     fontDraw(FONT_BOLD, 18, x + PANEL_PAD, y + ABOUT_H - 46, "github.com/mizuiroame/kaivideo", COLOR_ACCENT);
-    uiDrawHelp(MARGIN, HELP_Y, GFX_WIDTH - 2 * MARGIN, "[A][B] back");
 }

@@ -21,13 +21,13 @@
 size_t uiFirstVisible(size_t cursor, size_t count);
 
 // The folder list under the tab bar, with how far each video has been
-// watched; message (an error, for a while) replaces the help line.
+// watched (the help line under it is the app's).
 typedef enum {
     BROWSE_FILES,      // The Files tab.
     BROWSE_PICK,       // Choosing the library folder: a title, Use and Cancel buttons.
     BROWSE_PICK_FIRST, // The same the first time, without Cancel.
 } BrowseMode;
-void uiDrawBrowser(const Browser *b, const ResumeList *resume, const char *message, BrowseMode mode);
+void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode);
 // The bar over a playing video, and the close button above it; note, if
 // any, is said above the bar ("Resumed at 12:34").
 void uiDrawPlayerBar(const Player *p, const char *name, const char *note);

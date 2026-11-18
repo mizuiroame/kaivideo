@@ -69,6 +69,7 @@ static int g_problems;
 
 static void begin(void)
 {
+    uiLibraryResetHits();
     gfxSetTarget(g_pixels, GFX_FB_WIDTH);
 }
 
@@ -194,10 +195,13 @@ static void buildSampleLibrary(void)
     libviewInit(&g_view);
 }
 
+#define HOME_HELP "[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"
+
 static void libraryScene(const char *name, bool folder_set, const char *status, const char *message)
 {
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, folder_set, status, message);
+    uiDrawFooterHelp(HOME_HELP);
     save(name);
 }
 
@@ -209,7 +213,7 @@ static void checkTabTaps(const char *name)
         LibHit hit = uiLibraryTap(x, 34);
         if (hit.kind == LIBHIT_TAB)
             found |= 1 << hit.a;
-        else if (hit.kind == LIBHIT_SETTINGS)
+        else if (hit.kind == LIBHIT_MENU)
             found |= 1 << TAB_COUNT;
     }
     if (found != (1 << (TAB_COUNT + 1)) - 1) {
@@ -220,6 +224,8 @@ static void checkTabTaps(const char *name)
 
 static void libraryScenes(void)
 {
+    SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
+    uiLibrarySetStatus(&sys, false);
     makeFakeThumbs();
     uiLibrarySetThumbnails(false);  // The color cards first.
     buildSampleLibrary();
@@ -280,6 +286,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "0.3.0-beta");
+    uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
     save("settings");
     // The main page's rows: 48 high from 76 below the panel's top (5 rows, a 60 footer).
     int top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2 + 76;
@@ -294,8 +301,9 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "0.3.0-beta");
+    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_display");
-    top = (GFX_HEIGHT - (76 + 4 * 48 + 60)) / 2;
+    top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
     if (uiLibraryTap((GFX_WIDTH - 760) / 2 + 60, top + 33).kind != LIBHIT_PAGE_BACK) {
         printf("TOUCH: settings_display: Back doesn't answer a tap\n");
         g_problems++;
@@ -303,7 +311,27 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawAbout("0.3.0-beta");
+    uiDrawFooterHelp("[A][B] back");
     save("about");
+
+    // The + menu, and its question.
+    static const char *const MENU[] = {"Look for new videos", "Settings", "Exit KaiVideo"};
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawMenu("KaiVideo", "0.3.0-beta", MENU, 3, 1);
+    uiDrawFooterHelp("[A] choose  [B] close  [+] exit");
+    save("menu");
+    LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 3 * 48 + 20)) / 2 + 76 + 2 * 48 + 20);
+    if (item.kind != LIBHIT_MENU_ITEM || item.a != 2 || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: menu: an item or the outside doesn't answer as drawn\n");
+        g_problems++;
+    }
+    static const char *const EXIT[] = {"Exit", "Cancel"};
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0);
+    uiDrawFooterHelp("[A] choose  [B] cancel  [+] exit");
+    save("menu_exit");
     themeApply(0, 0);
 
     libraryScene("lib_no_folder", false, NULL, NULL);
@@ -324,12 +352,16 @@ static void libraryScenes(void)
     begin();
     gfxClear(COLOR_BG);
     uiDrawTabBar(TAB_FILES, NULL);
-    uiDrawBrowser(&b, &g_resume, NULL, BROWSE_FILES);
+    uiDrawBrowser(&b, &g_resume, BROWSE_FILES);
+    uiDrawFooterStrip();
+    uiDrawFooterHelp("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
     save("lib_files");
     checkTabTaps("lib_files");
     begin();
     gfxClear(COLOR_BG);
-    uiDrawBrowser(&b, &g_resume, NULL, BROWSE_PICK);
+    uiDrawBrowser(&b, &g_resume, BROWSE_PICK);
+    uiDrawFooterStrip();
+    uiDrawFooterHelp("[A] open  [B] folder above  [X] use this folder  [-] cancel");
     save("lib_picker");
     size_t row;
     if (uiTapBrowser(&b, GFX_WIDTH - 100, 34, BROWSE_PICK, &row) != TAP_USE_FOLDER ||

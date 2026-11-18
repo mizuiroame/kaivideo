@@ -23,7 +23,9 @@
 #include "menu.h"
 #include "player.h"
 #include "resume.h"
+#include "sysinfo.h"
 #include "thumbs.h"
+#include "ui_library.h"
 #include "touch.h"
 #include "ui.h"
 #include "util.h"
@@ -274,8 +276,13 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
         chooseRow(app, m->cursor, now);
         return;
     }
-    if (pressed & (HidNpadButton_B | HidNpadButton_Plus)) {
+    if (pressed & HidNpadButton_B) {
         menuClose(m);
+        return;
+    }
+    if (pressed & HidNpadButton_Plus) {  // The + menu, as everywhere.
+        menuClose(m);
+        appOpenMenu(app);
         return;
     }
     if (pressed & (HidNpadButton_X | HidNpadButton_Y)) {
@@ -310,6 +317,12 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
 static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     Player *p = app->player;
+    if (app->app_menu != APP_MENU_NONE) {
+        appMenuInput(app, pressed, touch, now);
+        bool back = app->stop_requested;
+        app->stop_requested = false;
+        return !back;
+    }
     if (app->menu.open) {
         menuInput(app, pressed, touch, now);
         return true;
@@ -317,8 +330,12 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     bool overlay = playerPaused(p) || now < app->overlay_until;
     if (pressed || touch.type == TOUCH_TAP)
         app->overlay_until = now + OVERLAY_NS;
-    if (pressed & (HidNpadButton_B | HidNpadButton_Plus))
+    if (pressed & HidNpadButton_B)
         return false;
+    if (pressed & HidNpadButton_Plus) {
+        appOpenMenu(app);
+        return true;
+    }
     if (pressed & HidNpadButton_A)
         playerTogglePause(p, now);
     if (pressed & HidNpadButton_Y)
@@ -389,6 +406,11 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         uiDrawPlayerBar(app->player, app->playing_name,
                         now < app->bar_note_until && !app->menu.open ? app->bar_note : NULL);
     uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);
+    if (app->app_menu != APP_MENU_NONE) {  // The + menu over the video.
+        uiLibraryResetHits();
+        appMenuDraw(app);
+        uiDrawFooterHelp(appFooterHelp(app));
+    }
 }
 
 int main(int argc, char **argv)
@@ -423,6 +445,7 @@ int main(int argc, char **argv)
         browserOpen(&app.browser, BROWSER_ROOT);  // The folder kept is gone.
     appConfigPath(path, sizeof(path), "thumbs");
     thumbsInit(path);
+    sysinfoInit();
     appSettingsStart(&app);
     appLibraryStart(&app);
     InputRepeat repeat;
@@ -437,6 +460,9 @@ int main(int argc, char **argv)
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
         thumbsUpdate();
+        SysInfo sys;
+        sysinfoGet(&sys, now);
+        uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
         if (app.player) {
             char error[160] = "";
@@ -468,6 +494,7 @@ int main(int argc, char **argv)
     appSaveSettings(&app);
     appLibraryExit(&app);
     thumbsExit();
+    sysinfoExit();
     browserFree(&app.browser);
     appLog("Done.");
     audioSystemExit();

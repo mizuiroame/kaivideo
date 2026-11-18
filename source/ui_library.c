@@ -1,6 +1,5 @@
 #include "ui_library.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -8,20 +7,25 @@
 #include "font.h"
 #include "gfx.h"
 #include "thumbs.h"
+#include "ui_buttons.h"
 #include "ui_style.h"
+#include "util.h"
 
-#define TAB_X 210              // The first tab, right of the name.
-#define TAB_H 40
-#define TAB_Y 14
-#define FOLDER_W 132           // The Settings button, top right.
-#define FOLDER_X (GFX_WIDTH - MARGIN - FOLDER_W)
+#define TAB_GAP 28             // The header, as KaiPlayer's and KaiRadio's.
+#define TAB_TEXT_MIDDLE 28.0f
+#define HINT_GAP 9
+#define BATTERY_LOW 15
+#define COLOR_CHARGING GFX_RGB(0x5B, 0xD6, 0x7A)
+#define MENU_PANEL_W 640       // The + menu.
+#define MENU_PANEL_ROW_H 48
+#define MENU_PANEL_PAD 32
 #define GAP 16
-#define HOME_Y 80              // Home's first row.
-#define HOME_TITLE_H 36
-#define HOME_CARD_W 216
-#define HOME_CARD_H 122
-#define HOME_ROW_H 202
-#define GRID_Y 88
+#define HOME_Y 76              // Home's first row; three fit above the help line.
+#define HOME_TITLE_H 34
+#define HOME_CARD_W 206
+#define HOME_CARD_H 116
+#define HOME_ROW_H 196
+#define GRID_Y 84
 #define GRID_CARD_W ((GFX_WIDTH - 2 * MARGIN - (LIBVIEW_COLS - 1) * GAP) / LIBVIEW_COLS)
 #define GRID_CARD_H 128
 #define GRID_ROW_H 186
@@ -104,43 +108,143 @@ static void drawPicture(const uint32_t *pixels, int x, int y, int w, int h, int 
     gfxResetClip();
 }
 
-static void drawGearIcon(float cx, float cy, Color color)
+static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files"};
+
+static SysInfo g_sys;
+static bool g_clock_24h;
+
+void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h)
 {
-    for (int i = 0; i < 6; i++) {  // Six teeth, then the ring over them.
-        float a = i * 1.0472f;
-        gfxLine(cx, cy, cx + 10.5f * cosf(a), cy + 10.5f * sinf(a), 4, color);
-    }
-    gfxFillCircle((int)cx, (int)cy, 8, color);
-    gfxFillCircle((int)cx, (int)cy, 3, COLOR_SURFACE);
+    g_sys = *sys;
+    g_clock_24h = clock_24h;
 }
 
-static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files"};
+void uiLibraryResetHits(void)
+{
+    g_hit_count = 0;
+}
+
+// The tabs in the middle, between the ZL and ZR that change them.
+static void drawTabs(LibTab active)
+{
+    int widths[TAB_COUNT], total = 0;
+    for (int i = 0; i < TAB_COUNT; i++) {
+        widths[i] = fontTextWidth((int)active == i ? FONT_BOLD : FONT_REGULAR, 20, TAB_NAMES[i]);
+        total += widths[i] + (i > 0 ? TAB_GAP : 0);
+    }
+    int x = (GFX_WIDTH - total) / 2;
+    uiDrawButton(x - HINT_GAP - uiButtonWidth("ZL"), TAB_TEXT_MIDDLE, "ZL", COLOR_SURFACE_HI, COLOR_DIM);
+    for (int i = 0; i < TAB_COUNT; i++) {
+        bool on = (int)active == i;
+        fontDraw(on ? FONT_BOLD : FONT_REGULAR, 20, x, 18, TAB_NAMES[i], on ? COLOR_TEXT : COLOR_DIM);
+        uiLibraryAddHit(x - TAB_GAP / 2, 4, widths[i] + TAB_GAP, UI_TAB_BAR_H - 8, LIBHIT_TAB, i, 0);
+        if (on)
+            gfxFillRoundRect(x, 48, widths[i], 3, 1, COLOR_ACCENT);
+        x += widths[i] + TAB_GAP;
+    }
+    uiDrawButton(x - TAB_GAP + HINT_GAP, TAB_TEXT_MIDDLE, "ZR", COLOR_SURFACE_HI, COLOR_DIM);
+}
+
+static void drawBattery(int x, int y, int percent, bool charging)
+{
+    Color fill = charging ? COLOR_CHARGING : percent <= BATTERY_LOW ? COLOR_ERROR : COLOR_TEXT;
+    gfxFillRoundRect(x, y, 30, 16, 4, COLOR_DIM);
+    gfxFillRoundRect(x + 2, y + 2, 26, 12, 3, COLOR_BG);
+    gfxFillRoundRect(x + 31, y + 5, 3, 6, 1, COLOR_DIM);
+    int inner = 22 * (percent < 0 ? 0 : percent > 100 ? 100 : percent) / 100;
+    if (inner > 0)
+        gfxFillRoundRect(x + 4, y + 4, inner, 8, 2, fill);
+    if (charging) {  // A lightning bolt over the battery.
+        float cx = (float)x + 15.0f, cy = (float)y + 8.0f;
+        // Two halves that overlap in the middle, so no seam shows between them.
+        gfxTriangle(cx + 2.0f, cy - 8.0f, cx - 5.0f, cy + 1.5f, cx + 1.5f, cy + 1.5f, COLOR_BG);
+        gfxTriangle(cx - 2.0f, cy + 8.0f, cx + 5.0f, cy - 1.5f, cx - 1.5f, cy - 1.5f, COLOR_BG);
+        gfxTriangle(cx + 1.5f, cy - 6.0f, cx - 3.5f, cy + 1.0f, cx + 1.0f, cy + 1.0f, COLOR_TEXT);
+        gfxTriangle(cx - 1.5f, cy + 6.0f, cx + 3.5f, cy - 1.0f, cx - 1.0f, cy - 1.0f, COLOR_TEXT);
+    }
+}
+
+// The top right: a scan's progress, the time and the battery.
+static void drawStatus(const char *status)
+{
+    int x = GFX_WIDTH - MARGIN;
+    if (g_sys.has_battery) {
+        char percent[8];
+        snprintf(percent, sizeof(percent), "%d%%", g_sys.battery_percent);
+        x -= 34;
+        drawBattery(x, 20, g_sys.battery_percent, g_sys.charging);
+        x -= fontTextWidth(FONT_REGULAR, 17, percent) + 8;
+        fontDraw(FONT_REGULAR, 17, x, 19, percent, g_sys.charging ? COLOR_CHARGING : COLOR_DIM);
+        x -= 20;
+    }
+    if (g_sys.has_time) {
+        char clock[16];
+        utilFormatClock(clock, sizeof(clock), g_sys.hour, g_sys.minute, g_clock_24h);
+        x -= fontTextWidth(FONT_BOLD, 18, clock);
+        fontDraw(FONT_BOLD, 18, x, 18, clock, COLOR_TEXT);
+        x -= 24;
+    }
+    if (status && status[0]) {
+        x -= fontTextWidth(FONT_BOLD, 16, status);
+        fontDraw(FONT_BOLD, 16, x, 20, status, COLOR_ACCENT);
+    }
+}
+
+// Three bars before the name: the touch way into the + menu.
+static void drawMenuButton(void)
+{
+    for (int i = 0; i < 3; i++)
+        gfxFillRoundRect(MARGIN, 22 + i * 7, 22, 3, 1, COLOR_ACCENT);
+}
 
 void uiDrawTabBar(LibTab active, const char *status)
 {
-    g_hit_count = 0;
-    fontDraw(FONT_BOLD, 26, MARGIN, 18, "KaiVideo", COLOR_ACCENT);
-    int x = TAB_X;
-    for (int t = 0; t < TAB_COUNT; t++) {
-        int w = fontTextWidth(FONT_BOLD, 19, TAB_NAMES[t]) + 32;
-        bool on = t == (int)active;
-        if (on)
-            gfxFillRoundRect(x, TAB_Y, w, TAB_H, TAB_H / 2, COLOR_SURFACE_HI);
-        fontDrawCentered(FONT_BOLD, 19, x + w / 2.0f, TAB_Y + TAB_H / 2.0f, TAB_NAMES[t], on ? COLOR_TEXT : COLOR_DIM);
-        if (on)
-            gfxFillRoundRect(x + w / 2 - 12, TAB_Y + TAB_H + 4, 24, 3, 1, COLOR_ACCENT);
-        uiLibraryAddHit(x, 0, w, UI_TAB_BAR_H, LIBHIT_TAB, t, 0);
-        x += w + 6;
+    drawMenuButton();
+    int title_w = fontDraw(FONT_BOLD, 26, MARGIN + 36, 16, "KaiVideo", COLOR_ACCENT);
+    uiLibraryAddHit(0, 0, MARGIN + 36 + title_w + 12, UI_TAB_BAR_H, LIBHIT_MENU, 0, 0);
+    drawTabs(active);
+    drawStatus(status);
+}
+
+void uiDrawFooterStrip(void)
+{
+    if (!backgroundPixels())
+        gfxFillRect(0, UI_FOOTER_Y, GFX_WIDTH, GFX_HEIGHT - UI_FOOTER_Y, COLOR_BG);
+}
+
+void uiDrawFooterHelp(const char *help)
+{
+    uiDrawHelp(MARGIN, UI_FOOTER_Y + 28.0f, GFX_WIDTH - 2 * MARGIN, help);
+}
+
+// --- The + menu ---
+
+static void drawMenuRow(int x, int row_y, int i, int cursor, const char *label)
+{
+    bool selected = i == cursor;
+    if (selected) {
+        gfxFillRoundRect(x + 16, row_y, MENU_PANEL_W - 32, MENU_PANEL_ROW_H - 6, 10, COLOR_SURFACE_HI);
+        gfxFillRect(x + 16, row_y + 10, 3, MENU_PANEL_ROW_H - 26, COLOR_ACCENT);
     }
-    // L and R change tab: said once, left of the Folder button.
-    const char *hint = status && status[0] ? status : "L R  tabs     Y  search     -  settings";
-    int hint_w = fontTextWidth(FONT_REGULAR, 16, hint);
-    fontDrawMiddle(FONT_REGULAR, 16, FOLDER_X - 20 - hint_w, TAB_Y + TAB_H / 2.0f, hint,
-                   status && status[0] ? COLOR_ACCENT : COLOR_FAINT);
-    gfxFillRoundRect(FOLDER_X, TAB_Y, FOLDER_W, TAB_H, TAB_H / 2, COLOR_SURFACE);
-    drawGearIcon(FOLDER_X + 26, TAB_Y + TAB_H / 2.0f, COLOR_DIM);
-    fontDrawMiddle(FONT_BOLD, 17, FOLDER_X + 46, TAB_Y + TAB_H / 2.0f, "Settings", COLOR_DIM);
-    uiLibraryAddHit(FOLDER_X, 0, FOLDER_W, UI_TAB_BAR_H, LIBHIT_SETTINGS, 0, 0);
+    fontDrawClipped(selected ? FONT_BOLD : FONT_REGULAR, 21, x + MENU_PANEL_PAD, row_y + 9,
+                    MENU_PANEL_W - 2 * MENU_PANEL_PAD, label, COLOR_TEXT);
+    uiLibraryAddHit(x + 16, row_y, MENU_PANEL_W - 32, MENU_PANEL_ROW_H - 6, LIBHIT_MENU_ITEM, i, 0);
+}
+
+void uiDrawMenu(const char *title, const char *version, const char *const *items, int count, int cursor)
+{
+    int h = 76 + count * MENU_PANEL_ROW_H + 20;
+    int x = (GFX_WIDTH - MENU_PANEL_W) / 2, y = (GFX_HEIGHT - h) / 2;
+    gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), UI_DIM_ALPHA);
+    uiLibraryAddHit(0, 0, GFX_WIDTH, GFX_HEIGHT, LIBHIT_CLOSE, 0, 0);
+    gfxFillRoundRect(x, y, MENU_PANEL_W, h, 16, COLOR_SURFACE);
+    uiLibraryAddHit(x, y, MENU_PANEL_W, h, LIBHIT_PANEL, 0, 0);
+    // The app's name and version (as KaiRadio's), or a question.
+    int title_w = fontDraw(FONT_BOLD, 22, x + MENU_PANEL_PAD, y + 24, title, version ? COLOR_ACCENT : COLOR_TEXT);
+    if (version)
+        fontDraw(FONT_REGULAR, 15, x + MENU_PANEL_PAD + title_w + 12, y + 31, version, COLOR_FAINT);
+    for (int i = 0; i < count; i++)
+        drawMenuRow(x, y + 76 + i * MENU_PANEL_ROW_H, i, cursor, items[i]);
 }
 
 // A card's colors, the same for the same name every time.
@@ -514,7 +618,7 @@ void uiDrawToast(const char *message)
     int w = fontTextWidth(FONT_BOLD, 18, message) + 48;
     if (w > GFX_WIDTH - 2 * MARGIN)
         w = GFX_WIDTH - 2 * MARGIN;
-    int x = (GFX_WIDTH - w) / 2, y = GFX_HEIGHT - 70;
+    int x = (GFX_WIDTH - w) / 2, y = UI_FOOTER_Y - 58;
     gfxFillRoundRect(x, y, w, 46, 23, COLOR_SURFACE_HI);
     fontDrawClipped(FONT_BOLD, 18, x + 24, y + 10, w - 48, message, COLOR_ERROR);
 }
@@ -526,6 +630,7 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
 {
     uiDrawBackground();
     uiDrawTabBar(v->tab, status);
+    gfxSetClip(0, UI_TAB_BAR_H, GFX_WIDTH, UI_FOOTER_Y - UI_TAB_BAR_H);
     if (!folder_set) {
         drawCentered("Choose the folder with your videos",
                      "KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.");
@@ -545,5 +650,7 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     } else if (v->tab == TAB_FILMS || v->tab == TAB_SERIES) {
         drawGrid(v, v->tab == TAB_FILMS ? GRID_FILMS : GRID_SERIES, lib, resume);
     }
+    gfxResetClip();
+    uiDrawFooterStrip();
     uiDrawToast(message);
 }
