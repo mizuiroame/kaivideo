@@ -46,7 +46,7 @@ static void testUpNext(void)
         snprintf(path, sizeof(path), "sdmc:/V/Dustland/Dustland.S01E%02d.mkv", e);
         libraryAdd(&lib, path, 1, 1);
     }
-    libraryAdd(&lib, "sdmc:/V/Paper Moon (1998)/moon.mkv", 1, 1);
+    libraryAdd(&lib, "sdmc:/V/Paper Lanterns (1998)/moon.mkv", 1, 1);
     libraryBuild(&lib);
     int rook = strcmp(lib.shows[0].name, "Rook") == 0 ? 0 : 1;
     // The next episode, across seasons; none after the last, or for a film.

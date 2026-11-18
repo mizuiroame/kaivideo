@@ -35,14 +35,14 @@ static void testFilms(void)
     // From the file's name: tags dropped, the year kept apart.
     CHECK(isFilm(parse("sdmc:/Media/Downloads/Luna.Verde.2024.MULTi.FRENCH.HDR.2160p.WEB.H265-GRP.mkv", root),
                  "Luna Verde", 2024));
-    CHECK(isFilm(parse("sdmc:/Media/Paper.Moon.1998.1080p.REMASTERED.BluRay.ENG.LATINO.JAP.DD5.1.H265-GRP.mkv",
+    CHECK(isFilm(parse("sdmc:/Media/Paper.Lanterns.1998.1080p.REMASTERED.BluRay.ENG.LATINO.JAP.DD5.1.H265-GRP.mkv",
                        root),
-                 "Paper Moon", 1998));
-    CHECK(isFilm(parse("sdmc:/Media/The Lantern (1993) 2160p Bluray Remux h265 HDR10 DTS-HD MA 5.1-GRP_Rips.mkv", root),
-                 "The Lantern", 1993));
+                 "Paper Lanterns", 1998));
+    CHECK(isFilm(parse("sdmc:/Media/The Lantern Keeper (1993) 2160p Bluray Remux h265 HDR10 DTS-HD MA 5.1-GRP_Rips.mkv", root),
+                 "The Lantern Keeper", 1993));
     // A year-like number that starts the title, or one that isn't a year, stays.
     CHECK(isFilm(parse("sdmc:/Media/1999.Nights.In.Kyoto.1975.1080p.mkv", root), "1999 Nights In Kyoto", 1975));
-    CHECK(isFilm(parse("sdmc:/Media/Station 2049 (2017).mkv", root), "Station 2049", 2017));
+    CHECK(isFilm(parse("sdmc:/Media/Station Nine (2017).mkv", root), "Station Nine", 2017));
     CHECK(isFilm(parse("sdmc:/Media/Home Video.mp4", root), "Home Video", 0));
     // A folder without a year above the file doesn't name it.
     CHECK(isFilm(parse("sdmc:/Media/Movies/Ashfall.2010.2160p.UHD.Blu-ray.Remux.HDR10.HEVC.mkv", root),
@@ -54,13 +54,13 @@ static void testEpisodes(void)
     const char *root = "sdmc:/Media";
     // The series' folder names it; the episode's title comes after SxxEyy.
     CHECK(isEpisode(parse("sdmc:/Media/TV_Shows/Prairie Road/"
-                          "Prairie.Road.S09E06.The.Long.Fence.1080p.DSNP.WEB-DL.AAC2.0.H.264-GRP.mkv",
+                          "Prairie.Road.S09E06.Dry.Creek.1080p.DSNP.WEB-DL.AAC2.0.H.264-GRP.mkv",
                           root),
-                    "Prairie Road", 9, 6, "The Long Fence"));
+                    "Prairie Road", 9, 6, "Dry Creek"));
     CHECK(isEpisode(parse("sdmc:/Media/TV_Shows/Prairie Road/"
-                          "Prairie Road 1997 S01E11 Fence Day at the Fair 1080p DSNP WEB-DL DUAL AAC2 0.mkv",
+                          "Prairie Road 2003 S01E11 Harvest Fair 1080p DSNP WEB-DL DUAL AAC2 0.mkv",
                           root),
-                    "Prairie Road", 1, 11, "Fence Day at the Fair"));
+                    "Prairie Road", 1, 11, "Harvest Fair"));
     CHECK(isEpisode(parse("sdmc:/Media/TV_Shows/Sky Pilots - The Long War/LongWar_S06E09.mkv", root),
                     "Sky Pilots - The Long War", 6, 9, ""));
     CHECK(isEpisode(parse("sdmc:/Media/TV_Shows/Dustland/"

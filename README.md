@@ -6,6 +6,18 @@ An **open-source video player** for **Switch 2** running
 [KaiRadio](https://github.com/mizuiroame/kairadio). Play the videos on your
 microSD card with the console's own hardware video decoder.
 
+![Home](docs/screenshots/home.png)
+
+| A series | Next episode | Subtitles |
+|----------|--------------|-----------|
+| ![A series' page](docs/screenshots/series.png) | ![The next episode's card](docs/screenshots/up_next.png) | ![The subtitles list](docs/screenshots/subtitles.png) |
+
+| Films | Settings |
+|-------|----------|
+| ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) |
+
+The screenshots show made-up films and series.
+
 > KaiVideo is an independent project. It is not affiliated with, endorsed by
 > or sponsored by Nintendo. See the [Legal notice](#legal-notice).
 
@@ -96,7 +108,7 @@ kept:
   anime). A folder named after the series (`TV/Rook/`, `Rook/Season 1/`) gives
   it its name; otherwise the file's name does.
 - **Films**: every other video. A `Title (Year)` folder gives the film its
-  name (`Movies/Paper Moon (1998)/anything.mkv`); otherwise the file's name
+  name (`Movies/Paper Lanterns (1998)/anything.mkv`); otherwise the file's name
   does, without tags like `1080p`, `BluRay` or `x264`.
 
 > **Don't take the microSD card out while kaiHEN is running.** Removing it

@@ -122,7 +122,7 @@ void appOpenPicker(App *app)
 
 // --- Playing and opening ---
 
-// "Paper Moon (1998)", "Rook · S01E03 · Lamentia".
+// "Paper Lanterns (1998)", "Rook · S01E03 · Lamentia".
 static void itemName(const Library *lib, int item, char *out, size_t size)
 {
     const LibraryItem *it = &lib->items[item];

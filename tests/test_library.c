@@ -40,7 +40,7 @@ void testLibrary(void)
 {
     mkdir(TMP_ROOT, 0755);
     touchFile("Movies/Quiet Harbor (2017)/harbor.mp4", 1000);
-    touchFile("Movies/Paper.Moon.1998.1080p.BluRay.mkv", 3000);
+    touchFile("Movies/Paper.Lanterns.1998.1080p.BluRay.mkv", 3000);
     touchFile("Movies/notes.txt", 9000);  // Not a video.
     touchFile("TV/Rook/Season 2/Rook.S02E01.1080p.mkv", 2000);
     touchFile("TV/Rook/Rook.S01E02.1080p.mkv", 2000);
@@ -53,7 +53,7 @@ void testLibrary(void)
     CHECK(libraryScan(&lib, NULL));
     CHECK(lib.count == 6);
     // Films by title; one series from three folders, its episodes in order.
-    CHECK(lib.film_count == 2 && strcmp(lib.items[lib.films[0]].name.title, "Paper Moon") == 0 &&
+    CHECK(lib.film_count == 2 && strcmp(lib.items[lib.films[0]].name.title, "Paper Lanterns") == 0 &&
           strcmp(lib.items[lib.films[1]].name.title, "Quiet Harbor") == 0);
     CHECK(lib.show_count == 1);
     const LibraryShow *rook = findShow(&lib, "Rook");
@@ -63,7 +63,7 @@ void testLibrary(void)
               lib.items[rook->episodes[3]].name.season == 2);
         CHECK(lib.items[rook->episodes[0]].show == 0);
     }
-    // The newest first: Paper Moon (3000), Rook (2500), Quiet Harbor (1000).
+    // The newest first: Paper Lanterns (3000), Rook (2500), Quiet Harbor (1000).
     CHECK(lib.recent_count == 3 && !lib.recent[0].is_show && lib.recent[1].is_show && !lib.recent[2].is_show);
 
     // Kept and read back.

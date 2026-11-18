@@ -1,6 +1,6 @@
-// What a video file is, from its name and folders: a film ("Paper Moon",
+// What a video file is, from its name and folders: a film ("Paper Lanterns",
 // 1998) or an episode of a series ("Prairie Road", season 9, episode 6,
-// "The Long Fence"). Release tags (1080p, x265, WEB-DL, [group]...) are
+// "Dry Creek"). Release tags (1080p, x265, WEB-DL, [group]...) are
 // dropped. Pure logic over strings.
 #pragma once
 

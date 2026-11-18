@@ -190,7 +190,7 @@ static void buildSampleLibrary(void)
     libraryBuild(&g_lib);
     const int64_t S = 1000000000;
     memset(&g_resume, 0, sizeof(g_resume));
-    for (size_t i = 0; i < g_lib.count; i += 9)
+    for (size_t i = 4; i < g_lib.count; i += 9)  // Not the watched episodes below.
         resumeRemember(&g_resume, g_lib.items[i].path, (int64_t)(200 + i * 13) * S, 2700 * S);
     // A series' first three episodes watched: its fourth is Up next on Home.
     watchedInit(&g_watched);
@@ -205,6 +205,14 @@ static void buildSampleLibrary(void)
 }
 
 #define HOME_HELP "[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"
+
+static void libraryHelpScene(const char *name, const char *help)
+{
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawFooterHelp(help);
+    save(name);
+}
 
 static void libraryScene(const char *name, bool folder_set, const char *status, const char *message)
 {
@@ -279,10 +287,12 @@ static void libraryScenes(void)
     libraryScene("thumbs_home", true, NULL, NULL);
     g_view.tab = TAB_FILMS;
     libraryScene("thumbs_films", true, NULL, NULL);
+    g_view.tab = TAB_SERIES;
     for (size_t s = 0; s < g_lib.show_count; s++)
         if (strstr(g_lib.shows[s].name, "Prairie"))
             libviewOpenShow(&g_view, &g_lib, (int)s, -1);
-    libraryScene("thumbs_show", true, NULL, NULL);
+    libviewShowMove(&g_view, &g_lib, 0, 3);  // The cursor on the next to watch.
+    libraryHelpScene("thumbs_show", "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu");
     // Each episode's watched circle answers a tap, on its row.
     LibHit circle = uiLibraryTap(GFX_WIDTH - MARGIN - 12, 196 + 58 + 29);
     if (circle.kind != LIBHIT_WATCHED || circle.a != 1) {
@@ -299,7 +309,7 @@ static void libraryScenes(void)
         drawPicture();
         uiDrawSubtitles("No, I'm not going back there.", with_bar);
         if (with_bar)
-            uiDrawPlayerBar(&playing, "Prairie Road \xC2\xB7 S01E03 \xC2\xB7 Texas Twister", NULL, -1);
+            uiDrawPlayerBar(&playing, "Prairie Road \xC2\xB7 S01E03 \xC2\xB7 Windmill Weather", NULL, -1);
         uiLibraryResetHits();
         uiDrawUpNextCard(&g_lib, next, 0.6, 18, with_bar);
         save(with_bar ? "up_next" : "up_next_hidden");
@@ -379,7 +389,7 @@ static void libraryScenes(void)
     static Browser b;
     b.items = calloc(4, sizeof(BrowserEntry));
     snprintf(b.path, sizeof(b.path), "%s", "sdmc:/Media/Movies");
-    const char *names[] = {"Paper Moon (1998)", "Quiet Harbor (2017)", "Ashfall (2010) 2160p.mkv", "Trailer.mp4"};
+    const char *names[] = {"Paper Lanterns (1998)", "Quiet Harbor (2017)", "Ashfall (2010) 2160p.mkv", "Trailer.mp4"};
     for (int i = 0; i < 4; i++) {
         snprintf(b.items[i].name, sizeof(b.items[i].name), "%s", names[i]);
         b.items[i].is_dir = i < 2;
