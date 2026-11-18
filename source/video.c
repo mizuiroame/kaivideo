@@ -12,6 +12,7 @@
 #include <switch.h>
 
 #include "subs.h"
+#include "swframe.h"
 
 #define IO_BUFFER (256 * 1024)
 #define SUBMIT_TIMEOUT_NS 2000000ull
@@ -20,6 +21,8 @@
 
 #define SUB_TEXT_MAX 1024
 #define SUB_DEFAULT_NS 4000000000ll  // A line without an end shows this long.
+#define DEFAULT_FRAME_NS 41666667ll  // Between frames, when a file doesn't say.
+#define MAX_RECEIVE_ERRORS 64        // In a row: decoding has failed for good.
 
 typedef struct {
     uint8_t *y, *uv;   // NV12, width bytes a row.
@@ -45,6 +48,13 @@ struct Video {
     int64_t duration_ns;
     VideoDecoder decoder;
     bool decoder_open;
+    // Decoding on the CPU instead (only the decoding thread uses these once open).
+    AVCodecContext *software;
+    AVFrame *software_frame;
+    int max_threads;               // 0: as many as suit the video.
+    int64_t software_last_ns;      // The last frame's time: for a frame without one.
+    int64_t frame_ns;
+    int64_t clock_ns;              // Where playback last was (SWFRAME_NO_CLOCK after a seek).
     char description[96];
     int width, height;
     double aspect;
@@ -125,10 +135,125 @@ static bool interrupted(Video *v)
     return yes;
 }
 
+// The queue's next free slot, once there is one; NULL when interrupted.
+static Slot *waitForSlot(Video *v)
+{
+    pthread_mutex_lock(&v->lock);
+    while (v->count == VIDEO_QUEUE && !v->stop && !v->seek_requested)
+        pthread_cond_wait(&v->wake, &v->lock);
+    bool stop = v->stop || v->seek_requested;
+    Slot *s = &v->slots[(v->head + v->count) % VIDEO_QUEUE];
+    pthread_mutex_unlock(&v->lock);
+    return stop ? NULL : s;
+}
+
+// The slot from waitForSlot is filled: into the queue. False if a seek came
+// meanwhile (the frame is from before it).
+static bool commitSlot(Video *v, double copy_ms)
+{
+    pthread_mutex_lock(&v->lock);
+    bool seeking = v->seek_requested;
+    if (!seeking) {
+        v->count++;
+        v->stats.decoded++;
+        v->copy_total_ms += copy_ms;
+    }
+    pthread_mutex_unlock(&v->lock);
+    return !seeking;
+}
+
+// --- Decoding on the CPU ---
+
+static int softwareBits(int format)
+{
+    switch (format) {
+    case AV_PIX_FMT_YUV420P:
+    case AV_PIX_FMT_YUVJ420P: return 8;
+    case AV_PIX_FMT_YUV420P10LE: return 10;
+    default: return 0;
+    }
+}
+
+// A decoded frame into the queue, as NV12. False when interrupted or failed.
+static bool queueSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
+{
+    int bits = softwareBits(f->format);
+    if (!bits) {
+        fail(v, "This video's picture format can't be shown.");
+        return false;
+    }
+    Slot *s = waitForSlot(v);
+    if (!s)
+        return false;
+    int width = f->width < v->width ? f->width & ~1 : v->width;
+    int height = f->height < v->height ? f->height & ~1 : v->height;
+    const uint8_t *const planes[3] = {f->data[0], f->data[1], f->data[2]};
+    const ptrdiff_t lines[3] = {f->linesize[0], f->linesize[1], f->linesize[2]};
+    u64 t0 = armGetSystemTick();
+    swframeToNv12(planes, lines, width, height, bits, s->y, s->uv, v->width);
+    s->pts_ns = pts_ns;
+    return commitSlot(v, armTicksToNs(armGetSystemTick() - t0) / 1e6);
+}
+
+// Takes every frame FFmpeg has ready. False when interrupted or failed.
+static bool takeSoftwareFrames(Video *v)
+{
+    AVFrame *f = v->software_frame;
+    int errors = 0;
+    while (!interrupted(v)) {
+        int got = avcodec_receive_frame(v->software, f);
+        if (got == AVERROR(EAGAIN) || got == AVERROR_EOF)
+            return true;
+        if (got < 0) {  // A damaged frame: the next ones may be fine.
+            if (++errors < MAX_RECEIVE_ERRORS)
+                continue;
+            fail(v, "The video can't be decoded.");
+            return false;
+        }
+        errors = 0;
+        int64_t pts = f->best_effort_timestamp;
+        int64_t pts_ns = pts != AV_NOPTS_VALUE ? av_rescale_q(pts, v->time_base, (AVRational){1, 1000000000})
+                                               : v->software_last_ns + v->frame_ns;
+        v->software_last_ns = pts_ns;
+        bool keep = pts_ns >= v->skip_until_ns;
+        bool ok = !keep || queueSoftwareFrame(v, f, pts_ns);
+        av_frame_unref(f);
+        if (!ok)
+            return false;
+    }
+    return false;
+}
+
+static bool submitSoftware(Video *v, const AVPacket *p, bool last)
+{
+    pthread_mutex_lock(&v->lock);
+    int64_t clock_ns = v->clock_ns;
+    pthread_mutex_unlock(&v->lock);
+    bool skippable = p->pts != AV_NOPTS_VALUE &&
+                     swframeCanSkip(av_rescale_q(p->pts, v->time_base, (AVRational){1, 1000000000}), v->skip_until_ns,
+                                    clock_ns);
+    v->software->skip_frame = skippable ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
+    int sent;
+    while ((sent = avcodec_send_packet(v->software, p)) == AVERROR(EAGAIN))
+        if (!takeSoftwareFrames(v))
+            return false;
+    if (sent < 0 && sent != AVERROR_INVALIDDATA) {
+        fail(v, "The video can't be decoded.");
+        return false;
+    }
+    if (last)
+        avcodec_send_packet(v->software, NULL);  // The frames it still holds come out.
+    return takeSoftwareFrames(v);
+}
+
+// --- Decoding with the console's decoder ---
+
 // Moves every frame the decoder has ready into the queue, waiting up to
 // timeout_ns for the first; waits for room when the queue is full. False when interrupted.
 static bool takeFrames(Video *v, u64 timeout_ns)
 {
+    if (v->software)
+        return takeSoftwareFrames(v);
     VideoFrame f;
     while (R_SUCCEEDED(videoDecoderGetFrame(&v->decoder, &f, timeout_ns))) {
         timeout_ns = 0;
@@ -137,13 +262,8 @@ static bool takeFrames(Video *v, u64 timeout_ns)
             videoDecoderReleaseFrame(&v->decoder, &f);
             continue;
         }
-        pthread_mutex_lock(&v->lock);
-        while (v->count == VIDEO_QUEUE && !v->stop && !v->seek_requested)
-            pthread_cond_wait(&v->wake, &v->lock);
-        bool stop = v->stop || v->seek_requested;
-        Slot *s = &v->slots[(v->head + v->count) % VIDEO_QUEUE];
-        pthread_mutex_unlock(&v->lock);
-        if (stop) {
+        Slot *s = waitForSlot(v);
+        if (!s) {
             videoDecoderReleaseFrame(&v->decoder, &f);
             return false;
         }
@@ -154,15 +274,7 @@ static bool takeFrames(Video *v, u64 timeout_ns)
         videoDecoderReleaseFrame(&v->decoder, &f);
         if (R_FAILED(rc))
             continue;
-        pthread_mutex_lock(&v->lock);
-        bool seeking = v->seek_requested;  // A seek came while copying: this frame is from before.
-        if (!seeking) {
-            v->count++;
-            v->stats.decoded++;
-            v->copy_total_ms += ms;
-        }
-        pthread_mutex_unlock(&v->lock);
-        if (seeking)
+        if (!commitSlot(v, ms))
             return false;
     }
     return !interrupted(v);
@@ -170,6 +282,8 @@ static bool takeFrames(Video *v, u64 timeout_ns)
 
 static bool submit(Video *v, const AVPacket *p, bool last)
 {
+    if (v->software)
+        return submitSoftware(v, p, last);
     int64_t ts = p->pts != AV_NOPTS_VALUE ? p->pts : p->dts != AV_NOPTS_VALUE ? p->dts : 0;
     s64 ns = av_rescale_q(ts, v->time_base, (AVRational){1, 1000000000});
     if (ns > v->submitted_max_ns)
@@ -199,7 +313,12 @@ static void doSeek(Video *v, int64_t target_ns)
     av_seek_frame(v->fmt, v->stream, ts, AVSEEK_FLAG_BACKWARD);
     if (v->bsf)
         av_bsf_flush(v->bsf);
-    videoDecoderFlush(&v->decoder);
+    if (v->software) {
+        avcodec_flush_buffers(v->software);
+        v->software_last_ns = target_ns;
+    } else {
+        videoDecoderFlush(&v->decoder);
+    }
     for (int i = 0; i < v->sub_count; i++)
         avcodec_flush_buffers(v->subs[i].ctx);
     v->skip_until_ns = target_ns;
@@ -340,7 +459,51 @@ static const char *codecName(enum AVCodecID id)
     }
 }
 
-static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
+static SwframeCodec swframeCodecOf(enum AVCodecID id)
+{
+    switch (id) {
+    case AV_CODEC_ID_H264: return SWFRAME_H264;
+    case AV_CODEC_ID_HEVC: return SWFRAME_HEVC;
+    case AV_CODEC_ID_VP9: return SWFRAME_VP9;
+    case AV_CODEC_ID_AV1: return SWFRAME_AV1;
+    case AV_CODEC_ID_VP8: return SWFRAME_VP8;
+    default: return SWFRAME_OTHER;
+    }
+}
+
+static int cpuCores(void)
+{
+    u64 mask = 0;
+    return R_SUCCEEDED(svcGetInfo(&mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0)) ? __builtin_popcountll(mask) : 1;
+}
+
+static bool openSoftware(Video *v, AVStream *st, double fps, char *error, size_t error_size)
+{
+    AVCodecParameters *par = st->codecpar;
+    const AVCodec *codec = avcodec_find_decoder(par->codec_id);
+    v->software = codec ? avcodec_alloc_context3(codec) : NULL;
+    v->software_frame = av_frame_alloc();
+    if (!v->software || !v->software_frame || avcodec_parameters_to_context(v->software, par) < 0) {
+        snprintf(error, error_size, "This %s video can't be decoded.", codecName(par->codec_id));
+        return false;
+    }
+    int threads = swframeThreads(par->width, par->height, fps, cpuCores());
+    v->software->thread_count = v->max_threads > 0 && v->max_threads < threads ? v->max_threads : threads;
+    v->software->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
+    v->software->pkt_timebase = st->time_base;
+    if (avcodec_open2(v->software, codec, NULL) < 0) {
+        snprintf(error, error_size, "This %s video can't be decoded.", codecName(par->codec_id));
+        return false;
+    }
+    v->frame_ns = fps > 0 ? (int64_t)(1e9 / fps) : DEFAULT_FRAME_NS;
+    snprintf(v->description, sizeof(v->description), "%s %dx%d, %.3g fps, software", codecName(par->codec_id),
+             par->width, par->height, fps);
+    return true;
+}
+
+// The console's decoder, with the filter its codec needs. False, with a
+// reason, if it can't take this video.
+static bool openHardware(Video *v, AVStream *st, double fps, char *error, size_t error_size)
 {
     AVCodecParameters *par = st->codecpar;
     ViddecCodec codec;
@@ -349,18 +512,7 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     case AV_CODEC_ID_H264: codec = ViddecCodec_H264; filter = "h264_mp4toannexb"; break;
     case AV_CODEC_ID_VP9: codec = ViddecCodec_Vp9; filter = "vp9_superframe_split"; break;
     case AV_CODEC_ID_AV1: codec = ViddecCodec_Av1; break;
-    case AV_CODEC_ID_VP8: codec = ViddecCodec_Vp8; break;
-    default:
-        snprintf(error, error_size, "%s video can't be played: KaiVideo plays H.264, VP9, AV1 and VP8.",
-                 codecName(par->codec_id));
-        return false;
-    }
-    // The decoder's output is 8-bit NV12: 10-bit video isn't sent to it.
-    const AVPixFmtDescriptor *pix = av_pix_fmt_desc_get((enum AVPixelFormat)par->format);
-    if (pix && pix->comp[0].depth > 8) {
-        snprintf(error, error_size, "%d-bit %s video can't be played: KaiVideo plays 8-bit video.",
-                 pix->comp[0].depth, codecName(par->codec_id));
-        return false;
+    default: codec = ViddecCodec_Vp8; break;
     }
     if (filter) {
         const AVBitStreamFilter *spec = av_bsf_get_by_name(filter);
@@ -370,7 +522,6 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
             return false;
         }
     }
-    double fps = av_q2d(av_guess_frame_rate(v->fmt, st, NULL));
     // H.264 codes 1080 lines as 1088: the decoder sizes its reference images
     // from what it's told, and with B-frames 1080 isn't enough (it stalls).
     VideoDecoderConfig config = {
@@ -392,6 +543,33 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     snprintf(v->description, sizeof(v->description), "%s %dx%d, %.3g fps", codecName(par->codec_id), par->width,
              par->height, fps);
     return true;
+}
+
+static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
+{
+    AVCodecParameters *par = st->codecpar;
+    const AVPixFmtDescriptor *pix = av_pix_fmt_desc_get((enum AVPixelFormat)par->format);
+    int bits = pix ? pix->comp[0].depth : 0;
+    SwframeCodec kind = swframeCodecOf(par->codec_id);
+    double fps = av_q2d(av_guess_frame_rate(v->fmt, st, NULL));
+    switch (swframeRoute(kind, bits)) {
+    case SWFRAME_SOFTWARE:
+        return openSoftware(v, st, fps, error, error_size);
+    case SWFRAME_HARDWARE:
+        if (openHardware(v, st, fps, error, error_size))
+            return true;
+        if (kind != SWFRAME_H264)
+            return false;
+        av_bsf_free(&v->bsf);  // H.264 the decoder refuses: FFmpeg can still play it.
+        return openSoftware(v, st, fps, error, error_size);
+    default:
+        if (kind == SWFRAME_OTHER)
+            snprintf(error, error_size, "%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8.",
+                     codecName(par->codec_id));
+        else
+            snprintf(error, error_size, "%d-bit %s video can't be played.", bits, codecName(par->codec_id));
+        return false;
+    }
 }
 
 // The text subtitle tracks (SubRip, ASS, mov_text, WebVTT), up to
@@ -439,6 +617,11 @@ static void openChapters(Video *v)
 
 Video *videoOpen(const char *path, char *error, size_t error_size)
 {
+    return videoOpenLimited(path, 0, error, error_size);
+}
+
+Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t error_size)
+{
     Video *v = calloc(1, sizeof(*v));
     if (!v) {
         snprintf(error, error_size, "Out of memory.");
@@ -446,6 +629,8 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
     }
     pthread_mutex_init(&v->lock, NULL);
     pthread_cond_init(&v->wake, NULL);
+    v->clock_ns = SWFRAME_NO_CLOCK;
+    v->max_threads = max_threads;
     v->file = fopen(path, "rb");
     if (!v->file) {
         snprintf(error, error_size, "The file can't be opened.");
@@ -534,6 +719,8 @@ void videoClose(Video *v)
     }
     if (v->decoder_open)
         videoDecoderClose(&v->decoder);
+    avcodec_free_context(&v->software);
+    av_frame_free(&v->software_frame);
     av_bsf_free(&v->bsf);
     for (int i = 0; i < v->sub_count; i++) {
         avcodec_free_context(&v->subs[i].ctx);
@@ -580,6 +767,7 @@ const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
 {
     bool taken = false;
     pthread_mutex_lock(&v->lock);
+    v->clock_ns = media_ns;
     // Every frame whose time has come: the latest is shown, the others were late.
     while (v->count > 0 && v->slots[v->head].pts_ns <= media_ns) {
         if (taken)
@@ -621,6 +809,7 @@ void videoSeek(Video *v, int64_t pts_ns)
     pthread_mutex_lock(&v->lock);
     v->seek_requested = true;
     v->seek_ns = pts_ns < 0 ? 0 : pts_ns;
+    v->clock_ns = SWFRAME_NO_CLOCK;
     v->count = 0;  // What's queued is from before; the thread empties it properly too.
     pthread_cond_broadcast(&v->wake);
     pthread_mutex_unlock(&v->lock);

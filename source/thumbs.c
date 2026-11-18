@@ -132,8 +132,11 @@ const uint32_t *thumbGet(const char *path, int64_t size)
         char jpg[600];
         jpgPath(e->key, jpg, sizeof(jpg));
         struct stat st;
-        if (stat(jpg, &st) == 0) {
-            e->state = st.st_size > 0 ? THUMB_ON_CARD : THUMB_NONE;
+        ThumbFileKind kind = stat(jpg, &st) == 0 ? thumbgenFileKind(st.st_size) : THUMB_FILE_RETRY;
+        if (kind == THUMB_FILE_PICTURE) {
+            e->state = THUMB_ON_CARD;
+        } else if (kind == THUMB_FILE_NONE) {
+            e->state = THUMB_NONE;
         } else {
             e->state = THUMB_ASKED;
             thumbgenRequest(path, jpg, e->key);
@@ -164,7 +167,7 @@ void thumbsUpdate(void)
     while (thumbgenTakeDone(&key)) {
         Entry *e = find(key, false);
         if (e && e->state == THUMB_ASKED)
-            e->state = THUMB_ON_CARD;  // Read when next drawn (an empty file reads as none).
+            e->state = THUMB_ON_CARD;  // Read when next drawn (the mark reads as none).
     }
 }
 

@@ -26,6 +26,8 @@
 #define WAIT_TIMEOUT_NS 10000000ull
 #define THREAD_STACK_SIZE 0x40000
 #define THREAD_PRIORITY 0x2B
+// Only these are opened while reading the file's format: not the video decoders.
+#define AUDIO_DECODERS "aac,mp3float,mp3,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp"
 
 static u32 g_out_rate;
 static bool g_ready;
@@ -548,6 +550,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     }
     a->fmt->pb = a->io;
     a->fmt->flags |= AVFMT_FLAG_CUSTOM_IO;
+    a->fmt->codec_whitelist = av_strdup(AUDIO_DECODERS);
     const AVCodec *decoder = NULL;
     if (avformat_open_input(&a->fmt, NULL, NULL, NULL) < 0 || avformat_find_stream_info(a->fmt, NULL) < 0) {
         audioClose(a);

@@ -33,8 +33,11 @@ The screenshots show made-up films and series.
   and an About page.
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
-  **AV1** and **VP8**, tried up to 1080p at 60 frames per second. A video the
-  decoder can't play says so instead of stuttering.
+  **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
+- **HEVC (H.265)**, 8-bit and 10-bit, and **10-bit H.264**, decoded on the CPU
+  with FFmpeg: the console's decoder interface doesn't offer them. Measured on
+  the console, a 1080p 10-bit episode decodes at several times its speed. It
+  uses more battery than hardware decoding.
 - Sound with [FFmpeg](https://ffmpeg.org/): **AAC**, **MP3**, **Opus**,
   **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
   and **Dolby TrueHD** (surround is mixed down to stereo).
@@ -99,7 +102,7 @@ Press **−** (or tap **Settings**) for:
   darkened so text stays readable.
 - **Thumbnails**: pictures from the videos on their cards, or plain colors.
   They're made a few at a time while nothing plays, and kept in
-  `config/thumbs`. Videos KaiVideo can't play (HEVC) keep their color.
+  `config/thumbs`. Videos KaiVideo can't play keep their color.
 
 ### How films and series are found
 
@@ -178,14 +181,13 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 - **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown; text ones
   are.
-- **10-bit** H.264 (Hi10P) and 10-bit AV1 videos can't be played.
-- **HEVC (H.265)** videos can't be played: the decoder interface KaiVideo
-  uses ([libounce](https://github.com/ouncebrew/libounce)) offers H.264, VP9,
-  AV1 and VP8, not HEVC. Many recent rips (often named `x265` or `HEVC`) are
-  HEVC; KaiVideo says so when you open one, and their cards keep a plain
-  color. Converting them to H.264 (for example with HandBrake) makes them
-  playable.
-- Not tried with 4K videos or HDR yet.
+- **10-bit** VP9 and AV1, and **12-bit** HEVC, can't be played.
+- **HEVC** is decoded on the CPU, because the decoder interface KaiVideo uses
+  ([libounce](https://github.com/ouncebrew/libounce)) doesn't offer it. 10-bit
+  video is shown in 8 bits. Very high bitrates (Blu-ray remuxes) and 4K may be
+  too heavy: frames are then skipped to keep up with the sound.
+- **HDR** isn't converted: HDR videos play, with washed-out colors.
+- Not tried with 4K videos yet.
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
@@ -195,7 +197,7 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 ## Plans
 
-- **HEVC (H.265)**, as soon as libounce offers it.
+- **HEVC in hardware**, if libounce offers it.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
 - Smoother jumps, and checks with big libraries, 4K and HDR on the console.
 
@@ -212,11 +214,11 @@ docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make -C tests/preview  # scre
 ```
 
 `ffmpeg/Dockerfile` builds FFmpeg 7.1 from its release tarball (checked by
-SHA-256) with only the demuxers, parsers, bitstream filters, audio and
-subtitle decoders and the `atempo` audio filter KaiVideo needs, and fails if
-the build would include GPL or
-non-free parts. The video itself is decoded by the console, through
-[libounce](https://github.com/ouncebrew/libounce)'s `VideoDecoder`.
+SHA-256) with only the demuxers, parsers, bitstream filters, decoders and the
+`atempo` audio filter KaiVideo needs, and fails if the build would include GPL
+or non-free parts. Most video is decoded by the console, through
+[libounce](https://github.com/ouncebrew/libounce)'s `VideoDecoder`; FFmpeg
+decodes HEVC and 10-bit H.264.
 
 `tools/make_icon.py` draws `icon.jpg`.
 

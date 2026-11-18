@@ -11,7 +11,8 @@
 
 #define QUEUE_MAX 48
 #define PATH_MAX_LEN 768
-#define STACK_SIZE 0x10000
+#define STACK_SIZE 0x80000             // Reading a video's format can decode its first frames.
+#define DECODE_THREADS 2              // Leaves the CPU to the library while it works.
 #define PRIORITY 0x2E                 // Below the UI's.
 #define FRAME_WAIT_NS 8000000000ull   // A frame that hasn't come by then: give up on it.
 #define POLL_NS 20000000ull
@@ -56,7 +57,7 @@ static const GfxVideoFrame *frameAt(Video *v, int64_t point_ns)
 static bool make(const Request *r)
 {
     char error[160];
-    Video *v = videoOpen(r->path, error, sizeof(error));
+    Video *v = videoOpenLimited(r->path, DECODE_THREADS, error, sizeof(error));
     const GfxVideoFrame *f = NULL;
     if (v) {
         int64_t length = videoDuration(v), point = length > 0 ? length / 5 : 30000000000ll;
@@ -82,9 +83,11 @@ static bool make(const Request *r)
             remove(r->jpg);
         free(rgb);
     } else if (!interrupted) {
-        FILE *none = fopen(r->jpg, "wb");  // Empty: this video has no picture (not decodable).
-        if (none)
+        FILE *none = fopen(r->jpg, "wb");  // The mark: this video has no picture (not decodable).
+        if (none) {
+            fwrite(THUMB_NONE_MARK, 1, THUMB_NONE_MARK_SIZE, none);
             fclose(none);
+        }
     }
     if (v)
         videoClose(v);

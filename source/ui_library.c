@@ -123,7 +123,7 @@ static const uint32_t *pictureOf(const Library *lib, LibraryRef ref)
         return NULL;
     if (!ref.is_show)
         return thumbGet(lib->items[ref.index].path, lib->items[ref.index].size);
-    // A series: its first episode that has one (an HEVC one has none: the next).
+    // A series: its first episode that has one (one that can't be decoded has none: the next).
     const LibraryShow *show = &lib->shows[ref.index];
     for (int i = 0; i < show->count && i < SERIES_PICTURE_TRIES; i++) {
         const LibraryItem *item = &lib->items[show->episodes[i]];
@@ -739,7 +739,7 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
         drawSearch(v, lib, resume);
     } else if (lib->count == 0) {
         drawCentered(status && status[0] ? "Looking for videos..." : "No videos here yet",
-                     "KaiVideo plays MP4, MKV and WebM files (H.264, VP9, AV1, VP8).");
+                     "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).");
     } else if (v->tab == TAB_HOME) {
         drawHome(v, lib, home, resume);
     } else if (v->tab == TAB_FILMS && lib->film_count == 0) {

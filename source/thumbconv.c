@@ -1,6 +1,11 @@
 // thumbgen.h's picture maths, apart from its thread so the host tests run it.
 #include "thumbgen.h"
 
+ThumbFileKind thumbgenFileKind(long long size)
+{
+    return size == 0 ? THUMB_FILE_RETRY : size <= THUMB_NONE_MARK_SIZE ? THUMB_FILE_NONE : THUMB_FILE_PICTURE;
+}
+
 static uint8_t clampByte(float v)
 {
     return v <= 0.0f ? 0 : v >= 255.0f ? 255 : (uint8_t)(v + 0.5f);

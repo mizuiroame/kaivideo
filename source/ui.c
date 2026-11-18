@@ -109,7 +109,7 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
     if (b->count == 0) {
         fontDrawCentered(FONT_BOLD, 24, GFX_WIDTH / 2.0f, 300, "No videos or folders here.", COLOR_TEXT);
         fontDrawCentered(FONT_REGULAR, 19, GFX_WIDTH / 2.0f, 340,
-                         "KaiVideo plays MP4, MKV and WebM files (H.264, VP9, AV1, VP8).", COLOR_DIM);
+                         "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).", COLOR_DIM);
     }
     size_t first = uiFirstVisible(b->cursor, b->count);
     for (size_t i = first; i < b->count && i < first + UI_ROWS; i++) {

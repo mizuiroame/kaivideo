@@ -235,6 +235,7 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
         target = 0;
     videoSeek(p->video, target);
     p->position_ns = target;
+    p->first_frame_ns = target;
     p->base_pos_ns = target;
     p->base_now_ns = now_ns;
     p->holding = true;  // Until the picture has a frame from the target.

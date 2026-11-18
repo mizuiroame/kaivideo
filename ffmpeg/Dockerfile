@@ -1,8 +1,9 @@
 # FFmpeg for Switch 2 under the LGPL 2.1, for KaiVideo: the MP4 and
 # MKV/WebM demuxers, the bitstream filters that hand video to the console's
 # hardware decoder, and the audio decoders, plus the resampler and the atempo
-# filter (playback speed without changing the pitch). Video isn't decoded by
-# FFmpeg: libounce's VideoDecoder does that. No GPL or non-free
+# filter (playback speed without changing the pitch). Most video is decoded by
+# libounce's VideoDecoder; FFmpeg's HEVC and H.264 decoders take what the
+# hardware can't (HEVC, 10-bit H.264). No GPL or non-free
 # parts, no network code.
 #   docker build -t kaivideo-devkit ffmpeg
 # gives the devkit image with FFmpeg in portlibs/switch2.
@@ -11,6 +12,8 @@ FROM ${DEVKIT_IMAGE}
 
 ARG FFMPEG_VERSION=7.1
 ARG FFMPEG_SHA256=40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6
+# More configure options, for experiments (tools/hevctest).
+ARG EXTRA_FFMPEG_OPTIONS=
 
 WORKDIR /tmp/ffmpeg
 COPY horizon.patch .
@@ -32,10 +35,12 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --enable-avcodec --enable-avformat --enable-swresample --enable-avfilter \
       --enable-neon \
       --enable-filter=abuffer,abuffersink,atempo \
-      --enable-decoder=mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
-      --enable-parser=h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
+      --enable-decoder=hevc,h264,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
+      --enable-parser=hevc,h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
       --enable-demuxer=mov,matroska \
       --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata \
+      $EXTRA_FFMPEG_OPTIONS \
+ && grep -q 'define HAVE_PTHREADS 1' config.h \
  && make -j"$(nproc)" \
  && make install \
  && grep -q 'define CONFIG_GPL 0' config.h \

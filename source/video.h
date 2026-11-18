@@ -1,6 +1,7 @@
 // Playing a video file's picture: a thread reads it with FFmpeg and decodes
-// it with the console's hardware decoder (libounce's VideoDecoder), into a
-// few frames that the window's thread shows when their time comes.
+// it with the console's hardware decoder (libounce's VideoDecoder), or with
+// FFmpeg on the CPU for what that can't play (HEVC, 10-bit H.264), into a few
+// frames that the window's thread shows when their time comes.
 #pragma once
 
 #include <stdbool.h>
@@ -26,8 +27,10 @@ typedef struct {
 typedef struct Video Video;
 
 // Opens path and starts decoding. NULL with a reason in error if the file
-// can't be read or its video isn't H.264, VP9, AV1 or VP8.
+// can't be read or its video can't be decoded.
 Video *videoOpen(const char *path, char *error, size_t error_size);
+// The same, using at most max_threads threads if it's decoded on the CPU.
+Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t error_size);
 // Stops the thread and frees everything.
 void videoClose(Video *v);
 
