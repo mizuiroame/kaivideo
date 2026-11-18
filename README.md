@@ -18,7 +18,7 @@ microSD card with the console's own hardware video decoder.
   and **Search** finds a title by name. Cards show a **picture from the
   video**, taken by the console's decoder in the background the first time.
 - **Settings**: themes and accent colors, your own **background** image,
-  subtitle size, and an About page.
+  and an About page.
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second. A video the
@@ -30,7 +30,8 @@ microSD card with the console's own hardware video decoder.
   pick one from a list (**X**), without stopping the picture.
 - **Subtitles**: an `.srt` file next to the video (`Film.srt` or
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
-  MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none.
+  MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
+  size, color and style (outline or a dark box) are at the end of that list.
 - **Resume where you left off**: open a video you stopped halfway and it goes
   on from there (**ZL** starts it over). Videos you've started show how far
   you got.
@@ -74,7 +75,6 @@ Press **−** (or tap **Settings**) for:
 - **Thumbnails**: pictures from the videos on their cards, or plain colors.
   They're made a few at a time while nothing plays, and kept in
   `config/thumbs`. Videos KaiVideo can't play (HEVC) keep their color.
-- **Subtitle size**: Small, Medium or Large.
 
 ### How films and series are found
 
