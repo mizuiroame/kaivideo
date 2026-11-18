@@ -8,10 +8,12 @@
 #include <stdint.h>
 
 #include "gfx.h"
+#include "playback.h"
 
 #define VIDEO_QUEUE 3  // Decoded frames waiting to be shown.
 #define VIDEO_SUB_TRACKS 8  // Text subtitle tracks kept from a file.
 #define VIDEO_AUDIO_TRACKS 8  // Sound tracks that can be chosen.
+#define VIDEO_CHAPTERS 99     // Chapters kept from a file.
 
 typedef struct {
     // Counted while it plays, for the log.
@@ -57,6 +59,9 @@ const char *videoSubtitleLabel(const Video *v, int track);
 int videoSubtitlePreferred(const Video *v);
 // The track's text at pos_ns into out ('\n' between lines); false if none.
 bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size);
+
+// The file's chapters, in order of time.
+const PlaybackChapter *videoChapters(const Video *v, int *count);
 
 // The file's sound tracks, in the file's order (audio.h opens them by this number).
 int videoAudioTrackCount(const Video *v);

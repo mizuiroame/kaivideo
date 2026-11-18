@@ -12,6 +12,7 @@
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
 #define SWITCH_LEAD_NS 300000000ll   // A new sound track joins this far ahead of the picture.
 #define JOIN_SLACK_NS 20000000ll     // Ready this little behind the picture still joins.
+#define MS_NS 1000000ll
 
 struct Player {
     Video *video;
@@ -20,8 +21,11 @@ struct Player {
     int audio_track;         // The sound track chosen (video.h's numbering), -1 before one is.
     char audio_info[160];
     bool paused;
+    int speed;               // Thousandths (playback.h).
+    int audio_delay_ms, subtitle_delay_ms;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
     int64_t position_ns;     // Where playback is, in the file's time.
+    int64_t first_frame_ns;  // The first frame since opening or the last seek.
     // The console's clock, when it's the one: position = base_pos + (now - base_now).
     bool own_clock;
     int64_t base_pos_ns;
@@ -89,6 +93,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
         return NULL;
     }
     snprintf(p->path, sizeof(p->path), "%s", path);
+    p->speed = PLAYBACK_PERMILLE;
     pthread_mutex_init(&p->swap_lock, NULL);
     char why[160];
     p->audio = audioOpen(path, -1, why, sizeof(why));
@@ -145,9 +150,10 @@ bool playerSubtitleText(Player *p, char *out, size_t size)
 {
     if (p->subtitle < 0)
         return false;
+    int64_t at = p->position_ns - (int64_t)p->subtitle_delay_ms * MS_NS;
     if (p->has_external && p->subtitle == 0)
-        return subsAt(&p->external, p->position_ns, out, size);
-    return videoSubtitleAt(p->video, p->subtitle - (p->has_external ? 1 : 0), p->position_ns, out, size);
+        return subsAt(&p->external, at, out, size);
+    return videoSubtitleAt(p->video, p->subtitle - (p->has_external ? 1 : 0), at, out, size);
 }
 
 // Makes the console's clock the one from here, carrying on from position.
@@ -171,6 +177,7 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
         int64_t first;
         if (videoNextPts(p->video, &first)) {
             p->holding = false;
+            p->first_frame_ns = first;
             p->position_ns = first;
             p->base_pos_ns = first;
             p->base_now_ns = now_ns;
@@ -180,7 +187,7 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
         }
     } else if (p->own_clock) {
         if (!p->paused)
-            p->position_ns = p->base_pos_ns + (int64_t)(now_ns - p->base_now_ns);
+            p->position_ns = p->base_pos_ns + playbackScaled((int64_t)(now_ns - p->base_now_ns), p->speed);
         if (p->joining)
             join(p);
     } else {
@@ -188,12 +195,18 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
         if (audioClock(p->audio, &heard)) {
             p->position_ns = heard;
             p->waiting_since_ns = 0;
+            p->speed = audioSpeed(p->audio);  // Normal if the one asked for couldn't be set up.
         } else if (audioFinished(p->audio) ||
                    (!p->paused && p->waiting_since_ns && now_ns - p->waiting_since_ns > AUDIO_WAIT_NS)) {
             useOwnClock(p, now_ns);  // The sound ended, or never came: the picture goes on alone.
         }
     }
-    return videoFrameAt(p->video, p->position_ns);
+    // Sound later than the picture: the picture is that far ahead of what's heard.
+    // Never before the first frame: after a seek it shows at once, even with
+    // the sound ahead of the picture.
+    int64_t delay_ns = p->audio_track >= 0 ? (int64_t)p->audio_delay_ms * MS_NS : 0;
+    int64_t picture_ns = p->position_ns + delay_ns;
+    return videoFrameAt(p->video, picture_ns > p->first_frame_ns ? picture_ns : p->first_frame_ns);
 }
 
 void playerTogglePause(Player *p, uint64_t now_ns)
@@ -238,6 +251,84 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns)
 void playerSeekTo(Player *p, int64_t target_ns, uint64_t now_ns)
 {
     playerSeekBy(p, target_ns - p->position_ns, now_ns);
+}
+
+// How far ahead of the picture sound joins: the same wait at any speed.
+static int64_t joinLead(const Player *p)
+{
+    return playbackScaled(SWITCH_LEAD_NS, p->speed);
+}
+
+void playerSetSpeed(Player *p, int permille, uint64_t now_ns)
+{
+    if (permille == p->speed)
+        return;
+    if (!p->holding)
+        useOwnClock(p, now_ns);  // The picture goes on by the console's clock meanwhile.
+    p->speed = permille;
+    if (!p->audio)
+        return;  // No sound, or a new track on its way: it takes the speed when it comes.
+    audioSetSpeed(p->audio, permille);
+    if (p->holding) {
+        audioSeek(p->audio, p->position_ns);  // Waits for the first frame, as usual.
+        return;
+    }
+    audioSetPaused(p->audio, true);
+    audioSeek(p->audio, p->position_ns + joinLead(p));
+    p->joining = true;
+}
+
+int playerSpeed(const Player *p)
+{
+    return p->speed;
+}
+
+void playerSetAudioDelay(Player *p, int delay_ms)
+{
+    p->audio_delay_ms = delay_ms;
+}
+
+int playerAudioDelay(const Player *p)
+{
+    return p->audio_delay_ms;
+}
+
+void playerSetSubtitleDelay(Player *p, int delay_ms)
+{
+    p->subtitle_delay_ms = delay_ms;
+}
+
+int playerSubtitleDelay(const Player *p)
+{
+    return p->subtitle_delay_ms;
+}
+
+int playerChapterCount(const Player *p)
+{
+    int count;
+    videoChapters(p->video, &count);
+    return count;
+}
+
+const char *playerChapterName(const Player *p, int chapter)
+{
+    int count;
+    const PlaybackChapter *chapters = videoChapters(p->video, &count);
+    return chapter >= 0 && chapter < count ? chapters[chapter].title : "";
+}
+
+int64_t playerChapterStart(const Player *p, int chapter)
+{
+    int count;
+    const PlaybackChapter *chapters = videoChapters(p->video, &count);
+    return chapter >= 0 && chapter < count ? chapters[chapter].start_ns : 0;
+}
+
+int playerChapter(const Player *p)
+{
+    int count;
+    const PlaybackChapter *chapters = videoChapters(p->video, &count);
+    return playbackChapterAt(chapters, count, p->position_ns);
 }
 
 int64_t playerPosition(const Player *p)
@@ -358,13 +449,14 @@ static void finishSwap(Player *p)
         return;
     }
     snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
+    audioSetSpeed(p->audio, p->speed);
     if (p->holding) {
         // A seek is under way: the sound waits for its first frame, as usual.
         audioSeek(p->audio, p->position_ns);
         p->own_clock = false;
         return;
     }
-    audioSeek(p->audio, p->position_ns + SWITCH_LEAD_NS);
+    audioSeek(p->audio, p->position_ns + joinLead(p));
     p->joining = true;
 }
 
@@ -379,10 +471,14 @@ static void join(Player *p)
         p->waiting_since_ns = 0;
         return;
     }
+    if (audioFinished(p->audio)) {
+        p->joining = false;  // No sound left from here: the picture ends on its own.
+        return;
+    }
     if (p->paused || !audioReadyAt(p->audio, &start))
         return;
     if (start + JOIN_SLACK_NS < p->position_ns)
-        audioSeek(p->audio, p->position_ns + SWITCH_LEAD_NS);
+        audioSeek(p->audio, p->position_ns + joinLead(p));
     else if (p->position_ns >= start)
         audioSetPaused(p->audio, false);
 }

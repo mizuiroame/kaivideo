@@ -1,7 +1,8 @@
 # FFmpeg for Switch 2 under the LGPL 2.1, for KaiVideo: the MP4 and
 # MKV/WebM demuxers, the bitstream filters that hand video to the console's
-# hardware decoder, and the audio decoders, plus the resampler. Video isn't
-# decoded by FFmpeg: libounce's VideoDecoder does that. No GPL or non-free
+# hardware decoder, and the audio decoders, plus the resampler and the atempo
+# filter (playback speed without changing the pitch). Video isn't decoded by
+# FFmpeg: libounce's VideoDecoder does that. No GPL or non-free
 # parts, no network code.
 #   docker build -t kaivideo-devkit ffmpeg
 # gives the devkit image with FFmpeg in portlibs/switch2.
@@ -27,9 +28,10 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --disable-shared --enable-static \
       --disable-runtime-cpudetect --disable-programs --disable-doc --disable-debug \
       --disable-autodetect --disable-network --disable-everything \
-      --disable-avdevice --disable-avfilter --disable-swscale \
-      --enable-avcodec --enable-avformat --enable-swresample \
+      --disable-avdevice --disable-swscale \
+      --enable-avcodec --enable-avformat --enable-swresample --enable-avfilter \
       --enable-neon \
+      --enable-filter=abuffer,abuffersink,atempo \
       --enable-decoder=mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
       --enable-parser=h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
       --enable-demuxer=mov,matroska \

@@ -5,6 +5,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "playback.h"
 #include "ui_buttons.h"
 #include "ui_style.h"
 #include "util.h"
@@ -17,6 +18,8 @@
 #define CC_X (GFX_WIDTH - MARGIN - 200 - CC_W)
 #define AUDIO_W 76              // The sound track button, left of CC.
 #define AUDIO_X (CC_X - 12 - AUDIO_W)
+#define PLAYBACK_W 104          // The Playback button, left of Audio.
+#define PLAYBACK_X (AUDIO_X - 12 - PLAYBACK_W)
 #define SUB_PX g_sub_px           // Settings > Subtitle size.
 #define SUB_LINE_H (g_sub_px * 13 / 10)
 #define SUB_MAX_W (GFX_WIDTH - 160)
@@ -196,7 +199,9 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
         gfxFillRoundRect(MARGIN, y + 18, 7, 26, 2, COLOR_TEXT);
         gfxFillRoundRect(MARGIN + 13, y + 18, 7, 26, 2, COLOR_TEXT);
     }
-    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, AUDIO_X - MARGIN - 60, name, COLOR_TEXT);
+    fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, PLAYBACK_X - MARGIN - 60, name, COLOR_TEXT);
+    gfxFillRoundRect(PLAYBACK_X, y + 14, PLAYBACK_W, CC_H, 6, COLOR_SURFACE_HI);
+    fontDrawCentered(FONT_BOLD, 18, PLAYBACK_X + PLAYBACK_W / 2.0f, y + 14 + CC_H / 2.0f, "Playback", COLOR_TEXT);
     if (playerAudioTrackCount(p) > 1) {
         gfxFillRoundRect(AUDIO_X, y + 14, AUDIO_W, CC_H, 6, COLOR_SURFACE_HI);
         fontDrawCentered(FONT_BOLD, 18, AUDIO_X + AUDIO_W / 2.0f, y + 14 + CC_H / 2.0f, "Audio", COLOR_TEXT);
@@ -220,21 +225,32 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
     gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, track_w, 6, 3, COLOR_TRACK);
     if (done > 0)
         gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, done, 6, 3, COLOR_ACCENT);
+    for (int i = 0; duration > 0 && i < playerChapterCount(p); i++) {  // Where each chapter starts.
+        double start = playerChapterStart(p, i) / 1e9;
+        if (start > 0 && start < duration)
+            gfxFillRect(MARGIN + (int)(track_w * (start / duration)) - 1, y + TRACK_Y_OFFSET, 2, 6, GFX_RGB(0, 0, 0));
+    }
     gfxFillCircle(MARGIN + done, y + TRACK_Y_OFFSET + 3, scrub >= 0 ? 12 : 8, COLOR_ACCENT);  // Bigger under a finger.
     char info[256];
     // The buttons, as the other screens' help line, and the video's format on the right.
-    snprintf(info, sizeof(info), "%s  \xC2\xB7  %s", playerVideoInfo(p), playerAudioInfo(p));
+    char speed[16] = "";
+    if (playerSpeed(p) != PLAYBACK_PERMILLE)
+        playbackFormatSpeed(speed, sizeof(speed), playerSpeed(p));
+    snprintf(info, sizeof(info), "%s%s%s  \xC2\xB7  %s", speed, speed[0] ? "  \xC2\xB7  " : "", playerVideoInfo(p),
+             playerAudioInfo(p));
     int info_w = fontTextWidth(FONT_REGULAR, 16, info);
     if (info_w > track_w / 3)
         info_w = track_w / 3;
     fontDrawClipped(FONT_REGULAR, 16, GFX_WIDTH - MARGIN - info_w, y + 82, info_w, info, COLOR_FAINT);
     uiDrawHelp(MARGIN, (float)y + 93.0f, track_w - info_w - 24,
-               "[A] pause  [<>] 10 s  [L][R] 1 min  [ZL] start  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu");
+               "[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start");
 }
 
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)
 {
     int bar_y = GFX_HEIGHT - BAR_H;
+    if (x >= PLAYBACK_X - 6 && x < PLAYBACK_X + PLAYBACK_W + 6 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
+        return TAP_PLAYBACK;
     if (has_tracks && x >= AUDIO_X - 6 && x < AUDIO_X + AUDIO_W + 6 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
         return TAP_AUDIO;
     if (has_subtitles && x >= CC_X - 6 && x < CC_X + CC_W + 10 && y >= bar_y + 4 && y < bar_y + 14 + CC_H + 10)
@@ -319,11 +335,11 @@ void uiDrawPausedSymbol(void)
     gfxTriangle(cx - 20, cy - 32, cx - 20, cy + 32, cx + 34, cy, COLOR_TEXT);
 }
 
-// --- The drop-down lists of sound tracks and subtitles ---
+// --- The drop-down lists of chapters, sound tracks and subtitles ---
 
 static int menuRight(UiMenuKind kind)
 {
-    return kind == UI_MENU_AUDIO ? AUDIO_X + AUDIO_W : CC_X + CC_W;
+    return kind == UI_MENU_PLAYBACK ? PLAYBACK_X + PLAYBACK_W : kind == UI_MENU_AUDIO ? AUDIO_X + AUDIO_W : CC_X + CC_W;
 }
 
 static int fixedHeight(const Menu *m)
@@ -341,9 +357,33 @@ static void menuBox(UiMenuKind kind, const Menu *m, int *x, int *y, int *w, int 
 
 static const char *menuLabel(const Player *p, UiMenuKind kind, int row)
 {
+    if (kind == UI_MENU_PLAYBACK)
+        return playerChapterName(p, row);
     if (kind == UI_MENU_AUDIO)
         return playerAudioTrackName(p, row);
     return row == 0 ? "Off" : playerSubtitleLabel(p, row - 1);
+}
+
+// The Playback list's options: "Speed  < 1.25x >".
+static const char *playbackOption(const Player *p, PlaybackOption option, char *value, size_t size)
+{
+    switch (option) {
+    case PLAYBACK_OPT_SPEED:
+        playbackFormatSpeed(value, size, playerSpeed(p));
+        return "Speed";
+    case PLAYBACK_OPT_AUDIO_DELAY:
+        if (playerAudioTrackCount(p) > 0)
+            playbackFormatDelay(value, size, playerAudioDelay(p));
+        else
+            snprintf(value, size, "No sound");
+        return "Audio delay";
+    default:
+        if (playerSubtitleCount(p) > 0)
+            playbackFormatDelay(value, size, playerSubtitleDelay(p));
+        else
+            snprintf(value, size, "No subtitles");
+        return "Subtitle delay";
+    }
 }
 
 static void drawCheck(float x, float cy, Color color)
@@ -358,19 +398,25 @@ static void drawRowCursor(int x, int ry, int w)
     gfxFillRect(x + 8, ry + 12, 3, MENU_ROW_H - 24, COLOR_ACCENT);
 }
 
-// The subtitles' options under their list: "Size  < Medium >".
-static void drawOptions(const Menu *m, const Config *config, int x, int y, int w)
+// The options under a list: "Size  < Medium >".
+static void drawOptions(const Player *p, UiMenuKind kind, const Menu *m, const Config *config, int x, int y, int w)
 {
     gfxFillRect(x + 20, y + MENU_DIVIDER / 2, w - 40, 1, COLOR_TRACK);
     char value[32];
-    for (int i = 0; i < m->fixed && i < SUBOPT_COUNT; i++) {
+    for (int i = 0; i < m->fixed; i++) {
         int row = m->count - m->fixed + i, ry = y + MENU_DIVIDER + i * MENU_ROW_H;
         bool on = row == m->cursor;
         if (on)
             drawRowCursor(x, ry, w);
         float cy = ry + MENU_ROW_H / 2.0f;
-        fontDrawMiddle(FONT_REGULAR, 19, x + 52, cy, subtitleOptionLabel((SubtitleOption)i), COLOR_DIM);
-        subtitleOptionValue(config, (SubtitleOption)i, value, sizeof(value));
+        const char *label;
+        if (kind == UI_MENU_PLAYBACK) {
+            label = playbackOption(p, (PlaybackOption)i, value, sizeof(value));
+        } else {
+            label = subtitleOptionLabel((SubtitleOption)i);
+            subtitleOptionValue(config, (SubtitleOption)i, value, sizeof(value));
+        }
+        fontDrawMiddle(FONT_REGULAR, 19, x + 52, cy, label, COLOR_DIM);
         int value_w = fontTextWidth(FONT_BOLD, 19, value), right = x + w - 24;
         gfxFillTriangleRight(right - 9, (int)cy - 7, 9, 14, on ? COLOR_TEXT : COLOR_FAINT);
         fontDrawMiddle(FONT_BOLD, 19, right - 20 - value_w, cy, value, COLOR_ACCENT);
@@ -386,9 +432,11 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
     menuBox(kind, m, &x, &y, &w, &h);
     gfxFillRoundRect(x - 2, y - 2, w + 4, h + 4, 14, COLOR_SURFACE_HI);  // An edge against the picture.
     gfxFillRoundRect(x, y, w, h, 12, COLOR_SURFACE);
-    fontDrawMiddle(FONT_BOLD, 20, x + 20, y + MENU_HEAD / 2.0f + 2, kind == UI_MENU_AUDIO ? "Audio" : "Subtitles",
-                   COLOR_DIM);
-    int current = kind == UI_MENU_AUDIO ? playerAudioTrack(p) : playerSubtitle(p) + 1;
+    const char *title = kind == UI_MENU_PLAYBACK ? "Playback" : kind == UI_MENU_AUDIO ? "Audio" : "Subtitles";
+    fontDrawMiddle(FONT_BOLD, 20, x + 20, y + MENU_HEAD / 2.0f + 2, title, COLOR_DIM);
+    int current = kind == UI_MENU_PLAYBACK ? playerChapter(p)
+                  : kind == UI_MENU_AUDIO  ? playerAudioTrack(p)
+                                           : playerSubtitle(p) + 1;
     for (int i = 0; i < menuVisible(m); i++) {
         int row = m->first + i, ry = y + MENU_HEAD + i * MENU_ROW_H;
         if (row == m->cursor)
@@ -396,7 +444,15 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
         float cy = ry + MENU_ROW_H / 2.0f;
         if (row == current)
             drawCheck(x + 22, cy, COLOR_ACCENT);
-        fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, w - 52 - 24, menuLabel(p, kind, row),
+        int label_w = w - 52 - 24;
+        if (kind == UI_MENU_PLAYBACK) {  // A chapter says where it starts.
+            char at[16];
+            utilFormatTime(at, sizeof(at), playerChapterStart(p, row) / 1e9);
+            int at_w = fontTextWidth(FONT_REGULAR, 17, at);
+            fontDrawMiddle(FONT_REGULAR, 17, x + w - 24 - at_w, cy, at, COLOR_FAINT);
+            label_w -= at_w + 12;
+        }
+        fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, label_w, menuLabel(p, kind, row),
                         row == current ? COLOR_TEXT : COLOR_DIM);
     }
     int list = m->count - m->fixed;
@@ -407,7 +463,7 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
         gfxFillRoundRect(x + w - 10, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
     if (m->fixed && config)
-        drawOptions(m, config, x, y + MENU_HEAD + menuVisible(m) * MENU_ROW_H, w);
+        drawOptions(p, kind, m, config, x, y + MENU_HEAD + menuVisible(m) * MENU_ROW_H, w);
 }
 
 TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
@@ -428,4 +484,11 @@ TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
         return TAP_MENU_BOX;
     *row = m->count - m->fixed + i;
     return TAP_MENU_ROW;
+}
+
+int uiTapOptionDelta(UiMenuKind kind, const Menu *m, int x)
+{
+    int bx, by, bw, bh;
+    menuBox(kind, m, &bx, &by, &bw, &bh);
+    return x < bx + bw / 2 ? -1 : 1;
 }

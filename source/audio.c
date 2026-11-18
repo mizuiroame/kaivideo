@@ -1,5 +1,6 @@
 #include "audio.h"
 #include "clock.h"
+#include "playback.h"
 #include "video.h"
 
 #include <malloc.h>
@@ -8,7 +9,11 @@
 #include <string.h>
 
 #include <libavcodec/avcodec.h>
+#include <libavfilter/avfilter.h>
+#include <libavfilter/buffersink.h>
+#include <libavfilter/buffersrc.h>
 #include <libavformat/avformat.h>
+#include <libavutil/channel_layout.h>
 #include <libswresample/swresample.h>
 #include <switch.h>
 
@@ -51,14 +56,28 @@ struct Audio {
     size_t pending_frames, pending_capacity;
     int64_t pending_pts_ns;       // Time of pending's first frame.
 
+    // Another speed than normal: converted sound goes through FFmpeg's atempo
+    // filter on its way to pending. Only the sound thread touches these.
+    AVFilterGraph *tempo_graph;
+    AVFilterContext *tempo_in, *tempo_out;
+    AVFrame *tempo_frame;
+    s16 *source;                  // Converted sound on its way into the filter.
+    size_t source_frames, source_capacity;
+    int64_t source_pts_ns;
+    bool tempo_started, tempo_drained;
+    int64_t tempo_base_ns;        // The file's time of the filter's first sound.
+    int64_t tempo_input, tempo_output;  // Frames into and out of the filter.
+
     Thread thread;
     bool thread_started;
     Mutex lock;
     volatile bool stop;
     bool paused;
     bool seek_requested;
+    bool seek_pending;            // Asked for and not finished: what's queued meanwhile is from before it.
     int64_t seek_ns;
     int64_t skip_until_ns;        // After a seek: sound before this is dropped.
+    int speed, speed_wanted;      // Thousandths; speed changes with a seek, under lock.
     bool read_done, finished;
 
     // The clock: base_pts is the time of the first frame queued since the
@@ -163,7 +182,122 @@ static bool prepareResampler(Audio *a, const AVFrame *f)
            swr_init(a->swr) >= 0;
 }
 
-// Adds a decoded frame to pending, as output sound, dropping what's before skip_until.
+// Room for frames more stereo frames after the used ones.
+static bool reserveFrames(s16 **data, size_t *capacity, size_t used, size_t frames)
+{
+    if (used + frames <= *capacity)
+        return true;
+    size_t wanted = (used + frames) * 2;
+    s16 *grown = realloc(*data, wanted * 2 * sizeof(s16));
+    if (!grown)
+        return false;
+    *data = grown;
+    *capacity = wanted;
+    return true;
+}
+
+// --- Another speed: FFmpeg's atempo filter ---
+
+static void tempoClose(Audio *a)
+{
+    avfilter_graph_free(&a->tempo_graph);
+    a->tempo_in = a->tempo_out = NULL;
+}
+
+static bool tempoOpen(Audio *a, int permille)
+{
+    char source[96], tempo[32];
+    snprintf(source, sizeof(source), "time_base=1/%u:sample_rate=%u:sample_fmt=s16:channel_layout=stereo", g_out_rate,
+             g_out_rate);
+    snprintf(tempo, sizeof(tempo), "tempo=%d.%03d", permille / PLAYBACK_PERMILLE, permille % PLAYBACK_PERMILLE);
+    AVFilterContext *filter = NULL;
+    a->tempo_graph = avfilter_graph_alloc();
+    if (!a->tempo_frame)
+        a->tempo_frame = av_frame_alloc();
+    bool ok = a->tempo_graph && a->tempo_frame &&
+              avfilter_graph_create_filter(&a->tempo_in, avfilter_get_by_name("abuffer"), "in", source, NULL,
+                                           a->tempo_graph) >= 0 &&
+              avfilter_graph_create_filter(&filter, avfilter_get_by_name("atempo"), "tempo", tempo, NULL,
+                                           a->tempo_graph) >= 0 &&
+              avfilter_graph_create_filter(&a->tempo_out, avfilter_get_by_name("abuffersink"), "out", NULL, NULL,
+                                           a->tempo_graph) >= 0 &&
+              avfilter_link(a->tempo_in, 0, filter, 0) >= 0 && avfilter_link(filter, 0, a->tempo_out, 0) >= 0 &&
+              avfilter_graph_config(a->tempo_graph, NULL) >= 0;
+    if (!ok)
+        tempoClose(a);
+    return ok;
+}
+
+// Moves what the filter has ready into pending. A frame out of it stands for
+// speed times its length of the file, counted from the filter's first sound.
+static void tempoPull(Audio *a)
+{
+    AVFrame *f = a->tempo_frame;
+    while (av_buffersink_get_frame(a->tempo_out, f) >= 0) {
+        size_t n = (size_t)f->nb_samples;
+        if (reserveFrames(&a->pending, &a->pending_capacity, a->pending_frames, n)) {
+            if (a->pending_frames == 0)
+                a->pending_pts_ns = a->tempo_base_ns + av_rescale(a->tempo_output * a->speed, 1000000, g_out_rate);
+            memcpy(a->pending + a->pending_frames * 2, f->data[0], n * 2 * sizeof(s16));
+            a->pending_frames += n;
+        }
+        a->tempo_output += (int64_t)n;
+        av_frame_unref(f);
+    }
+}
+
+// Sends the converted sound through the filter.
+static void tempoFeed(Audio *a)
+{
+    AVFrame *f = a->tempo_frame;
+    if (a->source_frames == 0)
+        return;
+    if (!a->tempo_started) {
+        a->tempo_started = true;
+        a->tempo_base_ns = a->source_pts_ns;
+    }
+    av_frame_unref(f);
+    f->nb_samples = (int)a->source_frames;
+    f->format = AV_SAMPLE_FMT_S16;
+    f->sample_rate = (int)g_out_rate;
+    f->pts = a->tempo_input;
+    f->ch_layout = (AVChannelLayout)AV_CHANNEL_LAYOUT_STEREO;
+    if (av_frame_get_buffer(f, 0) >= 0) {
+        memcpy(f->data[0], a->source, a->source_frames * 2 * sizeof(s16));
+        a->tempo_input += (int64_t)a->source_frames;
+        if (av_buffersrc_add_frame(a->tempo_in, f) < 0)
+            av_frame_unref(f);  // That bit of sound is lost; the clock counts from the filter's output.
+    }
+    a->source_frames = 0;
+    tempoPull(a);
+}
+
+// At the end of the file: the filter gives up what it still holds.
+static void tempoDrain(Audio *a)
+{
+    if (!a->tempo_graph || a->tempo_drained)
+        return;
+    a->tempo_drained = true;
+    tempoFeed(a);
+    if (av_buffersrc_add_frame(a->tempo_in, NULL) >= 0)
+        tempoPull(a);
+}
+
+// Starts the speed asked for, with nothing of the old one left in the filter.
+// Returns the speed that could be set up.
+static int tempoReset(Audio *a, int permille)
+{
+    tempoClose(a);
+    if (permille != PLAYBACK_PERMILLE && !tempoOpen(a, permille))
+        permille = PLAYBACK_PERMILLE;  // Sound at normal speed beats none: the picture follows it.
+    a->source_frames = 0;
+    a->tempo_started = a->tempo_drained = false;
+    a->tempo_input = a->tempo_output = 0;
+    return permille;
+}
+
+// Adds a decoded frame as output sound, dropping what's before skip_until: to
+// pending, or at another speed on its way through the filter.
 static void addFrame(Audio *a, AVFrame *f)
 {
     if (!prepareResampler(a, f))
@@ -173,32 +307,33 @@ static void addFrame(Audio *a, AVFrame *f)
     int out = swr_get_out_samples(a->swr, f->nb_samples);
     if (out <= 0)
         return;
-    if (a->pending_frames + (size_t)out > a->pending_capacity) {
-        size_t capacity = (a->pending_frames + (size_t)out) * 2;
-        s16 *grown = realloc(a->pending, capacity * 2 * sizeof(s16));
-        if (!grown)
-            return;
-        a->pending = grown;
-        a->pending_capacity = capacity;
-    }
-    uint8_t *dst = (uint8_t *)(a->pending + a->pending_frames * 2);
+    bool tempo = a->tempo_graph != NULL;
+    s16 **data = tempo ? &a->source : &a->pending;
+    size_t *frames = tempo ? &a->source_frames : &a->pending_frames;
+    size_t *capacity = tempo ? &a->source_capacity : &a->pending_capacity;
+    int64_t *start_ns = tempo ? &a->source_pts_ns : &a->pending_pts_ns;
+    if (!reserveFrames(data, capacity, *frames, (size_t)out))
+        return;
+    uint8_t *dst = (uint8_t *)(*data + *frames * 2);
     int n = swr_convert(a->swr, &dst, out, (const uint8_t **)f->extended_data, f->nb_samples);
     if (n <= 0)
         return;
-    if (a->pending_frames == 0 && pts_ns >= 0)
-        a->pending_pts_ns = pts_ns;
-    a->pending_frames += (size_t)n;
+    if (*frames == 0 && pts_ns >= 0)
+        *start_ns = pts_ns;
+    *frames += (size_t)n;
     // After a seek, drop sound before the target (seeks land on an earlier packet).
-    if (a->skip_until_ns > 0 && a->pending_pts_ns >= 0 && a->pending_pts_ns < a->skip_until_ns) {
-        size_t drop = (size_t)((a->skip_until_ns - a->pending_pts_ns) * (int64_t)g_out_rate / 1000000000);
-        if (drop > a->pending_frames)
-            drop = a->pending_frames;
-        memmove(a->pending, a->pending + drop * 2, (a->pending_frames - drop) * 2 * sizeof(s16));
-        a->pending_frames -= drop;
-        a->pending_pts_ns += (int64_t)drop * 1000000000 / g_out_rate;
-        if (a->pending_frames > 0)
+    if (a->skip_until_ns > 0 && *start_ns >= 0 && *start_ns < a->skip_until_ns) {
+        size_t drop = (size_t)((a->skip_until_ns - *start_ns) * (int64_t)g_out_rate / 1000000000);
+        if (drop > *frames)
+            drop = *frames;
+        memmove(*data, *data + drop * 2, (*frames - drop) * 2 * sizeof(s16));
+        *frames -= drop;
+        *start_ns += (int64_t)drop * 1000000000 / g_out_rate;
+        if (*frames > 0)
             a->skip_until_ns = 0;
     }
+    if (tempo)
+        tempoFeed(a);
 }
 
 // Decodes until pending holds a buffer's worth, or the file ends. False at the end.
@@ -210,8 +345,10 @@ static bool fill(Audio *a)
             addFrame(a, a->frame);
             continue;
         }
-        if (r == AVERROR_EOF || a->read_done)
+        if (r == AVERROR_EOF || a->read_done) {
+            tempoDrain(a);
             return a->pending_frames > 0;
+        }
         if (av_read_frame(a->fmt, a->pkt) < 0) {
             a->read_done = true;
             avcodec_send_packet(a->codec, NULL);  // Drain what's left.
@@ -255,14 +392,14 @@ static void queueBuffer(Audio *a, int i, Fade fade)
     int64_t pts = a->pending_pts_ns;
     memmove(a->pending, a->pending + n * 2, (a->pending_frames - n) * 2 * sizeof(s16));
     a->pending_frames -= n;
-    a->pending_pts_ns += (int64_t)n * 1000000000 / g_out_rate;
+    a->pending_pts_ns += (int64_t)n * 1000000 * a->speed / g_out_rate;
     b->data_size = BUFFER_BYTES;
     b->data_offset = 0;
     if (R_FAILED(audoutAppendAudioOutBuffer(b)))
         return;
     a->queued[i] = true;
     mutexLock(&a->lock);
-    if (!a->clock_valid) {
+    if (!a->clock_valid && !a->seek_pending) {  // Sound from before a seek doesn't start the clock.
         a->clock_valid = true;
         a->base_pts_ns = pts;
         a->base_played = played();
@@ -308,6 +445,12 @@ static void doSeek(Audio *a, int64_t target_ns)
     a->read_done = false;
     a->skip_until_ns = target_ns > 0 ? target_ns : 0;
     mutexLock(&a->lock);
+    int speed = a->speed_wanted;
+    mutexUnlock(&a->lock);
+    speed = tempoReset(a, speed);
+    mutexLock(&a->lock);
+    a->speed = speed;
+    a->seek_pending = a->seek_requested;  // Another may have come meanwhile.
     a->clock_valid = false;
     a->finished = false;
     a->primed = false;
@@ -340,6 +483,9 @@ static void audioThread(void *arg)
             mutexLock(&a->lock);
             a->primed = a->pending_frames > 0 && a->skip_until_ns == 0;
             a->primed_pts_ns = a->pending_pts_ns;
+            // Sent past the end of the sound: there's nothing to get ready.
+            if (a->read_done && a->pending_frames == 0 && !anyQueued(a))
+                a->finished = true;
             mutexUnlock(&a->lock);
         }
         if (paused || ended) {
@@ -450,6 +596,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
         }
     }
     a->paused = true;  // Until the player says the picture is ready.
+    a->speed = a->speed_wanted = PLAYBACK_PERMILLE;
     if (R_FAILED(threadCreate(&a->thread, audioThread, a, NULL, THREAD_STACK_SIZE, THREAD_PRIORITY, -2)) ||
         R_FAILED(threadStart(&a->thread))) {
         snprintf(error, error_size, "The sound thread can't start.");
@@ -474,6 +621,9 @@ void audioClose(Audio *a)
     for (int i = 0; i < BUFFER_COUNT; i++)
         free(a->buffers[i].buffer);
     free(a->pending);
+    free(a->source);
+    tempoClose(a);
+    av_frame_free(&a->tempo_frame);
     swr_free(&a->swr);
     avcodec_free_context(&a->codec);
     av_packet_free(&a->pkt);
@@ -503,10 +653,11 @@ bool audioClock(Audio *a, int64_t *pts_ns)
         bool stalled = heard >= a->queued_frames;
         if (heard > a->queued_frames)
             heard = a->queued_frames;  // Not past what was queued.
-        int64_t raw = a->base_pts_ns + (int64_t)(heard * 1000000000ull / g_out_rate);
-        int64_t step = (int64_t)(BUFFER_FRAMES * 1000000000ull / g_out_rate);
-        *pts_ns = smoothClockRead(&a->smooth, raw, (int64_t)armTicksToNs(armGetSystemTick()), step,
-                                  !a->paused && !stalled);
+        // In the file's time: at another speed, a second heard is more or less of it.
+        int64_t raw = a->base_pts_ns + av_rescale((int64_t)heard * a->speed, 1000000, g_out_rate);
+        int64_t step = (int64_t)BUFFER_FRAMES * 1000000 * a->speed / g_out_rate;
+        int64_t now = playbackScaled((int64_t)armTicksToNs(armGetSystemTick()), a->speed);
+        *pts_ns = smoothClockRead(&a->smooth, raw, now, step, !a->paused && !stalled);
     }
     mutexUnlock(&a->lock);
     return valid;
@@ -523,10 +674,26 @@ void audioSeek(Audio *a, int64_t pts_ns)
 {
     mutexLock(&a->lock);
     a->seek_requested = true;
+    a->seek_pending = true;
     a->seek_ns = pts_ns;
     a->clock_valid = false;
     a->primed = false;
     mutexUnlock(&a->lock);
+}
+
+void audioSetSpeed(Audio *a, int permille)
+{
+    mutexLock(&a->lock);
+    a->speed_wanted = permille;
+    mutexUnlock(&a->lock);
+}
+
+int audioSpeed(Audio *a)
+{
+    mutexLock(&a->lock);
+    int speed = a->speed;
+    mutexUnlock(&a->lock);
+    return speed;
 }
 
 bool audioFinished(Audio *a)

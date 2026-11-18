@@ -86,6 +86,7 @@ int main(void)
     testThumbs();
     testWatched();
     testTrackPrefs();
+    testPlayback();
     printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

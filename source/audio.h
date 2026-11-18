@@ -29,6 +29,11 @@ bool audioClock(Audio *a, int64_t *pts_ns);
 void audioSetPaused(Audio *a, bool paused);
 // Goes to pts_ns: what's queued is dropped, and sound before it is skipped.
 void audioSeek(Audio *a, int64_t pts_ns);
+// The speed to play at (thousandths, playback.h), pitch unchanged. It takes
+// effect with the next audioSeek: the clock then runs at that speed.
+void audioSetSpeed(Audio *a, int permille);
+// The speed in effect: normal if the wanted one couldn't be set up.
+int audioSpeed(Audio *a);
 // True once everything has been played.
 bool audioFinished(Audio *a);
 // While paused, the sound gets ready to start: true once it is, with the

@@ -12,6 +12,7 @@
 #include "library.h"
 #include "libview.h"
 #include "menu.h"
+#include "playback.h"
 #include "player.h"
 #include "resume.h"
 #include "ui.h"
@@ -29,11 +30,15 @@ struct Player {
     bool paused;
     int audio, subtitle;
     int audio_count, subtitle_count;
+    int speed, audio_delay, subtitle_delay;
+    int chapter_count;
 };
 
 static const char *const AUDIO[] = {"English - DD5.1", "Español (Latinoamérica) - DD5.1", "Commentary - AAC2.0"};
 static const char *const SUBS[] = {"English", "English (SDH)", "Español", "Français", "Deutsch", "Italiano",
                                    "Português (Brasil)", "日本語", "Polski", "Svenska"};
+static const char *const CHAPTERS[] = {"Cold Open", "The Harbor", "Night Shift", "A Long Way Down", "Reckoning",
+                                       "The Letter", "Low Tide", "Morning", "End Credits"};
 
 bool playerPaused(const Player *p) { return p->paused; }
 int64_t playerPosition(const Player *p) { (void)p; return 1325ll * 1000000000; }
@@ -46,6 +51,13 @@ int playerAudioTrack(const Player *p) { return p->audio; }
 int playerSubtitleCount(const Player *p) { return p->subtitle_count; }
 const char *playerSubtitleLabel(const Player *p, int track) { (void)p; return SUBS[track]; }
 int playerSubtitle(const Player *p) { return p->subtitle; }
+int playerSpeed(const Player *p) { return p->speed ? p->speed : PLAYBACK_PERMILLE; }
+int playerAudioDelay(const Player *p) { return p->audio_delay; }
+int playerSubtitleDelay(const Player *p) { return p->subtitle_delay; }
+int playerChapterCount(const Player *p) { return p->chapter_count; }
+const char *playerChapterName(const Player *p, int chapter) { (void)p; return CHAPTERS[chapter]; }
+int64_t playerChapterStart(const Player *p, int chapter) { (void)p; return chapter * 300ll * 1000000000; }
+int playerChapter(const Player *p) { return p->chapter_count ? 4 : -1; }
 
 // --- Output ---
 
@@ -114,7 +126,7 @@ static void checkMenuTaps(const char *name, UiMenuKind kind, const Menu *m)
         int found = -1, row = -1;
         // The middle of row i: scan down the list's right half for it.
         for (int y = 0; y < GFX_HEIGHT && found < 0; y += 4) {
-            if (uiTapTrackMenu(kind, m, kind == UI_MENU_AUDIO ? 900 : 1000, y, &row) == TAP_MENU_ROW &&
+            if (uiTapTrackMenu(kind, m, kind == UI_MENU_SUBTITLES ? 1000 : 700, y, &row) == TAP_MENU_ROW &&
                 row == m->first + i)
                 found = y;
         }
@@ -461,6 +473,40 @@ int main(int argc, char **argv)
             g_problems++;
         }
     }
+    // Chapters above the speed and the delays, and the same without chapters.
+    p.chapter_count = 9;
+    p.speed = 1250;
+    p.audio_delay = 300;
+    p.subtitle_delay = -1200;
+    Menu playback;
+    menuOpen(&playback, p.chapter_count + PLAYBACK_OPT_COUNT, PLAYBACK_OPT_COUNT, 4);
+    playerScene("menu_playback", &p, UI_MENU_PLAYBACK, &playback, NULL, NULL);
+    checkMenuTaps("menu_playback", UI_MENU_PLAYBACK, &playback);
+    for (int i = 0; i < PLAYBACK_OPT_COUNT; i++) {  // Each option answers on both of its halves.
+        int row = -1, want = playback.count - PLAYBACK_OPT_COUNT + i, hit = -1;
+        for (int y = 0; y < GFX_HEIGHT && hit < 0; y += 4)
+            if (uiTapTrackMenu(UI_MENU_PLAYBACK, &playback, 700, y, &row) == TAP_MENU_ROW && row == want)
+                hit = y;
+        if (hit < 0 || uiTapOptionDelta(UI_MENU_PLAYBACK, &playback, 500) != -1 ||
+            uiTapOptionDelta(UI_MENU_PLAYBACK, &playback, 800) != 1) {
+            printf("TOUCH: menu_playback: option %d doesn't answer a tap on both sides\n", i);
+            g_problems++;
+        }
+    }
+    double unused;
+    if (uiTapPlayer(830, GFX_HEIGHT - UI_PLAYER_BAR_H + 28, true, true, &unused) != TAP_PLAYBACK) {
+        printf("TOUCH: player_bar: the Playback button doesn't answer a tap\n");
+        g_problems++;
+    }
+    playerScene("player_chapters", &p, UI_MENU_AUDIO, &closed, NULL, NULL);
+    p.chapter_count = 0;
+    p.speed = 0;
+    p.subtitle_count = 0;
+    menuOpen(&playback, PLAYBACK_OPT_COUNT, PLAYBACK_OPT_COUNT, 0);
+    playerScene("menu_playback_plain", &p, UI_MENU_PLAYBACK, &playback, NULL, NULL);
+    p.subtitle_count = 10;
+    p.audio_delay = p.subtitle_delay = 0;
+
     // Large yellow subtitles on a dark box, with the cursor on Style.
     g_config.subtitles = SUBTITLES_LARGE;
     g_config.subtitle_color = 1;

@@ -48,10 +48,11 @@ void uiDrawPausedSymbol(void);
 typedef enum {
     UI_MENU_AUDIO,      // The sound tracks.
     UI_MENU_SUBTITLES,  // "Off", the subtitle tracks, then their options (size, color, style).
+    UI_MENU_PLAYBACK,   // The chapters, then the speed and the sync delays.
 } UiMenuKind;
 
-// The drop-down list above the bar's Audio or CC button, with the track
-// playing (or shown) checked and the cursor's row lit.
+// The drop-down list above the bar's Playback, Audio or CC button, with the
+// chapter or track playing (or shown) checked and the cursor's row lit.
 // config: the subtitles' options' values (fixed rows), or NULL.
 void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Config *config);
 
@@ -66,6 +67,7 @@ typedef enum {
     TAP_SEEK,      // The progress bar: *fraction is where (0-1).
     TAP_SUBTITLES, // The player's CC button (the list of subtitles).
     TAP_AUDIO,     // The player's Audio button (the list of sound tracks).
+    TAP_PLAYBACK,  // The player's Playback button (chapters, speed, delays).
     TAP_PICTURE,   // Anywhere else on a playing video.
     TAP_MENU_ROW,  // A row of the open drop-down list: *row is its index.
     TAP_MENU_BOX,  // The list, but not a row (its title).
@@ -77,3 +79,5 @@ TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *
 // has_subtitles, has_tracks: the CC and Audio buttons are there.
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction);
 TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row);
+// A tap on one of the list's option rows: -1 on its left half, 1 on its right.
+int uiTapOptionDelta(UiMenuKind kind, const Menu *m, int x);

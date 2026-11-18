@@ -31,3 +31,4 @@ void testSettings(void);
 void testThumbs(void);
 void testWatched(void);
 void testTrackPrefs(void);
+void testPlayback(void);

@@ -2,9 +2,9 @@
 // is decoded by the console's hardware decoder and drawn with the GPU; sound
 // is decoded with FFmpeg and is the clock. Choose a film or an episode in
 // the library (app_library.c), or a file in the Files tab, then A pauses,
-// left and right go 10 seconds back or forward, L and R a minute, X and Y
-// open the lists of sound tracks and subtitles, - hides the bar, and B goes
-// back. In an episode's last 30 seconds a card offers the next one: ZR plays
+// left and right go 10 seconds back or forward, L and R a minute, up opens
+// the Playback list (chapters, speed, sync delays), X and Y the lists of
+// sound tracks and subtitles, - hides the bar, and B goes back. In an episode's last 30 seconds a card offers the next one: ZR plays
 // it now, and it plays on its own at the end. Every control works with
 // touch too.
 #include <stdarg.h>
@@ -23,6 +23,7 @@
 #include "gfx.h"
 #include "input.h"
 #include "menu.h"
+#include "playback.h"
 #include "player.h"
 #include "resume.h"
 #include "sysinfo.h"
@@ -205,6 +206,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     app->hud_hidden = false;
     app->bar_note[0] = '\0';
     menuClose(&app->menu);
+    playerSetSpeed(app->player, playbackSpeedPermille(app->speed_index), now);
     applyTrackPrefs(app, now);
     int64_t resume_at;
     if (resumeFind(&app->resume, path, &resume_at, NULL)) {
@@ -262,7 +264,11 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
 {
     Player *p = app->player;
     menuClose(&app->menu);
-    if (kind == UI_MENU_AUDIO && playerAudioTrackCount(p) < 2)
+    if (kind == UI_MENU_PLAYBACK) {
+        // On the chapter playing; without chapters, on the speed.
+        int chapter = playerChapter(p);
+        menuOpen(&app->menu, playerChapterCount(p) + PLAYBACK_OPT_COUNT, PLAYBACK_OPT_COUNT, chapter > 0 ? chapter : 0);
+    } else if (kind == UI_MENU_AUDIO && playerAudioTrackCount(p) < 2)
         sayInBar(app, now, "%s", "This video has one sound track.");
     else if (kind == UI_MENU_SUBTITLES && playerSubtitleCount(p) == 0)
         sayInBar(app, now, "%s", "This video has no subtitles.");
@@ -275,10 +281,30 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
     app->drag_rows = 0;
 }
 
-// Changes one of the subtitles' options (the list's fixed rows) and keeps it.
-static void stepOption(App *app, int row, int delta)
+// Changes one of the Playback list's options, for this video (the speed
+// stays for the next ones).
+static void stepPlaybackOption(App *app, PlaybackOption option, int delta, uint64_t now)
 {
-    SubtitleOption option = (SubtitleOption)(row - (app->menu.count - app->menu.fixed));
+    Player *p = app->player;
+    if (option == PLAYBACK_OPT_SPEED) {
+        app->speed_index = playbackSpeedStep(app->speed_index, delta);
+        playerSetSpeed(p, playbackSpeedPermille(app->speed_index), now);
+    } else if (option == PLAYBACK_OPT_AUDIO_DELAY && playerAudioTrackCount(p) > 0) {
+        playerSetAudioDelay(p, playbackDelayStep(playerAudioDelay(p), delta));
+    } else if (option == PLAYBACK_OPT_SUBTITLE_DELAY && playerSubtitleCount(p) > 0) {
+        playerSetSubtitleDelay(p, playbackDelayStep(playerSubtitleDelay(p), delta));
+    }
+}
+
+// Changes one of the list's options (its fixed rows); the subtitles' are kept.
+static void stepOption(App *app, int row, int delta, uint64_t now)
+{
+    int index = row - (app->menu.count - app->menu.fixed);
+    if (app->menu_kind == UI_MENU_PLAYBACK) {
+        stepPlaybackOption(app, (PlaybackOption)index, delta, now);
+        return;
+    }
+    SubtitleOption option = (SubtitleOption)index;
     subtitleOptionStep(&app->config, option, delta);
     appApplySubtitleStyle(app);
     appSaveSettings(app);
@@ -286,15 +312,20 @@ static void stepOption(App *app, int row, int delta)
 
 // Plays or shows the list's row, said in the bar, and kept for next time.
 // The sound list closes; the subtitles' stays, for their size, color and
-// style below. An option row changes instead.
+// style below. A chapter is gone to. An option row changes instead.
 static void chooseRow(App *app, int row, uint64_t now)
 {
     Player *p = app->player;
     if (row >= app->menu.count - app->menu.fixed) {
-        stepOption(app, row, 1);
+        stepOption(app, row, 1, now);
         return;
     }
-    if (app->menu_kind == UI_MENU_AUDIO) {
+    if (app->menu_kind == UI_MENU_PLAYBACK) {
+        playerSeekTo(p, playerChapterStart(p, row), now);
+        app->seeks++;
+        sayInBar(app, now, "%s", playerChapterName(p, row));
+        menuClose(&app->menu);
+    } else if (app->menu_kind == UI_MENU_AUDIO) {
         if (row != playerAudioTrack(p))
             playerSetAudioTrack(p, row, now);
         sayInBar(app, now, "Sound: %s", playerAudioTrackName(p, row));
@@ -317,7 +348,9 @@ static void tapOutsideMenu(App *app, int x, int y, uint64_t now)
     Player *p = app->player;
     double fraction;
     TapTarget target = uiTapPlayer(x, y, playerSubtitleCount(p) > 0, playerAudioTrackCount(p) > 1, &fraction);
-    if (target == TAP_AUDIO && app->menu_kind != UI_MENU_AUDIO)
+    if (target == TAP_PLAYBACK && app->menu_kind != UI_MENU_PLAYBACK)
+        openMenu(app, UI_MENU_PLAYBACK, now);
+    else if (target == TAP_AUDIO && app->menu_kind != UI_MENU_AUDIO)
         openMenu(app, UI_MENU_AUDIO, now);
     else if (target == TAP_SUBTITLES && app->menu_kind != UI_MENU_SUBTITLES)
         openMenu(app, UI_MENU_SUBTITLES, now);
@@ -334,7 +367,7 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
     if (pressed & BUTTONS_UP) menuMove(m, -1);
     if (pressed & BUTTONS_DOWN) menuMove(m, 1);
     if (menuOnFixed(m) && (pressed & (BUTTONS_LEFT | BUTTONS_RIGHT)))
-        stepOption(app, m->cursor, (pressed & BUTTONS_LEFT) ? -1 : 1);
+        stepOption(app, m->cursor, (pressed & BUTTONS_LEFT) ? -1 : 1, now);
     if (pressed & HidNpadButton_A) {
         chooseRow(app, m->cursor, now);
         return;
@@ -359,7 +392,9 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
     int row;
     if (touch.type == TOUCH_TAP) {
         TapTarget target = uiTapTrackMenu(app->menu_kind, m, touch.x, touch.y, &row);
-        if (target == TAP_MENU_ROW)
+        if (target == TAP_MENU_ROW && app->menu_kind == UI_MENU_PLAYBACK && row >= m->count - m->fixed)
+            stepOption(app, row, uiTapOptionDelta(app->menu_kind, m, touch.x), now);  // Delays go both ways.
+        else if (target == TAP_MENU_ROW)
             chooseRow(app, row, now);
         else if (target == TAP_OUTSIDE)
             tapOutsideMenu(app, touch.x, touch.y, now);
@@ -436,6 +471,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         playerTogglePause(p, now);
         appLog("  A: %s at %.1f s", playerPaused(p) ? "pause" : "play", playerPosition(p) / 1e9);
     }
+    if (pressed & BUTTONS_UP)
+        openMenu(app, UI_MENU_PLAYBACK, now);
     if (pressed & HidNpadButton_Y)
         openMenu(app, UI_MENU_SUBTITLES, now);
     if (pressed & HidNpadButton_X)
@@ -474,6 +511,7 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         case TAP_CLOSE: return false;
         case TAP_SUBTITLES: openMenu(app, UI_MENU_SUBTITLES, now); break;
         case TAP_AUDIO: openMenu(app, UI_MENU_AUDIO, now); break;
+        case TAP_PLAYBACK: openMenu(app, UI_MENU_PLAYBACK, now); break;
         case TAP_SEEK:
             appLog("  seek to %.1f s (tap)", fraction * playerDuration(p) / 1e9);
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
@@ -583,6 +621,7 @@ int main(int argc, char **argv)
         appLog("The audio output couldn't start: videos play silent.");
 
     static App app;
+    app.speed_index = PLAYBACK_SPEED_NORMAL;
     char folder[BROWSER_PATH_MAX];
     loadSettings(&app, folder, sizeof(folder));
     appConfigPath(path, sizeof(path), "resume.txt");

@@ -27,6 +27,25 @@ void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns);
 // Goes to target_ns (kept within the file): a tap on the progress bar.
 void playerSeekTo(Player *p, int64_t target_ns, uint64_t now_ns);
 
+// The speed, in thousandths (playback.h): the picture goes on while the sound
+// changes to it, with its pitch kept. It stays through seeks and track changes.
+void playerSetSpeed(Player *p, int permille, uint64_t now_ns);
+int playerSpeed(const Player *p);
+// How much later the sound (or, negative, earlier) goes than the picture.
+void playerSetAudioDelay(Player *p, int delay_ms);
+int playerAudioDelay(const Player *p);
+// How much later (or earlier) the subtitles show. A file's own subtitles can
+// only come earlier by as far as the file has been read.
+void playerSetSubtitleDelay(Player *p, int delay_ms);
+int playerSubtitleDelay(const Player *p);
+
+// The file's chapters, in order of time.
+int playerChapterCount(const Player *p);
+const char *playerChapterName(const Player *p, int chapter);
+int64_t playerChapterStart(const Player *p, int chapter);
+// The chapter playing, or -1 before the first (or with none).
+int playerChapter(const Player *p);
+
 int64_t playerPosition(const Player *p);
 int64_t playerDuration(const Player *p);
 // True once the picture has ended, or failed (error says why).

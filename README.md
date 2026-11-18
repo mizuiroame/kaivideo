@@ -44,6 +44,9 @@ The screenshots show made-up films and series.
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
   MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
   size, color and style (outline or a dark box) are at the end of that list.
+- **Playback list** (**↑**): the video's **chapters** (also marked on the
+  progress bar), the **speed** from 0.5x to 2x with the voices' pitch kept,
+  and **audio** and **subtitle delays** for a file that's out of sync.
 - **Resume where you left off**: open a video you stopped halfway and it goes
   on from there (**ZL** starts it over). Videos you've started show how far
   you got.
@@ -152,6 +155,7 @@ do what, as in KaiPlayer and KaiRadio.
 | **◀** / **▶** | Back or forward 10 seconds |
 | **L** / **R** | Back or forward 1 minute |
 | **ZL** | Start over |
+| **↑** | The Playback list: chapters, speed, audio and subtitle delays |
 | **X** | The list of sound tracks |
 | **Y** | The list of subtitles |
 | **−** | Hide the bar (**−** again, or a tap, shows it) |
@@ -161,11 +165,14 @@ do what, as in KaiPlayer and KaiRadio.
 
 In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
 The subtitles list stays open after you pick, for their size, color and style
-(**◀** / **▶**).
+(**◀** / **▶**). In the Playback list, **A** goes to a chapter and **◀** / **▶**
+change the speed and the delays (or tap the left or right half of their row).
+The speed stays for the next videos until KaiVideo closes; the delays are for
+the video playing.
 Any button or tap shows the bar for a few seconds. With the bar showing, tap
 the picture or the play button to pause or play (a paused video shows a big
-play symbol), or tap or drag the progress bar to go there; **Audio** or
-**CC** open their lists, and the **×** at the top left goes back.
+play symbol), or tap or drag the progress bar to go there; **Playback**,
+**Audio** or **CC** open their lists, and the **×** at the top left goes back.
 
 ## Limitations
 
@@ -205,8 +212,9 @@ docker run --rm -v "$PWD:/w" -w /w kaivideo-devkit make -C tests/preview  # scre
 ```
 
 `ffmpeg/Dockerfile` builds FFmpeg 7.1 from its release tarball (checked by
-SHA-256) with only the demuxers, parsers, bitstream filters and audio and
-subtitle decoders KaiVideo needs, and fails if the build would include GPL or
+SHA-256) with only the demuxers, parsers, bitstream filters, audio and
+subtitle decoders and the `atempo` audio filter KaiVideo needs, and fails if
+the build would include GPL or
 non-free parts. The video itself is decoded by the console, through
 [libounce](https://github.com/ouncebrew/libounce)'s `VideoDecoder`.
 

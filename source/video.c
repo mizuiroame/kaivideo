@@ -79,6 +79,8 @@ struct Video {
     int sub_count;
     char audio_names[VIDEO_AUDIO_TRACKS][64];
     int audio_count;
+    PlaybackChapter chapters[VIDEO_CHAPTERS];
+    int chapter_count;
 };
 
 // --- Reading the file (FFmpeg has no file protocol in this build) ---
@@ -422,6 +424,19 @@ static void openSubtitles(Video *v)
     }
 }
 
+static void openChapters(Video *v)
+{
+    for (unsigned i = 0; i < v->fmt->nb_chapters && v->chapter_count < VIDEO_CHAPTERS; i++) {
+        const AVChapter *c = v->fmt->chapters[i];
+        const AVDictionaryEntry *title = av_dict_get(c->metadata, "title", NULL, 0);
+        PlaybackChapter *out = &v->chapters[v->chapter_count++];
+        int64_t start = av_rescale_q(c->start, c->time_base, (AVRational){1, 1000000000});
+        out->start_ns = start > 0 ? start : 0;
+        snprintf(out->title, sizeof(out->title), "%s", title ? title->value : "");
+    }
+    playbackChaptersPrepare(v->chapters, v->chapter_count);
+}
+
 Video *videoOpen(const char *path, char *error, size_t error_size)
 {
     Video *v = calloc(1, sizeof(*v));
@@ -486,6 +501,7 @@ Video *videoOpen(const char *path, char *error, size_t error_size)
         return NULL;
     }
     openSubtitles(v);
+    openChapters(v);
     for (unsigned i = 0; i < v->fmt->nb_streams && v->audio_count < VIDEO_AUDIO_TRACKS; i++) {
         AVStream *as = v->fmt->streams[i];
         if (as->codecpar->codec_type != AVMEDIA_TYPE_AUDIO)
@@ -657,6 +673,14 @@ bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size
     bool on = subsAt(&v->subs[track].track, pos_ns, out, size);
     pthread_mutex_unlock(&v->lock);
     return on;
+}
+
+// --- Chapters ---
+
+const PlaybackChapter *videoChapters(const Video *v, int *count)
+{
+    *count = v->chapter_count;
+    return v->chapters;
 }
 
 // --- Sound tracks ---
