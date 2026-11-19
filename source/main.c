@@ -509,7 +509,8 @@ static void switchWhileOpening(App *app, uint64_t pressed)
     char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
     if (!appLiveNeighbor(app, delta, location, sizeof(location), name, sizeof(name)))
         return;
-    app->live_pending = delta;
+    app->live_pending = delta;  // Back round to the channel opening (0) opens it again.
+    app->live_pending_set = true;
     snprintf(app->live_pending_name, sizeof(app->live_pending_name), "%s", name);
     if (!app->open_cancelled) {
         app->open_cancelled = true;
@@ -522,6 +523,7 @@ static void openPendingChannel(App *app, uint64_t now)
 {
     int delta = app->live_pending;
     app->live_pending = 0;
+    app->live_pending_set = false;
     char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
     if (!appLiveNeighbor(app, delta, location, sizeof(location), name, sizeof(name)))
         return;
@@ -1075,6 +1077,7 @@ int main(int argc, char **argv)
                     // B: back to the library at once; the opening ends out of sight
                     // (a server or a name lookup may take a moment to let go).
                     app.live_pending = 0;
+                    app.live_pending_set = false;
                     app.open_dismissed = true;
                     if (!app.open_cancelled) {
                         app.open_cancelled = true;
@@ -1091,7 +1094,7 @@ int main(int argc, char **argv)
             }
             if (app.open_done)
                 finishOpening(&app, now);
-            if (!app.opening && app.live_pending)
+            if (!app.opening && app.live_pending_set)
                 openPendingChannel(&app, now);
             else if (!app.opening && app.queued)
                 openQueued(&app, now);
@@ -1100,7 +1103,7 @@ int main(int argc, char **argv)
             uiDrawLoading(app.queued_name, spinnerAngle(now), false);  // Waiting for the last one to let go.
             uiDrawFooterHelp("[B] cancel");
         } else if (app.opening && !app.open_dismissed) {
-            bool switching = app.live_pending != 0;
+            bool switching = app.live_pending_set;
             uiDrawLoading(switching ? app.live_pending_name : app.playing_name, spinnerAngle(now),
                           app.open_cancelled && !switching);
             uiDrawFooterHelp(liveIsLocation(app.playing_path) ? "[L][R] channel  [B] cancel" : "[B] cancel");

@@ -96,6 +96,7 @@ struct App {
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
     uint64_t live_read_at;
     bool live_read_soon;        // Read the guide again at once (appLiveReadSoon).
+    bool live_pending_set;      // L or R was pressed while a channel opened (live_pending may add up to 0).
     int live_pending;           // L and R while a channel opens: channels to move on once it's let go.
     char live_pending_name[APP_NAME_MAX];  // The channel they lead to, for the loading screen.
     int live_switch;          // L or R while a channel plays: -1 or 1, taken by the main loop.
