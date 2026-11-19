@@ -896,6 +896,11 @@ int64_t videoDuration(const Video *v)
     return v->duration_ns;
 }
 
+int64_t videoStartNs(const Video *v)
+{
+    return v->input.start_us * 1000;
+}
+
 const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
 {
     bool taken = false, previewed = false;

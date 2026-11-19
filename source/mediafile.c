@@ -427,6 +427,14 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
     if (!ok || avformat_find_stream_info(*fmt, NULL) < 0)
         return false;
     if (converted) {
+        // FFmpeg keeps an HLS track's own name (NAME="Original") as its
+        // comment: it's the name the lists show.
+        for (unsigned i = 0; i < (*fmt)->nb_streams; i++) {
+            AVDictionary **tags = &(*fmt)->streams[i]->metadata;
+            const AVDictionaryEntry *name = av_dict_get(*tags, "comment", NULL, 0);
+            if (name && name->value[0] && !av_dict_get(*tags, "title", NULL, 0))
+                av_dict_set(tags, "title", name->value, 0);
+        }
         in->skipped_us = hlsBaseNs() / 1000;
         if ((*fmt)->start_time != AV_NOPTS_VALUE)
             in->start_us = (*fmt)->start_time - in->skipped_us;

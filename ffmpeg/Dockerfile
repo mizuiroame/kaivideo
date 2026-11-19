@@ -2,7 +2,8 @@
 # MKV/WebM demuxers, the bitstream filters that hand video to the console's
 # hardware decoder, and the audio decoders, plus the resampler and the atempo
 # filter (playback speed without changing the pitch). HLS and MPEG-TS read what
-# a Jellyfin server converts; KaiVideo gives them its segments itself (the file
+# a Jellyfin server converts, and Live TV channels' own streams (with WebVTT
+# subtitles and AAC sound tracks of their own); KaiVideo gives them its segments itself (the file
 # protocol is only there because the HLS reader insists on one). Most video is decoded by
 # libounce's VideoDecoder; FFmpeg's HEVC and H.264 decoders take what the
 # hardware can't (HEVC, 10-bit H.264). No GPL or non-free
@@ -39,7 +40,7 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --enable-filter=abuffer,abuffersink,atempo \
       --enable-decoder=hevc,h264,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
       --enable-parser=hevc,h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
-      --enable-demuxer=mov,matroska,hls,mpegts --enable-protocol=file \
+      --enable-demuxer=mov,matroska,hls,mpegts,webvtt,aac --enable-protocol=file \
       --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata \
       $EXTRA_FFMPEG_OPTIONS \
  && grep -q 'define HAVE_PTHREADS 1' config.h \

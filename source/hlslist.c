@@ -116,9 +116,26 @@ static bool addSegment(HlsPlaylist *out, const char *line, size_t n, const char 
     return true;
 }
 
+// A segment's local name, with its line break: "file:kaivideo/12.ts", or
+// "file:kaivideo/2/12.vtt" in a master list's list 2. How long it is.
+static int localName(const HlsPlaylist *p, int index, char *out, size_t size)
+{
+    if (p->list < 0)
+        return snprintf(out, size, HLS_LOCAL_PREFIX "%d.ts\n", index);
+    return snprintf(out, size, HLS_LOCAL_PREFIX "%d/%d.%s\n", p->list, index, p->subtitles ? "vtt" : "ts");
+}
+
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out)
 {
+    return hlsPlaylistParseList(playlist, base, start_ns, -1, false, out);
+}
+
+bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_ns, int list, bool subtitles,
+                          HlsPlaylist *out)
+{
     memset(out, 0, sizeof(*out));
+    out->list = list;
+    out->subtitles = subtitles;
     int total = countSegments(playlist);
     if (total == 0)
         return false;
@@ -154,7 +171,7 @@ bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, 
             if (index >= first) {
                 if (length_line)
                     addText(out, &used, length_line, length_size);
-                used += (size_t)sprintf(out->text + used, HLS_LOCAL_PREFIX "%d.ts\n", index);
+                used += (size_t)localName(out, index, out->text + used, LOCAL_NAME_MAX);
             }
             length_line = NULL;
         } else if (n) {
@@ -187,9 +204,10 @@ static bool rebuildText(HlsPlaylist *p)
     size_t used = (size_t)snprintf(text, room,
                                    "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%d\n" MEDIA_SEQUENCE "%lld\n",
                                    target > 0 ? target : 1, (long long)(p->sequence + p->first));
-    for (int i = p->first; i < p->count; i++)
-        used += (size_t)snprintf(text + used, room - used, EXTINF "%.3f,\n" HLS_LOCAL_PREFIX "%d.ts\n",
-                                 segmentLength(p, i) / NS_PER_S, i);
+    for (int i = p->first; i < p->count; i++) {
+        used += (size_t)snprintf(text + used, room - used, EXTINF "%.3f,\n", segmentLength(p, i) / NS_PER_S);
+        used += (size_t)localName(p, i, text + used, room - used);
+    }
     if (p->ended)
         used += (size_t)snprintf(text + used, room - used, "#EXT-X-ENDLIST\n");
     free(p->text);
@@ -353,4 +371,34 @@ int hlsLocalSegment(const char *url)
     char *end;
     long n = strtol(url + prefix, &end, 10);
     return end != url + prefix && n >= 0 && strcmp(end, ".ts") == 0 ? (int)n : -1;
+}
+
+bool hlsLocalName(const char *url, int *list, int *index)
+{
+    size_t prefix = sizeof(HLS_LOCAL_PREFIX) - 1;
+    if (strncmp(url, HLS_LOCAL_PREFIX, prefix) != 0)
+        return false;
+    char *end;
+    long first = strtol(url + prefix, &end, 10);
+    if (end == url + prefix || first < 0)
+        return false;
+    if (!strcmp(end, ".ts")) {  // A list alone: "12.ts".
+        *list = 0;
+        *index = (int)first;
+        return true;
+    }
+    if (*end != '/')
+        return false;
+    const char *rest = end + 1;
+    if (!strcmp(rest, "index.m3u8")) {
+        *list = (int)first;
+        *index = -1;
+        return true;
+    }
+    long second = strtol(rest, &end, 10);
+    if (end == rest || second < 0 || (strcmp(end, ".ts") && strcmp(end, ".vtt")))
+        return false;
+    *list = (int)first;
+    *index = (int)second;
+    return true;
 }

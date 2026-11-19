@@ -52,6 +52,9 @@ bool videoNextPts(Video *v, int64_t *pts_ns);
 void videoSeek(Video *v, int64_t pts_ns);
 // The file's length, or 0 if it doesn't say.
 int64_t videoDuration(const Video *v);
+// Where playback's time 0 is on the stream's own clock (converted and live
+// streams don't start at 0), in ns.
+int64_t videoStartNs(const Video *v);
 // True once every frame has been shown, or decoding failed (see error).
 bool videoFinished(Video *v, char *error, size_t error_size);
 VideoStats videoStats(const Video *v);

@@ -11,6 +11,7 @@
 #include "jellyfin.h"
 #include "jfsync.h"
 #include "subs.h"
+#include "webvtt.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
 #define SWITCH_LEAD_NS 300000000ll   // A new sound track joins this far ahead of the picture.
@@ -35,6 +36,7 @@ typedef struct {
     SubTrack track;
     ExtState state;     // Under ext_lock.
     int stream_index;   // The server's number.
+    int live_track_plus1;  // A channel's own subtitles (hlsio.h), plus 1; 0 for others.
 } ExtSub;
 
 struct Player {
@@ -257,6 +259,10 @@ static void updateExternal(Player *p)
 void playerSetSubtitle(Player *p, int track)
 {
     p->subtitle = track >= 0 && track < playerSubtitleCount(p) ? track : -1;
+    if (hlsIsLocation(p->path) && hlsSubtitleCount() > 0) {  // A channel's own: fetched only while chosen.
+        bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
+        hlsSelectSubtitle(live ? p->ext[p->subtitle].live_track_plus1 - 1 : -1);
+    }
     if (p->subtitle >= 0 && p->subtitle < p->ext_count) {
         pthread_mutex_lock(&p->ext_lock);
         if (p->ext[p->subtitle].state == EXT_FAILED)  // Asked for again: one more try.
@@ -288,8 +294,29 @@ void playerAttachPlan(Player *p, const JfPlan *plan, const char *location)
             p->subtitle = p->ext_count;
         p->ext_count++;
     }
+    // A channel's own subtitles: their lines come as it plays (playerUpdate).
+    for (int i = 0; hlsIsLocation(p->path) && i < hlsSubtitleCount() && p->ext_count < EXTERNAL_MAX; i++) {
+        ExtSub *e = &p->ext[p->ext_count++];
+        const char *name = hlsSubtitleName(i);
+        subsTrackName(e->label, sizeof(e->label), name[0] ? name : NULL, hlsSubtitleLanguage(i), i + 1);
+        e->state = EXT_READY;
+        e->live_track_plus1 = i + 1;
+    }
     if (!p->converted && had_file_track && p->subtitle >= 0)  // The file's tracks moved down the list.
         p->subtitle += p->ext_count;
+}
+
+// The chosen subtitles' lines that came for a channel's own track.
+static void takeLiveSubtitles(Player *p)
+{
+    char *data;
+    size_t size;
+    while (hlsTakeSubtitle(&data, &size)) {
+        bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
+        if (live)
+            webvttAdd(&p->ext[p->subtitle].track, data, size, videoStartNs(p->video));
+        free(data);
+    }
 }
 
 bool playerIsConverted(const Player *p)
@@ -416,6 +443,7 @@ bool playerTakeStartTimes(Player *p, int *start_ms, int *cushion_ms)
 const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
 {
     updateExternal(p);
+    takeLiveSubtitles(p);
     if (p->swapping)
         finishSwap(p);
     if (p->audio && audioTakeSwitchError(p->audio, p->swap_error, sizeof(p->swap_error))) {

@@ -37,4 +37,14 @@ double hlsSecondsReady(int64_t from_ns);
 // it, such as an interrupt_callback: while it says so, a reader stops waiting
 // for a segment). *playlist is to be closed with hlsCloseInput after the format.
 bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist);
+
+// Subtitles of a channel's own stream (WebVTT lists FFmpeg doesn't read):
+// how many, and each one's name and language code.
+int hlsSubtitleCount(void);
+const char *hlsSubtitleName(int track);
+const char *hlsSubtitleLanguage(int track);
+// Starts fetching a track's segments near the picture's (-1: none).
+void hlsSelectSubtitle(int track);
+// The next WebVTT segment of the chosen track (data to be freed); false if none waits.
+bool hlsTakeSubtitle(char **data, size_t *size);
 void hlsCloseInput(AVIOContext *playlist);

@@ -29,6 +29,8 @@ typedef struct {
     int64_t longest_ns;      // Its longest segment.
     int64_t sequence;        // The media sequence number of urls[0].
     int first;               // The first segment in text.
+    int list;                // Its number among a master list's (hlsmaster.h), -1 when alone.
+    bool subtitles;          // Its segments are WebVTT.
 } HlsPlaylist;
 
 // The variant of a master list that the console plays best: up to 1080p,
@@ -40,6 +42,10 @@ bool hlsBestVariant(const char *playlist, long long max_bitrate, char *out, size
 // From a media playlist found at base. The renamed list starts at the segment
 // holding start_ns, so nothing before it has to be made. False if it has no segments.
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out);
+// The same for list number list of a master list: its segments are named
+// HLS_LOCAL_PREFIX "list/n.ts" (".vtt" for subtitles).
+bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_ns, int list, bool subtitles,
+                          HlsPlaylist *out);
 // A live list read again: the segments in it that p doesn't have yet (by
 // media sequence, so a list that drops its old segments works too) are added
 // at its end, and its text is made again. How many were added, -1 if the
@@ -50,3 +56,6 @@ void hlsPlaylistFree(HlsPlaylist *p);
 void hlsPlaylistSpan(const HlsPlaylist *p, int64_t from_ns, int64_t length_ns, int *first, int *last);
 // The segment number of a name made by hlsPlaylistParse, or -1.
 int hlsLocalSegment(const char *url);
+// A local name: the list (0 for a list alone) and segment, or -1 for the
+// list's own "list/index.m3u8". False if it isn't one.
+bool hlsLocalName(const char *url, int *list, int *index);

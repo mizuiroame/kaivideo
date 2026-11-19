@@ -6,3 +6,4 @@ tests/build/
 *.map
 __pycache__/
 testvideos/
+tests/*/build/
