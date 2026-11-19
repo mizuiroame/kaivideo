@@ -4,6 +4,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "home.h"
 #include "library.h"
@@ -62,7 +63,8 @@ typedef struct {
     LibraryRef results[LIBVIEW_RESULTS];
     int result_count;
     Scroll results_scroll;
-    Scroll live;  // The Live TV channel under the cursor.
+    Scroll live;      // The Live TV channel under the cursor.
+    int64_t live_at;  // And the time in its guide (livetv.h): 0 for now.
 } LibView;
 
 // Starts on Home, with the card's tabs.

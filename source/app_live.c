@@ -43,6 +43,8 @@ static bool takeGuide(App *app)
         if (had != (app->live.count > 0))
             appLibraryRefreshHome(app);  // The tab comes or goes.
         libviewLiveMove(&app->view, app->live.count, 0);
+        if (app->view.live_at <= (int64_t)time(NULL))
+            app->view.live_at = 0;  // The program the cursor was on has started: it's on now.
     }
     return true;
 }
@@ -91,12 +93,35 @@ static void playChannel(App *app, int index, uint64_t now)
         app->open_from_start = false;
 }
 
+// A tap on a program in the guide: the cursor goes to it, and a tap on the
+// one it's on watches its channel.
+static void tapProgram(App *app, LibHit hit, uint64_t now)
+{
+    LibView *v = &app->view;
+    if (hit.a < 0 || hit.a >= app->live.count)
+        return;
+    const LiveChannel *c = &app->live.channels[hit.a];
+    if (hit.b < 0 || hit.b >= c->program_count)
+        return;
+    int64_t now_s = (int64_t)time(NULL), at = v->live_at > now_s ? v->live_at : now_s;
+    if (hit.a == v->live.cursor && liveProgramAt(c, at) == hit.b) {
+        playChannel(app, hit.a, now);
+        return;
+    }
+    v->live.cursor = hit.a;
+    libviewLiveMove(v, app->live.count, 0);
+    v->live_at = c->programs[hit.b].start > now_s ? c->programs[hit.b].start : 0;
+}
+
 void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     LibView *v = &app->view;
     int dy = (pressed & BUTTONS_UP) ? -1 : (pressed & BUTTONS_DOWN) ? 1 : 0;
+    int dx = (pressed & BUTTONS_LEFT) ? -1 : (pressed & BUTTONS_RIGHT) ? 1 : 0;
     if (dy)
         libviewLiveMove(v, app->live.count, dy);
+    if (dx && v->live.cursor >= 0 && v->live.cursor < app->live.count)
+        v->live_at = liveStep(&app->live.channels[v->live.cursor], v->live_at, (int64_t)time(NULL), dx);
     if (pressed & HidNpadButton_A)
         playChannel(app, v->live.cursor, now);
     if (touch.type == TOUCH_TAP) {
@@ -104,6 +129,8 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         if (hit.kind == LIBHIT_LIVE_ROW) {
             v->live.cursor = hit.a;
             playChannel(app, hit.a, now);
+        } else if (hit.kind == LIBHIT_LIVE_PROGRAM) {
+            tapProgram(app, hit, now);
         }
     } else if (touch.type == TOUCH_DRAG && touch.start_y >= UI_TAB_BAR_H) {
         app->drag_rows -= touch.dy;

@@ -160,7 +160,8 @@ void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
 // Once a frame: reads the guide now and then (often while its tab shows), and takes it when read.
 void appLiveUpdate(App *app, uint64_t now);
 void appLiveExit(App *app);
-// The Live TV tab: up and down move, A plays the channel.
+// The Live TV guide: up and down change channel, left and right move through
+// its programs, A plays the channel.
 void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appLiveDraw(const App *app);
 // Live TV is playing: no jumps, no resume point.

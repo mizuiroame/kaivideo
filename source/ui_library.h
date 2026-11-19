@@ -42,6 +42,7 @@ typedef enum {
     LIBHIT_FAVORITE,         // The details panel's or a series page's favorite button.
     LIBHIT_SKIP,             // The player's "Skip intro" button.
     LIBHIT_LIVE_ROW,         // a: a Live TV channel.
+    LIBHIT_LIVE_PROGRAM,     // a: a Live TV channel, b: one of its programs in the guide.
 } LibHitKind;
 
 typedef struct {

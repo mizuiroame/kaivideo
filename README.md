@@ -186,11 +186,14 @@ What your server adds, when it's set up for it:
 - **Pictures on the bar**: with **trickplay** turned on in the server's
   libraries, dragging the progress bar shows a picture of where your finger
   is, and a far jump shows one while it loads.
-- **Live TV**: with tuners or channels on the server, a **Live TV** tab lists
-  them with what's on now (and how far into it) and what's next. **A** watches
-  a channel, converted by the server; **L** / **R** change channel while it
-  plays. It starts a few seconds behind live, so it doesn't stop to wait for
-  the server.
+- **Live TV**: with tuners or channels on the server, a **Live TV** tab shows
+  its guide: a row for each channel and its programs over two hours, with a
+  line at the time now. **↑** / **↓** change channel and **◀** / **▶** move
+  through its programs, up to four hours ahead; the strip at the bottom says
+  what the cursor is on. **A** watches the channel, converted by the server
+  (tap a program to put the cursor on it, and tap it again to watch);
+  **L** / **R** change channel while it plays. It starts a few seconds behind
+  live, so it doesn't stop to wait for the server.
 
 ### Where KaiVideo keeps its files
 
@@ -214,7 +217,8 @@ when brewstore installs it). Your videos aren't touched.
 | **−** | Settings |
 | **+** | The menu: Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
-On a series, **◀** / **▶** change the season and **X** marks the episode
+On **Live TV**, **↑** / **↓** change channel, **◀** / **▶** move through the
+guide and **A** watches the channel. On a series, **◀** / **▶** change the season and **X** marks the episode
 watched or not (or tap its circle on the right). Tap a tab, a card or a row to
 open it, and drag to scroll; the **☰** before the name opens the menu. In
 **Files**, **◀** / **▶** move a page and the path at the top goes to the
@@ -275,12 +279,11 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
   on a home network, and over https through a test proxy with a certificate
   of its own; not yet from outside a home network.
 - **Live TV** has been tried with test channels a server made from video
-  files, not with a TV tuner. The guide shows now and next, not a grid.
+  files, not with a TV tuner. Programs can't be recorded.
 
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
-- **Live TV**: a guide grid of the next hours.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
 - Smoother jumps, and checks with big libraries on the console.
 

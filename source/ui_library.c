@@ -36,7 +36,7 @@
 #define SEARCH_BOX_Y 84
 #define SEARCH_BOX_H 56
 #define SEARCH_LIST_Y 160
-#define MAX_HITS 96
+#define MAX_HITS 160  // The Live TV guide has one for each program in view.
 #define SERIES_PICTURE_TRIES 8  // Episodes tried for a series' picture.
 #define PLAYER_FADE_BANDS 12
 #define PLAYER_FADE_BAND_H 6

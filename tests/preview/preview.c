@@ -129,18 +129,31 @@ static void liveScene(Player *p)
     static const char *const NAMES[] = {"KaiVideo Test One", "KaiVideo Test Two", "Harbor News 24", "Kite Hill Sports"};
     static const char *const NOW[] = {"The Quiet Workshop", "Kite Hill Live", "Evening Report", "Regional Final"};
     static const char *const NEXT[] = {"Paper Boats", "Morning Lanterns", "Harbor Weather", "Post-Game"};
-    LiveChannel channels[4] = {0};
+    static const char *const LATER[] = {"Lantern Makers", "Tide Tables", "Night Desk", "Highlights", "Quiet Hours"};
+    static LiveChannel channels[4];
     const int64_t now = 1795082400 + 600;
     for (int i = 0; i < 4; i++) {
-        snprintf(channels[i].id, sizeof(channels[i].id), "c%d", i);
-        snprintf(channels[i].name, sizeof(channels[i].name), "%s", NAMES[i]);
-        snprintf(channels[i].number, sizeof(channels[i].number), "%d", i + 1);
-        channels[i].now = (LiveProgram){.start = now - 600 - i * 300, .end = now + 1200 + i * 300};
-        snprintf(channels[i].now.title, sizeof(channels[i].now.title), "%s", NOW[i]);
-        channels[i].next = (LiveProgram){.start = channels[i].now.end, .end = channels[i].now.end + 1800};
-        snprintf(channels[i].next.title, sizeof(channels[i].next.title), "%s", NEXT[i]);
+        LiveChannel *c = &channels[i];
+        snprintf(c->id, sizeof(c->id), "c%d", i);
+        snprintf(c->name, sizeof(c->name), "%s", NAMES[i]);
+        snprintf(c->number, sizeof(c->number), "%d", i + 1);
+        c->now = (LiveProgram){.start = now - 600 - i * 300, .end = now + 1200 + i * 300};
+        snprintf(c->now.title, sizeof(c->now.title), "%s", NOW[i]);
+        c->next = (LiveProgram){.start = c->now.end, .end = c->now.end + 1800 + i * 900};
+        snprintf(c->next.title, sizeof(c->next.title), "%s", NEXT[i]);
+        c->programs[0] = c->now;
+        c->programs[1] = c->next;
+        c->program_count = 2;
+        for (int64_t start = c->next.end; start < now + 3 * 3600; c->program_count++) {
+            LiveProgram *p = &c->programs[c->program_count];
+            *p = (LiveProgram){.start = start, .end = start + 1800 + (c->program_count % 3) * 900};
+            snprintf(p->title, sizeof(p->title), "%s", LATER[(i + c->program_count) % 5]);
+            start = p->end;
+        }
     }
     channels[3].now.title[0] = '\0';
+    memmove(&channels[3].programs[0], &channels[3].programs[1], (size_t)(channels[3].program_count - 1) * sizeof(LiveProgram));
+    channels[3].program_count--;  // No guide for now on the last channel, only later.
     LiveGuide guide = {channels, 4};
     static LibView view;
     static Library lib;   // The tab doesn't need videos.
@@ -155,12 +168,27 @@ static void liveScene(Player *p)
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
-    uiDrawFooterHelp("[A] watch  [^v] channel  [ZL][ZR] tabs  [-] settings  [+] menu");
+    uiDrawFooterHelp("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
     save("live_tab");
-    if (uiLibraryTap(GFX_WIDTH / 2, 84 + 84 + 40).kind != LIBHIT_LIVE_ROW) {
-        printf("TOUCH: live_tab: a channel doesn't answer a tap\n");
+    const int row2_y = 116 + 76 + 38;  // The middle of the second channel's row.
+    if (uiLibraryTap(100, row2_y).kind != LIBHIT_LIVE_ROW) {
+        printf("TOUCH: live_tab: a channel's name doesn't answer a tap\n");
         g_problems++;
     }
+    LibHit program = uiLibraryTap(GFX_WIDTH - 60, row2_y);
+    if (program.kind != LIBHIT_LIVE_PROGRAM || program.a != 1 || program.b < 1) {
+        printf("TOUCH: live_tab: a later program doesn't answer a tap\n");
+        g_problems++;
+    }
+    // The cursor on a later program, the view moved on to it.
+    view.live_at = liveStep(&channels[1], liveStep(&channels[1], 0, now, 1), now, 1);
+    view.live_at = liveStep(&channels[1], view.live_at, now, 1);
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
+    uiDrawFooterHelp("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
+    save("live_guide_later");
+    view.live_at = 0;
     uiLibrarySetSource("");
     p->live = true;
     begin();

@@ -158,7 +158,7 @@ const char *appFooterHelp(const App *app)
                       : "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {
     case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";
-    case TAB_LIVE: return "[A] watch  [^v] channel  [ZL][ZR] tabs  [-] settings  [+] menu";
+    case TAB_LIVE: return "[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu";
     case TAB_FILES: return "[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu";
     default: return "[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu";
     }

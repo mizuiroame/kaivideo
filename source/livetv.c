@@ -80,11 +80,27 @@ static LiveChannel *findChannel(LiveGuide *g, const char *id)
     return NULL;
 }
 
-// Keeps p as the channel's program now or next, if it's that.
+// Adds p to the channel's programs by its start: the same start twice is kept
+// once, and with no room the latest goes.
+static void addProgram(LiveChannel *c, const LiveProgram *p)
+{
+    int at = c->program_count;
+    while (at > 0 && c->programs[at - 1].start > p->start)
+        at--;
+    if ((at > 0 && c->programs[at - 1].start == p->start) || at >= LIVE_PROGRAMS_PER_CHANNEL)
+        return;
+    int keep = c->program_count < LIVE_PROGRAMS_PER_CHANNEL ? c->program_count : LIVE_PROGRAMS_PER_CHANNEL - 1;
+    memmove(&c->programs[at + 1], &c->programs[at], (size_t)(keep - at) * sizeof(LiveProgram));
+    c->programs[at] = *p;
+    c->program_count = keep + 1;
+}
+
+// Keeps p as the channel's program now or next, if it's that, and in its list.
 static void place(LiveChannel *c, const LiveProgram *p, int64_t now_s)
 {
     if (p->end <= now_s)
         return;  // Over.
+    addProgram(c, p);
     if (p->start <= now_s) {
         c->now = *p;
     } else if (!c->next.title[0] || p->start < c->next.start) {
@@ -97,6 +113,7 @@ void liveGuideSetPrograms(LiveGuide *g, const char *json, int64_t now_s)
     for (int i = 0; i < g->count; i++) {
         g->channels[i].now = (LiveProgram){0};
         g->channels[i].next = (LiveProgram){0};
+        g->channels[i].program_count = 0;
     }
     json_t *root = json_loads(json, 0, NULL);
     size_t i;
@@ -121,7 +138,7 @@ double liveProgress(const LiveProgram *p, int64_t now_s)
     return f < 0 ? 0 : f > 1 ? 1 : f;
 }
 
-static void formatClock(int64_t utc_s, int64_t offset_s, bool clock_24h, char *out, size_t size)
+void liveClock(int64_t utc_s, int64_t offset_s, bool clock_24h, char *out, size_t size)
 {
     int64_t local = utc_s + offset_s, of_day = ((local % SECONDS_PER_DAY) + SECONDS_PER_DAY) % SECONDS_PER_DAY;
     int hour = (int)(of_day / SECONDS_PER_HOUR), minute = (int)(of_day % SECONDS_PER_HOUR / SECONDS_PER_MINUTE);
@@ -134,9 +151,56 @@ static void formatClock(int64_t utc_s, int64_t offset_s, bool clock_24h, char *o
 void liveTimeRange(const LiveProgram *p, int64_t utc_offset_s, bool clock_24h, char *out, size_t size)
 {
     char from[16], to[16];
-    formatClock(p->start, utc_offset_s, clock_24h, from, sizeof(from));
-    formatClock(p->end, utc_offset_s, clock_24h, to, sizeof(to));
+    liveClock(p->start, utc_offset_s, clock_24h, from, sizeof(from));
+    liveClock(p->end, utc_offset_s, clock_24h, to, sizeof(to));
     snprintf(out, size, "%s - %s", from, to);
+}
+
+int liveProgramAt(const LiveChannel *c, int64_t t)
+{
+    for (int i = 0; i < c->program_count; i++)
+        if (c->programs[i].end > t)
+            return i;
+    return -1;
+}
+
+int64_t liveStep(const LiveChannel *c, int64_t at, int64_t now_s, int dx)
+{
+    int here = liveProgramAt(c, at > now_s ? at : now_s);
+    int to = here + (dx > 0 ? 1 : -1);
+    if (here < 0 || to < 0 || to >= c->program_count)
+        return at > now_s ? at : 0;
+    return c->programs[to].start > now_s ? c->programs[to].start : 0;
+}
+
+// Floors to a multiple of step, for times before 1970 too.
+static int64_t floorTo(int64_t t, int64_t step)
+{
+    int64_t r = t % step;
+    return r < 0 ? t - r - step : t - r;
+}
+
+int64_t liveGridStart(int64_t now_s, int64_t at, int64_t utc_offset_s)
+{
+    int64_t base = floorTo(now_s + utc_offset_s, LIVE_GRID_STEP_S) - utc_offset_s;
+    if (at <= now_s)
+        return base;
+    // The cursor goes no further right than the column before the last, so
+    // what comes after it shows too.
+    int64_t columns = LIVE_GRID_SPAN_S / LIVE_GRID_STEP_S;
+    int64_t past = (at - base) / LIVE_GRID_STEP_S - (columns - 2);
+    return base + (past > 0 ? past : 0) * LIVE_GRID_STEP_S;
+}
+
+bool liveGridSpan(const LiveProgram *p, int64_t from, int x0, int width, int *x, int *w)
+{
+    int64_t to = from + LIVE_GRID_SPAN_S;
+    int64_t s = p->start > from ? p->start : from, e = p->end < to ? p->end : to;
+    if (e <= s)
+        return false;
+    *x = x0 + (int)((s - from) * width / LIVE_GRID_SPAN_S);
+    *w = x0 + (int)((e - from) * width / LIVE_GRID_SPAN_S) - *x;
+    return true;
 }
 
 void liveLocation(char *out, size_t size, const char *channel_id)
