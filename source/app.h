@@ -88,7 +88,9 @@ struct App {
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
     uint64_t live_read_at;
     bool live_read_soon;        // Read the guide again at once (appLiveReadSoon).
-    int live_switch;           // L or R while a channel plays: -1 or 1, taken by the main loop.
+    int live_pending;           // L and R while a channel opens: channels to move on once it's let go.
+    char live_pending_name[APP_NAME_MAX];  // The channel they lead to, for the loading screen.
+    int live_switch;          // L or R while a channel plays: -1 or 1, taken by the main loop.
     JfSegment segments[JF_SEGMENTS_MAX];  // The playing video's parts to skip (app_skip.c).
     int segment_count;
     bool stats_shown;           // ↓ shows the statistics panel (app_stats.c).

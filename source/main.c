@@ -453,6 +453,38 @@ static void switchChannel(App *app, uint64_t now)
         app->open_from_start = false;
 }
 
+// L or R while a channel opens: that opening is let go, and the channel
+// they lead to (counting every press) opens after it.
+static void switchWhileOpening(App *app, uint64_t pressed)
+{
+    if (!liveIsLocation(app->playing_path) || !(pressed & (HidNpadButton_L | HidNpadButton_R)))
+        return;
+    int delta = app->live_pending + ((pressed & HidNpadButton_L) ? -1 : 1);
+    char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
+    if (!appLiveNeighbor(app, delta, location, sizeof(location), name, sizeof(name)))
+        return;
+    app->live_pending = delta;
+    snprintf(app->live_pending_name, sizeof(app->live_pending_name), "%s", name);
+    if (!app->open_cancelled) {
+        app->open_cancelled = true;
+        mediaFileInterruptAll();
+    }
+}
+
+// The channel L and R led to while another opened, once that one is let go.
+static void openPendingChannel(App *app, uint64_t now)
+{
+    int delta = app->live_pending;
+    app->live_pending = 0;
+    char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
+    if (!appLiveNeighbor(app, delta, location, sizeof(location), name, sizeof(name)))
+        return;
+    appLog("  channel: %s", name);
+    app->open_from_start = true;
+    if (!appStartVideo(app, location, name, now))
+        app->open_from_start = false;
+}
+
 static void reopenIfAsked(App *app, uint64_t now)
 {
     int audio;
@@ -980,17 +1012,25 @@ int main(int argc, char **argv)
         if (app.player && !app.opening && playerTakeStartTimes(app.player, &start_ms, &cushion_ms))
             appLog("  playing after %d ms (%d ms gathering video)", start_ms, cushion_ms);
         if (app.opening) {
-            if ((pressed & HidNpadButton_B) && !app.open_cancelled) {
-                app.open_cancelled = true;
-                mediaFileInterruptAll();
+            if (pressed & HidNpadButton_B) {
+                app.live_pending = 0;  // B: no channel after this one either.
+                if (!app.open_cancelled) {
+                    app.open_cancelled = true;
+                    mediaFileInterruptAll();
+                }
             }
+            switchWhileOpening(&app, pressed);
             pressed = 0;  // Not for the video that's about to show.
             if (app.open_done)
                 finishOpening(&app, now);
+            if (!app.opening && app.live_pending)
+                openPendingChannel(&app, now);
         }
         if (app.opening) {
-            uiDrawLoading(app.playing_name, spinnerAngle(now), app.open_cancelled);
-            uiDrawFooterHelp("[B] cancel");
+            bool switching = app.live_pending != 0;
+            uiDrawLoading(switching ? app.live_pending_name : app.playing_name, spinnerAngle(now),
+                          app.open_cancelled && !switching);
+            uiDrawFooterHelp(liveIsLocation(app.playing_path) ? "[L][R] channel  [B] cancel" : "[B] cancel");
         } else if (app.player) {
             char error[160] = "";
             bool keep = playerInput(&app, pressed, t, now);
