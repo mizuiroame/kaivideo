@@ -56,6 +56,8 @@ static void takeProbe(App *app, uint64_t now)
     appLog("Jellyfin %s: %s%s%s", r.finding ? "search" : "test", r.message, r.detail[0] ? " | " : "", r.detail);
     if (r.finding && r.ok && app->jf.state != JF_SIGNED_IN && !jfSyncSetServer(r.found))
         snprintf(r.message, sizeof(r.message), "The server found can't be used: type its address under Server.");
+    if (!r.finding && r.ok)
+        appLiveReadSoon(app);  // A test that worked also looks for Live TV channels again.
     appShowMessage(app, r.message, now);
 }
 

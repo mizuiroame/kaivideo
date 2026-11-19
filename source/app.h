@@ -87,7 +87,8 @@ struct App {
     bool live_reading;
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
     uint64_t live_read_at;
-    int live_switch;            // L or R while a channel plays: -1 or 1, taken by the main loop.
+    bool live_read_soon;        // Read the guide again at once (appLiveReadSoon).
+    int live_switch;           // L or R while a channel plays: -1 or 1, taken by the main loop.
     JfSegment segments[JF_SEGMENTS_MAX];  // The playing video's parts to skip (app_skip.c).
     int segment_count;
     bool stats_shown;           // ↓ shows the statistics panel (app_stats.c).
@@ -160,6 +161,9 @@ void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
 // Once a frame: reads the guide now and then (often while its tab shows), and takes it when read.
 void appLiveUpdate(App *app, uint64_t now);
 void appLiveExit(App *app);
+// Reads the server's channels and guide again as soon as it can, not at the
+// next refresh: after changing to Jellyfin, or a connection test that worked.
+void appLiveReadSoon(App *app);
 // The Live TV guide: up and down change channel, left and right move through
 // its programs, A plays the channel.
 void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);

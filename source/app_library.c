@@ -88,6 +88,7 @@ void appLibrarySetSource(App *app, bool jellyfin)
         libraryInit(&app->library, JF_ROOT);
         appLibraryRefreshHome(app);
         jfSyncRefresh();
+        appLiveReadSoon(app);  // The server may have channels now that it didn't have before.
     } else {
         loadCardLibrary(app);
     }

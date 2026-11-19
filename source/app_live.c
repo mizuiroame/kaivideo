@@ -56,14 +56,21 @@ void appLiveUpdate(App *app, uint64_t now)
         joined = takeGuide(app);
     bool signed_in = app->config.use_jellyfin && app->jf.state == JF_SIGNED_IN;
     uint64_t every = liveShown(app) ? SHOWN_REFRESH_NS : IDLE_REFRESH_NS;
-    if (!signed_in || !joined || app->player || (app->live_read_at && now - app->live_read_at < every))
+    bool due = !app->live_read_at || now - app->live_read_at >= every || app->live_read_soon;
+    if (!signed_in || !joined || app->player || !due)
         return;
+    app->live_read_soon = false;
     app->live_read_at = now;
     liveGuideInit(&app->live_incoming);
     app->live_reading = true;
     joined = pthread_create(&app->live_thread, NULL, readGuide, app) != 0;
     if (joined)
         app->live_reading = false;
+}
+
+void appLiveReadSoon(App *app)
+{
+    app->live_read_soon = true;
 }
 
 void appLiveExit(App *app)
