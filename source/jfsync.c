@@ -766,6 +766,27 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
     return ok;
 }
 
+bool jfSyncLiveSource(const char *location, JfPlan *out)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX], body[256];
+    NetClient *net = netClientOpen();
+    bool ok = false;
+    if (g.running && net && jfLocationIds(location, item, source) && !strcmp(source, LIVE_SOURCE)) {
+        JfSession s = sessionCopy();
+        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s", s.server, item, s.user_id);
+        jfAuthHeader(&s, g.version, auth, sizeof(auth));
+        jfLiveInfoBody(body, sizeof(body), s.user_id);
+        NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S};
+        NetResponse r;
+        if (netFetchText(net, &request, PLAN_MAX_BYTES, &r)) {
+            ok = jfLivePlanParse(r.data, out);
+            netResponseFree(&r);
+        }
+    }
+    netClientClose(net);
+    return ok;
+}
+
 // The answer to an API path, with a client of the caller's own (any thread).
 static bool fetchWith(NetClient *net, const char *path, size_t max, NetResponse *out)
 {

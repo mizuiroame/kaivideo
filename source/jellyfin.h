@@ -101,12 +101,19 @@ typedef struct {
     int audio_count, sub_count;
     int audio_current;  // An index in audio, -1 if none.
     int sub_default;    // An index in subs, -1 for none.
+    char source_url[JF_TRANSCODE_URL_MAX];  // Live TV read straight from the channel's own HLS, or "".
 } JfPlan;
 
 // The body of a PlaybackInfo request. audio_index: the server's number, -1 for its choice.
 void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index);
 // Reads the answer. False if it says nothing playable.
 bool jfPlanParse(const char *json, JfPlan *out);
+// Live TV: the body asking about a channel without the server opening its stream.
+void jfLiveInfoBody(char *out, size_t size, const char *user_id);
+// From that answer, the channel's own HLS source (an http or https .m3u8 that
+// never ends), for the console to read without the server: direct, with
+// source_url set. False if it has none such.
+bool jfLivePlanParse(const char *json, JfPlan *out);
 
 // Holds a library being read with its user data, which grows with it.
 // Parts of a video the server marked (with a plugin such as Intro Skipper).

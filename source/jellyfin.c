@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #include <jansson.h>
 
@@ -274,6 +275,39 @@ bool jfPlanParse(const char *json, JfPlan *out)
         snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
         snprintf(out->live_stream_id, sizeof(out->live_stream_id), "%s", textOf(source, "LiveStreamId"));
         readTracks(source, out);
+    }
+    json_decref(root);
+    return ok;
+}
+
+void jfLiveInfoBody(char *out, size_t size, const char *user_id)
+{
+    snprintf(out, size, "{\"UserId\":\"%s\",\"AutoOpenLiveStream\":false,\"EnableDirectPlay\":true}", user_id);
+}
+
+// An http(s) address whose path (not its query) ends in ".m3u8".
+static bool isHlsAddress(const char *url)
+{
+    if (strncmp(url, "http://", 7) && strncmp(url, "https://", 8))
+        return false;
+    size_t path = strcspn(url, "?#"), ext = sizeof(".m3u8") - 1;
+    return path > ext && !strncasecmp(url + path - ext, ".m3u8", ext);
+}
+
+bool jfLivePlanParse(const char *json, JfPlan *out)
+{
+    memset(out, 0, sizeof(*out));
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *source = json_array_get(json_object_get(root, "MediaSources"), 0);
+    const char *path = textOf(source, "Path");
+    bool ok = source && !strcmp(textOf(source, "Protocol"), "Http") &&
+              json_is_true(json_object_get(source, "IsInfiniteStream")) && isHlsAddress(path) &&
+              strlen(path) < sizeof(out->source_url);
+    if (ok) {
+        out->direct = true;
+        out->audio_current = out->sub_default = -1;
+        snprintf(out->source_url, sizeof(out->source_url), "%s", path);
+        snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
     }
     json_decref(root);
     return ok;

@@ -207,11 +207,31 @@ static int preferredSound(const App *app, const JfPlan *plan)
 
 // Asks the server how to play the video, and starts its conversion if that's
 // the way. What to open goes in path. False, with the reason, if it can't.
-static bool prepareRemote(App *app, int audio_index, char *path, size_t size)
+// Live TV: the channel straight from its own HLS source, without the server
+// converting it, when it has one the console can read. True if it plays so.
+static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
+{
+    JfPlan *plan = &app->open_plan;
+    if (!liveIsLocation(app->playing_path) || !jfSyncLiveSource(app->playing_path, plan))
+        return false;
+    if (!hlsStartDirect(plan->source_url, bitrate, app->open_error, sizeof(app->open_error))) {
+        appLog("  %s: the server converts it instead", app->open_error);
+        memset(plan, 0, sizeof(*plan));
+        app->open_error[0] = '\0';
+        return false;
+    }
+    appLog("  live from the channel's own source");
+    snprintf(path, size, HLS_LOCATION);
+    return true;
+}
+
+static bool prepareRemote(App *app, int audio_index, bool try_direct, char *path, size_t size)
 {
     JfPlan *plan = &app->open_plan;
     long long bitrate = settingQualityBitrate(&app->config);
     char *error = app->open_error;
+    if (try_direct && audio_index < 0 && openLiveDirect(app, bitrate, path, size))
+        return true;
     if (!jfSyncResolve(app->playing_path, bitrate, audio_index, plan, error, sizeof(app->open_error)))
         return false;
     int preferred = audio_index < 0 && !plan->direct ? preferredSound(app, plan) : -1;
@@ -235,8 +255,17 @@ static void *openThread(void *arg)
     snprintf(path, sizeof(path), "%s", app->playing_path);
     int audio_index = app->next_audio_plus1 - 1;
     app->next_audio_plus1 = 0;
-    if (!remote || prepareRemote(app, audio_index, path, sizeof(path)))
+    if (!remote || prepareRemote(app, audio_index, true, path, sizeof(path)))
         app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
+    if (!app->open_result && app->open_plan.source_url[0] && !app->open_cancelled) {
+        // The channel's own stream opened but won't play here: the server converts it.
+        appLog("  the channel's own stream won't play (%s): the server converts it instead", app->open_error);
+        hlsStop();
+        memset(&app->open_plan, 0, sizeof(app->open_plan));
+        app->open_error[0] = '\0';
+        if (prepareRemote(app, audio_index, false, path, sizeof(path)))
+            app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
+    }
     if (app->open_result && remote && !liveIsLocation(app->playing_path))
         app->segment_count = jfSyncFetchSegments(app->playing_path, app->segments, JF_SEGMENTS_MAX);
     if (app->open_result && remote)

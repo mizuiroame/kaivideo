@@ -6,7 +6,13 @@
 
 #define LOCAL_NAME_MAX 48
 #define EXTINF "#EXTINF:"
+#define MEDIA_SEQUENCE "#EXT-X-MEDIA-SEQUENCE:"
+#define STREAM_INF "#EXT-X-STREAM-INF:"
 #define NS_PER_S 1e9
+#define HEADER_ROOM 160
+#define EXTINF_ROOM 32
+#define CODECS_MAX 128
+#define MAX_HEIGHT 1088  // 1080p, coded as 1088.
 
 bool hlsResolveUrl(const char *base, const char *ref, char *out, size_t size)
 {
@@ -159,6 +165,153 @@ bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, 
     out->text[used] = '\0';
     out->size = used;
     out->ended = strstr(playlist, "#EXT-X-ENDLIST") != NULL;
+    const char *sequence = strstr(playlist, MEDIA_SEQUENCE);
+    out->sequence = sequence ? strtoll(sequence + sizeof(MEDIA_SEQUENCE) - 1, NULL, 10) : 0;
+    out->first = first;
+    return true;
+}
+
+static int64_t segmentLength(const HlsPlaylist *p, int i)
+{
+    return (i + 1 < p->count ? p->starts_ns[i + 1] : p->end_ns) - p->starts_ns[i];
+}
+
+// The renamed list again, from p->first, after segments were added.
+static bool rebuildText(HlsPlaylist *p)
+{
+    size_t room = HEADER_ROOM + (size_t)(p->count - p->first) * (LOCAL_NAME_MAX + EXTINF_ROOM);
+    char *text = malloc(room);
+    if (!text)
+        return false;
+    int target = (int)((p->longest_ns + (int64_t)NS_PER_S - 1) / (int64_t)NS_PER_S);
+    size_t used = (size_t)snprintf(text, room,
+                                   "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%d\n" MEDIA_SEQUENCE "%lld\n",
+                                   target > 0 ? target : 1, (long long)(p->sequence + p->first));
+    for (int i = p->first; i < p->count; i++)
+        used += (size_t)snprintf(text + used, room - used, EXTINF "%.3f,\n" HLS_LOCAL_PREFIX "%d.ts\n",
+                                 segmentLength(p, i) / NS_PER_S, i);
+    if (p->ended)
+        used += (size_t)snprintf(text + used, room - used, "#EXT-X-ENDLIST\n");
+    free(p->text);
+    p->text = text;
+    p->size = used;
+    return true;
+}
+
+int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base)
+{
+    HlsPlaylist fresh;
+    if (!hlsPlaylistParse(playlist, base, 0, &fresh))
+        return -1;
+    int64_t have = p->sequence + p->count;  // The sequence number the next new segment has.
+    int start = fresh.sequence + fresh.count > have ? (int)(have > fresh.sequence ? have - fresh.sequence : 0) : fresh.count;
+    int added = fresh.count - start;
+    char **urls = added ? realloc(p->urls, (size_t)(p->count + added) * sizeof(char *)) : p->urls;
+    if (urls)
+        p->urls = urls;
+    int64_t *starts = added && urls ? realloc(p->starts_ns, (size_t)(p->count + added) * sizeof(int64_t)) : p->starts_ns;
+    if (!urls || !starts) {
+        hlsPlaylistFree(&fresh);
+        return -1;
+    }
+    p->starts_ns = starts;
+    for (int i = start; i < fresh.count; i++) {
+        int64_t length = segmentLength(&fresh, i);
+        p->urls[p->count] = fresh.urls[i];
+        fresh.urls[i] = NULL;  // Now p's.
+        p->starts_ns[p->count++] = p->end_ns;
+        p->end_ns += length;
+        if (length > p->longest_ns)
+            p->longest_ns = length;
+    }
+    // A gap (the list slid past segments never read): numbering goes on from the new ones.
+    if (added && fresh.sequence + start > have)
+        p->sequence = fresh.sequence + start - (p->count - added);
+    p->ended = fresh.ended;
+    hlsPlaylistFree(&fresh);
+    if ((added || p->ended) && !rebuildText(p))
+        return -1;
+    return added;
+}
+
+// --- Master lists ---
+
+typedef struct {
+    long long bandwidth;
+    int height;          // 0 if not said.
+    bool hevc, sound_only;
+    const char *uri;
+    size_t uri_length;
+} Variant;
+
+static long long attributeNumber(const char *line, size_t n, const char *name)
+{
+    const char *at = strstr(line, name);
+    return at && at < line + n ? strtoll(at + strlen(name), NULL, 10) : 0;
+}
+
+// Fills v from an #EXT-X-STREAM-INF line.
+static void readVariant(const char *line, size_t n, Variant *v)
+{
+    v->bandwidth = attributeNumber(line, n, "BANDWIDTH=");
+    const char *resolution = strstr(line, "RESOLUTION=");
+    if (resolution && resolution < line + n) {
+        const char *x = strchr(resolution, 'x');
+        v->height = x && x < line + n ? atoi(x + 1) : 0;
+    }
+    char codecs[CODECS_MAX] = "";
+    const char *c = strstr(line, "CODECS=\"");
+    if (c && c < line + n) {
+        c += sizeof("CODECS=\"") - 1;
+        size_t length = strcspn(c, "\"\r\n");
+        snprintf(codecs, sizeof(codecs), "%.*s", (int)(length < sizeof(codecs) ? length : sizeof(codecs) - 1), c);
+    }
+    v->hevc = strstr(codecs, "hvc1") || strstr(codecs, "hev1") || strstr(codecs, "dvh");
+    bool picture = v->hevc || strstr(codecs, "avc") || strstr(codecs, "vp09") || strstr(codecs, "av01");
+    v->sound_only = codecs[0] && !picture;
+}
+
+// Whether a is the better choice of the two, as hlsBestVariant says.
+static bool better(const Variant *a, const Variant *b, long long max_bitrate)
+{
+    bool fits_a = a->height <= MAX_HEIGHT, fits_b = b->height <= MAX_HEIGHT;
+    if (fits_a != fits_b)
+        return fits_a;
+    if (a->sound_only != b->sound_only)
+        return !a->sound_only;
+    if (a->hevc != b->hevc)
+        return !a->hevc;
+    bool within_a = max_bitrate <= 0 || a->bandwidth <= max_bitrate;
+    bool within_b = max_bitrate <= 0 || b->bandwidth <= max_bitrate;
+    if (within_a != within_b)
+        return within_a;
+    return within_a ? a->bandwidth > b->bandwidth : a->bandwidth < b->bandwidth;
+}
+
+bool hlsBestVariant(const char *playlist, long long max_bitrate, char *out, size_t size)
+{
+    Variant best = {0}, here = {0};
+    bool found = false, pending = false;
+    for (const char *p = playlist; *p;) {
+        size_t n = lineLength(p);
+        if (!strncmp(p, STREAM_INF, sizeof(STREAM_INF) - 1)) {
+            here = (Variant){0};
+            readVariant(p, n, &here);
+            pending = true;
+        } else if (pending && n && p[0] != '#') {
+            here.uri = p;
+            here.uri_length = n;
+            if (!found || better(&here, &best, max_bitrate))
+                best = here;
+            found = true;
+            pending = false;
+        }
+        p = nextLine(p, n);
+    }
+    if (!found || best.uri_length >= size)
+        return false;
+    memcpy(out, best.uri, best.uri_length);
+    out[best.uri_length] = '\0';
     return true;
 }
 

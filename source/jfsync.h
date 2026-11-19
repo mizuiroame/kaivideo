@@ -71,6 +71,9 @@ void jfSyncEndConversion(const char *location);
 
 // Asks the server how to play a location, from any thread. audio_index: the
 // server's number for the sound track, -1 for its choice.
+// Live TV: the channel's own HLS source, asked for without the server opening
+// the channel (out is direct, with source_url). False if it has none such.
+bool jfSyncLiveSource(const char *location, JfPlan *out);
 bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, JfPlan *out, char *error,
                    size_t error_size);
 // The address and header for a conversion the server gave (url as in the plan).

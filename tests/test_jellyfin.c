@@ -289,6 +289,22 @@ static void testPlan(void)
     jfPlaybackBody(body, sizeof(body), "u1", 60000000, -1);
     CHECK(!strstr(body, "AudioStreamIndex") && strstr(body, "\"Value\":\"25000000\""));  // Never more directly.
     CHECK(strlen(body) < sizeof(body) - 1);
+
+    // Live TV: a channel's own HLS source, for the console to read itself.
+    static const char CHANNEL[] =
+        "{\"PlaySessionId\":\"ps2\",\"MediaSources\":[{\"Protocol\":\"Http\",\"IsInfiniteStream\":true,"
+        "\"Path\":\"https://cdn.example/live/main.m3u8?x=1\",\"SupportsDirectPlay\":true}]}";
+    CHECK(jfLivePlanParse(CHANNEL, &p) && p.direct && !strcmp(p.source_url, "https://cdn.example/live/main.m3u8?x=1"));
+    CHECK(!strcmp(p.play_session, "ps2") && !p.live_stream_id[0]);
+    // A tuner's own stream that isn't HLS, or a file, is left to the server.
+    CHECK(!jfLivePlanParse("{\"MediaSources\":[{\"Protocol\":\"Http\",\"IsInfiniteStream\":true,"
+                           "\"Path\":\"http://host.docker.internal:8931/stream/kai1.ts\"}]}", &p));
+    CHECK(!jfLivePlanParse("{\"MediaSources\":[{\"Protocol\":\"File\",\"IsInfiniteStream\":true,"
+                           "\"Path\":\"/tv/a.m3u8\"}]}", &p));
+    CHECK(!jfLivePlanParse("{\"MediaSources\":[{\"Protocol\":\"Http\",\"Path\":\"https://a/b.m3u8\"}]}", &p));
+    CHECK(!jfLivePlanParse("nonsense", &p));
+    jfLiveInfoBody(body, sizeof(body), "u1");
+    CHECK(strstr(body, "\"AutoOpenLiveStream\":false") && strstr(body, "\"UserId\":\"u1\""));
 }
 
 static void testHlsLists(void)
@@ -333,6 +349,44 @@ static void testHlsLists(void)
     CHECK(first == 0 && last == 0);
     hlsPlaylistSpan(&p, 8000000000ll, 4000000000ll, &first, &last);  // Runs past the end.
     CHECK(first == 2 && last == 2);
+    hlsPlaylistFree(&p);
+
+    // A channel's own master list: the best the console shows, within the quality chosen.
+    static const char MASTER[] =
+        "#EXTM3U\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360,CODECS=\"avc1.4d401e,mp4a.40.2\"\n360.m3u8\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=3000000,RESOLUTION=1280x720,CODECS=\"avc1.640029,mp4a.40.2\"\n720.m3u8\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=6000000,RESOLUTION=1920x1080,CODECS=\"hvc1.1.6.L120,mp4a.40.2\"\n1080h.m3u8\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080,CODECS=\"avc1.640028,mp4a.40.2\"\n1080.m3u8\n"
+        "#EXT-X-STREAM-INF:BANDWIDTH=16000000,RESOLUTION=3840x2160,CODECS=\"avc1.640033,mp4a.40.2\"\n2160.m3u8\n";
+    CHECK(hlsBestVariant(MASTER, 0, out, sizeof(out)) && !strcmp(out, "1080.m3u8"));  // Not 4K, H.264 over HEVC.
+    CHECK(hlsBestVariant(MASTER, 4000000, out, sizeof(out)) && !strcmp(out, "720.m3u8"));
+    CHECK(hlsBestVariant(MASTER, 100000, out, sizeof(out)) && !strcmp(out, "360.m3u8"));  // None fits: the lightest.
+    CHECK(hlsBestVariant("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=48130,CODECS=\"mp4a.40.2\"\na.m3u8\n"
+                         "#EXT-X-STREAM-INF:BANDWIDTH=4164200\nv.m3u8\n", 0, out, sizeof(out)) &&
+          !strcmp(out, "v.m3u8"));  // Sound alone isn't a picture.
+    CHECK(hlsBestVariant("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nonly.m3u8\n", 0, out, sizeof(out)) &&
+          !strcmp(out, "only.m3u8"));
+    CHECK(!hlsBestVariant(LIST, 0, out, sizeof(out)));  // A media list has no variants.
+
+    // A live list that slides: segments keep their numbers by media sequence.
+    static const char SLIDE1[] = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:100\n"
+                                 "#EXTINF:6.0,\ns100.ts\n#EXTINF:6.0,\ns101.ts\n#EXTINF:6.0,\ns102.ts\n";
+    static const char SLIDE2[] = "#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXT-X-MEDIA-SEQUENCE:102\n"
+                                 "#EXTINF:6.0,\ns102.ts\n#EXTINF:6.0,\ns103.ts\n#EXTINF:4.0,\ns104.ts\n";
+    CHECK(hlsPlaylistParse(SLIDE1, "https://cdn/x/live.m3u8", 0, &p) && p.sequence == 100 && p.count == 3);
+    CHECK(hlsPlaylistAppend(&p, SLIDE2, "https://cdn/x/live.m3u8") == 2);
+    CHECK(p.count == 5 && !strcmp(p.urls[3], "https://cdn/x/s103.ts") && !strcmp(p.urls[4], "https://cdn/x/s104.ts"));
+    CHECK(p.starts_ns[3] == 18000000000ll && p.starts_ns[4] == 24000000000ll && p.end_ns == 28000000000ll);
+    CHECK(strstr(p.text, "#EXT-X-MEDIA-SEQUENCE:100\n") && strstr(p.text, "#EXTINF:4.000,\n" HLS_LOCAL_PREFIX "4.ts\n"));
+    CHECK(strstr(p.text, HLS_LOCAL_PREFIX "0.ts\n") && !strstr(p.text, "#EXT-X-ENDLIST"));
+    CHECK(hlsPlaylistAppend(&p, SLIDE2, "https://cdn/x/live.m3u8") == 0 && p.count == 5);  // Nothing new.
+    CHECK(hlsPlaylistAppend(&p, "#EXTM3U\n", "https://cdn/x/live.m3u8") == -1 && p.count == 5);
+    // A list that grows from the start (as the server's conversions do) appends the same way.
+    hlsPlaylistFree(&p);
+    CHECK(hlsPlaylistParse("#EXTM3U\n#EXTINF:8.0,\nhls/0.ts\n", "http://h/a.m3u8", 0, &p) && p.sequence == 0);
+    CHECK(hlsPlaylistAppend(&p, "#EXTM3U\n#EXTINF:8.0,\nhls/0.ts\n#EXTINF:8.0,\nhls/1.ts\n#EXT-X-ENDLIST\n",
+                            "http://h/a.m3u8") == 1 && p.count == 2 && p.ended);
     hlsPlaylistFree(&p);
 
     CHECK(hlsLocalSegment(HLS_LOCAL_PREFIX "12.ts") == 12);

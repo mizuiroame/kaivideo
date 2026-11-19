@@ -22,6 +22,7 @@
 #define PLAYLIST_MAX (8u * 1024 * 1024)
 #define SEGMENT_MAX (96u * 1024 * 1024)
 #define PLAYLIST_TIMEOUT_S 30L
+#define DIRECT_TIMEOUT_S 8L   // A channel's own source: if it doesn't answer soon, the server converts instead.
 #define SEGMENT_STALL_S 40L   // The server may need a while to start converting.
 #define FETCH_TRIES 3
 #define RETRY_WAIT_NS 500000000L
@@ -58,6 +59,8 @@ static struct {
     unsigned interrupts;
     volatile bool abort_fetch;
     bool stop, failed;
+    long long max_bitrate;        // For choosing a master list's variant; 0: no limit.
+    long playlist_timeout_s;
     char media_url[HLS_URL_MAX];  // Read again while the list grows (live TV).
     int64_t base_ns;              // The list's start: set at start, read without the lock.
     uint64_t grew_ns;             // When a live list last grew.
@@ -114,9 +117,15 @@ static int freeSlot(void)
 
 // --- The thread ---
 
+// The server's sign-in, or none: a channel's own source never gets it.
+static const char *authorization(void)
+{
+    return g.authorization[0] ? g.authorization : NULL;
+}
+
 static bool fetchSegment(int index, NetResponse *r)
 {
-    NetRequest request = {.url = g.list.urls[index], .authorization = g.authorization, .cancel = &g.abort_fetch,
+    NetRequest request = {.url = g.list.urls[index], .authorization = authorization(), .cancel = &g.abort_fetch,
                           .stall_s = SEGMENT_STALL_S};
     for (int attempt = 0; attempt < FETCH_TRIES && !g.abort_fetch; attempt++) {
         if (netFetchText(g.net, &request, SEGMENT_MAX, r))
@@ -144,24 +153,18 @@ static void reread(void)
         g.abort_fetch = false;  // Left set by a fetch called off; stopping sets it again.
     pthread_mutex_unlock(&g.lock);
     NetResponse media;
-    HlsPlaylist list;
     bool ok = getText(g.media_url, &media);
-    if (ok) {
-        ok = hlsPlaylistParse(media.data, g.media_url, 0, &list);
-        netResponseFree(&media);
-    }
     pthread_mutex_lock(&g.lock);
     uint64_t now = monotonicNs();
-    if (ok && list.count > g.list.count)
-        g.grew_ns = now;
-    if (ok && list.count >= g.list.count) {
-        bool ended = list.ended;
-        hlsPlaylistFree(&g.list);
-        g.list = list;
-        g.list.ended = ended;
-        pthread_cond_broadcast(&g.wake);
-    } else if (ok) {
-        hlsPlaylistFree(&list);  // Shorter: not the same list any more; kept as it was.
+    if (ok) {
+        // New segments go at the end, by their numbers: a channel's own list
+        // drops its old ones as it goes, the server's keeps them all.
+        int added = hlsPlaylistAppend(&g.list, media.data, g.media_url);
+        netResponseFree(&media);
+        if (added > 0)
+            g.grew_ns = now;
+        if (added >= 0)
+            pthread_cond_broadcast(&g.wake);
     }
     if (!g.list.ended && now - g.grew_ns > LIVE_STALL_NS) {
         g.failed = true;  // Readers waiting for more give up: playback ends, and says so.
@@ -228,23 +231,30 @@ static void *fetchThread(void *arg)
 
 static bool getText(const char *url, NetResponse *r)
 {
-    NetRequest request = {.url = url, .authorization = g.authorization, .cancel = &g.abort_fetch,  // Stopping cuts it short.
-                          .timeout_s = PLAYLIST_TIMEOUT_S};
+    NetRequest request = {.url = url, .authorization = authorization(), .cancel = &g.abort_fetch,  // Stopping cuts it short.
+                          .timeout_s = g.playlist_timeout_s};
     return netFetchText(g.net, &request, PLAYLIST_MAX, r);
 }
 
-// The media playlist behind the master one, into g.list.
+// The media playlist behind the master one (its best variant), into g.list.
+// A list that has segments already is the media one itself.
 static bool readPlaylists(const char *master_url, int64_t start_ns)
 {
     NetResponse master, media;
     char ref[HLS_URL_MAX], url[HLS_URL_MAX];
     if (!getText(master_url, &master))
         return false;
-    bool ok = hlsFirstEntry(master.data, ref, sizeof(ref)) && hlsResolveUrl(master_url, ref, url, sizeof(url));
-    netResponseFree(&master);
-    if (!ok || !getText(url, &media))
-        return false;
-    ok = hlsPlaylistParse(media.data, url, start_ns, &g.list);
+    bool is_master = hlsBestVariant(master.data, g.max_bitrate, ref, sizeof(ref));
+    bool ok = is_master ? hlsResolveUrl(master_url, ref, url, sizeof(url))
+                        : snprintf(url, sizeof(url), "%s", master_url) < (int)sizeof(url);
+    if (!is_master) {
+        media = master;  // Already the one with the segments.
+    } else {
+        netResponseFree(&master);
+        if (!ok || !getText(url, &media))
+            return false;
+    }
+    ok = ok && hlsPlaylistParse(media.data, url, start_ns, &g.list);
     netResponseFree(&media);
     snprintf(g.media_url, sizeof(g.media_url), "%s", url);
     g.base_ns = g.list.base_ns;
@@ -258,20 +268,21 @@ int64_t hlsBaseNs(void)
     return g.running ? g.base_ns : 0;
 }
 
-bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, char *error, size_t error_size)
+static bool start(const char *master_url, const char *auth, long long max_bitrate, long timeout_s, int64_t start_ns)
 {
     hlsStop();
     memset(&g, 0, sizeof(g));
     pthread_mutex_init(&g.lock, NULL);
     pthread_cond_init(&g.wake, NULL);
-    snprintf(g.authorization, sizeof(g.authorization), "%s", authorization);
+    snprintf(g.authorization, sizeof(g.authorization), "%s", auth ? auth : "");
+    g.max_bitrate = max_bitrate;
+    g.playlist_timeout_s = timeout_s;
     g.fetching = -1;
     g.interrupts = mediaFileInterrupts();
     g.net = netClientOpen();
     bool ok = g.net && readPlaylists(master_url, start_ns);
     g.running = ok && pthread_create(&g.thread, NULL, fetchThread, NULL) == 0;
     if (!g.running) {
-        snprintf(error, error_size, "The server didn't start converting this video.");
         hlsPlaylistFree(&g.list);
         netClientClose(g.net);
         g.net = NULL;
@@ -279,6 +290,22 @@ bool hlsStart(const char *master_url, const char *authorization, int64_t start_n
         pthread_mutex_destroy(&g.lock);
     }
     return g.running;
+}
+
+bool hlsStartDirect(const char *url, long long max_bitrate, char *error, size_t error_size)
+{
+    bool ok = start(url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0);
+    if (!ok)
+        snprintf(error, error_size, "The channel's own stream can't be read.");
+    return ok;
+}
+
+bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, char *error, size_t error_size)
+{
+    bool ok = start(master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns);
+    if (!ok)
+        snprintf(error, error_size, "The server didn't start converting this video.");
+    return ok;
 }
 
 void hlsStop(void)

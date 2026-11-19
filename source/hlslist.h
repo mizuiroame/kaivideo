@@ -27,11 +27,24 @@ typedef struct {
     bool ended;       // It says it's complete; else (live TV) it grows and is read again.
     int64_t end_ns;          // Where its last segment ends.
     int64_t longest_ns;      // Its longest segment.
+    int64_t sequence;        // The media sequence number of urls[0].
+    int first;               // The first segment in text.
 } HlsPlaylist;
+
+// The variant of a master list that the console plays best: up to 1080p,
+// H.264 before HEVC, a picture before sound alone, and the most within
+// max_bitrate (0: no limit; if none fits, the lightest). False if playlist
+// isn't a master list.
+bool hlsBestVariant(const char *playlist, long long max_bitrate, char *out, size_t size);
 
 // From a media playlist found at base. The renamed list starts at the segment
 // holding start_ns, so nothing before it has to be made. False if it has no segments.
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out);
+// A live list read again: the segments in it that p doesn't have yet (by
+// media sequence, so a list that drops its old segments works too) are added
+// at its end, and its text is made again. How many were added, -1 if the
+// list can't be read (p unchanged).
+int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base);
 void hlsPlaylistFree(HlsPlaylist *p);
 // The segments holding length_ns of video from from_ns on; past the end, the last one.
 void hlsPlaylistSpan(const HlsPlaylist *p, int64_t from_ns, int64_t length_ns, int *first, int *last);
