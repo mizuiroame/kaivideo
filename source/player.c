@@ -20,6 +20,7 @@
 #define SWITCH_WAIT_NS 10000000000ull // The picture waits this long for a new track, at most.
 #define JOIN_SLACK_NS 20000000ll     // Ready this little behind the picture still joins.
 #define CUSHION_WAIT_NS 3000000000ull // A converted video waits this long, at most, for some video ahead.
+#define LIVE_CUSHION_WAIT_NS 30000000000ull  // Live TV waits longer: its next segments are still being made.
 #define MS_NS 1000000ll
 #define EXTERNAL_MAX (JF_PLAN_SUBS + 1)
 #define REOPEN_SETTLE_NS 600000000ull  // Jumps closer together than this count as one.
@@ -382,7 +383,8 @@ static bool readyToStart(Player *p, uint64_t now_ns)
         p->first_frame_ns = first;
         p->first_frame_at_ns = now_ns;
     }
-    return !p->converted || hlsCushionReady(p->first_frame_ns) || now_ns - p->first_frame_at_ns > CUSHION_WAIT_NS;
+    uint64_t most = hlsIsLive() ? LIVE_CUSHION_WAIT_NS : CUSHION_WAIT_NS;
+    return !p->converted || hlsCushionReady(p->first_frame_ns) || now_ns - p->first_frame_at_ns > most;
 }
 
 // Holding ends: time starts from the first frame, and the sound with it, so

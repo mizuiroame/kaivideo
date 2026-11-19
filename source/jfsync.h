@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "jellyfin.h"
+#include "livetv.h"
 #include "net.h"
 
 typedef enum {
@@ -51,6 +52,20 @@ bool jfSyncTakeCatalog(JfCatalog *c);
 
 void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, bool paused);
 void jfSyncSetPlayed(const char *location, bool played);
+// Live TV's channels and what's on now and next, into out (replacing its
+// channels), from any thread. How many channels, -1 if the server didn't answer.
+int jfSyncFetchLive(LiveGuide *out, int64_t now_s);
+// Live TV: the server can close the channel's stream it opened (JfPlan.live_stream_id).
+void jfSyncCloseLiveStream(const char *location, const char *live_stream_id);
+// The address and header for a location's trickplay: its sheet (a JPEG) of
+// pictures width wide, or with width 0 the item's answer that says what there is.
+bool jfSyncTrickplayRequest(const char *location, int width, int sheet, char *url, size_t url_size,
+                            char *authorization, size_t auth_size);
+// The parts of a location the server marked to skip (intro, credits...), from
+// any thread. How many, 0 if none or the server didn't answer.
+int jfSyncFetchSegments(const char *location, JfSegment *out, int max);
+// Marks a film (its location) or a series ("jellyfin:<series id>/series") as a favorite, or not.
+void jfSyncSetFavorite(const char *location, bool favorite);
 // The server can stop converting the video that was playing.
 void jfSyncEndConversion(const char *location);
 

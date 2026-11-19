@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #define NET_USER_AGENT "KaiVideo/" KAIVIDEO_VERSION " (+https://github.com/mizuiroame/kaivideo)"
 #define NET_ERROR_MAX 128
@@ -36,13 +37,30 @@ typedef bool (*NetSink)(const void *data, size_t size, void *user);
 bool netFetch(NetClient *c, const NetRequest *request, NetSink sink, void *user, long *status, char *error,
               size_t error_size);
 
+// What went wrong with a request, in the steps a connection takes.
+typedef enum {
+    NET_OK,           // An answer came (see the status for what it says).
+    NET_NO_NAME,      // The address's name couldn't be looked up.
+    NET_NO_CONNECT,   // Nothing took the connection at that address and port.
+    NET_TIMEOUT,      // No answer in time.
+    NET_SECURE,       // The https handshake failed.
+    NET_CERTIFICATE,  // The server's certificate isn't trusted.
+    NET_STATUS,       // It answered, with a status other than 2xx.
+    NET_OTHER,
+} NetProblem;
+
 typedef struct {
     char *data;  // NUL-terminated; free with netResponseFree.
     size_t size;
     long status;
+    NetProblem problem;
     char error[NET_ERROR_MAX];
 } NetResponse;
 
 // The whole answer, up to max_bytes (more fails).
 bool netFetchText(NetClient *c, const NetRequest *request, size_t max_bytes, NetResponse *out);
 void netResponseFree(NetResponse *r);
+// Bytes received by every client so far: its growth is the network's speed.
+uint64_t netBytesReceived(void);
+// Off: https servers' certificates aren't checked (a server with its own). On at start.
+void netSetCheckCertificates(bool check);

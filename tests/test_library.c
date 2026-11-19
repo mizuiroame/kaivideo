@@ -36,8 +36,57 @@ static const LibraryShow *findShow(const Library *lib, const char *name)
     return NULL;
 }
 
+// A server's libraries ("collections") and favorites: what each tab and the
+// Favorites row show.
+static void testCollections(void)
+{
+    static Library lib;
+    libraryInit(&lib, "jellyfin:");
+    int films = libraryAddCollection(&lib, "Movies", COLLECTION_FILMS);
+    int shows = libraryAddCollection(&lib, "Shows", COLLECTION_SERIES);
+    int anime = libraryAddCollection(&lib, "Anime", COLLECTION_MIXED);
+    CHECK(films == 0 && shows == 1 && anime == 2 && lib.collection_count == 3);
+    VideoName lantern = {.title = "Paper Lanterns", .year = 1998}, kite = {.title = "Kite Hill"};
+    VideoName ep1 = {.is_episode = true, .show = "Rook", .season = 1, .episode = 1};
+    VideoName ep2 = {.is_episode = true, .show = "Rook", .season = 1, .episode = 2};
+    VideoName moon = {.is_episode = true, .show = "Moon Fox", .season = 1, .episode = 1};
+    VideoName clip = {.title = "Moon Fox: The Film"};
+    CHECK(libraryAddRemote(&lib, "jellyfin:a/a", &lantern, 1, 1, &(LibraryRemote){.in_collection = films + 1, .favorite = true}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:b/b", &kite, 1, 2, &(LibraryRemote){.in_collection = films + 1}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:c/c", &ep1, 1, 3, &(LibraryRemote){.in_collection = shows + 1}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:d/d", &ep2, 1, 4, &(LibraryRemote){.in_collection = shows + 1, .favorite = true}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:e/e", &moon, 1, 5, &(LibraryRemote){.in_collection = anime + 1}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:f/f", &clip, 1, 6, &(LibraryRemote){.in_collection = anime + 1}));
+    CHECK(libraryAddRemote(&lib, "jellyfin:g/g", &kite, 1, 7, &(LibraryRemote){0}));  // In none.
+    libraryBuild(&lib);
+    CHECK(lib.items[6].collection == -1 && lib.items[0].collection == films);
+
+    LibraryRef refs[16];
+    size_t n = libraryCollectionRefs(&lib, films, refs, 16);
+    CHECK(n == 2 && !refs[0].is_show && lib.items[refs[0].index].name.title[0] == 'K');  // By title.
+    n = libraryCollectionRefs(&lib, shows, refs, 16);
+    CHECK(n == 1 && refs[0].is_show && !strcmp(lib.shows[refs[0].index].name, "Rook"));
+    n = libraryCollectionRefs(&lib, anime, refs, 16);
+    CHECK(n == 2 && refs[0].is_show && !refs[1].is_show);  // A mixed one: its series, then its films.
+    CHECK(libraryCollectionRefs(&lib, 7, refs, 16) == 0);
+    CHECK(libraryCollectionRefs(&lib, films, refs, 1) == 1);  // Never more than asked.
+
+    // A series is a favorite when the server says so of it (its episodes carry it).
+    n = libraryFavorites(&lib, refs, 16);
+    CHECK(n == 2 && refs[0].is_show && !refs[1].is_show && refs[1].index == 0);
+    int moon_show = lib.items[4].show;
+    librarySetFavorite(&lib, (LibraryRef){true, moon_show}, true);
+    CHECK(lib.shows[moon_show].favorite && lib.items[4].favorite);
+    librarySetFavorite(&lib, (LibraryRef){false, 0}, false);
+    n = libraryFavorites(&lib, refs, 16);
+    CHECK(n == 2 && refs[0].is_show && refs[1].is_show);
+    CHECK(libraryAddCollection(&lib, "", COLLECTION_FILMS) == -1);
+    libraryFree(&lib);
+}
+
 void testLibrary(void)
 {
+    testCollections();
     mkdir(TMP_ROOT, 0755);
     touchFile("Movies/Quiet Harbor (2017)/harbor.mp4", 1000);
     touchFile("Movies/Paper.Lanterns.1998.1080p.BluRay.mkv", 3000);

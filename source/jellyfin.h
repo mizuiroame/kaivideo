@@ -10,6 +10,7 @@
 #include <stdint.h>
 
 #include "library.h"
+#include "net.h"
 #include "resume.h"
 #include "watched.h"
 
@@ -53,6 +54,20 @@ void jfLocationMake(char *out, size_t size, const char *item, const char *source
 
 // "192.168.0.2" -> "http://192.168.0.2:8096". False if it can't be an address.
 bool jfServerNormalize(const char *text, char *out, size_t size);
+
+#define JF_VERDICT_MAX 200
+#define JF_DISCOVERY_PORT 7359
+#define JF_DISCOVERY_QUESTION "Who is JellyfinServer?"
+// What a test of the connection found, from the answer to /System/Info/Public
+// (body may be NULL): who answered, or which step failed and what to check.
+// True if a Jellyfin server answered.
+bool jfConnectionVerdict(NetProblem problem, long status, const char *body, const char *server, char *out, size_t size);
+// True for an address on a home network (private ranges, names without a dot, .local).
+bool jfAddressIsLocal(const char *server);
+// A server's answer to JF_DISCOVERY_QUESTION, which came from sender_ip: its
+// address there, with the scheme and port it gave, and its name.
+bool jfDiscoveryParse(const char *json, const char *sender_ip, char *server, size_t server_size, char *name,
+                      size_t name_size);
 // The Authorization header; the token is left out when the session has none.
 void jfAuthHeader(const JfSession *s, const char *version, char *out, size_t size);
 
@@ -68,6 +83,7 @@ int64_t jfParseDate(const char *text);
 #define JF_PLAN_SUBS 16
 #define JF_TRANSCODE_URL_MAX 1536
 #define JF_TRACK_NAME_MAX 64
+#define JF_LIVE_STREAM_MAX 192
 
 typedef struct {
     int index;   // The server's number for the stream.
@@ -80,6 +96,7 @@ typedef struct {
     bool direct;  // The original file; else the conversion at transcode_url.
     char transcode_url[JF_TRANSCODE_URL_MAX];
     char play_session[JF_ID_MAX + 24];
+    char live_stream_id[JF_LIVE_STREAM_MAX];  // Live TV: the stream the server opened, closed after.
     JfTrack audio[JF_PLAN_AUDIO], subs[JF_PLAN_SUBS];  // Subtitles: text ones only.
     int audio_count, sub_count;
     int audio_current;  // An index in audio, -1 if none.
@@ -92,14 +109,41 @@ void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_b
 bool jfPlanParse(const char *json, JfPlan *out);
 
 // Holds a library being read with its user data, which grows with it.
+// Parts of a video the server marked (with a plugin such as Intro Skipper).
+#define JF_SEGMENTS_MAX 8
+#define JF_SEGMENT_TAIL_NS 3000000000ll  // A part this close to its end isn't offered to skip.
+typedef enum { JF_SEGMENT_INTRO, JF_SEGMENT_RECAP, JF_SEGMENT_PREVIEW, JF_SEGMENT_OUTRO } JfSegmentKind;
+typedef struct {
+    JfSegmentKind kind;
+    int64_t start_ns, end_ns;
+} JfSegment;
+
+// The skippable parts of a /MediaSegments answer, by start. Returns how many (at most max).
+int jfSegmentsParse(const char *json, JfSegment *out, int max);
+// The part to offer to skip at pos_ns, -1 if none.
+int jfSegmentAt(const JfSegment *s, int count, int64_t pos_ns);
+// "Skip intro", "Skip credits"...
+const char *jfSegmentLabel(JfSegmentKind kind);
+
+#define JF_FAVORITE_SERIES_MAX 512
+
 typedef struct {
     Library library;
     JfUserData *users;  // One per library item.
     size_t capacity;
+    char view_ids[LIBRARY_COLLECTIONS][JF_ID_MAX];  // The server's id of each of library.collections.
+    int adding_collection;  // The collection pages being added go in; -1 for none.
+    char (*favorite_series)[JF_ID_MAX];  // Series the user marked: their episodes count as favorites.
+    int favorite_series_count;
 } JfCatalog;
 
 void jfCatalogInit(JfCatalog *c);
 void jfCatalogFree(JfCatalog *c);
+// The user's libraries from /UserViews that hold videos, as collections.
+// Returns how many, -1 if it can't be read.
+int jfCatalogAddViews(JfCatalog *c, const char *json);
+// The series the user marked as favorites (an /Items answer). Returns how many, -1 if unreadable.
+int jfCatalogSetFavoriteSeries(JfCatalog *c, const char *json);
 // Adds the films and episodes of one /Items answer. Returns how many it held
 // (those that can't be used included), -1 if it can't be read. total, if not
 // NULL, gets TotalRecordCount.

@@ -12,6 +12,7 @@
 typedef enum {
     HOME_CONTINUE,  // Videos started and not finished, the latest first; then each
                     // series' next episode after the one watched last ("Up next").
+    HOME_FAVORITES, // Series and films marked as favorites (on a server).
     HOME_RECENT,    // Films and series, the newest files first.
     HOME_SERIES,    // By name.
     HOME_FILMS,     // By title.

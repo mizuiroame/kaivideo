@@ -10,14 +10,17 @@ static const char *const LABELS[SETTING_COUNT] = {
     "SD card folder", "Update the library", "Thumbnails", "Play next episode", "Display", "About",
     "Theme", "Accent color", "Background", "Background blur", "Clock",
     "Jellyfin", "Server", "Sign in with a code", "Sign in with a password", "Sign out", "Video quality",
+    "Find servers on this network", "Test the connection", "Certificate check",
 };
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_AUTOPLAY, SETTING_OPEN_DISPLAY,
      SETTING_ABOUT},
     {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
-    {SETTING_JF_SERVER, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_COUNT},
+    {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
+     SETTING_COUNT},
 };
-static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_QUALITY, SETTING_JF_SIGN_OUT, SETTING_COUNT};
+static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_QUALITY, SETTING_JF_TEST,
+                                            SETTING_JF_CERTIFICATE, SETTING_JF_SIGN_OUT, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "Jellyfin"};
 
 // Auto: the original when the console can play it, else a good conversion.
@@ -50,6 +53,7 @@ void configDefaults(Config *c)
     c->blur = BLUR_MEDIUM;
     c->thumbnails = true;
     c->autoplay = true;
+    c->jf_check_certificate = true;
     c->subtitles = SUBTITLES_MEDIUM;
 }
 
@@ -91,6 +95,8 @@ bool configReadLine(Config *c, const char *line)
         c->use_jellyfin = strcmp(value, "1") == 0;
     else if (isKey(line, length, "jellyfin_quality"))
         c->jf_quality = readChoice(value, QUALITY_COUNT, 0);
+    else if (isKey(line, length, "jellyfin_check_certificate"))
+        c->jf_check_certificate = strcmp(value, "0") != 0;
     else if (isKey(line, length, "subtitles"))
         c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
     else if (isKey(line, length, "subtitle_color"))
@@ -109,6 +115,7 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "background=%s\n", c->background);
     fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\njellyfin_quality=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
             c->use_jellyfin ? 1 : 0, c->jf_quality);
+    fprintf(f, "jellyfin_check_certificate=%d\n", c->jf_check_certificate ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
 }
@@ -139,7 +146,8 @@ const char *settingLabel(SettingRow row)
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
-           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY;
+           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
+           row == SETTING_JF_CERTIFICATE;
 }
 
 static int wrap(int value, int delta, int count)
@@ -157,6 +165,7 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_CLOCK: c->clock_24h = !c->clock_24h; break;
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
+    case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
     default: break;
     }
 }
@@ -172,6 +181,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? "24-hour" : "12-hour"); break;
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
     case SETTING_JF_QUALITY: snprintf(out, size, "%s", QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name); break;
+    case SETTING_JF_CERTIFICATE: snprintf(out, size, "%s", c->jf_check_certificate ? "On" : "Off: any certificate"); break;
     default: out[0] = '\0'; break;
     }
 }

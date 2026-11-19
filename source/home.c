@@ -82,6 +82,10 @@ void homeCompute(Home *home, const Library *lib, const ResumeList *resume, const
         addUpNext(row, lib, resume, watched);
     home->count += row->count > 0;
 
+    row = addRow(home, HOME_FAVORITES);
+    row->count = (int)libraryFavorites(lib, row->items, HOME_ROW_MAX);
+    home->count += row->count > 0;
+
     row = addRow(home, HOME_RECENT);
     for (size_t i = 0; i < lib->recent_count && row->count < HOME_ROW_MAX; i++)
         row->items[row->count++] = lib->recent[i];
@@ -102,6 +106,7 @@ const char *homeRowTitle(HomeRowKind kind)
 {
     switch (kind) {
     case HOME_CONTINUE: return "Continue watching";
+    case HOME_FAVORITES: return "Favorites";
     case HOME_RECENT: return "Recently added";
     case HOME_SERIES: return "Series";
     case HOME_FILMS: return "Films";

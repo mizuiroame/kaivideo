@@ -24,6 +24,9 @@ typedef struct {
     int64_t *starts_ns;  // Where each segment starts in the video.
     int count;
     int64_t base_ns;  // Where the renamed list starts in the video.
+    bool ended;       // It says it's complete; else (live TV) it grows and is read again.
+    int64_t end_ns;          // Where its last segment ends.
+    int64_t longest_ns;      // Its longest segment.
 } HlsPlaylist;
 
 // From a media playlist found at base. The renamed list starts at the segment

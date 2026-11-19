@@ -9,6 +9,7 @@
 
 #include <jansson.h>
 
+#include "livetv.h"
 #include "net.h"
 
 #define FILE_PATH_MAX 600
@@ -26,6 +27,9 @@
 #define SUBTITLE_TIMEOUT_S 120L  // The server may have to read them out of the file first.
 #define PAGE_MAX_BYTES (32u * 1024 * 1024)
 #define SMALL_MAX_BYTES (256u * 1024)
+#define LIVE_GUIDE_AHEAD_S (4 * 3600)  // Programs read for the guide: now and the next hours.
+#define LIVE_PROGRAMS_MAX 3000
+#define SEGMENTS_TIMEOUT_S 5L    // Parts to skip are a nicety: opening doesn't wait long for them.
 #define POLL_SECONDS 2
 #define SIGN_IN_POLLS 300       // About ten minutes.
 #define REPORTS_MAX 16
@@ -34,13 +38,14 @@
 #define IMAGE_FORMAT "Jpg"  // What stb_image reads, whatever the server would prefer.
 
 typedef struct {
-    enum { JOB_REPORT, JOB_PLAYED, JOB_END_CONVERSION } type;
+    enum { JOB_REPORT, JOB_PLAYED, JOB_END_CONVERSION, JOB_FAVORITE, JOB_CLOSE_LIVE } type;
     JfReportKind kind;
     char location[LIBRARY_PATH_MAX];
     int64_t position_ns;
-    bool flag;  // Paused; or played.
+    bool flag;  // Paused; or played; or a favorite.
     int tries;
     char play_session[JF_ID_MAX + 24];
+    char live_stream[JF_LIVE_STREAM_MAX];  // JOB_CLOSE_LIVE's.
     bool converted;
 } Job;
 
@@ -287,16 +292,17 @@ static void setProgress(bool refreshing, int loaded, int total)
     pthread_mutex_unlock(&g.lock);
 }
 
-// Reads every page into c. False if one can't be had.
-static bool readPages(JfCatalog *c, const char *user)
+// Reads the pages of one of the user's libraries (parent NULL: all of them at
+// once) into c; loaded counts the videos read so far. False if one can't be had.
+static bool readCollection(JfCatalog *c, const char *user, const char *parent, int *loaded)
 {
     int start = 0, total = 0;
     for (;;) {
-        char path[512];
+        char path[640];
         snprintf(path, sizeof(path),
-                 "/Items?userId=%s&Recursive=true&IncludeItemTypes=Movie,Episode&Fields=MediaSources,Overview,DateCreated"
-                 "&SortBy=SortName&EnableImages=false&StartIndex=%d&Limit=%d",
-                 user, start, JF_PAGE_ITEMS);
+                 "/Items?userId=%s%s%s&Recursive=true&IncludeItemTypes=Movie,Episode"
+                 "&Fields=MediaSources,Overview,DateCreated&SortBy=SortName&EnableImages=false&StartIndex=%d&Limit=%d",
+                 user, parent ? "&ParentId=" : "", parent ? parent : "", start, JF_PAGE_ITEMS);
         NetResponse r;
         if (!callText(path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r)) {
             setError(r.status == 401 ? "Jellyfin signed this console out." : "The library couldn't be read.");
@@ -307,10 +313,54 @@ static bool readPages(JfCatalog *c, const char *user)
         if (count < 0)
             return false;
         start += count;
-        setProgress(true, start, total);
-        if (count < JF_PAGE_ITEMS || (total > 0 && start >= total) || start >= MAX_ITEMS)
+        *loaded += count;
+        setProgress(true, *loaded, parent ? 0 : total);
+        if (count < JF_PAGE_ITEMS || (total > 0 && start >= total) || *loaded >= MAX_ITEMS)
             return true;
     }
+}
+
+// The user's libraries, as tabs. How many; 0 or less: read everything at once.
+static int readViews(JfCatalog *c, const char *user)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "/UserViews?userId=%s", user);
+    NetResponse r;
+    if (!callText(path, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, &r))
+        return -1;
+    int views = jfCatalogAddViews(c, r.data);
+    netResponseFree(&r);
+    return views;
+}
+
+// The series marked as favorites: their episodes are read as favorites. Without them, none are.
+static void readFavoriteSeries(JfCatalog *c, const char *user)
+{
+    char path[320];
+    snprintf(path, sizeof(path),
+             "/Items?userId=%s&Recursive=true&IncludeItemTypes=Series&Filters=IsFavorite&EnableImages=false&Limit=%d",
+             user, JF_FAVORITE_SERIES_MAX);
+    NetResponse r;
+    if (!callText(path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r))
+        return;
+    jfCatalogSetFavoriteSeries(c, r.data);
+    netResponseFree(&r);
+}
+
+// Reads every video into c, library by library. False if a page can't be had.
+static bool readPages(JfCatalog *c, const char *user)
+{
+    readFavoriteSeries(c, user);
+    int loaded = 0;
+    if (readViews(c, user) <= 0)
+        return readCollection(c, user, NULL, &loaded);
+    for (int i = 0; i < c->library.collection_count; i++) {
+        c->adding_collection = i;
+        if (!readCollection(c, user, c->view_ids[i], &loaded))
+            return false;
+    }
+    c->adding_collection = -1;
+    return true;
 }
 
 static void refresh(void)
@@ -356,10 +406,15 @@ static bool runJob(const Job *job)
     char item[JF_ID_MAX], source[JF_ID_MAX], path[256], body[320];
     if (!jfLocationIds(job->location, item, source))
         return true;
-    if (job->type == JOB_PLAYED) {
+    if (job->type == JOB_PLAYED || job->type == JOB_FAVORITE) {
         JfSession s = sessionCopy();
-        snprintf(path, sizeof(path), "/UserPlayedItems/%s?userId=%s", item, s.user_id);
+        snprintf(path, sizeof(path), "/%s/%s?userId=%s",
+                 job->type == JOB_PLAYED ? "UserPlayedItems" : "UserFavoriteItems", item, s.user_id);
         return post(path, "{}", !job->flag);
+    }
+    if (job->type == JOB_CLOSE_LIVE) {
+        snprintf(path, sizeof(path), "/LiveStreams/Close?liveStreamId=%s", job->live_stream);
+        return post(path, "{}", false);
     }
     if (job->type == JOB_END_CONVERSION) {
         JfSession s = sessionCopy();
@@ -658,9 +713,26 @@ void jfSyncEndConversion(const char *location)
     addJob(&job);
 }
 
+void jfSyncCloseLiveStream(const char *location, const char *live_stream_id)
+{
+    if (!live_stream_id[0])
+        return;
+    Job job = {.type = JOB_CLOSE_LIVE};
+    snprintf(job.location, sizeof(job.location), "%s", location);
+    snprintf(job.live_stream, sizeof(job.live_stream), "%s", live_stream_id);
+    addJob(&job);
+}
+
 void jfSyncSetPlayed(const char *location, bool played)
 {
     Job job = {.type = JOB_PLAYED, .flag = played};
+    snprintf(job.location, sizeof(job.location), "%s", location);
+    addJob(&job);
+}
+
+void jfSyncSetFavorite(const char *location, bool favorite)
+{
+    Job job = {.type = JOB_FAVORITE, .flag = favorite};
     snprintf(job.location, sizeof(job.location), "%s", location);
     addJob(&job);
 }
@@ -675,7 +747,9 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
     snprintf(error, error_size, "The server can't be reached.");
     if (g.running && body && net && jfLocationIds(location, item, source)) {
         JfSession s = sessionCopy();
-        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s&mediaSourceId=%s", s.server, item, s.user_id, source);
+        bool live = !strcmp(source, LIVE_SOURCE);  // A channel: the server opens its stream.
+        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s%s%s", s.server, item, s.user_id,
+                 live ? "" : "&mediaSourceId=", live ? "" : source);
         jfAuthHeader(&s, g.version, auth, sizeof(auth));
         jfPlaybackBody(body, PLAN_BODY_MAX, s.user_id, max_bitrate, audio_index);
         NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S};
@@ -690,6 +764,69 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
     netClientClose(net);
     free(body);
     return ok;
+}
+
+// The answer to an API path, with a client of the caller's own (any thread).
+static bool fetchWith(NetClient *net, const char *path, size_t max, NetResponse *out)
+{
+    char url[JF_URL_MAX + 256], auth[JF_AUTH_MAX];
+    JfSession s = sessionCopy();
+    snprintf(url, sizeof(url), "%s%s", s.server, path);
+    jfAuthHeader(&s, g.version, auth, sizeof(auth));
+    NetRequest request = {.url = url, .authorization = auth, .timeout_s = API_TIMEOUT_S};
+    return netFetchText(net, &request, max, out);
+}
+
+static void isoTime(int64_t s, char *out, size_t size)
+{
+    time_t t = (time_t)s;
+    struct tm tm;
+    gmtime_r(&t, &tm);
+    strftime(out, size, "%Y-%m-%dT%H:%M:%SZ", &tm);
+}
+
+int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
+{
+    NetClient *net = netClientOpen();
+    JfSession s = sessionCopy();
+    char path[512], from[32], to[32];
+    NetResponse r;
+    int count = -1;
+    snprintf(path, sizeof(path), "/LiveTv/Channels?userId=%s&EnableImages=false&Limit=%d", s.user_id, LIVE_CHANNELS_MAX);
+    if (g.running && net && fetchWith(net, path, PAGE_MAX_BYTES, &r)) {
+        count = liveGuideSetChannels(out, r.data);
+        netResponseFree(&r);
+    }
+    isoTime(now_s, from, sizeof(from));
+    isoTime(now_s + LIVE_GUIDE_AHEAD_S, to, sizeof(to));
+    snprintf(path, sizeof(path), "/LiveTv/Programs?UserId=%s&MinEndDate=%s&MaxStartDate=%s&EnableImages=false&Limit=%d",
+             s.user_id, from, to, LIVE_PROGRAMS_MAX);
+    if (count > 0 && fetchWith(net, path, PAGE_MAX_BYTES, &r)) {
+        liveGuideSetPrograms(out, r.data, now_s);
+        netResponseFree(&r);
+    }
+    netClientClose(net);
+    return count;
+}
+
+int jfSyncFetchSegments(const char *location, JfSegment *out, int max)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
+    NetClient *net = netClientOpen();
+    int count = 0;
+    if (g.running && net && jfLocationIds(location, item, source)) {
+        JfSession s = sessionCopy();
+        snprintf(url, sizeof(url), "%s/MediaSegments/%s", s.server, item);
+        jfAuthHeader(&s, g.version, auth, sizeof(auth));
+        NetRequest request = {.url = url, .authorization = auth, .timeout_s = SEGMENTS_TIMEOUT_S};
+        NetResponse r;
+        if (netFetchText(net, &request, SMALL_MAX_BYTES, &r)) {
+            count = jfSegmentsParse(r.data, out, max);
+            netResponseFree(&r);
+        }
+    }
+    netClientClose(net);
+    return count;
 }
 
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size)
@@ -722,6 +859,21 @@ bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char 
         return false;
     JfSession s = sessionCopy();
     snprintf(url, url_size, "%s/Videos/%s/stream?static=true&mediaSourceId=%s", s.server, item, source);
+    jfAuthHeader(&s, g.version, authorization, auth_size);
+    return s.token[0] != '\0';
+}
+
+bool jfSyncTrickplayRequest(const char *location, int width, int sheet, char *url, size_t url_size,
+                            char *authorization, size_t auth_size)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX];
+    if (!g.running || !jfLocationIds(location, item, source))
+        return false;
+    JfSession s = sessionCopy();
+    if (width > 0)
+        snprintf(url, url_size, "%s/Videos/%s/Trickplay/%d/%d.jpg?mediaSourceId=%s", s.server, item, width, sheet, source);
+    else
+        snprintf(url, url_size, "%s/Items?userId=%s&ids=%s&Fields=Trickplay&EnableImages=false", s.server, s.user_id, item);
     jfAuthHeader(&s, g.version, authorization, auth_size);
     return s.token[0] != '\0';
 }

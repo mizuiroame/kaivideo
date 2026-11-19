@@ -10,7 +10,9 @@
 #include "app.h"
 #include "background.h"
 #include "buttons.h"
+#include "jfprobe.h"
 #include "keyboard_system.h"
+#include "net.h"
 #include "theme.h"
 #include "ui.h"
 #include "ui_library.h"
@@ -39,6 +41,7 @@ static void applyLooks(const App *app)
 void appSettingsStart(App *app)
 {
     applyLooks(app);
+    netSetCheckCertificates(app->config.jf_check_certificate);
     if (app->config.background[0] &&
         !backgroundLoad(app->library_root, app->config.background, app->config.blur))
         app->config.background[0] = '\0';  // Gone or unreadable: not tried again every start.
@@ -184,10 +187,26 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
     } else {
         settingStep(&app->config, row, delta);
         applyLooks(app);
+        netSetCheckCertificates(app->config.jf_check_certificate);
         if (row == SETTING_THEME || row == SETTING_BLUR)
             backgroundSetBlur(app->config.blur);  // Made again over the theme's color, or with the new blur.
     }
     appSaveSettings(app);
+}
+
+// Testing the server, or finding one: the answer comes as a message (app_jellyfin.c).
+static void askNetwork(App *app, SettingRow row, uint64_t now)
+{
+    if (jfProbeRunning()) {
+        appShowMessage(app, "Still asking the network...", now);
+    } else if (row == SETTING_JF_FIND) {
+        if (jfProbeStartFind(JF_PROBE_BROADCAST))
+            appShowMessage(app, "Looking for Jellyfin servers on this network...", now);
+    } else if (!app->jf.server[0]) {
+        appShowMessage(app, "Enter the server's address first, or find it on this network.", now);
+    } else if (jfProbeStartTest(app->jf.server)) {
+        appShowMessage(app, "Testing the connection...", now);
+    }
 }
 
 static void activate(App *app, SettingRow row, uint64_t now)
@@ -207,6 +226,13 @@ static void activate(App *app, SettingRow row, uint64_t now)
     case SETTING_JF_CODE: codeSignIn(app, now); break;
     case SETTING_JF_PASSWORD: passwordSignIn(app, now); break;
     case SETTING_JF_SIGN_OUT: signOut(app); break;
+    case SETTING_JF_FIND:
+    case SETTING_JF_TEST:
+        if (row == SETTING_JF_FIND && signedIn(app))
+            appShowMessage(app, "Sign out first to change the server.", now);
+        else
+            askNetwork(app, row, now);
+        break;
     case SETTING_ABOUT: app->about_open = true; break;
     default: change(app, row, 1, now); break;
     }

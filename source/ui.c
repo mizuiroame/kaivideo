@@ -223,8 +223,12 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
     utilFormatTime(pos, sizeof(pos), position);
     utilFormatTime(len, sizeof(len), duration);
     snprintf(time, sizeof(time), "%s / %s", pos, len);
-    fontDraw(FONT_REGULAR, 20, GFX_WIDTH - MARGIN - fontTextWidth(FONT_REGULAR, 20, time), y + 18, time, COLOR_TEXT);
-    int track_w = GFX_WIDTH - 2 * MARGIN, done = duration > 0 ? (int)(track_w * (position / duration)) : 0;
+    bool live = duration <= 0;  // Live TV: it has no length, and plays on.
+    if (live)
+        snprintf(time, sizeof(time), "LIVE");
+    fontDraw(live ? FONT_BOLD : FONT_REGULAR, 20, GFX_WIDTH - MARGIN - fontTextWidth(live ? FONT_BOLD : FONT_REGULAR, 20, time),
+             y + 18, time, live ? COLOR_ACCENT : COLOR_TEXT);
+    int track_w = GFX_WIDTH - 2 * MARGIN, done = live ? track_w : duration > 0 ? (int)(track_w * (position / duration)) : 0;
     if (done > track_w)
         done = track_w;
     gfxFillRoundRect(MARGIN, y + TRACK_Y_OFFSET, track_w, 6, 3, COLOR_TRACK);
@@ -248,7 +252,8 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
         info_w = track_w / 3;
     fontDrawClipped(FONT_REGULAR, 16, GFX_WIDTH - MARGIN - info_w, y + 82, info_w, info, COLOR_FAINT);
     uiDrawHelp(MARGIN, (float)y + 93.0f, track_w - info_w - 24,
-               "[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start");
+               live ? "[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu"
+                    : "[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start");
 }
 
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "app.h"
+#include "jfprobe.h"
 
 #ifndef KAIVIDEO_VERSION
 #define KAIVIDEO_VERSION "dev"
@@ -46,8 +47,21 @@ static void sayNewError(App *app, uint64_t now)
         appShowMessage(app, app->jf.error, now);
 }
 
+// A test or search from Settings finished: say what it found, and use a server found.
+static void takeProbe(App *app, uint64_t now)
+{
+    JfProbeResult r;
+    if (!jfProbeTake(&r))
+        return;
+    appLog("Jellyfin %s: %s%s%s", r.finding ? "search" : "test", r.message, r.detail[0] ? " | " : "", r.detail);
+    if (r.finding && r.ok && app->jf.state != JF_SIGNED_IN && !jfSyncSetServer(r.found))
+        snprintf(r.message, sizeof(r.message), "The server found can't be used: type its address under Server.");
+    appShowMessage(app, r.message, now);
+}
+
 void appJellyfinUpdate(App *app, uint64_t now)
 {
+    takeProbe(app, now);
     if (!jfSyncRunning())
         return;
     jfSyncGetStatus(&app->jf);
@@ -74,7 +88,7 @@ void appJellyfinUpdate(App *app, uint64_t now)
 
 void appJellyfinPlaybackStarted(App *app, uint64_t now)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path))
         return;
     app->jf_last_report = now;
     jfSyncReport(JF_REPORT_START, app->playing_path, playerPosition(app->player), false);
@@ -82,7 +96,7 @@ void appJellyfinPlaybackStarted(App *app, uint64_t now)
 
 void appJellyfinPlaybackTick(App *app, uint64_t now)
 {
-    if (!jfIsLocation(app->playing_path) || now - app->jf_last_report < REPORT_NS)
+    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path) || now - app->jf_last_report < REPORT_NS)
         return;
     app->jf_last_report = now;
     jfSyncReport(JF_REPORT_PROGRESS, app->playing_path, playerPosition(app->player), playerPaused(app->player));
@@ -90,7 +104,7 @@ void appJellyfinPlaybackTick(App *app, uint64_t now)
 
 void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path))
         return;
     jfSyncReport(JF_REPORT_STOP, app->playing_path, position_ns, false);
     if (watched)

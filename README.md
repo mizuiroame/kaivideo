@@ -35,8 +35,12 @@ The screenshots show made-up films and series.
 - **Jellyfin**: browse your server with the same screens, sign in with Quick
   Connect or a password, and play its videos over your network. What the
   console plays as it is plays from the original file; 4K, HDR and the rest
-  are converted by your server, at the quality you choose. What you watch
-  stays in sync with your other devices. See [Jellyfin](#jellyfin).
+  are converted by your server, at the quality you choose. Your libraries
+  are tabs, your **favorites** have a row on Home, **Skip intro** and **Skip
+  credits** come up where the server marked them, dragging the bar shows a
+  **picture of that moment**, and **Live TV** has its own tab with what's on
+  now and next. What you watch stays in sync with your other devices. See
+  [Jellyfin](#jellyfin).
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
@@ -133,8 +137,10 @@ kept:
 
 ### Jellyfin
 
-1. In **Settings** (**−**), open **Jellyfin** and type your server's address
-   under **Server**, like `192.168.0.10:8096`.
+1. In **Settings** (**−**), open **Jellyfin** and choose **Find servers on
+   this network**, or type your server's address under **Server**, like
+   `192.168.0.10:8096`. **Test the connection** says whether it answers, or
+   which step failed: the name, the port, the time it took, the certificate.
 2. Choose **Sign in with a code**: a code appears. In Jellyfin on your phone
    or computer, open your profile, choose **Quick Connect** and enter it. Or
    choose **Sign in with a password** and type your user name and password
@@ -142,9 +148,17 @@ kept:
 3. Your library appears. **X** on the library's screens, or the button next
    to KaiVideo's name, changes between Jellyfin and the SD card.
 
-Films and episodes open a panel with their summary: **A** plays or resumes,
-**Y** starts from the beginning and **X** marks them watched. Where you left a
-video and what you've watched go to the server and come back from it.
+Your server's libraries are the tabs, by their own names (like Movies and
+Shows), with Home, Search and Files. Films and episodes open a panel with
+their summary: **A** plays or resumes, **Y** starts from the beginning, **X**
+marks them watched and **R** adds the film, or the episode's series, to your
+**Favorites** (on a series' page, **R** too). Favorites have their own row on
+Home. Where you left a video, what you've watched and your favorites go to the
+server and come back from it, so they match your phone and TV.
+
+A server outside your home works over **https**. Its certificate is checked;
+for a server with a certificate of its own making, turn **Certificate check**
+off.
 
 What the console can play is played from the original file: its picture,
 every sound track (changed almost at once) and its subtitles, styled ones
@@ -162,6 +176,22 @@ Separate subtitle files on the server show in the subtitles list too. The
 sign-in is kept in `config/jellyfin.txt` on the card: **Sign out** ends it on
 the server.
 
+What your server adds, when it's set up for it:
+
+- **Skip intro, recap and credits**: where the server marked them (with a
+  plugin such as [Intro Skipper](https://github.com/intro-skipper/intro-skipper),
+  or chapters named so), a button comes up at the bottom right: **ZR** or a
+  tap skips that part. In an episode's last seconds, **ZR** plays the next one
+  instead.
+- **Pictures on the bar**: with **trickplay** turned on in the server's
+  libraries, dragging the progress bar shows a picture of where your finger
+  is, and a far jump shows one while it loads.
+- **Live TV**: with tuners or channels on the server, a **Live TV** tab lists
+  them with what's on now (and how far into it) and what's next. **A** watches
+  a channel, converted by the server; **L** / **R** change channel while it
+  plays. It starts a few seconds behind live, so it doesn't stop to wait for
+  the server.
+
 ### Where KaiVideo keeps its files
 
 Your library folder, the list of videos found in it, where you left each
@@ -176,7 +206,7 @@ when brewstore installs it). Your videos aren't touched.
 
 | Button | What it does |
 |--------|--------------|
-| **ZL** / **ZR** (or **L** / **R**) | The tab before or after: Home, Films, Series, Search, Files |
+| **ZL** / **ZR** (or **L** / **R**) | The tab before or after: Home, Films, Series (or your server's libraries), Search, Files |
 | **↑** **↓** **◀** **▶** | Move |
 | **A** | Play the film or episode, or open the series |
 | **B** | Back from a series (in Files: the folder above) |
@@ -200,10 +230,13 @@ do what, as in KaiPlayer and KaiRadio.
 | **L** / **R** | Back or forward 1 minute |
 | **ZL** | Start over |
 | **↑** | The Playback list: chapters, speed, audio and subtitle delays |
+| **↓** | Statistics: how it plays (from the card, the original file or converted), frames a second and how many came late, the network's speed and how much is ready ahead |
+| **ZR** | **Skip intro** (or recap, or credits) when its button shows |
 | **X** | The list of sound tracks |
 | **Y** | The list of subtitles |
 | **−** | Hide the bar (**−** again, or a tap, shows it) |
 | **ZR** | In an episode's last 30 seconds: play the next one now |
+| **L** / **R** | On Live TV: the channel before or after (no jumps in live video) |
 | **B** | Back to the library (where you were is remembered) |
 | **+** | The menu, over the video: Back to the library, Exit |
 
@@ -239,13 +272,15 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 - **Jellyfin**: converted videos start, change sound track or quality, and
   jump far back, in a few seconds rather than at once, while the server
   converts from there. Their subtitles come without styles. It has been tried
-  on a home network; signing in from outside it hasn't.
+  on a home network, and over https through a test proxy with a certificate
+  of its own; not yet from outside a home network.
+- **Live TV** has been tried with test channels a server made from video
+  files, not with a TV tuner. The guide shows now and next, not a grid.
 
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
-- **Jellyfin**: Live TV, servers outside your home over HTTPS, and a panel
-  with what's playing and how well.
+- **Live TV**: a guide grid of the next hours.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
 - Smoother jumps, and checks with big libraries on the console.
 

@@ -70,10 +70,18 @@ typedef struct {
     bool stopped;
 } Transfer;
 
+static uint64_t g_bytes_received;
+
+uint64_t netBytesReceived(void)
+{
+    return __atomic_load_n(&g_bytes_received, __ATOMIC_RELAXED);
+}
+
 static size_t onData(char *data, size_t one, size_t count, void *user)
 {
     Transfer *t = user;
     size_t n = one * count;
+    __atomic_add_fetch(&g_bytes_received, n, __ATOMIC_RELAXED);
     if (t->sink(data, n, t->user))
         return n;
     t->stopped = true;
@@ -117,9 +125,35 @@ static struct curl_slist *buildHeaders(const NetRequest *r)
     return headers;
 }
 
+static bool g_check_certificates = true;
+
+void netSetCheckCertificates(bool check)
+{
+    __atomic_store_n(&g_check_certificates, check, __ATOMIC_RELAXED);
+}
+
+static NetProblem problemOf(CURLcode rc, long status)
+{
+    switch (rc) {
+    case CURLE_OK: return status >= 200 && status < 300 ? NET_OK : NET_STATUS;
+    case CURLE_COULDNT_RESOLVE_HOST: return NET_NO_NAME;
+    case CURLE_COULDNT_CONNECT: return NET_NO_CONNECT;
+    case CURLE_OPERATION_TIMEDOUT: return NET_TIMEOUT;
+    case CURLE_PEER_FAILED_VERIFICATION:
+    case CURLE_SSL_CACERT_BADFILE:
+    case CURLE_SSL_ISSUER_ERROR: return NET_CERTIFICATE;
+    case CURLE_SSL_CONNECT_ERROR: return NET_SECURE;
+    default: return NET_OTHER;
+    }
+}
+
 static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *headers, Transfer *t, char *error)
 {
     curl_easy_reset(curl);  // Keeps the connection.
+    if (!__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED)) {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
     curl_easy_setopt(curl, CURLOPT_URL, r->url);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, NET_USER_AGENT);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -147,8 +181,8 @@ static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *heade
     }
 }
 
-bool netFetch(NetClient *c, const NetRequest *request, NetSink sink, void *user, long *status, char *error,
-              size_t error_size)
+static bool fetch(NetClient *c, const NetRequest *request, NetSink sink, void *user, long *status, NetProblem *problem,
+                  char *error, size_t error_size)
 {
     char curl_error[CURL_ERROR_SIZE] = "";
     Transfer t = {sink, user, false};
@@ -160,6 +194,8 @@ bool netFetch(NetClient *c, const NetRequest *request, NetSink sink, void *user,
     curl_slist_free_all(headers);
     if (status)
         *status = code;
+    if (problem)
+        *problem = t.stopped ? problemOf(CURLE_OK, code) : problemOf(rc, code);
     bool answered = code >= 200 && code < 300;
     if ((rc == CURLE_OK || t.stopped) && answered)
         return true;
@@ -168,6 +204,12 @@ bool netFetch(NetClient *c, const NetRequest *request, NetSink sink, void *user,
     else
         snprintf(error, error_size, "The server answered %ld", code);
     return false;
+}
+
+bool netFetch(NetClient *c, const NetRequest *request, NetSink sink, void *user, long *status, char *error,
+              size_t error_size)
+{
+    return fetch(c, request, sink, user, status, NULL, error, error_size);
 }
 
 typedef struct {
@@ -197,7 +239,7 @@ bool netFetchText(NetClient *c, const NetRequest *request, size_t max_bytes, Net
 {
     memset(out, 0, sizeof(*out));
     TextSink sink = {out, max_bytes, false};
-    bool ok = netFetch(c, request, addText, &sink, &out->status, out->error, sizeof(out->error));
+    bool ok = fetch(c, request, addText, &sink, &out->status, &out->problem, out->error, sizeof(out->error));
     if (ok && sink.too_big) {
         snprintf(out->error, sizeof(out->error), "The answer is too large");
         ok = false;

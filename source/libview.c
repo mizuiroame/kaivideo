@@ -19,17 +19,101 @@ static void keepInView(Scroll *s, int count, int visible)
     s->first = clamp(s->first, 0, count > visible ? count - visible : 0);
 }
 
+static const LibTab CARD_TABS[] = {TAB_HOME, TAB_FILMS, TAB_SERIES, TAB_SEARCH, TAB_FILES};
+
+static void addTab(LibView *v, LibTab kind, int collection)
+{
+    if (v->tab_count < LIBVIEW_TABS)
+        v->tabs[v->tab_count++] = (LibTabRef){kind, collection};
+}
+
+void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live)
+{
+    v->tab_count = 0;
+    if (server && (lib->collection_count > 0 || live)) {
+        addTab(v, TAB_HOME, -1);
+        for (int i = 0; i < lib->collection_count; i++)
+            addTab(v, TAB_COLLECTION, i);
+        if (live)
+            addTab(v, TAB_LIVE, -1);
+        addTab(v, TAB_SEARCH, -1);
+        addTab(v, TAB_FILES, -1);
+    } else {
+        for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]); i++)
+            addTab(v, CARD_TABS[i], -1);
+    }
+    if (libviewTabIndex(v) < 0) {
+        v->tab = TAB_HOME;
+        v->collection = -1;
+        v->show = -1;
+    }
+}
+
 void libviewInit(LibView *v)
 {
     memset(v, 0, sizeof(*v));
     v->show = -1;
     v->details = -1;
+    v->collection = -1;
+    for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]); i++)
+        addTab(v, CARD_TABS[i], -1);
+}
+
+int libviewTabIndex(const LibView *v)
+{
+    for (int i = 0; i < v->tab_count; i++)
+        if (v->tabs[i].kind == v->tab && (v->tab != TAB_COLLECTION || v->tabs[i].collection == v->collection))
+            return i;
+    return -1;
+}
+
+void libviewGoToTab(LibView *v, int index)
+{
+    if (index < 0 || index >= v->tab_count)
+        return;
+    v->tab = v->tabs[index].kind;
+    v->collection = v->tabs[index].collection;
+    v->show = -1;
 }
 
 void libviewNextTab(LibView *v, int delta)
 {
-    v->tab = (LibTab)(((int)v->tab + delta + TAB_COUNT) % TAB_COUNT);
-    v->show = -1;
+    int at = libviewTabIndex(v);
+    if (v->tab_count == 0)
+        return;
+    libviewGoToTab(v, (((at < 0 ? 0 : at) + delta) % v->tab_count + v->tab_count) % v->tab_count);
+}
+
+int libviewGrid(const LibView *v)
+{
+    switch (v->tab) {
+    case TAB_FILMS: return GRID_FILMS;
+    case TAB_SERIES: return GRID_SERIES;
+    case TAB_COLLECTION:
+        return v->collection >= 0 && v->collection < LIBRARY_COLLECTIONS ? GRID_COLLECTIONS + v->collection : -1;
+    default: return -1;
+    }
+}
+
+int libviewGridCount(const LibView *v, const Library *lib, int grid)
+{
+    (void)v;
+    if (grid == GRID_FILMS)
+        return (int)lib->film_count;
+    if (grid == GRID_SERIES)
+        return (int)lib->show_count;
+    int c = grid - GRID_COLLECTIONS;
+    return c >= 0 && c < lib->collection_count ? (int)lib->collections[c].count : 0;
+}
+
+LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int index)
+{
+    (void)v;
+    if (grid == GRID_FILMS)
+        return (LibraryRef){false, lib->films[index]};
+    if (grid == GRID_SERIES)
+        return (LibraryRef){true, index};
+    return lib->collections[grid - GRID_COLLECTIONS].refs[index];
 }
 
 // --- Home ---
@@ -147,6 +231,14 @@ int libviewShowItem(const LibView *v, const Library *lib)
     return lib->shows[v->show].episodes[first + v->episodes.cursor];
 }
 
+// --- Live TV ---
+
+void libviewLiveMove(LibView *v, int count, int dy)
+{
+    v->live.cursor += dy;
+    keepInView(&v->live, count, LIBVIEW_LIVE_ROWS);
+}
+
 // --- Search ---
 
 void libviewSearch(LibView *v, const Library *lib, const char *query)
@@ -182,8 +274,8 @@ void libviewClamp(LibView *v, const Library *lib, const Home *home)
     v->home_first_row = clamp(v->home_first_row, 0, v->home_row);
     for (int r = 0; r < home->count; r++)
         keepInView(&v->home_cols[r], home->rows[r].count, LIBVIEW_HOME_COLS);
-    libviewGridMove(v, GRID_FILMS, (int)lib->film_count, 0, 0);
-    libviewGridMove(v, GRID_SERIES, (int)lib->show_count, 0, 0);
+    for (int grid = 0; grid < GRID_COUNT; grid++)
+        libviewGridMove(v, (LibGrid)grid, libviewGridCount(v, lib, grid), 0, 0);
     if (v->query[0]) {
         char query[LIBVIEW_QUERY_MAX];
         snprintf(query, sizeof(query), "%s", v->query);
@@ -207,15 +299,14 @@ bool libviewSelected(const LibView *v, const Library *lib, const Home *home, Lib
         *out = home->rows[v->home_row].items[v->home_cols[v->home_row].cursor];
         return true;
     case TAB_FILMS:
-        if ((size_t)v->grid[GRID_FILMS].cursor >= lib->film_count)
-            return false;
-        *out = (LibraryRef){false, lib->films[v->grid[GRID_FILMS].cursor]};
-        return true;
     case TAB_SERIES:
-        if ((size_t)v->grid[GRID_SERIES].cursor >= lib->show_count)
+    case TAB_COLLECTION: {
+        int grid = libviewGrid(v);
+        if (grid < 0 || v->grid[grid].cursor >= libviewGridCount(v, lib, grid))
             return false;
-        *out = (LibraryRef){true, v->grid[GRID_SERIES].cursor};
+        *out = libviewGridRef(v, lib, grid, v->grid[grid].cursor);
         return true;
+    }
     case TAB_SEARCH:
         if (v->results_scroll.cursor >= v->result_count)
             return false;

@@ -23,10 +23,21 @@ typedef enum {
     TAB_SERIES,
     TAB_SEARCH,
     TAB_FILES,
+    TAB_COLLECTION,  // One of a server's libraries (LibView.collection).
+    TAB_LIVE,        // A server's Live TV channels.
     TAB_COUNT,
 } LibTab;
 
-typedef enum { GRID_FILMS, GRID_SERIES, GRID_COUNT } LibGrid;
+#define LIBVIEW_TABS (LIBRARY_COLLECTIONS + 5)
+#define LIBVIEW_LIVE_ROWS 6  // Channels in view.
+
+typedef struct {
+    LibTab kind;
+    int collection;  // TAB_COLLECTION's library, -1 for the others.
+} LibTabRef;
+
+// The grids: Films, Series, then one per server library from GRID_COLLECTIONS.
+typedef enum { GRID_FILMS, GRID_SERIES, GRID_COLLECTIONS, GRID_COUNT = GRID_COLLECTIONS + LIBRARY_COLLECTIONS } LibGrid;
 
 typedef struct {
     int cursor, first;  // The item under the cursor, the first in view.
@@ -34,6 +45,9 @@ typedef struct {
 
 typedef struct {
     LibTab tab;
+    int collection;               // The library shown, when tab is TAB_COLLECTION.
+    LibTabRef tabs[LIBVIEW_TABS]; // The tabs, in order (libviewSetTabs).
+    int tab_count;
     int home_row, home_first_row;
     Scroll home_cols[HOME_KIND_COUNT];  // Each Home row's place (by row index on screen).
     Scroll grid[GRID_COUNT];            // first is a row of cards here.
@@ -48,11 +62,29 @@ typedef struct {
     LibraryRef results[LIBVIEW_RESULTS];
     int result_count;
     Scroll results_scroll;
+    Scroll live;  // The Live TV channel under the cursor.
 } LibView;
 
+// Starts on Home, with the card's tabs.
 void libviewInit(LibView *v);
+// The tabs for this library: with a server's libraries, Home, each of them,
+// Live TV (live: the server has channels), Search and Files; else Home, Films,
+// Series, Search and Files. A tab that's gone leaves Home showing.
+void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live);
+// Live TV: moves the cursor through count channels.
+void libviewLiveMove(LibView *v, int count, int dy);
 // Changes tab by delta (wrapping), closing a series' page.
 void libviewNextTab(LibView *v, int delta);
+// Goes to the index'th tab (a tap on it), closing a series' page.
+void libviewGoToTab(LibView *v, int index);
+// The index of the tab showing in tabs, -1 if it isn't there.
+int libviewTabIndex(const LibView *v);
+
+// The grid the current tab shows, -1 if it isn't one.
+int libviewGrid(const LibView *v);
+// How many cards a grid has, and one of them.
+int libviewGridCount(const LibView *v, const Library *lib, int grid);
+LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int index);
 
 // Home: dx moves across the row, dy between rows.
 void libviewHomeMove(LibView *v, const Home *home, int dx, int dy);

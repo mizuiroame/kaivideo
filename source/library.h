@@ -25,6 +25,8 @@ typedef struct {
     char *series_art;    // Where its series' picture comes from, or NULL.
     int64_t runtime_ns;  // 0 if unknown.
     int blocked;         // Why the console can't play it (JfPlayability), 0 if it can.
+    bool favorite;       // A film marked so, or an episode of a series marked so.
+    int collection;      // The server's library it's in (an index in collections), -1 for none.
 } LibraryItem;
 
 // What a server says of a video besides its name.
@@ -32,6 +34,8 @@ typedef struct {
     const char *overview, *series_art;
     int64_t runtime_ns;
     int blocked;
+    bool favorite;
+    int in_collection;  // Its library's index in collections plus 1; 0 for none.
 } LibraryRemote;
 
 typedef struct {
@@ -40,6 +44,8 @@ typedef struct {
     int count;
     int seasons;            // How many different seasons.
     int64_t added;          // Its newest episode's time.
+    bool favorite;
+    int collection;         // Its first episode's.
 } LibraryShow;
 
 // A film or episode (an item), or a series.
@@ -47,6 +53,17 @@ typedef struct {
     bool is_show;
     int index;
 } LibraryRef;
+
+// A library on the server, as its tab shows it.
+#define LIBRARY_COLLECTIONS 8
+#define LIBRARY_COLLECTION_NAME 48
+typedef enum { COLLECTION_MIXED, COLLECTION_FILMS, COLLECTION_SERIES } CollectionKind;
+typedef struct {
+    char name[LIBRARY_COLLECTION_NAME];
+    CollectionKind kind;
+    LibraryRef *refs;  // Made by libraryBuild: its series by name, then its films by title.
+    size_t count;
+} LibraryCollection;
 
 typedef struct {
     char root[LIBRARY_PATH_MAX];
@@ -59,6 +76,8 @@ typedef struct {
     size_t film_count;
     LibraryRef *recent;  // Films and series, the newest first.
     size_t recent_count;
+    LibraryCollection collections[LIBRARY_COLLECTIONS];  // A server's libraries; none on the card.
+    int collection_count;
 } Library;
 
 void libraryInit(Library *lib, const char *root);
@@ -86,6 +105,16 @@ int libraryFind(const Library *lib, const char *path);
 // The episode after item in its series (the next season's first after a
 // season's last), or -1: the last one, or a film.
 int libraryNextEpisode(const Library *lib, int item);
+
+// Adds one of the server's libraries. Its index, or -1 (no name, or too many).
+int libraryAddCollection(Library *lib, const char *name, CollectionKind kind);
+// What a library's tab shows (built): its series by name, then its films by
+// title. Returns how many (at most max).
+size_t libraryCollectionRefs(const Library *lib, int collection, LibraryRef *out, size_t max);
+// Favorite series by name, then favorite films by title. Returns how many (at most max).
+size_t libraryFavorites(const Library *lib, LibraryRef *out, size_t max);
+// Marks a film, or a series and its episodes.
+void librarySetFavorite(Library *lib, LibraryRef ref, bool favorite);
 
 // Series, films and episodes whose names hold the query (compared by
 // namingKey): series first, then films, then episodes. Returns how many

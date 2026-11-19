@@ -38,6 +38,9 @@ unsigned mediaFileInterrupts(void);
 // True if reading stopped because the network failed (not at the file's end).
 // f NULL: a converted stream.
 bool mediaFileFailed(const MediaFile *f);
+// Megabytes of the server's file fetched ahead of its slowest reader, without
+// a gap; -1 if none is being read.
+double mediaFileMegabytesReady(void);
 
 // For avio_alloc_context, with the MediaFile as opaque.
 int mediaFileRead(void *opaque, uint8_t *buf, int size);

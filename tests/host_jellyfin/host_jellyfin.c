@@ -13,6 +13,8 @@
 
 #include "blockcache.h"
 #include "hlsio.h"
+#include "jfprobe.h"
+#include "tpfetch.h"
 #include "jfsync.h"
 #include "mediafile.h"
 #include "video.h"
@@ -232,6 +234,9 @@ static void testJumpWhileWaiting(const char *server, const char *folder)
         EXPECT(waitForFrame(v, 0, WAIT_MS) >= 0, "no first frame");
         EXPECT(hlsCushionReady(0), "the first segment alone covers its start");
         EXPECT(!hlsCushionReady(NEAR_END_OF_FIRST_S * 1000000000ll), "counted on a segment that isn't here");
+        double ready = hlsSecondsReady(1000000000ll);
+        EXPECT(ready > 7.2 && ready < 7.4, "the seconds ready aren't the first segment's rest");
+        EXPECT(netBytesReceived() > 0, "nothing counted as received");
         videoSeek(v, IN_SECOND_S * 1000000000ll);
         sleepMs(INTERRUPT_AFTER_MS);  // It's waiting for the late segment now.
         videoSeek(v, BACK_S * 1000000000ll);
@@ -248,6 +253,59 @@ static void testJumpWhileWaiting(const char *server, const char *folder)
     hlsStop();
 }
 
+// Live TV: the list grows while it plays, and playback goes on into what was added.
+static void testLiveList(const char *server)
+{
+    enum { INTO_SECOND_S = 9, LIVE_WAIT_MS = 30000 };
+    char url[PATH_MAX_LEN], error[160] = "";
+    snprintf(url, sizeof(url), "%s/hlslive/master.m3u8", server);
+    EXPECT(hlsStart(url, "none", 0, error, sizeof(error)), error);
+    // Only the first segment is made yet: playing from it would catch up with the server.
+    EXPECT(hlsIsLive() && !hlsCushionReady(0), "live TV would start at the edge of what's made");
+    Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
+    EXPECT(v != NULL, error);
+    if (v) {
+        int64_t pts = -1, last = -1;
+        int64_t start = nowMs();
+        // Takes frames as they come (as the player shows them), until one past the first segment.
+        while (nowMs() - start < LIVE_WAIT_MS && last < INTO_SECOND_S * 1000000000ll) {
+            if (videoNextPts(v, &pts)) {
+                last = pts;
+                videoFrameAt(v, pts);
+            }
+            sleepMs(1);
+        }
+        EXPECT(last >= INTO_SECOND_S * 1000000000ll, "playback didn't go on into the segment added later");
+        printf("live: reached %.2f s after %d ms\n", last / 1e9, (int)(nowMs() - start));
+        videoClose(v);
+    }
+    hlsStop();
+}
+
+static bool waitProbe(JfProbeResult *r)
+{
+    for (int i = 0; i < WAIT_MS; i++) {
+        if (jfProbeTake(r))
+            return true;
+        sleepMs(1);
+    }
+    return false;
+}
+
+// Settings' questions: finding the server on the network, and testing addresses.
+static void testProbes(const char *server)
+{
+    JfProbeResult r;
+    EXPECT(jfProbeStartFind("127.0.0.1") && waitProbe(&r), "the search didn't finish");
+    EXPECT(r.finding && r.ok && !strcmp(r.found, server), "the server wasn't found at the address that answered");
+    printf("find: %s\n", r.message);
+    EXPECT(jfProbeStartTest(server) && waitProbe(&r), "the test didn't finish");
+    EXPECT(!r.finding && r.ok && strstr(r.message, "Fake Den"), "the server didn't pass the test");
+    EXPECT(jfProbeStartTest("http://127.0.0.1:1") && waitProbe(&r), "the test didn't finish");
+    EXPECT(!r.ok && strstr(r.message, "port"), "a closed port wasn't named");
+    printf("test: %s\n", r.message);
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3)
@@ -256,18 +314,23 @@ int main(int argc, char **argv)
     snprintf(session, sizeof(session), "%s/jellyfin.txt", argv[2]);
     snprintf(catalog, sizeof(catalog), "%s/catalog.txt", argv[2]);
     EXPECT(jfSyncStart(session, catalog, "test", true), "didn't start");
+    testProbes(argv[1]);
     EXPECT(jfSyncSetServer(argv[1]), "the server's address");
     jfSyncSignIn();
     EXPECT(waitState(JF_SIGNED_IN), "didn't sign in");
     JfCatalog c;
     EXPECT(waitCatalog(&c), "no library");
     EXPECT(c.library.count == 1 && c.library.film_count == 1, "wrong library");
+    EXPECT(c.library.collection_count == 1 && !strcmp(c.library.collections[0].name, "Fake Films") &&
+               c.library.count == 1 && c.library.items[0].collection == 0 && c.library.items[0].favorite,
+           "the server's library or the favorite didn't come");
     if (c.library.count == 1) {
         char location[LIBRARY_PATH_MAX];
         snprintf(location, sizeof(location), "%s", c.library.items[0].path);
         playIt(location);
         testConvertedStart(argv[1]);
         testJumpWhileWaiting(argv[1], argv[2]);
+        testLiveList(argv[1]);
         testServerFails(argv[2]);
         testInterrupt(argv[2]);
         jfSyncReport(JF_REPORT_START, location, 0, false);
@@ -276,6 +339,27 @@ int main(int argc, char **argv)
         jfSyncReport(JF_REPORT_STOP, location, 3 * NS_PER_MS, false);
         jfSyncSetPlayed(location, true);
         jfSyncSetPlayed(location, false);
+        // The server's trickplay: the picture of 1.5 s is the sheet's second, green.
+        tpfetchStart(location);
+        const uint32_t *picture = NULL;
+        int w = 0, h = 0;
+        bool changed = false;
+        for (int i = 0; i < WAIT_MS && !picture; i++) {
+            picture = tpfetchPicture(1500 * NS_PER_MS, &w, &h, &changed);
+            sleepMs(1);
+        }
+        uint32_t pixel = picture ? picture[10 * w + 20] : 0;
+        EXPECT(picture && w == 40 && h == 20 && changed && (pixel & 0xFF) < 100 && ((pixel >> 8) & 0xFF) > 150,
+               "the trickplay picture didn't come, or isn't the right one");
+        bool again;
+        EXPECT(tpfetchPicture(1600 * NS_PER_MS, &w, &h, &again) == picture && !again, "the same picture was cut again");
+        tpfetchStop();
+        JfSegment segments[JF_SEGMENTS_MAX];
+        EXPECT(jfSyncFetchSegments(location, segments, JF_SEGMENTS_MAX) == 1 && segments[0].kind == JF_SEGMENT_INTRO &&
+                   segments[0].end_ns == 5000000000ll,
+               "the intro didn't come from the server");
+        jfSyncSetFavorite(location, false);
+        jfSyncSetFavorite(JF_PREFIX "eeee1111/" JF_SERIES_SOURCE, true);
     }
     jfCatalogFree(&c);
     jfSyncSignOut();

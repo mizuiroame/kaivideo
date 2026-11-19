@@ -21,8 +21,73 @@ static void buildLibrary(Library *lib)
     libraryBuild(lib);
 }
 
+// A server's libraries are tabs of their own, each a grid of its films and series.
+static void testCollectionTabs(void)
+{
+    static Library lib;
+    libraryInit(&lib, "jellyfin:");
+    int films = libraryAddCollection(&lib, "Películas", COLLECTION_FILMS);
+    int shows = libraryAddCollection(&lib, "Programas", COLLECTION_SERIES);
+    char path[64];
+    for (int i = 0; i < 7; i++) {
+        VideoName n = {.year = 2000 + i};
+        snprintf(n.title, sizeof(n.title), "Film %d", i);
+        snprintf(path, sizeof(path), "jellyfin:f%d/f%d", i, i);
+        libraryAddRemote(&lib, path, &n, 1, i, &(LibraryRemote){.in_collection = films + 1});
+    }
+    for (int s = 0; s < 2; s++) {
+        VideoName n = {.is_episode = true, .season = 1, .episode = 1};
+        snprintf(n.show, sizeof(n.show), "Show %d", s);
+        snprintf(path, sizeof(path), "jellyfin:e%d/e%d", s, s);
+        libraryAddRemote(&lib, path, &n, 1, 1, &(LibraryRemote){.in_collection = shows + 1});
+    }
+    libraryBuild(&lib);
+    CHECK(lib.collections[films].count == 7 && lib.collections[shows].count == 2);
+
+    static LibView v;
+    libviewInit(&v);
+    libviewSetTabs(&v, &lib, true, false);
+    CHECK(v.tab_count == 5 && v.tabs[1].kind == TAB_COLLECTION && v.tabs[1].collection == films &&
+          v.tabs[2].collection == shows && v.tabs[3].kind == TAB_SEARCH && v.tabs[4].kind == TAB_FILES);
+    libviewNextTab(&v, 1);
+    CHECK(v.tab == TAB_COLLECTION && v.collection == films && libviewGrid(&v) == GRID_COLLECTIONS + films);
+    int grid = libviewGrid(&v);
+    CHECK(libviewGridCount(&v, &lib, grid) == 7);
+    libviewGridMove(&v, grid, 7, 1, 1);  // To the second row, second card: the 7th.
+    CHECK(v.grid[grid].cursor == LIBVIEW_COLS + 1 || v.grid[grid].cursor == 6);
+    static Home home;
+    homeCompute(&home, &lib, NULL, NULL);
+    LibraryRef ref;
+    CHECK(libviewSelected(&v, &lib, &home, &ref) && !ref.is_show &&
+          ref.index == lib.collections[films].refs[v.grid[grid].cursor].index);
+    libviewNextTab(&v, 1);
+    CHECK(v.collection == shows && libviewSelected(&v, &lib, &home, &ref) && ref.is_show);
+    libviewGoToTab(&v, 0);
+    CHECK(v.tab == TAB_HOME && libviewGrid(&v) == -1);
+    libviewNextTab(&v, -1);  // Wraps to the last: Files.
+    CHECK(v.tab == TAB_FILES);
+    v.tab = TAB_SEARCH;      // Set by name: next goes on from there.
+    libviewNextTab(&v, -1);
+    CHECK(v.tab == TAB_COLLECTION && v.collection == shows);
+
+    // With Live TV, its tab comes after the libraries.
+    libviewSetTabs(&v, &lib, true, true);
+    CHECK(v.tab_count == 6 && v.tabs[3].kind == TAB_LIVE && v.tabs[4].kind == TAB_SEARCH);
+    libviewGoToTab(&v, 3);
+    libviewLiveMove(&v, 20, 9);
+    CHECK(v.tab == TAB_LIVE && libviewGrid(&v) == -1 && v.live.cursor == 9 && v.live.first == 9 - LIBVIEW_LIVE_ROWS + 1);
+    libviewLiveMove(&v, 3, 0);  // Fewer channels now: the cursor stays on one.
+    CHECK(v.live.cursor == 2 && v.live.first == 0);
+
+    // The card's tabs, and back: a tab that's gone falls back to Home.
+    libviewSetTabs(&v, &lib, false, false);
+    CHECK(v.tab_count == 5 && v.tabs[1].kind == TAB_FILMS && v.tab == TAB_HOME);
+    libraryFree(&lib);
+}
+
 void testLibView(void)
 {
+    testCollectionTabs();
     static Library lib;
     buildLibrary(&lib);
     static LibView v;

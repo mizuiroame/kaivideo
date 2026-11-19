@@ -149,12 +149,16 @@ const char *appFooterHelp(const App *app)
     if (app->picking)
         return app->library_root[0] ? "[A] open  [B] folder above  [X] use this folder  [-] cancel"
                                     : "[A] open  [B] folder above  [X] use this folder  [+] menu";
+    bool server = app->config.use_jellyfin;  // Favorites are kept on the server.
     if (app->view.details >= 0)
-        return "[A] play  [Y] from the start  [X] watched  [B] back";
+        return server ? "[A] play  [Y] from the start  [X] watched  [R] favorite  [B] back"
+                      : "[A] play  [Y] from the start  [X] watched  [B] back";
     if (app->view.show >= 0)
-        return "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
+        return server ? "[A] play  [X] watched  [R] favorite  [<>] season  [B] back  [ZL][ZR] tabs  [+] menu"
+                      : "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {
     case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";
+    case TAB_LIVE: return "[A] watch  [^v] channel  [ZL][ZR] tabs  [-] settings  [+] menu";
     case TAB_FILES: return "[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu";
     default: return "[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu";
     }

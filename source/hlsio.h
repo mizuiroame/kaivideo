@@ -22,6 +22,10 @@ bool hlsFailed(void);
 // True if the next few seconds from from_ns are here, so playing from there
 // won't run out at once. Also true when waiting longer is pointless.
 bool hlsCushionReady(int64_t from_ns);
+// True while the stream is live TV: its list grows as the server makes it.
+bool hlsIsLive(void);
+// Seconds of video in memory from from_ns on, without a gap; -1 if no stream runs.
+double hlsSecondsReady(int64_t from_ns);
 // Opens the running stream into *fmt (allocated, with what the caller set on
 // it, such as an interrupt_callback: while it says so, a reader stops waiting
 // for a segment). *playlist is to be closed with hlsCloseInput after the format.

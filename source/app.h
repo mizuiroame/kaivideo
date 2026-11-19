@@ -16,12 +16,14 @@
 #include "player.h"
 #include "resume.h"
 #include "settings.h"
+#include "stats.h"
 #include "touch.h"
 #include "trackprefs.h"
 #include "ui.h"
 #include "watched.h"
 
 #define APP_NAME_MAX 300
+#define APP_FAVORITE_CHANGES 8
 
 typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT } AppMenu;
 
@@ -73,6 +75,24 @@ struct App {
     bool stop_requested;        // "Back to the library" from the + menu over a video.
     bool scrubbing;             // A finger drags the progress bar.
     double scrub_fraction;
+    // Favorites changed here since the last catalog came: one read before
+    // them may come later, and they're put back on it (app_library.c).
+    char favorite_changes[APP_FAVORITE_CHANGES][LIBRARY_PATH_MAX];
+    bool favorite_values[APP_FAVORITE_CHANGES];
+    int favorite_change_count;
+    // Live TV (app_live.c): the guide shown, and one being read by a thread.
+    LiveGuide live;
+    LiveGuide live_incoming;
+    pthread_t live_thread;
+    bool live_reading;
+    int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
+    uint64_t live_read_at;
+    int live_switch;            // L or R while a channel plays: -1 or 1, taken by the main loop.
+    JfSegment segments[JF_SEGMENTS_MAX];  // The playing video's parts to skip (app_skip.c).
+    int segment_count;
+    bool stats_shown;           // ↓ shows the statistics panel (app_stats.c).
+    StatsWindow stats;
+    uint64_t stats_sampled;
 
     // The library (app_library.c).
     char library_root[LIBRARY_PATH_MAX];  // "" until one is chosen.
@@ -135,6 +155,36 @@ void appJellyfinUpdate(App *app, uint64_t now);
 void appJellyfinPlaybackStarted(App *app, uint64_t now);
 void appJellyfinPlaybackTick(App *app, uint64_t now);
 void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
+
+// app_live.c
+// Once a frame: reads the guide now and then (often while its tab shows), and takes it when read.
+void appLiveUpdate(App *app, uint64_t now);
+void appLiveExit(App *app);
+// The Live TV tab: up and down move, A plays the channel.
+void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appLiveDraw(const App *app);
+// Live TV is playing: no jumps, no resume point.
+bool appPlayingLive(const App *app);
+// The channel delta places from the one playing, wrapping (L/R in the player).
+// False if it isn't in the guide, or it's the only one.
+bool appLiveNeighbor(App *app, int delta, char *location, size_t location_size, char *name, size_t name_size);
+
+// app_skip.c
+// ZR, or a tap on its button, skips the part playing (intro, credits...).
+// True if it took the press. up_next: the next episode's card shows, and ZR is its.
+bool appSkipInput(App *app, uint64_t pressed, TouchEvent touch, bool up_next, uint64_t now);
+void appSkipDraw(const App *app, bool bar_shown, bool up_next);
+
+// app_trickplay.c
+// The jump's picture over the screen while it's awaited (waiting), from the server's trickplay.
+void appTrickplayBehind(const App *app, bool waiting);
+// The picture where a finger drags the bar, above it (bar: the bar shows).
+void appTrickplayAboveBar(const App *app, bool bar);
+
+// app_stats.c
+// Measures the video playing, and draws the panel if ↓ turned it on.
+void appStatsUpdate(App *app, uint64_t now);
+void appStatsDraw(const App *app);
 
 // app_menu.c
 void appOpenMenu(App *app);

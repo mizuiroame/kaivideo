@@ -33,6 +33,8 @@ static void cachePath(char *out, size_t size)
 void appLibraryRefreshHome(App *app)
 {
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
+    libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
+                   app->config.use_jellyfin && app->live.count > 0);
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -105,6 +107,8 @@ void appLibraryToggleSource(App *app, uint64_t now)
         appOpenJellyfinSettings(app, now);
 }
 
+static void reapplyFavoriteChanges(App *app);
+
 // What's on screen follows the library: indexes change with it.
 static void afterNewLibrary(App *app, const char *details_path)
 {
@@ -125,6 +129,7 @@ void appLibraryInstallCatalog(App *app, JfCatalog *c)
     libraryFree(&app->library);
     app->library = c->library;
     libraryInit(&c->library, JF_ROOT);  // The library is the app's now.
+    reapplyFavoriteChanges(app);
     thumbsRetryMissing();
     afterNewLibrary(app, details);
 }
@@ -239,6 +244,91 @@ static void toggleWatched(App *app)
         setWatched(app, item);
 }
 
+// The location the server knows a film or series by. False for videos on the card.
+static bool favoriteLocation(const Library *lib, LibraryRef ref, const char **out)
+{
+    if (ref.is_show) {
+        const LibraryShow *show = &lib->shows[ref.index];
+        *out = show->count ? lib->items[show->episodes[0]].series_art : NULL;
+    } else {
+        *out = lib->items[ref.index].path;
+    }
+    return *out && jfIsLocation(*out);
+}
+
+// Kept until the next catalog comes, which may have been read before it.
+static void rememberFavoriteChange(App *app, const char *location, bool favorite)
+{
+    int at = 0;
+    while (at < app->favorite_change_count && strcmp(app->favorite_changes[at], location))
+        at++;
+    if (at == APP_FAVORITE_CHANGES) {  // Full: the oldest goes.
+        memmove(app->favorite_changes[0], app->favorite_changes[1], (APP_FAVORITE_CHANGES - 1) * LIBRARY_PATH_MAX);
+        memmove(&app->favorite_values[0], &app->favorite_values[1], (APP_FAVORITE_CHANGES - 1) * sizeof(bool));
+        at = APP_FAVORITE_CHANGES - 1;
+    }
+    snprintf(app->favorite_changes[at], LIBRARY_PATH_MAX, "%s", location);
+    app->favorite_values[at] = favorite;
+    if (at == app->favorite_change_count)
+        app->favorite_change_count++;
+}
+
+// The film or series a favorite's location names, in the library.
+static bool findFavorite(const Library *lib, const char *location, LibraryRef *out)
+{
+    int item = libraryFind(lib, location);
+    if (item >= 0) {
+        *out = (LibraryRef){false, item};
+        return true;
+    }
+    for (size_t s = 0; s < lib->show_count; s++) {
+        const LibraryShow *show = &lib->shows[s];
+        const char *art = show->count ? lib->items[show->episodes[0]].series_art : NULL;
+        if (art && !strcmp(art, location)) {
+            *out = (LibraryRef){true, (int)s};
+            return true;
+        }
+    }
+    return false;
+}
+
+// Puts this console's latest favorites on a catalog that may be older than them.
+static void reapplyFavoriteChanges(App *app)
+{
+    for (int i = 0; i < app->favorite_change_count; i++) {
+        LibraryRef ref;
+        if (findFavorite(&app->library, app->favorite_changes[i], &ref))
+            librarySetFavorite(&app->library, ref, app->favorite_values[i]);
+    }
+    app->favorite_change_count = 0;
+}
+
+// Marks a film, or a series (an episode's), as a favorite or not, here and on the server.
+static void toggleFavorite(App *app, LibraryRef ref, uint64_t now)
+{
+    Library *lib = &app->library;
+    if (!ref.is_show && lib->items[ref.index].show >= 0)
+        ref = (LibraryRef){true, lib->items[ref.index].show};
+    const char *location;
+    if (!favoriteLocation(lib, ref, &location))
+        return;
+    bool favorite = !(ref.is_show ? lib->shows[ref.index].favorite : lib->items[ref.index].favorite);
+    librarySetFavorite(lib, ref, favorite);
+    jfSyncSetFavorite(location, favorite);
+    rememberFavoriteChange(app, location, favorite);
+    appLibraryRefreshHome(app);
+    appShowMessage(app, favorite ? "Added to Favorites." : "Removed from Favorites.", now);
+}
+
+// True if a film or series can be a favorite: it comes from the server.
+static bool canBeFavorite(const App *app, LibraryRef ref)
+{
+    const char *location;
+    if (!ref.is_show && app->library.items[ref.index].show >= 0)
+        ref = (LibraryRef){true, app->library.items[ref.index].show};
+    return favoriteLocation(&app->library, ref, &location);
+}
+
 void appLibraryPlay(App *app, int item, uint64_t now)
 {
     playItem(app, item, now);
@@ -257,6 +347,8 @@ static void detailsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t 
     LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
     if ((pressed & HidNpadButton_X) || hit.kind == LIBHIT_DETAILS_WATCHED) {
         setWatched(app, item);
+    } else if ((pressed & HidNpadButton_R) || hit.kind == LIBHIT_FAVORITE) {
+        toggleFavorite(app, (LibraryRef){false, item}, now);
     } else if ((pressed & HidNpadButton_A) || hit.kind == LIBHIT_DETAILS_PLAY) {
         v->details = -1;
         playItem(app, item, now);
@@ -377,9 +469,9 @@ static void homeMoveRows(App *app, int delta)
 
 static void gridMoveRows(App *app, int delta)
 {
-    LibGrid grid = app->view.tab == TAB_FILMS ? GRID_FILMS : GRID_SERIES;
-    int count = grid == GRID_FILMS ? (int)app->library.film_count : (int)app->library.show_count;
-    libviewGridMove(&app->view, grid, count, 0, delta);
+    int grid = libviewGrid(&app->view);
+    if (grid >= 0)
+        libviewGridMove(&app->view, (LibGrid)grid, libviewGridCount(&app->view, &app->library, grid), 0, delta);
 }
 
 static void showMoveRows(App *app, int delta)
@@ -400,10 +492,9 @@ static void move(App *app, int dx, int dy)
         libviewShowMove(v, &app->library, dx, dy);
     } else if (v->tab == TAB_HOME) {
         libviewHomeMove(v, &app->home, dx, dy);
-    } else if (v->tab == TAB_FILMS || v->tab == TAB_SERIES) {
-        LibGrid grid = v->tab == TAB_FILMS ? GRID_FILMS : GRID_SERIES;
-        int count = grid == GRID_FILMS ? (int)app->library.film_count : (int)app->library.show_count;
-        libviewGridMove(v, grid, count, dx, dy);
+    } else if (libviewGrid(v) >= 0) {
+        int grid = libviewGrid(v);
+        libviewGridMove(v, (LibGrid)grid, libviewGridCount(v, &app->library, grid), dx, dy);
     } else if (v->tab == TAB_SEARCH) {
         libviewResultsMove(v, dy);
     }
@@ -434,10 +525,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
 {
     LibView *v = &app->view;
     switch (hit.kind) {
-    case LIBHIT_TAB:
-        v->tab = (LibTab)hit.a;
-        v->show = -1;
-        break;
+    case LIBHIT_TAB: libviewGoToTab(v, hit.a); break;
     case LIBHIT_MENU: appOpenMenu(app); break;
     case LIBHIT_SOURCE: appLibraryToggleSource(app, now); break;
     case LIBHIT_HOME_CARD:
@@ -447,7 +535,9 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
         openSelected(app, now);
         break;
     case LIBHIT_GRID_CARD:
-        v->grid[v->tab == TAB_FILMS ? GRID_FILMS : GRID_SERIES].cursor = hit.a;
+        if (libviewGrid(v) < 0)
+            break;
+        v->grid[libviewGrid(v)].cursor = hit.a;
         openSelected(app, now);
         break;
     case LIBHIT_BACK: v->show = -1; break;
@@ -489,7 +579,7 @@ static void dragInput(App *app, TouchEvent touch)
                 libviewHomeMove(v, &app->home, -1, 0);
         }
         dragRows(app, touch.dy, HOME_DRAG_W - 30, homeMoveRows);
-    } else if (v->tab == TAB_FILMS || v->tab == TAB_SERIES) {
+    } else if (libviewGrid(v) >= 0) {
         dragRows(app, touch.dy, GRID_DRAG_H, gridMoveRows);
     } else if (v->tab == TAB_SEARCH) {
         dragRows(app, touch.dy, LIST_DRAG_H, resultsMoveRows);
@@ -525,6 +615,13 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         detailsInput(app, pressed, touch, now);
         return;
     }
+    // On a series' page from the server, R marks the series a favorite (ZR still changes tab).
+    LibraryRef shown = {true, v->show};
+    bool favorite_here = v->show >= 0 && (size_t)v->show < app->library.show_count && canBeFavorite(app, shown);
+    if (favorite_here && (pressed & HidNpadButton_R)) {
+        toggleFavorite(app, shown, now);
+        return;
+    }
     if (pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)) {
         libviewNextTab(v, (pressed & BUTTONS_TAB_LEFT) ? -1 : 1);
         return;  // A tap this frame was aimed at the old tab.
@@ -549,8 +646,17 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             folderInput(app, &app->browser, false, pressed, touch, now);
         return;
     }
+    if (v->tab == TAB_LIVE && v->show < 0) {
+        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU || hit.kind == LIBHIT_SOURCE)
+            tapInput(app, hit, now);
+        else
+            appLiveInput(app, pressed, touch, now);
+        return;
+    }
     buttonInput(app, pressed, now);
-    if (hit.kind != LIBHIT_NONE)
+    if (hit.kind == LIBHIT_FAVORITE && favorite_here)
+        toggleFavorite(app, shown, now);
+    else if (hit.kind != LIBHIT_NONE)
         tapInput(app, hit, now);
     else if (touch.type == TOUCH_DRAG)
         dragInput(app, touch);
@@ -599,17 +705,25 @@ void appLibraryDraw(App *app, uint64_t now)
         snprintf(status, sizeof(status), "Looking for videos... %zu", found);
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
         uiDrawBackground();
-        uiDrawTabBar(TAB_FILES, status);
+        uiDrawTabBar(&app->view, &app->library, status);
         uiDrawBrowser(&app->browser, &app->resume, BROWSE_FILES);
         uiDrawFooterStrip();
         uiDrawToast(under);
     } else {
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
                       app->library_root[0] != '\0' || app->config.use_jellyfin, status, under);
+        if (app->view.tab == TAB_LIVE && app->view.show < 0)
+            appLiveDraw(app);
+        LibraryRef shown = {true, app->view.show};
+        if (app->view.show >= 0 && (size_t)app->view.show < app->library.show_count && canBeFavorite(app, shown))
+            uiDrawShowFavorite(app->library.shows[app->view.show].favorite);
     }
-    if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
-        uiDrawDetails(&app->library, app->view.details, &app->resume,
-                      jfPlayabilityMessage((JfPlayability)app->library.items[app->view.details].blocked));
+    if (app->view.details >= 0 && (size_t)app->view.details < app->library.count) {
+        int item = app->view.details;
+        uiDrawDetails(&app->library, item, &app->resume,
+                      jfPlayabilityMessage((JfPlayability)app->library.items[item].blocked),
+                      canBeFavorite(app, (LibraryRef){false, item}));
+    }
     appSettingsDraw(app);
     appMenuDraw(app);
     if (overlay)

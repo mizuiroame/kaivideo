@@ -9,12 +9,15 @@
 #include <jansson.h>
 
 #define DEFAULT_PORT "8096"
+#define DEFAULT_HTTPS_PORT "8920"
+#define HTTP_BAD_REQUEST 400
 #define MAX_HD_WIDTH 2000
 #define MAX_BITS 10
 #define TICKS_TO_NS 100
 #define CACHE_LINE_MAX 65536
-#define CACHE_MAGIC "kaivideo-jellyfin-2"
-#define CACHE_FIELDS 16
+#define CACHE_MAGIC "kaivideo-jellyfin-3"
+#define CACHE_FIELDS 18
+#define CACHE_COLLECTION "#collection\t"  // A library: its kind, then its name.
 #define FIRST_CAPACITY 512
 
 bool jfIsLocation(const char *path)
@@ -269,6 +272,7 @@ bool jfPlanParse(const char *json, JfPlan *out)
     if (ok) {
         snprintf(out->transcode_url, sizeof(out->transcode_url), "%s", url);
         snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
+        snprintf(out->live_stream_id, sizeof(out->live_stream_id), "%s", textOf(source, "LiveStreamId"));
         readTracks(source, out);
     }
     json_decref(root);
@@ -281,6 +285,7 @@ void jfCatalogInit(JfCatalog *c)
 {
     memset(c, 0, sizeof(*c));
     libraryInit(&c->library, JF_ROOT);
+    c->adding_collection = -1;
 }
 
 void jfCatalogFree(JfCatalog *c)
@@ -289,6 +294,81 @@ void jfCatalogFree(JfCatalog *c)
     free(c->users);
     c->users = NULL;
     c->capacity = 0;
+    free(c->favorite_series);
+    c->favorite_series = NULL;
+    c->favorite_series_count = 0;
+}
+
+// What a library holds, from its CollectionType; false for what isn't videos.
+static bool collectionKind(const char *type, CollectionKind *kind)
+{
+    if (!type[0] || !strcmp(type, "mixed") || !strcmp(type, "homevideos")) {
+        *kind = COLLECTION_MIXED;
+        return true;
+    }
+    if (!strcmp(type, "movies"))
+        *kind = COLLECTION_FILMS;
+    else if (!strcmp(type, "tvshows"))
+        *kind = COLLECTION_SERIES;
+    else
+        return false;
+    return true;
+}
+
+int jfCatalogAddViews(JfCatalog *c, const char *json)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *items = json_object_get(root, "Items");
+    if (!json_is_array(items)) {
+        json_decref(root);
+        return -1;
+    }
+    int added = 0;
+    size_t i;
+    const json_t *view;
+    json_array_foreach(items, i, view) {
+        CollectionKind kind;
+        const char *id = textOf(view, "Id");
+        if (!collectionKind(textOf(view, "CollectionType"), &kind) || !id[0] || strlen(id) >= JF_ID_MAX)
+            continue;
+        int index = libraryAddCollection(&c->library, textOf(view, "Name"), kind);
+        if (index < 0)
+            continue;
+        snprintf(c->view_ids[index], JF_ID_MAX, "%s", id);
+        added++;
+    }
+    json_decref(root);
+    return added;
+}
+
+int jfCatalogSetFavoriteSeries(JfCatalog *c, const char *json)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *items = json_object_get(root, "Items");
+    if (!json_is_array(items)) {
+        json_decref(root);
+        return -1;
+    }
+    free(c->favorite_series);
+    c->favorite_series_count = 0;
+    c->favorite_series = calloc(JF_FAVORITE_SERIES_MAX, JF_ID_MAX);
+    size_t i;
+    const json_t *series;
+    json_array_foreach(items, i, series) {
+        const char *id = textOf(series, "Id");
+        if (c->favorite_series && c->favorite_series_count < JF_FAVORITE_SERIES_MAX && isId(id, strlen(id)))
+            snprintf(c->favorite_series[c->favorite_series_count++], JF_ID_MAX, "%s", id);
+    }
+    json_decref(root);
+    return c->favorite_series_count;
+}
+
+static bool seriesIsFavorite(const JfCatalog *c, const char *series)
+{
+    for (int i = 0; series[0] && i < c->favorite_series_count; i++)
+        if (!strcmp(c->favorite_series[i], series))
+            return true;
+    return false;
 }
 
 // Room for one more user entry.
@@ -372,6 +452,9 @@ static bool addItem(JfCatalog *c, const json_t *item)
         .series_art = art,
         .runtime_ns = json_integer_value(json_object_get(item, "RunTimeTicks")) * TICKS_TO_NS,
         .blocked = (int)jfPlayability(&facts),
+        .favorite = name.is_episode ? seriesIsFavorite(c, series)
+                                    : json_is_true(json_object_get(json_object_get(item, "UserData"), "IsFavorite")),
+        .in_collection = c->adding_collection + 1,
     };
     int64_t size = json_integer_value(json_object_get(source, "Size"));
     if (!libraryAddRemote(&c->library, location, &name, size, jfParseDate(textOf(item, "DateCreated")), &remote))
@@ -415,6 +498,11 @@ bool jfCatalogSave(const JfCatalog *c, const char *file)
     if (!f)
         return false;
     fprintf(f, CACHE_MAGIC "\n");
+    for (int i = 0; i < c->library.collection_count; i++) {
+        fprintf(f, CACHE_COLLECTION "%d\t", (int)c->library.collections[i].kind);
+        writeField(f, c->library.collections[i].name);
+        fputc('\n', f);
+    }
     for (size_t i = 0; i < c->library.count; i++) {
         const LibraryItem *it = &c->library.items[i];
         const JfUserData *u = &c->users[i];
@@ -426,7 +514,7 @@ bool jfCatalogSave(const JfCatalog *c, const char *file)
         writeField(f, it->name.show);
         writeField(f, it->overview ? it->overview : "");
         writeField(f, it->series_art ? it->series_art : "");
-        fputc('\n', f);
+        fprintf(f, "%d\t%d\n", it->favorite ? 1 : 0, it->collection + 1);
     }
     return fclose(f) == 0;
 }
@@ -446,8 +534,25 @@ static int splitFields(char *line, char *fields[CACHE_FIELDS])
     return n;
 }
 
+// "#collection<TAB>kind<TAB>name<TAB>": one of the server's libraries.
+static void loadCollection(JfCatalog *c, char *line)
+{
+    char *kind = line + sizeof(CACHE_COLLECTION) - 1, *name = strchr(kind, '\t');
+    if (!name)
+        return;
+    *name++ = '\0';
+    name[strcspn(name, "\t")] = '\0';
+    int k = atoi(kind);
+    bool known = k >= COLLECTION_MIXED && k <= COLLECTION_SERIES;
+    libraryAddCollection(&c->library, name, known ? (CollectionKind)k : COLLECTION_MIXED);
+}
+
 static void loadLine(JfCatalog *c, char *line)
 {
+    if (!strncmp(line, CACHE_COLLECTION, sizeof(CACHE_COLLECTION) - 1)) {
+        loadCollection(c, line);
+        return;
+    }
     char *v[CACHE_FIELDS];
     if (splitFields(line, v) < CACHE_FIELDS || !jfIsLocation(v[11]) || !growUsers(c))
         return;
@@ -455,7 +560,7 @@ static void loadLine(JfCatalog *c, char *line)
     snprintf(name.title, sizeof(name.title), "%s", v[12]);
     snprintf(name.show, sizeof(name.show), "%s", v[13]);
     LibraryRemote remote = {.overview = v[14], .series_art = v[15], .runtime_ns = strtoll(v[2], NULL, 10),
-                            .blocked = atoi(v[3])};
+                            .blocked = atoi(v[3]), .favorite = atoi(v[16]) != 0, .in_collection = atoi(v[17])};
     if (!libraryAddRemote(&c->library, v[11], &name, strtoll(v[0], NULL, 10), strtoll(v[1], NULL, 10), &remote))
         return;
     c->users[c->library.count - 1] = (JfUserData){strtoll(v[8], NULL, 10), strtoll(v[9], NULL, 10), atoi(v[10]) != 0};
@@ -527,4 +632,167 @@ void jfMergeUserData(const JfCatalog *c, ResumeList *resume, Watched *watched)
             resumeRemember(resume, item->path, user->position_ns, item->runtime_ns);
     }
     free(order);
+}
+
+// --- Testing the connection, and finding servers ---
+
+// host: where the address's host starts; its length up to the port or path.
+static size_t hostOf(const char *server, const char **host)
+{
+    const char *scheme = strstr(server, "://");
+    *host = scheme ? scheme + 3 : server;
+    return strcspn(*host, ":/");
+}
+
+bool jfAddressIsLocal(const char *server)
+{
+    const char *host;
+    size_t n = hostOf(server, &host);
+    char name[JF_SERVER_MAX];
+    if (n == 0 || n >= sizeof(name))
+        return false;
+    memcpy(name, host, n);
+    name[n] = '\0';
+    unsigned a, b, c, d;
+    char extra;
+    if (sscanf(name, "%u.%u.%u.%u%c", &a, &b, &c, &d, &extra) == 4)
+        return a == 10 || a == 127 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31) ||
+               (a == 169 && b == 254);
+    size_t length = strlen(name);
+    bool dot_local = length > 6 && !strcmp(name + length - 6, ".local");
+    return !strchr(name, '.') || dot_local;
+}
+
+static const char *problemAdvice(NetProblem problem)
+{
+    switch (problem) {
+    case NET_NO_NAME: return "The name in the address couldn't be found. Check it, or use the server's IP address.";
+    case NET_NO_CONNECT:
+        return "Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?";
+    case NET_TIMEOUT: return "The server didn't answer in time. Is the console on the same network as the server?";
+    case NET_SECURE: return "The secure connection failed. Does the server use https on that port?";
+    case NET_CERTIFICATE:
+        return "The server's certificate isn't trusted. If the server has its own certificate, turn Certificate check off.";
+    default: return "The connection failed. Check the address and the network.";
+    }
+}
+
+bool jfConnectionVerdict(NetProblem problem, long status, const char *body, const char *server, char *out, size_t size)
+{
+    if (problem == NET_STATUS && status == HTTP_BAD_REQUEST && !strncmp(server, "http://", 7)) {
+        // What a server answers when plain http comes to its https port.
+        snprintf(out, size, "That port may want a secure connection: write https:// before the address.");
+        return false;
+    }
+    if (problem == NET_STATUS) {
+        snprintf(out, size, "That address answers (%ld), but not as Jellyfin. Check the port and the path.", status);
+        return false;
+    }
+    if (problem != NET_OK) {
+        snprintf(out, size, "%s", problemAdvice(problem));
+        return false;
+    }
+    json_t *root = body ? json_loads(body, 0, NULL) : NULL;
+    const char *product = textOf(root, "ProductName");
+    bool jellyfin = strstr(product, "Jellyfin") != NULL;
+    if (!jellyfin) {
+        snprintf(out, size, "That address answers, but it isn't Jellyfin. Check the port (usually 8096).");
+    } else {
+        bool plain = strncmp(server, "https://", 8) != 0 && !jfAddressIsLocal(server);
+        snprintf(out, size, "Jellyfin %s on %s answers.%s", textOf(root, "Version"),
+                 textOf(root, "ServerName")[0] ? textOf(root, "ServerName") : "the server",
+                 plain ? " The connection isn't encrypted: use https outside your home." : "");
+    }
+    json_decref(root);
+    return jellyfin;
+}
+
+bool jfDiscoveryParse(const char *json, const char *sender_ip, char *server, size_t server_size, char *name,
+                      size_t name_size)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const char *address = textOf(root, "Address");
+    bool https = !strncmp(address, "https://", 8);
+    bool ok = https || !strncmp(address, "http://", 7);
+    if (ok) {
+        const char *host;
+        size_t n = hostOf(address, &host);
+        const char *port = host[n] == ':' ? host + n + 1 : NULL;
+        int port_length = port ? (int)strcspn(port, "/") : 0;
+        const char *usual = https ? DEFAULT_HTTPS_PORT : DEFAULT_PORT;  // Jellyfin's own, without a port.
+        int written = snprintf(server, server_size, "%s://%s:%.*s", https ? "https" : "http", sender_ip,
+                               port ? port_length : (int)strlen(usual), port ? port : usual);
+        ok = written > 0 && (size_t)written < server_size;
+        const char *found = textOf(root, "Name");
+        snprintf(name, name_size, "%s", found[0] ? found : "Jellyfin");
+    }
+    json_decref(root);
+    return ok;
+}
+
+// --- Parts to skip ---
+
+static bool segmentKind(const char *type, JfSegmentKind *kind)
+{
+    static const struct {
+        const char *name;
+        JfSegmentKind kind;
+    } KINDS[] = {{"Intro", JF_SEGMENT_INTRO}, {"Recap", JF_SEGMENT_RECAP}, {"Preview", JF_SEGMENT_PREVIEW},
+                 {"Outro", JF_SEGMENT_OUTRO}};
+    for (size_t i = 0; i < sizeof(KINDS) / sizeof(KINDS[0]); i++)
+        if (!strcmp(type, KINDS[i].name)) {
+            *kind = KINDS[i].kind;
+            return true;
+        }
+    return false;  // Commercials and unknown kinds aren't offered.
+}
+
+#define SEGMENTS_READ_MAX 64
+
+int jfSegmentsParse(const char *json, JfSegment *out, int max)
+{
+    JfSegment all[SEGMENTS_READ_MAX];  // All of them by start, then the first max.
+    json_t *root = json_loads(json, 0, NULL);
+    int n = 0;
+    size_t i;
+    const json_t *item;
+    json_array_foreach(json_object_get(root, "Items"), i, item) {
+        JfSegment s;
+        if (n >= SEGMENTS_READ_MAX || !segmentKind(textOf(item, "Type"), &s.kind))
+            continue;
+        s.start_ns = json_integer_value(json_object_get(item, "StartTicks")) * TICKS_TO_NS;
+        s.end_ns = json_integer_value(json_object_get(item, "EndTicks")) * TICKS_TO_NS;
+        if (s.end_ns <= s.start_ns)
+            continue;
+        int at = n++;
+        while (at > 0 && all[at - 1].start_ns > s.start_ns) {  // Kept in order of start.
+            all[at] = all[at - 1];
+            at--;
+        }
+        all[at] = s;
+    }
+    json_decref(root);
+    if (n > max)
+        n = max;
+    memcpy(out, all, (size_t)(n > 0 ? n : 0) * sizeof(JfSegment));
+    return n;
+}
+
+int jfSegmentAt(const JfSegment *s, int count, int64_t pos_ns)
+{
+    for (int i = 0; i < count; i++)
+        if (pos_ns >= s[i].start_ns && pos_ns < s[i].end_ns - JF_SEGMENT_TAIL_NS)
+            return i;
+    return -1;
+}
+
+const char *jfSegmentLabel(JfSegmentKind kind)
+{
+    switch (kind) {
+    case JF_SEGMENT_INTRO: return "Skip intro";
+    case JF_SEGMENT_RECAP: return "Skip recap";
+    case JF_SEGMENT_PREVIEW: return "Skip preview";
+    case JF_SEGMENT_OUTRO: return "Skip credits";
+    }
+    return "Skip";
 }

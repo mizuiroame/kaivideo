@@ -32,6 +32,7 @@
 #include "resume.h"
 #include "sysinfo.h"
 #include "thumbs.h"
+#include "tpfetch.h"
 #include "ui_library.h"
 #include "touch.h"
 #include "ui.h"
@@ -236,6 +237,8 @@ static void *openThread(void *arg)
     app->next_audio_plus1 = 0;
     if (!remote || prepareRemote(app, audio_index, path, sizeof(path)))
         app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
+    if (app->open_result && remote && !liveIsLocation(app->playing_path))
+        app->segment_count = jfSyncFetchSegments(app->playing_path, app->segments, JF_SEGMENTS_MAX);
     if (app->open_result && remote)
         playerAttachPlan(app->open_result, &app->open_plan, app->playing_path);
     app->open_done = true;
@@ -251,9 +254,11 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
     app->open_done = false;
     app->open_asked = now;
+    app->segment_count = 0;
     app->open_cancelled = false;
     app->open_error[0] = '\0';
     app->open_result = NULL;
+    memset(&app->open_plan, 0, sizeof(app->open_plan));  // Nothing of the last video's is ended for this one.
     app->open_sound[0] = '\0';
     app->quality_applied = app->config.jf_quality;
     app->open_start_ns = app->open_at_ns;
@@ -293,8 +298,11 @@ static void beginPlaying(App *app, uint64_t now)
     app->open_from_start = false;
     app->open_at_ns = 0;
     app->playing_converted = playerIsConverted(app->player);
-    if (jfIsLocation(path))
+    if (jfIsLocation(path)) {
         jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted);
+        if (!liveIsLocation(path))
+            tpfetchStart(path);  // Its pictures for the bar, if the server made them.
+    }
     if (open_at > 0) {
         playerSeekTo(app->player, open_at, now);
     } else if (!from_start && resumeFind(&app->resume, path, &resume_at, NULL)) {
@@ -320,6 +328,21 @@ static void beginPlaying(App *app, uint64_t now)
 }
 
 // Takes the opening thread's result once it has finished.
+// An opening that won't play: what the server started for it (a conversion,
+// a channel's stream holding a tuner) is ended.
+static void releaseServerStream(App *app)
+{
+    if (!jfIsLocation(app->playing_path))
+        return;
+    if (!app->open_plan.direct && app->open_plan.play_session[0]) {
+        jfSyncSetPlayback(app->open_plan.play_session, true);  // This opening's, not the last video's.
+        jfSyncEndConversion(app->playing_path);
+    }
+    if (liveIsLocation(app->playing_path))
+        jfSyncCloseLiveStream(app->playing_path, app->open_plan.live_stream_id);
+    app->open_plan.live_stream_id[0] = '\0';
+}
+
 static void finishOpening(App *app, uint64_t now)
 {
     pthread_join(app->open_thread, NULL);
@@ -330,10 +353,12 @@ static void finishOpening(App *app, uint64_t now)
         app->player = NULL;
         thumbsPause(false);
         hlsStop();
+        releaseServerStream(app);
     } else if (app->player) {
         beginPlaying(app, now);
     } else {
         hlsStop();
+        releaseServerStream(app);
         thumbsPause(false);
         appLog("%s: %s", app->playing_path, app->open_error);
         if (!app->open_cancelled)
@@ -351,8 +376,10 @@ static void stopVideo(App *app, const char *error, bool ended)
 {
     // Remember where it was left (or, watched to the end, forget it).
     int64_t duration = playerDuration(app->player), position = ended ? duration : playerPosition(app->player);
-    resumeRemember(&app->resume, app->playing_path, position, duration);
-    bool finished = duration > 0 && duration - position < RESUME_END_MARGIN_NS;
+    bool live = appPlayingLive(app);  // A channel: nothing to resume or mark watched.
+    if (!live)
+        resumeRemember(&app->resume, app->playing_path, position, duration);
+    bool finished = !live && duration > 0 && duration - position < RESUME_END_MARGIN_NS;
     if (finished) {  // Watched, as resuming sees it.
         watchedSet(&app->watched, app->playing_path, true);
         appSaveWatched(app);
@@ -369,12 +396,16 @@ static void stopVideo(App *app, const char *error, bool ended)
             error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
             s.dropped);
     mediaFileInterruptAll();  // Nothing waits for the network now.
+    tpfetchStop();
     playerClose(app->player);
     app->player = NULL;
     hlsStop();
     if (app->playing_converted)
         jfSyncEndConversion(app->playing_path);
+    if (live)
+        jfSyncCloseLiveStream(app->playing_path, app->open_plan.live_stream_id);
     app->playing_converted = false;
+    app->live_switch = 0;  // A switch asked for as it ended isn't for the next video.
     thumbsPause(false);
     appLibraryRefreshHome(app);  // Continue watching changed.
 }
@@ -392,9 +423,10 @@ static void reopenVideo(App *app, int audio_index, int64_t position, uint64_t no
     char path[BROWSER_PATH_MAX], name[APP_NAME_MAX];
     snprintf(path, sizeof(path), "%s", app->playing_path);
     snprintf(name, sizeof(name), "%s", app->playing_name);
+    bool live = appPlayingLive(app);  // A channel opens anew at what's on now, not at a position.
     stopVideo(app, NULL, false);
-    app->open_at_ns = position;
-    app->open_from_start = position <= 0;
+    app->open_at_ns = live ? 0 : position;
+    app->open_from_start = live || position <= 0;
     app->next_audio_plus1 = audio_index + 1;
     appStartVideo(app, path, name, now);
 }
@@ -404,6 +436,21 @@ static int currentSound(const App *app)
 {
     int track = playerAudioTrack(app->player);
     return track >= 0 && track < app->open_plan.audio_count ? app->open_plan.audio[track].index : -1;
+}
+
+// L or R on a channel: the one before or after it in the guide, at once.
+static void switchChannel(App *app, uint64_t now)
+{
+    int delta = app->live_switch;
+    app->live_switch = 0;
+    char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
+    if (!appLiveNeighbor(app, delta, location, sizeof(location), name, sizeof(name)))
+        return;
+    appLog("  channel: %s", name);
+    stopVideo(app, NULL, false);
+    app->open_from_start = true;  // A channel has no place to resume.
+    if (!appStartVideo(app, location, name, now))
+        app->open_from_start = false;
 }
 
 static void reopenIfAsked(App *app, uint64_t now)
@@ -636,6 +683,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
             return true;
         }
     }
+    if (appSkipInput(app, pressed, touch, upNextShowing(app, NULL), now))
+        return true;
     if (app->hud_hidden && (touch.type == TOUCH_TAP || (pressed & HidNpadButton_Minus))) {
         app->hud_hidden = false;  // A tap brings the bar back, as - does.
         app->overlay_until = now + OVERLAY_NS;
@@ -661,10 +710,19 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     }
     if (pressed & BUTTONS_UP)
         openMenu(app, UI_MENU_PLAYBACK, now);
+    if (pressed & BUTTONS_DOWN)
+        app->stats_shown = !app->stats_shown;
     if (pressed & HidNpadButton_Y)
         openMenu(app, UI_MENU_SUBTITLES, now);
     if (pressed & HidNpadButton_X)
         openMenu(app, UI_MENU_AUDIO, now);
+    if (appPlayingLive(app)) {  // Live TV: L and R change channel; what's on now is the only place, no jumps.
+        if (pressed & (HidNpadButton_L | HidNpadButton_R)) {
+            app->live_switch = (pressed & HidNpadButton_L) ? -1 : 1;
+            return true;
+        }
+        pressed &= ~(uint64_t)(HidNpadButton_ZL | BUTTONS_LEFT | BUTTONS_RIGHT);
+    }
     if (pressed & HidNpadButton_ZL) {  // From the start.
         playerSeekTo(p, 0, now);
         app->seeks++;
@@ -681,7 +739,7 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
     }
     // A finger on the progress bar drags along it; the video goes there when it lets go.
     double fraction = 0;
-    if (touch.type == TOUCH_DRAG && overlay &&
+    if (touch.type == TOUCH_DRAG && overlay && !appPlayingLive(app) &&
         (app->scrubbing || uiTapPlayer(touch.start_x, touch.start_y, playerSubtitleCount(p) > 0,
                                        playerAudioTrackCount(p) > 1, &fraction) == TAP_SEEK)) {
         app->scrubbing = true;
@@ -701,6 +759,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         case TAP_AUDIO: openMenu(app, UI_MENU_AUDIO, now); break;
         case TAP_PLAYBACK: openMenu(app, UI_MENU_PLAYBACK, now); break;
         case TAP_SEEK:
+            if (appPlayingLive(app))
+                break;
             appLog("  seek to %.1f s (tap)", fraction * playerDuration(p) / 1e9);
             playerSeekTo(p, (int64_t)(fraction * playerDuration(p)), now);
             app->seeks++;
@@ -790,7 +850,11 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         app->waiting_since = 0;
     else if (!app->waiting_since)
         app->waiting_since = now;
-    if (app->waiting_since && now - app->waiting_since > SPINNER_DELAY_NS)
+    bool waiting = app->waiting_since && now - app->waiting_since > SPINNER_DELAY_NS;
+    appTrickplayBehind(app, waiting);
+    if (waiting && appPlayingLive(app))
+        uiDrawWaiting(spinnerAngle(now), "Tuning in...");  // Live TV waits once at the start, a moment behind the edge.
+    else if (waiting)
         uiDrawSpinner(GFX_WIDTH / 2.0f, GFX_HEIGHT / 2.0f, spinnerAngle(now));
     else if (stalled && jfIsLocation(app->playing_path))
         uiDrawWaiting(spinnerAngle(now), "Waiting for the server...");
@@ -821,6 +885,10 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     if (upNextShowing(app, &left))
         uiDrawUpNextCard(&app->library, app->next_item, (double)left / UP_NEXT_NS,
                          (int)((left + 999999999) / 1000000000), bar);
+    appTrickplayAboveBar(app, bar);
+    appSkipDraw(app, bar, upNextShowing(app, NULL));
+    appStatsUpdate(app, now);
+    appStatsDraw(app);
     uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);
     if (app->app_menu != APP_MENU_NONE) {  // The + menu over the video.
         uiLibraryResetHits();
@@ -897,12 +965,15 @@ int main(int argc, char **argv)
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
         appJellyfinUpdate(&app, now);
+        appLiveUpdate(&app, now);
         updateScreenKeeping(&app);
         thumbsUpdate();
         SysInfo sys;
         sysinfoGet(&sys, now);
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
+        if (app.player && !app.opening && app.live_switch)
+            switchChannel(&app, now);
         if (app.player && !app.opening)
             reopenIfAsked(&app, now);
         int start_ms, cushion_ms;
@@ -960,6 +1031,7 @@ int main(int argc, char **argv)
         stopVideo(&app, NULL, false);
     appletSetMediaPlaybackState(false);
     appSaveSettings(&app);
+    appLiveExit(&app);
     appLibraryExit(&app);
     watchedFree(&app.watched);
     trackPrefsFree(&app.tracks);

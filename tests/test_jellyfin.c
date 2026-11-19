@@ -148,6 +148,82 @@ static void testCatalog(void)
     jfCatalogFree(&c);
 }
 
+// The server's libraries become tabs; favorites come from the item, or from its series.
+static void testViewsAndFavorites(void)
+{
+    static const char VIEWS[] =
+        "{\"Items\":[{\"Id\":\"v1\",\"Name\":\"Películas\",\"CollectionType\":\"movies\"},"
+        "{\"Id\":\"v2\",\"Name\":\"Música\",\"CollectionType\":\"music\"},"
+        "{\"Id\":\"v3\",\"Name\":\"Programas\",\"CollectionType\":\"tvshows\"},"
+        "{\"Id\":\"v4\",\"Name\":\"Mixed\"}]}";
+    static const char FAVORITE_SERIES[] = "{\"Items\":[{\"Id\":\"eeee1111\",\"Name\":\"Prairie Road\"}]}";
+    static const char ONE_FILM[] =
+        "{\"Items\":[{\"Id\":\"ffff1111\",\"Name\":\"Kite Hill\",\"Type\":\"Movie\","
+        "\"UserData\":{\"IsFavorite\":true},"
+        "\"MediaSources\":[{\"Id\":\"ffff2222\",\"Size\":1,\"Container\":\"mp4\",\"MediaStreams\":["
+        "{\"Type\":\"Video\",\"Codec\":\"h264\",\"Width\":1280,\"BitDepth\":8,\"VideoRange\":\"SDR\"}]}]}]}";
+    JfCatalog c;
+    jfCatalogInit(&c);
+    CHECK(jfCatalogAddViews(&c, VIEWS) == 3);  // Music isn't videos.
+    CHECK(c.library.collection_count == 3 && !strcmp(c.library.collections[1].name, "Programas"));
+    CHECK(c.library.collections[0].kind == COLLECTION_FILMS && c.library.collections[1].kind == COLLECTION_SERIES &&
+          c.library.collections[2].kind == COLLECTION_MIXED);
+    CHECK(!strcmp(c.view_ids[1], "v3"));
+    CHECK(jfCatalogAddViews(&c, "nope") == -1);
+    CHECK(jfCatalogSetFavoriteSeries(&c, FAVORITE_SERIES) == 1);
+
+    c.adding_collection = 1;
+    CHECK(jfCatalogAddPage(&c, PAGE, NULL) == 4);  // Dry Creek's series, Prairie Road, is a favorite.
+    c.adding_collection = 0;
+    CHECK(jfCatalogAddPage(&c, ONE_FILM, NULL) == 1);
+    libraryBuild(&c.library);
+    int kite = libraryFind(&c.library, JF_PREFIX "ffff1111/ffff2222");
+    int dry = libraryFind(&c.library, LOCATION_B), paper = libraryFind(&c.library, LOCATION_A);
+    CHECK(kite >= 0 && c.library.items[kite].favorite && c.library.items[kite].collection == 0);
+    CHECK(dry >= 0 && c.library.items[dry].favorite && c.library.items[dry].collection == 1);
+    CHECK(paper >= 0 && !c.library.items[paper].favorite);
+
+    // All of it is kept between runs.
+    const char *file = TMP_ROOT "/jellyfin_views.txt";
+    CHECK(jfCatalogSave(&c, file));
+    JfCatalog back;
+    jfCatalogInit(&back);
+    CHECK(jfCatalogLoad(&back, file));
+    CHECK(back.library.collection_count == 3 && !strcmp(back.library.collections[0].name, "Películas") &&
+          back.library.collections[1].kind == COLLECTION_SERIES);
+    kite = libraryFind(&back.library, JF_PREFIX "ffff1111/ffff2222");
+    dry = libraryFind(&back.library, LOCATION_B);
+    CHECK(kite >= 0 && back.library.items[kite].favorite && back.library.items[kite].collection == 0);
+    CHECK(dry >= 0 && back.library.items[dry].collection == 1 && back.library.shows[back.library.items[dry].show].favorite);
+    jfCatalogFree(&back);
+    jfCatalogFree(&c);
+    remove(file);
+}
+
+// The parts of a video the server found: intro, recap, credits... in order of start.
+static void testSegments(void)
+{
+    static const char ANSWER[] =
+        "{\"Items\":[{\"Type\":\"Outro\",\"StartTicks\":13000000000,\"EndTicks\":14000000000},"
+        "{\"Type\":\"Intro\",\"StartTicks\":50000000,\"EndTicks\":900000000},"
+        "{\"Type\":\"Commercial\",\"StartTicks\":1,\"EndTicks\":2},"
+        "{\"Type\":\"Intro\",\"StartTicks\":900000000,\"EndTicks\":900000000}],\"TotalRecordCount\":4}";
+    JfSegment s[JF_SEGMENTS_MAX];
+    int n = jfSegmentsParse(ANSWER, s, JF_SEGMENTS_MAX);
+    CHECK(n == 2);  // Commercials aren't offered; an empty one is dropped.
+    CHECK(s[0].kind == JF_SEGMENT_INTRO && s[0].start_ns == 5 * S_TO_NS && s[0].end_ns == 90 * S_TO_NS);
+    CHECK(s[1].kind == JF_SEGMENT_OUTRO && s[1].start_ns == 1300 * S_TO_NS);
+    CHECK(jfSegmentsParse("nope", s, JF_SEGMENTS_MAX) == 0);
+    CHECK(jfSegmentsParse(ANSWER, s, 1) == 1 && s[0].kind == JF_SEGMENT_INTRO);
+
+    // Which one to offer at a moment: from its start until a few seconds before its end.
+    CHECK(jfSegmentAt(s, n, 4 * S_TO_NS) < 0);
+    CHECK(jfSegmentAt(s, n, 5 * S_TO_NS) == 0 && jfSegmentAt(s, n, 80 * S_TO_NS) == 0);
+    CHECK(jfSegmentAt(s, n, 89 * S_TO_NS) < 0);  // Almost over: not worth a jump.
+    CHECK(jfSegmentAt(s, n, 1350 * S_TO_NS) == 1);
+    CHECK(!strcmp(jfSegmentLabel(JF_SEGMENT_INTRO), "Skip intro") && !strcmp(jfSegmentLabel(JF_SEGMENT_OUTRO), "Skip credits"));
+}
+
 static void testSession(void)
 {
     const char *file = TMP_ROOT "/jellyfin_session.txt";
@@ -240,6 +316,13 @@ static void testHlsLists(void)
     CHECK(strstr(p.text, HLS_LOCAL_PREFIX "1.ts\n") && strstr(p.text, "#EXT-X-ENDLIST") && !strstr(p.text, "k=1"));
     hlsPlaylistFree(&p);
     CHECK(!hlsPlaylistParse("#EXTM3U\n", "http://h/a", 0, &p));
+    CHECK(hlsPlaylistParse(LIST, "http://h:1/a.m3u8", 0, &p) && p.ended);
+    CHECK(p.end_ns == 6000000000ll && p.longest_ns == 3000000000ll);
+    hlsPlaylistFree(&p);
+    // Live TV: no end yet, so it's read again as it grows.
+    CHECK(hlsPlaylistParse("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:8.3,\nhls/0.ts\n", "http://h/a.m3u8", 0, &p) &&
+          !p.ended && p.count == 1);
+    hlsPlaylistFree(&p);
 
     static const char THREE[] = "#EXTM3U\n#EXTINF:3.0,\n0.ts\n#EXTINF:3.0,\n1.ts\n#EXTINF:3.0,\n2.ts\n#EXT-X-ENDLIST\n";
     int first = -1, last = -1;
@@ -270,8 +353,68 @@ static void testFit(void)
     CHECK(one[0] == 255);
 }
 
+// Each way a connection can fail says what to check; a good answer says who answered.
+static void testConnectionVerdict(void)
+{
+    char out[JF_VERDICT_MAX];
+    static const char INFO[] = "{\"ServerName\":\"den\",\"Version\":\"10.11.11\",\"ProductName\":\"Jellyfin Server\"}";
+    CHECK(jfConnectionVerdict(NET_OK, 200, INFO, "http://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(strstr(out, "den") && strstr(out, "10.11.11") && !strstr(out, "encrypted"));
+    // Over the internet without https: it works, and says it isn't private.
+    CHECK(jfConnectionVerdict(NET_OK, 200, INFO, "http://media.example.org:8096", out, sizeof(out)));
+    CHECK(strstr(out, "isn't encrypted") != NULL);
+    CHECK(jfConnectionVerdict(NET_OK, 200, INFO, "https://media.example.org", out, sizeof(out)));
+    CHECK(!strstr(out, "encrypted"));
+
+    CHECK(!jfConnectionVerdict(NET_OK, 200, "<html>router</html>", "http://192.168.0.1", out, sizeof(out)));
+    CHECK(strstr(out, "isn't Jellyfin") != NULL);
+    CHECK(!jfConnectionVerdict(NET_STATUS, 404, "", "http://192.168.0.20:80", out, sizeof(out)));
+    CHECK(strstr(out, "404") != NULL && !strstr(out, "https://"));
+    // Plain http to a port that wants https: say how to write it.
+    CHECK(!jfConnectionVerdict(NET_STATUS, 400, "", "http://192.168.0.20:8921", out, sizeof(out)));
+    CHECK(strstr(out, "https://") != NULL);
+    CHECK(!jfConnectionVerdict(NET_NO_NAME, 0, NULL, "http://nas.lan:8096", out, sizeof(out)));
+    CHECK(strstr(out, "name") != NULL);
+    CHECK(!jfConnectionVerdict(NET_NO_CONNECT, 0, NULL, "http://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(strstr(out, "port") != NULL);
+    CHECK(!jfConnectionVerdict(NET_TIMEOUT, 0, NULL, "http://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(strstr(out, "in time") != NULL);
+    CHECK(!jfConnectionVerdict(NET_CERTIFICATE, 0, NULL, "https://den.lan", out, sizeof(out)));
+    CHECK(strstr(out, "Certificate check") != NULL);
+    CHECK(!jfConnectionVerdict(NET_SECURE, 0, NULL, "https://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(strstr(out, "https") != NULL);
+
+    CHECK(jfAddressIsLocal("http://192.168.0.20:8096") && jfAddressIsLocal("http://10.0.0.5"));
+    CHECK(jfAddressIsLocal("http://172.20.1.1:8096") && !jfAddressIsLocal("http://172.40.1.1:8096"));
+    CHECK(jfAddressIsLocal("http://den.local:8096") && jfAddressIsLocal("http://den:8096"));
+    CHECK(!jfAddressIsLocal("http://media.example.org") && !jfAddressIsLocal("https://8.8.8.8"));
+}
+
+// A server's answer to the network-wide question: its port and scheme, at the
+// address the answer came from (in Docker it gives its own inner address).
+static void testDiscovery(void)
+{
+    char server[JF_SERVER_MAX], name[JF_NAME_MAX];
+    CHECK(jfDiscoveryParse("{\"Address\":\"http://172.18.0.11:8096\",\"Id\":\"d477\",\"Name\":\"den\"}",
+                           "192.168.0.20", server, sizeof(server), name, sizeof(name)));
+    CHECK(!strcmp(server, "http://192.168.0.20:8096") && !strcmp(name, "den"));
+    CHECK(jfDiscoveryParse("{\"Address\":\"https://nas.lan:8920\",\"Name\":\"\"}", "10.0.0.9", server,
+                           sizeof(server), name, sizeof(name)));
+    CHECK(!strcmp(server, "https://10.0.0.9:8920") && !strcmp(name, "Jellyfin"));
+    CHECK(jfDiscoveryParse("{\"Address\":\"http://172.18.0.11\",\"Name\":\"x\"}", "10.0.0.9", server, sizeof(server),
+                           name, sizeof(name)));
+    CHECK(!strcmp(server, "http://10.0.0.9:8096"));  // No port: Jellyfin's usual.
+    CHECK(!jfDiscoveryParse("not json", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    CHECK(!jfDiscoveryParse("{\"Name\":\"x\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    CHECK(!jfDiscoveryParse("{\"Address\":\"ftp://x:1\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+}
+
 void testJellyfin(void)
 {
+    testConnectionVerdict();
+    testDiscovery();
+    testViewsAndFavorites();
+    testSegments();
     testPlan();
     testHlsLists();
     testFit();

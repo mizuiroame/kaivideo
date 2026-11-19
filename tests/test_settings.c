@@ -18,10 +18,22 @@ void testSettings(void)
     CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, rows) == 7 && rows[1] == SETTING_OPEN_JELLYFIN &&
           rows[4] == SETTING_AUTOPLAY && rows[5] == SETTING_OPEN_DISPLAY);
     // Signing in is offered until it's done, and signing out only then.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, rows) == 3 && rows[1] == SETTING_JF_CODE &&
-          rows[2] == SETTING_JF_PASSWORD);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, rows) == 3 && rows[1] == SETTING_JF_QUALITY &&
-          rows[2] == SETTING_JF_SIGN_OUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, rows) == 6 && rows[1] == SETTING_JF_FIND &&
+          rows[2] == SETTING_JF_TEST && rows[3] == SETTING_JF_CODE && rows[4] == SETTING_JF_PASSWORD &&
+          rows[5] == SETTING_JF_CERTIFICATE);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, rows) == 5 && rows[1] == SETTING_JF_QUALITY &&
+          rows[2] == SETTING_JF_TEST && rows[3] == SETTING_JF_CERTIFICATE && rows[4] == SETTING_JF_SIGN_OUT);
+    // Certificates are checked unless turned off, for a server with its own.
+    Config cert;
+    configDefaults(&cert);
+    char shown[32];
+    settingValue(&cert, SETTING_JF_CERTIFICATE, shown, sizeof(shown));
+    CHECK(cert.jf_check_certificate && !strcmp(shown, "On") && settingIsChoice(SETTING_JF_CERTIFICATE));
+    settingStep(&cert, SETTING_JF_CERTIFICATE, 1);
+    settingValue(&cert, SETTING_JF_CERTIFICATE, shown, sizeof(shown));
+    CHECK(!cert.jf_check_certificate && !strcmp(shown, "Off: any certificate"));
+    CHECK(configReadLine(&cert, "jellyfin_check_certificate=1") && cert.jf_check_certificate);
+    CHECK(configReadLine(&cert, "jellyfin_check_certificate=0") && !cert.jf_check_certificate);
     Config quality;
     configDefaults(&quality);
     CHECK(settingQualityBitrate(&quality) == 25000000);  // Auto.

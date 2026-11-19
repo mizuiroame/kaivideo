@@ -23,6 +23,11 @@ static void freeBuilt(Library *lib)
     free(lib->shows);
     free(lib->films);
     free(lib->recent);
+    for (int i = 0; i < lib->collection_count; i++) {
+        free(lib->collections[i].refs);
+        lib->collections[i].refs = NULL;
+        lib->collections[i].count = 0;
+    }
     lib->shows = NULL;
     lib->films = NULL;
     lib->recent = NULL;
@@ -61,6 +66,7 @@ bool libraryAdd(Library *lib, const char *path, int64_t size, int64_t added)
     item->size = size;
     item->added = added;
     item->show = -1;
+    item->collection = -1;
     return true;
 }
 
@@ -76,7 +82,72 @@ bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int
     item->blocked = remote->blocked;
     item->overview = remote->overview && remote->overview[0] ? strdup(remote->overview) : NULL;
     item->series_art = remote->series_art && remote->series_art[0] ? strdup(remote->series_art) : NULL;
+    item->favorite = remote->favorite;
+    int collection = remote->in_collection - 1;
+    item->collection = collection >= 0 && collection < lib->collection_count ? collection : -1;
     return true;
+}
+
+int libraryAddCollection(Library *lib, const char *name, CollectionKind kind)
+{
+    if (!name || !name[0] || lib->collection_count >= LIBRARY_COLLECTIONS)
+        return -1;
+    LibraryCollection *c = &lib->collections[lib->collection_count];
+    snprintf(c->name, sizeof(c->name), "%s", name);
+    c->kind = kind;
+    return lib->collection_count++;
+}
+
+// Series by name (as built), then films by title, of those that pass.
+static size_t gatherRefs(const Library *lib, LibraryRef *out, size_t max,
+                         bool (*passes)(const Library *, LibraryRef, int), int arg)
+{
+    size_t n = 0;
+    for (size_t i = 0; i < lib->show_count && n < max; i++)
+        if (passes(lib, (LibraryRef){true, (int)i}, arg))
+            out[n++] = (LibraryRef){true, (int)i};
+    for (size_t i = 0; i < lib->film_count && n < max; i++)
+        if (passes(lib, (LibraryRef){false, lib->films[i]}, arg))
+            out[n++] = (LibraryRef){false, lib->films[i]};
+    return n;
+}
+
+static bool inCollection(const Library *lib, LibraryRef r, int collection)
+{
+    return (r.is_show ? lib->shows[r.index].collection : lib->items[r.index].collection) == collection;
+}
+
+static bool isFavorite(const Library *lib, LibraryRef r, int unused)
+{
+    (void)unused;
+    return r.is_show ? lib->shows[r.index].favorite : lib->items[r.index].favorite;
+}
+
+size_t libraryCollectionRefs(const Library *lib, int collection, LibraryRef *out, size_t max)
+{
+    if (collection < 0 || collection >= lib->collection_count)
+        return 0;
+    return gatherRefs(lib, out, max, inCollection, collection);
+}
+
+size_t libraryFavorites(const Library *lib, LibraryRef *out, size_t max)
+{
+    return gatherRefs(lib, out, max, isFavorite, 0);
+}
+
+void librarySetFavorite(Library *lib, LibraryRef ref, bool favorite)
+{
+    if (!ref.is_show) {
+        if (ref.index >= 0 && (size_t)ref.index < lib->count)
+            lib->items[ref.index].favorite = favorite;
+        return;
+    }
+    if (ref.index < 0 || (size_t)ref.index >= lib->show_count)
+        return;
+    LibraryShow *show = &lib->shows[ref.index];
+    show->favorite = favorite;
+    for (int i = 0; i < show->count; i++)
+        lib->items[show->episodes[i]].favorite = favorite;
 }
 
 // --- Building ---
@@ -153,6 +224,7 @@ static void buildShows(Library *lib, Keyed *episodes, size_t count)
         show->episodes = malloc((end - i) * sizeof(int));
         if (!show->episodes)
             break;
+        show->collection = lib->items[episodes[i].item].collection;
         int last_season = -1;
         for (size_t j = i; j < end; j++) {
             LibraryItem *item = &lib->items[episodes[j].item];
@@ -164,6 +236,7 @@ static void buildShows(Library *lib, Keyed *episodes, size_t count)
             }
             if (item->added > show->added)
                 show->added = item->added;
+            show->favorite = show->favorite || item->favorite;
         }
         commonName(lib, show, show->name, sizeof(show->name));
         lib->show_count++;
@@ -215,6 +288,13 @@ static void buildLocked(Library *lib)
             j--;
         }
         lib->recent[j] = r;
+    }
+    for (int c = 0; c < lib->collection_count; c++) {
+        LibraryCollection *collection = &lib->collections[c];
+        collection->refs = malloc((lib->film_count + lib->show_count + 1) * sizeof(LibraryRef));
+        collection->count = collection->refs ? libraryCollectionRefs(lib, c, collection->refs,
+                                                                     lib->film_count + lib->show_count)
+                                             : 0;
     }
 }
 

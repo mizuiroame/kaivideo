@@ -17,6 +17,7 @@
 #define READERS 2             // The picture's and the sound's.
 #define AHEAD 4               // Segments kept ready from where each reads.
 #define CUSHION_NS 4000000000ll  // Video in memory before playback starts or goes on from a jump.
+#define LIVE_MARGIN_NS 2000000000ll  // Live TV: this much more than a segment ahead before starting.
 #define IO_BUFFER (64 * 1024)
 #define PLAYLIST_MAX (8u * 1024 * 1024)
 #define SEGMENT_MAX (96u * 1024 * 1024)
@@ -26,6 +27,8 @@
 #define RETRY_WAIT_NS 500000000L
 #define WAIT_STEP_NS 50000000L
 #define NS_PER_S 1000000000L
+#define REREAD_NS 3000000000ull  // A growing list is read again this often (its segments are ~8 s).
+#define LIVE_STALL_NS 30000000000ull  // A live list that stops growing this long: the channel stopped.
 
 typedef enum { SLOT_EMPTY, SLOT_LOADING, SLOT_READY } SlotState;
 
@@ -55,6 +58,10 @@ static struct {
     unsigned interrupts;
     volatile bool abort_fetch;
     bool stop, failed;
+    char media_url[HLS_URL_MAX];  // Read again while the list grows (live TV).
+    int64_t base_ns;              // The list's start: set at start, read without the lock.
+    uint64_t grew_ns;             // When a live list last grew.
+    uint64_t next_reread_ns;
 } g;
 
 bool hlsIsLocation(const char *path)
@@ -120,15 +127,80 @@ static bool fetchSegment(int index, NetResponse *r)
     return false;
 }
 
+static uint64_t monotonicNs(void)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_MONOTONIC, &t);
+    return (uint64_t)t.tv_sec * NS_PER_S + (uint64_t)t.tv_nsec;
+}
+
+static bool getText(const char *url, NetResponse *r);
+
+// A live list: read it again, and take what was added (segments keep their numbers). Under the lock.
+static void reread(void)
+{
+    g.next_reread_ns = monotonicNs() + REREAD_NS;
+    if (!g.stop)
+        g.abort_fetch = false;  // Left set by a fetch called off; stopping sets it again.
+    pthread_mutex_unlock(&g.lock);
+    NetResponse media;
+    HlsPlaylist list;
+    bool ok = getText(g.media_url, &media);
+    if (ok) {
+        ok = hlsPlaylistParse(media.data, g.media_url, 0, &list);
+        netResponseFree(&media);
+    }
+    pthread_mutex_lock(&g.lock);
+    uint64_t now = monotonicNs();
+    if (ok && list.count > g.list.count)
+        g.grew_ns = now;
+    if (ok && list.count >= g.list.count) {
+        bool ended = list.ended;
+        hlsPlaylistFree(&g.list);
+        g.list = list;
+        g.list.ended = ended;
+        pthread_cond_broadcast(&g.wake);
+    } else if (ok) {
+        hlsPlaylistFree(&list);  // Shorter: not the same list any more; kept as it was.
+    }
+    if (!g.list.ended && now - g.grew_ns > LIVE_STALL_NS) {
+        g.failed = true;  // Readers waiting for more give up: playback ends, and says so.
+        pthread_cond_broadcast(&g.wake);
+    }
+}
+
+// Waits for something to do; a growing list is read again on time. Under the lock.
+static void waitForWork(void)
+{
+    if (g.list.ended) {
+        pthread_cond_wait(&g.wake, &g.lock);
+        return;
+    }
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    uint64_t now = monotonicNs(), left = g.next_reread_ns > now ? g.next_reread_ns - now : 0;
+    until.tv_sec += (time_t)(left / NS_PER_S);
+    until.tv_nsec += (long)(left % NS_PER_S);
+    if (until.tv_nsec >= NS_PER_S) {
+        until.tv_sec++;
+        until.tv_nsec -= NS_PER_S;
+    }
+    pthread_cond_timedwait(&g.wake, &g.lock, &until);
+}
+
 static void *fetchThread(void *arg)
 {
     (void)arg;
     pthread_mutex_lock(&g.lock);
     while (!g.stop) {
+        if (!g.list.ended && monotonicNs() >= g.next_reread_ns) {
+            reread();
+            continue;
+        }
         int index = g.failed ? -1 : nextSegment();
         int slot = index >= 0 ? freeSlot() : -1;
         if (slot < 0) {
-            pthread_cond_wait(&g.wake, &g.lock);
+            waitForWork();
             continue;
         }
         free(g.slots[slot].data);
@@ -156,7 +228,8 @@ static void *fetchThread(void *arg)
 
 static bool getText(const char *url, NetResponse *r)
 {
-    NetRequest request = {.url = url, .authorization = g.authorization, .timeout_s = PLAYLIST_TIMEOUT_S};
+    NetRequest request = {.url = url, .authorization = g.authorization, .cancel = &g.abort_fetch,  // Stopping cuts it short.
+                          .timeout_s = PLAYLIST_TIMEOUT_S};
     return netFetchText(g.net, &request, PLAYLIST_MAX, r);
 }
 
@@ -173,12 +246,16 @@ static bool readPlaylists(const char *master_url, int64_t start_ns)
         return false;
     ok = hlsPlaylistParse(media.data, url, start_ns, &g.list);
     netResponseFree(&media);
+    snprintf(g.media_url, sizeof(g.media_url), "%s", url);
+    g.base_ns = g.list.base_ns;
+    g.grew_ns = monotonicNs();
+    g.next_reread_ns = monotonicNs() + REREAD_NS;
     return ok;
 }
 
 int64_t hlsBaseNs(void)
 {
-    return g.running ? g.list.base_ns : 0;
+    return g.running ? g.base_ns : 0;
 }
 
 bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, char *error, size_t error_size)
@@ -233,16 +310,30 @@ bool hlsFailed(void)
     return failed;
 }
 
+bool hlsIsLive(void)
+{
+    if (!g.running)
+        return false;
+    pthread_mutex_lock(&g.lock);
+    bool live = !g.list.ended;
+    pthread_mutex_unlock(&g.lock);
+    return live;
+}
+
 bool hlsCushionReady(int64_t from_ns)
 {
     if (!g.running)
         return true;
     pthread_mutex_lock(&g.lock);
+    // Live TV is made as it plays: a segment as long as the longest, and a
+    // margin, must be there already, or playback catches up with the server.
+    bool live = !g.list.ended;
+    int64_t span = live ? g.list.longest_ns + LIVE_MARGIN_NS : CUSHION_NS;
     int first, last;
-    hlsPlaylistSpan(&g.list, from_ns, CUSHION_NS, &first, &last);
+    hlsPlaylistSpan(&g.list, from_ns, span, &first, &last);
     if (last > first + AHEAD - 1)
         last = first + AHEAD - 1;  // Only this many are fetched ahead.
-    bool ready = true;
+    bool ready = !live || from_ns + span <= g.list.end_ns;
     for (int i = first; i <= last && ready; i++) {
         int slot = findSlot(i);
         ready = slot >= 0 && g.slots[slot].state == SLOT_READY;
@@ -250,6 +341,24 @@ bool hlsCushionReady(int64_t from_ns)
     ready = ready || g.failed;
     pthread_mutex_unlock(&g.lock);
     return ready;
+}
+
+double hlsSecondsReady(int64_t from_ns)
+{
+    if (!g.running)
+        return -1;
+    pthread_mutex_lock(&g.lock);
+    int first, last;
+    hlsPlaylistSpan(&g.list, from_ns, 1, &first, &last);
+    int64_t until = from_ns;
+    for (int i = first; i < g.list.count; i++) {
+        int slot = findSlot(i);
+        if (slot < 0 || g.slots[slot].state != SLOT_READY)
+            break;
+        until = i + 1 < g.list.count ? g.list.starts_ns[i + 1] : until;  // The last one's end isn't known.
+    }
+    pthread_mutex_unlock(&g.lock);
+    return until > from_ns ? (until - from_ns) / 1e9 : 0.0;
 }
 
 // --- What FFmpeg reads ---

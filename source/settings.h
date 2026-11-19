@@ -26,6 +26,9 @@ typedef enum {
     SETTING_JF_PASSWORD,    // Signs in with a user name and password.
     SETTING_JF_SIGN_OUT,    // Signs out.
     SETTING_JF_QUALITY,     // The most a video may use, from the server.
+    SETTING_JF_FIND,        // Looks for servers on the network.
+    SETTING_JF_TEST,        // Tries the server, step by step.
+    SETTING_JF_CERTIFICATE, // Whether an https server's certificate must be trusted.
     SETTING_COUNT,
 } SettingRow;
 
@@ -48,6 +51,7 @@ typedef struct {
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the Jellyfin server.
     int jf_quality;                      // An index in the quality list; 0 is Auto.
+    bool jf_check_certificate;           // Off: an https server's own certificate is taken too.
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.

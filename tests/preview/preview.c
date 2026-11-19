@@ -21,6 +21,8 @@
 #include "theme.h"
 #include "thumbs.h"
 #include "ui_settings.h"
+#include "ui_live.h"
+#include "ui_stats.h"
 #include "ui_style.h"
 #include "sample_paths.h"
 
@@ -32,6 +34,7 @@ struct Player {
     int audio_count, subtitle_count;
     int speed, audio_delay, subtitle_delay;
     int chapter_count;
+    bool live;  // Live TV: no length.
 };
 
 static const char *const AUDIO[] = {"English - DD5.1", "Español (Latinoamérica) - DD5.1", "Commentary - AAC2.0"};
@@ -42,7 +45,7 @@ static const char *const CHAPTERS[] = {"Cold Open", "The Harbor", "Night Shift",
 
 bool playerPaused(const Player *p) { return p->paused; }
 int64_t playerPosition(const Player *p) { (void)p; return 1325ll * 1000000000; }
-int64_t playerDuration(const Player *p) { (void)p; return 2710ll * 1000000000; }
+int64_t playerDuration(const Player *p) { return p->live ? 0 : 2710ll * 1000000000; }
 const char *playerVideoInfo(const Player *p) { (void)p; return "H.264 1920x1080, 24 fps"; }
 const char *playerAudioInfo(const Player *p) { (void)p; return "ac3, 48 kHz, 6 channels"; }
 int playerAudioTrackCount(const Player *p) { return p->audio_count; }
@@ -118,6 +121,93 @@ static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu
     uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", m->open ? NULL : note, -1);
     uiDrawTrackMenu(p, kind, m, &g_config);
     save(name);
+}
+
+// The Live TV tab, and a channel playing (LIVE in the bar).
+static void liveScene(Player *p)
+{
+    static const char *const NAMES[] = {"KaiVideo Test One", "KaiVideo Test Two", "Harbor News 24", "Kite Hill Sports"};
+    static const char *const NOW[] = {"The Quiet Workshop", "Kite Hill Live", "Evening Report", "Regional Final"};
+    static const char *const NEXT[] = {"Paper Boats", "Morning Lanterns", "Harbor Weather", "Post-Game"};
+    LiveChannel channels[4] = {0};
+    const int64_t now = 1795082400 + 600;
+    for (int i = 0; i < 4; i++) {
+        snprintf(channels[i].id, sizeof(channels[i].id), "c%d", i);
+        snprintf(channels[i].name, sizeof(channels[i].name), "%s", NAMES[i]);
+        snprintf(channels[i].number, sizeof(channels[i].number), "%d", i + 1);
+        channels[i].now = (LiveProgram){.start = now - 600 - i * 300, .end = now + 1200 + i * 300};
+        snprintf(channels[i].now.title, sizeof(channels[i].now.title), "%s", NOW[i]);
+        channels[i].next = (LiveProgram){.start = channels[i].now.end, .end = channels[i].now.end + 1800};
+        snprintf(channels[i].next.title, sizeof(channels[i].next.title), "%s", NEXT[i]);
+    }
+    channels[3].now.title[0] = '\0';
+    LiveGuide guide = {channels, 4};
+    static LibView view;
+    static Library lib;   // The tab doesn't need videos.
+    static Home home;
+    static ResumeList resume;
+    libraryInit(&lib, "jellyfin:");
+    libviewInit(&view);
+    libviewSetTabs(&view, &lib, true, true);
+    view.tab = TAB_LIVE;
+    libviewLiveMove(&view, 4, 1);
+    uiLibrarySetSource("Jellyfin");
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
+    uiDrawFooterHelp("[A] watch  [^v] channel  [ZL][ZR] tabs  [-] settings  [+] menu");
+    save("live_tab");
+    if (uiLibraryTap(GFX_WIDTH / 2, 84 + 84 + 40).kind != LIBHIT_LIVE_ROW) {
+        printf("TOUCH: live_tab: a channel doesn't answer a tap\n");
+        g_problems++;
+    }
+    uiLibrarySetSource("");
+    p->live = true;
+    begin();
+    drawPicture();
+    uiDrawPlayerStatus();
+    uiDrawPlayerBar(p, "KaiVideo Test One  \xC2\xB7  The Quiet Workshop", NULL, -1);
+    save("player_live");
+    p->live = false;
+}
+
+// "Skip intro" over a playing video, with the bar and without it.
+static void skipScene(Player *p)
+{
+    begin();
+    drawPicture();
+    uiDrawPlayerStatus();
+    uiDrawPlayerBar(p, "Rook - S01E03 - Reckoning.mkv", NULL, -1);
+    uiDrawSkipButton("Skip intro", true);
+    save("player_skip");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 30, GFX_HEIGHT - UI_PLAYER_BAR_H - 90).kind != LIBHIT_SKIP) {
+        printf("TOUCH: player_skip: the skip button doesn't answer a tap\n");
+        g_problems++;
+    }
+    begin();
+    drawPicture();
+    uiDrawSkipButton("Skip credits", false);
+    save("player_skip_nobar");
+}
+
+// The statistics panel (↓) over a converted video.
+static void statsScene(void)
+{
+    StatsInfo info = {
+        .source = STATS_CONVERTED,
+        .quality = "8 Mb/s",
+        .video = "H.264 1920x1080, 24 fps",
+        .sound = "aac, 48 kHz, 2 channels",
+        .rates = {.valid = true, .fps = 23.98, .late_percent = 0.4, .mbps = 7.84},
+        .ahead_s = 9.5,
+        .ahead_mb = -1,
+        .speed_permille = 1250,
+    };
+    char lines[STATS_LINES][STATS_LINE_MAX];
+    begin();
+    drawPicture();
+    uiDrawStats(lines, statsFormat(&info, lines));
+    save("player_stats");
 }
 
 // Every row drawn in an open list must answer a tap with its own index.
@@ -251,12 +341,54 @@ static void checkTabTaps(const char *name)
         if (hit.kind == LIBHIT_TAB)
             found |= 1 << hit.a;
         else if (hit.kind == LIBHIT_MENU)
-            found |= 1 << TAB_COUNT;
+            found |= 1 << g_view.tab_count;
     }
-    if (found != (1 << (TAB_COUNT + 1)) - 1) {
+    if (found != (1 << (g_view.tab_count + 1)) - 1) {
         printf("TOUCH: %s: a tab or the Folder button doesn't answer a tap\n", name);
         g_problems++;
     }
+}
+
+// A Jellyfin server's libraries as tabs: the films in one, the series in another.
+static void collectionScene(void)
+{
+    static Library lib;
+    libraryInit(&lib, "jellyfin:");
+    int films = libraryAddCollection(&lib, "Pel\xC3\xAD" "culas", COLLECTION_FILMS);
+    int shows = libraryAddCollection(&lib, "Programas", COLLECTION_SERIES);
+    for (size_t i = 0; i < g_lib.count; i++) {
+        const LibraryItem *it = &g_lib.items[i];
+        LibraryRemote remote = {.in_collection = (it->show >= 0 ? shows : films) + 1, .favorite = i % 5 == 0};
+        libraryAddRemote(&lib, it->path, &it->name, it->size, it->added, &remote);
+    }
+    libraryBuild(&lib);
+    static LibView view;
+    static Home home;
+    libviewInit(&view);
+    homeCompute(&home, &lib, &g_resume, &g_watched);
+    libviewSetTabs(&view, &lib, true, false);
+    uiLibrarySetSource("Jellyfin");
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
+    uiDrawFooterHelp(HOME_HELP);
+    save("server_home");
+    libviewNextTab(&view, 1);
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
+    uiDrawFooterHelp(HOME_HELP);
+    save("server_films");
+    int found = 0;
+    for (int x = 0; x < GFX_WIDTH; x += 4) {
+        LibHit hit = uiLibraryTap(x, 34);
+        if (hit.kind == LIBHIT_TAB)
+            found |= 1 << hit.a;
+    }
+    if (found != (1 << view.tab_count) - 1) {
+        printf("TOUCH: server_films: a library's tab doesn't answer a tap\n");
+        g_problems++;
+    }
+    uiLibrarySetSource("");
+    libraryFree(&lib);
 }
 
 static void libraryScenes(void)
@@ -266,6 +398,7 @@ static void libraryScenes(void)
     makeFakeThumbs();
     uiLibrarySetThumbnails(false);  // The color cards first.
     buildSampleLibrary();
+    collectionScene();
     libraryScene("lib_home", true, NULL, NULL);
     checkTabTaps("lib_home");
     LibHit hit = uiLibraryTap(MARGIN + 20, 80 + 36 + 40);
@@ -286,6 +419,15 @@ static void libraryScenes(void)
         if (strstr(g_lib.shows[s].name, "Prairie"))
             libviewOpenShow(&g_view, &g_lib, (int)s, -1);
     libviewShowMove(&g_view, &g_lib, 1, 3);
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawShowFavorite(false);
+    uiDrawFooterHelp("[A] play  [X] watched  [R] favorite  [<>] season  [B] back  [ZL][ZR] tabs  [+] menu");
+    save("lib_show_server");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, UI_TAB_BAR_H + 38).kind != LIBHIT_FAVORITE) {
+        printf("TOUCH: lib_show_server: the favorite button doesn't answer a tap\n");
+        g_problems++;
+    }
     libraryScene("lib_show", true, NULL, NULL);
     if (uiLibraryTap(MARGIN + 10, 100).kind != LIBHIT_BACK) {
         printf("TOUCH: lib_show: Back doesn't answer a tap\n");
@@ -382,8 +524,8 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
-    top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
-    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 1 * 48 + 20);
+    top = (GFX_HEIGHT - (76 + 6 * 48 + 60)) / 2 + 76;
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
     if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
         g_problems++;
@@ -411,9 +553,11 @@ static void libraryScenes(void)
     film->overview = strdup("When the last road out of the valley closes, a fire lookout and a retired surveyor have "
                             "one week to find the family who stayed behind, before the ash reaches the river.");
     film->runtime_ns = 6720ll * 1000000000;
-    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "");
-    uiDrawFooterHelp("[A] play  [X] watched  [B] back");
+    film->favorite = true;
+    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "", true);
+    uiDrawFooterHelp("[A] play  [Y] from the start  [X] watched  [R] favorite  [B] back");
     save("details");
+    film->favorite = false;
     bool played = false, marked = false;
     for (int y = 0; y < GFX_HEIGHT; y += 4)
         for (int x = 0; x < GFX_WIDTH; x += 8) {
@@ -468,7 +612,8 @@ static void libraryScenes(void)
     b.cursor = 1;
     begin();
     gfxClear(COLOR_BG);
-    uiDrawTabBar(TAB_FILES, NULL);
+    g_view.tab = TAB_FILES;
+    uiDrawTabBar(&g_view, &g_lib, NULL);
     uiDrawBrowser(&b, &g_resume, BROWSE_FILES);
     uiDrawFooterStrip();
     uiDrawFooterHelp("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
@@ -506,6 +651,10 @@ int main(int argc, char **argv)
 
     p.paused = true;
     playerScene("player_paused", &p, UI_MENU_AUDIO, &closed, NULL, NULL);
+
+    statsScene();
+    skipScene(&p);
+    liveScene(&p);
 
     Menu audio;
     menuOpen(&audio, p.audio_count, 0, p.audio);

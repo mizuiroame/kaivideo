@@ -140,8 +140,11 @@ bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, 
                 return false;
             }
             out->starts_ns[index] = at;
-            if (length_line)
-                at += (int64_t)(strtod(length_line + sizeof(EXTINF) - 1, NULL) * NS_PER_S);
+            int64_t length = length_line ? (int64_t)(strtod(length_line + sizeof(EXTINF) - 1, NULL) * NS_PER_S) : 0;
+            at += length;
+            out->end_ns = at;
+            if (length > out->longest_ns)
+                out->longest_ns = length;
             if (index >= first) {
                 if (length_line)
                     addText(out, &used, length_line, length_size);
@@ -155,6 +158,7 @@ bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, 
     }
     out->text[used] = '\0';
     out->size = used;
+    out->ended = strstr(playlist, "#EXT-X-ENDLIST") != NULL;
     return true;
 }
 

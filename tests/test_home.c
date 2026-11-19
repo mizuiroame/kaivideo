@@ -32,6 +32,16 @@ void testHome(void)
     CHECK(!home.rows[0].items[0].is_show && lib.items[home.rows[0].items[0].index].name.episode == 2);
     CHECK(strcmp(homeRowTitle(HOME_CONTINUE), "Continue watching") == 0);
 
+    // Favorites come right after Continue watching: series, then films.
+    librarySetFavorite(&lib, (LibraryRef){false, lib.films[0]}, true);
+    librarySetFavorite(&lib, (LibraryRef){true, 0}, true);
+    homeCompute(&home, &lib, &resume, NULL);
+    CHECK(home.count == 5 && home.rows[1].kind == HOME_FAVORITES && home.rows[1].count == 2);
+    CHECK(home.rows[1].items[0].is_show && !home.rows[1].items[1].is_show);
+    CHECK(strcmp(homeRowTitle(HOME_FAVORITES), "Favorites") == 0);
+    librarySetFavorite(&lib, (LibraryRef){false, lib.films[0]}, false);
+    librarySetFavorite(&lib, (LibraryRef){true, 0}, false);
+
     // An empty library: no rows.
     static Library empty;
     libraryInit(&empty, "sdmc:/Nothing");

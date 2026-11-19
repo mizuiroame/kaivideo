@@ -365,6 +365,31 @@ MediaFile *mediaFileOpen(const char *location)
     return f;
 }
 
+double mediaFileMegabytesReady(void)
+{
+    pthread_mutex_lock(&g_shared_lock);
+    Remote *r = g_shared;
+    double megabytes = -1;
+    if (r) {
+        pthread_mutex_lock(&r->lock);
+        int64_t blocks[REMOTE_READERS], from = INT64_MAX;
+        int count = readerBlocks(r, blocks);
+        for (int i = 0; i < count; i++)
+            from = blocks[i] < from ? blocks[i] : from;
+        size_t bytes = 0;
+        for (int64_t b = from; count; b++) {
+            int slot = blockFind(r->slots, BLOCK_SLOTS, b);
+            if (slot < 0 || r->slots[slot].state != BLOCK_READY)
+                break;
+            bytes += r->slots[slot].size;
+        }
+        pthread_mutex_unlock(&r->lock);
+        megabytes = bytes / 1e6;
+    }
+    pthread_mutex_unlock(&g_shared_lock);
+    return megabytes;
+}
+
 void mediaFileInterruptAll(void)
 {
     __atomic_add_fetch(&g_interrupts, 1, __ATOMIC_RELAXED);
