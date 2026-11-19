@@ -419,6 +419,21 @@ static bool openFileInput(MediaInput *in, AVFormatContext **fmt, const char *loc
     return avformat_open_input(fmt, NULL, NULL, NULL) >= 0;
 }
 
+// Where a converted stream's time 0 is, in AV_TIME_BASE: its picture's start.
+// A conversion begun mid-video starts its sound seconds before its picture
+// (sound from before the place asked for), so the earliest track won't do:
+// the picture is where the place asked for begins. Without one, the earliest.
+static int64_t streamsStart(const AVFormatContext *fmt)
+{
+    for (unsigned i = 0; i < fmt->nb_streams; i++) {
+        const AVStream *st = fmt->streams[i];
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && st->start_time != AV_NOPTS_VALUE &&
+            !(st->disposition & AV_DISPOSITION_ATTACHED_PIC))
+            return av_rescale_q(st->start_time, st->time_base, AV_TIME_BASE_Q);
+    }
+    return fmt->start_time;
+}
+
 bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location, int buffer_size)
 {
     memset(in, 0, sizeof(*in));
@@ -436,8 +451,9 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
                 av_dict_set(tags, "title", name->value, 0);
         }
         in->skipped_us = hlsLocationBaseNs(location) / 1000;
-        if ((*fmt)->start_time != AV_NOPTS_VALUE)
-            in->start_us = (*fmt)->start_time - in->skipped_us;
+        int64_t start = streamsStart(*fmt);
+        if (start != AV_NOPTS_VALUE)
+            in->start_us = start - in->skipped_us;
     }
     return true;
 }

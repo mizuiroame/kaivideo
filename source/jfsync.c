@@ -866,9 +866,13 @@ bool jfSyncAudioConversion(const char *location, int audio_index, char *url, siz
     // Its own play session, so it can be ended without ending the video's.
     snprintf(play_session, session_size, "%08x%08x%08x%08x", (unsigned)rand(), (unsigned)rand(), (unsigned)time(NULL),
              (unsigned)audio_index);
+    // The server's /Audio conversion always takes the default track: a video
+    // conversion takes the one asked for. Its picture is made tiny (the
+    // smallest its hardware encoder takes well): what comes is nearly all sound.
     int n = snprintf(url, url_size,
-                     "%s/Audio/%s/main.m3u8?MediaSourceId=%s&DeviceId=%s&PlaySessionId=%s&AudioStreamIndex=%d"
+                     "%s/Videos/%s/main.m3u8?MediaSourceId=%s&DeviceId=%s&PlaySessionId=%s&AudioStreamIndex=%d"
                      "&AudioCodec=aac&MaxAudioChannels=2&AudioBitrate=192000&AudioSampleRate=48000"
+                     "&VideoCodec=h264&MaxWidth=320&MaxHeight=180&VideoBitrate=150000&SubtitleStreamIndex=-1"
                      "&SegmentContainer=ts&BreakOnNonKeyFrames=True",
                      s.server, item, source, s.device_id, play_session, audio_index);
     jfAuthHeader(&s, g.version, authorization, auth_size);
