@@ -56,6 +56,7 @@ const char *playerSubtitleLabel(const Player *p, int track) { (void)p; return SU
 int playerSubtitle(const Player *p) { return p->subtitle; }
 int playerSpeed(const Player *p) { return p->speed ? p->speed : PLAYBACK_PERMILLE; }
 int playerVolume(const Player *p) { return p->volume ? p->volume : PLAYBACK_VOLUME_NORMAL; }
+PlaybackAspect playerAspect(const Player *p) { (void)p; return PLAYBACK_ASPECT_ORIGINAL; }
 int playerAudioDelay(const Player *p) { return p->audio_delay; }
 int playerSubtitleDelay(const Player *p) { return p->subtitle_delay; }
 int playerChapterCount(const Player *p) { return p->chapter_count; }

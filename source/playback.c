@@ -84,6 +84,37 @@ void playbackApplyVolume(int16_t *pcm, size_t samples, int percent)
     }
 }
 
+PlaybackAspect playbackAspectStep(PlaybackAspect aspect, int delta)
+{
+    return (PlaybackAspect)((((int)aspect + delta) % PLAYBACK_ASPECT_COUNT + PLAYBACK_ASPECT_COUNT) %
+                            PLAYBACK_ASPECT_COUNT);
+}
+
+const char *playbackAspectName(PlaybackAspect aspect)
+{
+    static const char *const NAMES[PLAYBACK_ASPECT_COUNT] = {"Original", "Fill", "Stretch", "4:3", "16:9"};
+    return aspect >= 0 && aspect < PLAYBACK_ASPECT_COUNT ? NAMES[aspect] : NAMES[0];
+}
+
+void playbackVideoBox(double video_aspect, PlaybackAspect aspect, float screen_w, float screen_h, float *w, float *h)
+{
+    double screen = screen_w / screen_h;
+    double shape = aspect == PLAYBACK_ASPECT_4_3    ? 4.0 / 3.0
+                   : aspect == PLAYBACK_ASPECT_16_9 ? 16.0 / 9.0
+                   : video_aspect > 0               ? video_aspect
+                                                    : screen;
+    if (aspect == PLAYBACK_ASPECT_STRETCH) {
+        *w = screen_w;
+        *h = screen_h;
+    } else if ((shape > screen) != (aspect == PLAYBACK_ASPECT_FILL)) {
+        *w = screen_w;  // Wider than the screen (or, filling, narrower): as wide as it.
+        *h = (float)(screen_w / shape);
+    } else {
+        *h = screen_h;
+        *w = (float)(screen_h * shape);
+    }
+}
+
 static int compareChapters(const void *a, const void *b)
 {
     int64_t x = ((const PlaybackChapter *)a)->start_ns, y = ((const PlaybackChapter *)b)->start_ns;

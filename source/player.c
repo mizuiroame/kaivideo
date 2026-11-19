@@ -50,6 +50,7 @@ struct Player {
     bool paused;
     int speed;               // Thousandths (playback.h).
     int volume;              // Percent (playback.h).
+    PlaybackAspect aspect;   // How the picture fills the screen.
     int audio_delay_ms, subtitle_delay_ms;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
     int64_t position_ns;     // Where playback is, in the file's time.
@@ -641,6 +642,16 @@ void playerSetVolume(Player *p, int percent)
 int playerVolume(const Player *p)
 {
     return p->volume;
+}
+
+void playerSetAspect(Player *p, PlaybackAspect aspect)
+{
+    p->aspect = aspect;
+}
+
+PlaybackAspect playerAspect(const Player *p)
+{
+    return p->aspect;
 }
 
 void playerSetAudioDelay(Player *p, int delay_ms)

@@ -5,16 +5,24 @@ static int listCount(const Menu *m)
     return m->count - m->fixed;
 }
 
+// List rows that fit with the fixed ones under them: the screen takes
+// MENU_ALL_ROWS in all, and the list keeps at least MENU_MIN_ROWS.
+static int rowsInView(const Menu *m)
+{
+    int room = MENU_ALL_ROWS - m->fixed;
+    return room > MENU_ROWS ? MENU_ROWS : room < MENU_MIN_ROWS ? MENU_MIN_ROWS : room;
+}
+
 static void keepInView(Menu *m)
 {
-    int list = listCount(m);
+    int list = listCount(m), rows = rowsInView(m);
     if (m->cursor < list) {  // The fixed rows at the bottom don't scroll the list.
         if (m->cursor < m->first)
             m->first = m->cursor;
-        if (m->cursor >= m->first + MENU_ROWS)
-            m->first = m->cursor - MENU_ROWS + 1;
+        if (m->cursor >= m->first + rows)
+            m->first = m->cursor - rows + 1;
     }
-    int last_first = list > MENU_ROWS ? list - MENU_ROWS : 0;
+    int last_first = list > rows ? list - rows : 0;
     if (m->first > last_first)
         m->first = last_first;
     if (m->first < 0)
@@ -30,7 +38,7 @@ void menuOpen(Menu *m, int count, int fixed, int current)
     if (m->cursor < 0)
         m->cursor = 0;
     // The current row in the middle when the list scrolls.
-    m->first = m->cursor - MENU_ROWS / 2;
+    m->first = m->cursor - rowsInView(m) / 2;
     keepInView(m);
 }
 
@@ -60,7 +68,7 @@ void menuMove(Menu *m, int delta)
 
 int menuVisible(const Menu *m)
 {
-    return listCount(m) < MENU_ROWS ? listCount(m) : MENU_ROWS;
+    return listCount(m) < rowsInView(m) ? listCount(m) : rowsInView(m);
 }
 
 bool menuOnFixed(const Menu *m)

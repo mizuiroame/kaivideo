@@ -7,6 +7,8 @@
 #include <stdbool.h>
 
 #define MENU_ROWS 7  // List rows in view; more scroll.
+#define MENU_ALL_ROWS 11  // List and fixed rows the screen has room for: many fixed ones leave fewer list rows,
+#define MENU_MIN_ROWS 3   // but never fewer than these.
 
 typedef struct {
     bool open;
@@ -25,7 +27,7 @@ void menuClose(Menu *m);
 void menuSetFixed(Menu *m, int fixed);
 // Moves the cursor by delta rows (stopping at the ends), keeping it in view.
 void menuMove(Menu *m, int delta);
-// List rows in view (at most MENU_ROWS), not counting the fixed ones.
+// List rows in view (at most MENU_ROWS, and fewer under many fixed rows), not counting the fixed ones.
 int menuVisible(const Menu *m);
 // True when the cursor is on one of the fixed rows.
 bool menuOnFixed(const Menu *m);

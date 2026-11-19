@@ -5,8 +5,8 @@
 # a Jellyfin server converts, and Live TV channels' own streams (with WebVTT
 # subtitles and AAC sound tracks of their own); KaiVideo gives them its segments itself (the file
 # protocol is only there because the HLS reader insists on one). Most video is decoded by
-# libounce's VideoDecoder; FFmpeg's HEVC and H.264 decoders take what the
-# hardware can't (HEVC, 10-bit H.264). No GPL or non-free
+# libounce's VideoDecoder; FFmpeg's HEVC, H.264 and VP9 decoders take what the
+# hardware can't (HEVC, 10-bit H.264 and VP9, H.264 and VP9 over 1080p). No GPL or non-free
 # parts, no network code.
 #   docker build -t kaivideo-devkit ffmpeg
 # gives the devkit image with FFmpeg in portlibs/switch2.
@@ -38,7 +38,7 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --enable-avcodec --enable-avformat --enable-swresample --enable-avfilter \
       --enable-neon \
       --enable-filter=abuffer,abuffersink,atempo \
-      --enable-decoder=hevc,h264,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
+      --enable-decoder=hevc,h264,vp9,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
       --enable-parser=hevc,h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
       --enable-demuxer=mov,matroska,hls,mpegts,webvtt,aac --enable-protocol=file \
       --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata \

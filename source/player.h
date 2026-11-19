@@ -9,6 +9,7 @@
 
 #include "gfx.h"
 #include "jellyfin.h"
+#include "playback.h"
 #include "video.h"
 
 typedef struct Player Player;
@@ -49,6 +50,9 @@ int playerSpeed(const Player *p);
 // The sound's volume in percent (playback.h): 100 as it is, up to 200 louder.
 void playerSetVolume(Player *p, int percent);
 int playerVolume(const Player *p);
+// How the picture fills the screen (playback.h); the screen draws it so.
+void playerSetAspect(Player *p, PlaybackAspect aspect);
+PlaybackAspect playerAspect(const Player *p);
 // How much later the sound (or, negative, earlier) goes than the picture.
 void playerSetAudioDelay(Player *p, int delay_ms);
 int playerAudioDelay(const Player *p);

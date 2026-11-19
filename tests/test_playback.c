@@ -114,10 +114,35 @@ static void testVolume(void)
     CHECK(ramp[0] < ramp[1] && ramp[1] < ramp[2] && ramp[2] < ramp[3]);
 }
 
+static void testAspect(void)
+{
+    float w, h;
+    // A 2.39:1 film on the 16:9 screen (1920x1080).
+    playbackVideoBox(2.39, PLAYBACK_ASPECT_ORIGINAL, 1920, 1080, &w, &h);
+    CHECK(w == 1920 && h > 803 && h < 804);
+    playbackVideoBox(2.39, PLAYBACK_ASPECT_FILL, 1920, 1080, &w, &h);  // Covers the screen, cut at the sides.
+    CHECK(h == 1080 && w > 2581 && w < 2582);
+    playbackVideoBox(2.39, PLAYBACK_ASPECT_STRETCH, 1920, 1080, &w, &h);
+    CHECK(w == 1920 && h == 1080);
+    // A 16:9 video shown as 4:3, and a 4:3 one as 16:9.
+    playbackVideoBox(16.0 / 9.0, PLAYBACK_ASPECT_4_3, 1920, 1080, &w, &h);
+    CHECK(h == 1080 && w == 1440);
+    playbackVideoBox(4.0 / 3.0, PLAYBACK_ASPECT_16_9, 1920, 1080, &w, &h);
+    CHECK(w == 1920 && h == 1080);
+    playbackVideoBox(4.0 / 3.0, PLAYBACK_ASPECT_FILL, 1920, 1080, &w, &h);  // Cut at the top and bottom.
+    CHECK(w == 1920 && h == 1440);
+    playbackVideoBox(0, PLAYBACK_ASPECT_ORIGINAL, 1920, 1080, &w, &h);  // Unknown shape: the screen's.
+    CHECK(w == 1920 && h == 1080);
+    CHECK(!strcmp(playbackAspectName(PLAYBACK_ASPECT_4_3), "4:3"));
+    CHECK(playbackAspectStep(PLAYBACK_ASPECT_16_9, 1) == PLAYBACK_ASPECT_ORIGINAL);  // Around.
+    CHECK(playbackAspectStep(PLAYBACK_ASPECT_ORIGINAL, -1) == PLAYBACK_ASPECT_16_9);
+}
+
 void testPlayback(void)
 {
     testSpeed();
     testDelay();
     testChapters();
     testVolume();
+    testAspect();
 }

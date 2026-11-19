@@ -15,8 +15,9 @@
 typedef enum { SWFRAME_H264, SWFRAME_HEVC, SWFRAME_VP9, SWFRAME_AV1, SWFRAME_VP8, SWFRAME_OTHER } SwframeCodec;
 typedef enum { SWFRAME_HARDWARE, SWFRAME_SOFTWARE, SWFRAME_UNPLAYABLE } SwframeRoute;
 
-// The way a video goes. bits: its depth, 0 if unknown.
-SwframeRoute swframeRoute(SwframeCodec codec, int bits);
+// The way a video goes. bits: its depth, 0 if unknown; width and height: its
+// size, 0 if unknown.
+SwframeRoute swframeRoute(SwframeCodec codec, int bits, int width, int height);
 // Decoding threads with this many CPU cores. All of them, whatever the video:
 // playing they mostly wait, and after a seek they get to the target sooner.
 int swframeThreads(int cores);

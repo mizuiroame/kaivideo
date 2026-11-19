@@ -423,6 +423,9 @@ static const char *playbackOption(const Player *p, const Config *config, Playbac
         else
             snprintf(value, size, "No sound");
         return "Volume";
+    case PLAYBACK_OPT_ASPECT:
+        snprintf(value, size, "%s", playbackAspectName(playerAspect(p)));
+        return "Picture";
     case PLAYBACK_OPT_AUDIO_DELAY:
         if (playerAudioTrackCount(p) > 0)
             playbackFormatDelay(value, size, playerAudioDelay(p));
@@ -507,10 +510,10 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
         fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, label_w, menuLabel(p, kind, row),
                         row == current ? COLOR_TEXT : COLOR_DIM);
     }
-    int list = m->count - m->fixed;
-    if (list > MENU_ROWS) {  // A scrollbar.
-        int track_h = MENU_ROWS * MENU_ROW_H - 8, thumb_h = track_h * MENU_ROWS / list;
-        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (list - MENU_ROWS);
+    int list = m->count - m->fixed, shown = menuVisible(m);
+    if (list > shown) {  // A scrollbar.
+        int track_h = shown * MENU_ROW_H - 8, thumb_h = track_h * shown / list;
+        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (list - shown);
         gfxFillRoundRect(x + w - 10, y + MENU_HEAD + 4, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(x + w - 10, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }

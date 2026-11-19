@@ -20,6 +20,7 @@
 typedef enum {
     PLAYBACK_OPT_SPEED,
     PLAYBACK_OPT_VOLUME,
+    PLAYBACK_OPT_ASPECT,
     PLAYBACK_OPT_AUDIO_DELAY,
     PLAYBACK_OPT_SUBTITLE_DELAY,
     PLAYBACK_OPT_QUALITY,  // Only for videos from a server.
@@ -52,6 +53,22 @@ void playbackFormatVolume(char *out, size_t size, int percent);
 // Sound samples at percent of their volume, in place. Over 100%, sound near
 // the top bends under it (a soft limiter) instead of clipping.
 void playbackApplyVolume(int16_t *pcm, size_t samples, int percent);
+
+// How the picture fills the screen.
+typedef enum {
+    PLAYBACK_ASPECT_ORIGINAL,  // Its own shape, as large as fits.
+    PLAYBACK_ASPECT_FILL,      // Its own shape, covering the screen (cut at the edges).
+    PLAYBACK_ASPECT_STRETCH,   // The screen's shape.
+    PLAYBACK_ASPECT_4_3,
+    PLAYBACK_ASPECT_16_9,
+    PLAYBACK_ASPECT_COUNT,
+} PlaybackAspect;
+
+PlaybackAspect playbackAspectStep(PlaybackAspect aspect, int delta);
+const char *playbackAspectName(PlaybackAspect aspect);
+// The picture's size on a screen_w x screen_h screen, centered on it (it may
+// be larger, for FILL). video_aspect: its shape, width over height; 0 if unknown.
+void playbackVideoBox(double video_aspect, PlaybackAspect aspect, float screen_w, float screen_h, float *w, float *h);
 
 // Puts chapters in order of time and names those without a title ("Chapter 2").
 void playbackChaptersPrepare(PlaybackChapter *chapters, int count);

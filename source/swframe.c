@@ -3,16 +3,22 @@
 #include <string.h>
 
 #define TEN_TO_EIGHT 2  // Bits dropped from a 10-bit sample.
+#define HARDWARE_MAX_WIDTH 1920
+#define HARDWARE_MAX_HEIGHT 1088  // 1080p, coded as 1088.
 
-SwframeRoute swframeRoute(SwframeCodec codec, int bits)
+SwframeRoute swframeRoute(SwframeCodec codec, int bits, int width, int height)
 {
     bool eight = bits == 0 || bits == 8;
+    // Over 1080p the console's decoder stalls on H.264 and VP9 (it takes AV1).
+    bool large = width > HARDWARE_MAX_WIDTH || height > HARDWARE_MAX_HEIGHT;
     switch (codec) {
     case SWFRAME_HEVC:
         return eight || bits == 10 ? SWFRAME_SOFTWARE : SWFRAME_UNPLAYABLE;
     case SWFRAME_H264:
-        return eight ? SWFRAME_HARDWARE : bits == 10 ? SWFRAME_SOFTWARE : SWFRAME_UNPLAYABLE;
     case SWFRAME_VP9:
+        if (eight)
+            return large ? SWFRAME_SOFTWARE : SWFRAME_HARDWARE;
+        return bits == 10 ? SWFRAME_SOFTWARE : SWFRAME_UNPLAYABLE;
     case SWFRAME_AV1:
     case SWFRAME_VP8:
         return eight ? SWFRAME_HARDWARE : SWFRAME_UNPLAYABLE;

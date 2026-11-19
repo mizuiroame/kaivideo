@@ -608,15 +608,15 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     int bits = pix ? pix->comp[0].depth : 0;
     SwframeCodec kind = swframeCodecOf(par->codec_id);
     double fps = av_q2d(av_guess_frame_rate(v->fmt, st, NULL));
-    switch (swframeRoute(kind, bits)) {
+    switch (swframeRoute(kind, bits, par->width, par->height)) {
     case SWFRAME_SOFTWARE:
         return openSoftware(v, st, fps, error, error_size);
     case SWFRAME_HARDWARE:
         if (openHardware(v, st, fps, error, error_size))
             return true;
-        if (kind != SWFRAME_H264)
+        if (kind != SWFRAME_H264 && kind != SWFRAME_VP9)
             return false;
-        av_bsf_free(&v->bsf);  // H.264 the decoder refuses: FFmpeg can still play it.
+        av_bsf_free(&v->bsf);  // H.264 or VP9 the decoder refuses: FFmpeg can still play it.
         return openSoftware(v, st, fps, error, error_size);
     default:
         if (kind == SWFRAME_OTHER)

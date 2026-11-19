@@ -11,21 +11,30 @@ static const int64_t MS = 1000000;
 
 static void testRoute(void)
 {
-    CHECK(swframeRoute(SWFRAME_H264, 8) == SWFRAME_HARDWARE);
-    CHECK(swframeRoute(SWFRAME_VP9, 8) == SWFRAME_HARDWARE);
-    CHECK(swframeRoute(SWFRAME_AV1, 8) == SWFRAME_HARDWARE);
-    CHECK(swframeRoute(SWFRAME_VP8, 8) == SWFRAME_HARDWARE);
-    CHECK(swframeRoute(SWFRAME_H264, 0) == SWFRAME_HARDWARE);  // Depth unknown: as usual.
+    CHECK(swframeRoute(SWFRAME_H264, 8, 1920, 1080) == SWFRAME_HARDWARE);
+    CHECK(swframeRoute(SWFRAME_VP9, 8, 1920, 1080) == SWFRAME_HARDWARE);
+    CHECK(swframeRoute(SWFRAME_AV1, 8, 1920, 1080) == SWFRAME_HARDWARE);
+    CHECK(swframeRoute(SWFRAME_VP8, 8, 1920, 1080) == SWFRAME_HARDWARE);
+    CHECK(swframeRoute(SWFRAME_H264, 0, 1920, 1080) == SWFRAME_HARDWARE);  // Depth unknown: as usual.
 
-    CHECK(swframeRoute(SWFRAME_HEVC, 8) == SWFRAME_SOFTWARE);
-    CHECK(swframeRoute(SWFRAME_HEVC, 10) == SWFRAME_SOFTWARE);
-    CHECK(swframeRoute(SWFRAME_HEVC, 0) == SWFRAME_SOFTWARE);
-    CHECK(swframeRoute(SWFRAME_H264, 10) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_HEVC, 8, 1920, 1080) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_HEVC, 10, 1920, 1080) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_HEVC, 0, 1920, 1080) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_H264, 10, 1920, 1080) == SWFRAME_SOFTWARE);
 
-    CHECK(swframeRoute(SWFRAME_HEVC, 12) == SWFRAME_UNPLAYABLE);
-    CHECK(swframeRoute(SWFRAME_AV1, 10) == SWFRAME_UNPLAYABLE);
-    CHECK(swframeRoute(SWFRAME_VP9, 10) == SWFRAME_UNPLAYABLE);
-    CHECK(swframeRoute(SWFRAME_OTHER, 8) == SWFRAME_UNPLAYABLE);
+    // Over 1080p the console's decoder takes AV1 only (measured: H.264 and VP9 4K stall it).
+    CHECK(swframeRoute(SWFRAME_AV1, 8, 3840, 2160) == SWFRAME_HARDWARE);
+    CHECK(swframeRoute(SWFRAME_H264, 8, 3840, 2160) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_VP9, 8, 3840, 2160) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_H264, 8, 1920, 1088) == SWFRAME_HARDWARE);  // 1080p coded as 1088.
+    CHECK(swframeRoute(SWFRAME_VP9, 8, 2560, 1440) == SWFRAME_SOFTWARE);
+    CHECK(swframeRoute(SWFRAME_VP9, 8, 0, 0) == SWFRAME_HARDWARE);  // Size unknown: as usual.
+    CHECK(swframeRoute(SWFRAME_VP9, 10, 1920, 1080) == SWFRAME_SOFTWARE);  // FFmpeg's VP9 takes 10 bits.
+
+    CHECK(swframeRoute(SWFRAME_HEVC, 12, 1920, 1080) == SWFRAME_UNPLAYABLE);
+    CHECK(swframeRoute(SWFRAME_AV1, 10, 1920, 1080) == SWFRAME_UNPLAYABLE);
+    CHECK(swframeRoute(SWFRAME_VP9, 12, 1920, 1080) == SWFRAME_UNPLAYABLE);
+    CHECK(swframeRoute(SWFRAME_OTHER, 8, 1920, 1080) == SWFRAME_UNPLAYABLE);
 }
 
 static void testThreads(void)

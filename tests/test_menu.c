@@ -42,6 +42,12 @@ void testMenu(void)
     menuMove(&m, -14);
     CHECK(m.cursor == 0 && m.first == 0);
 
+    // Many fixed rows (the Playback list's options) leave fewer list rows, so all fit the screen.
+    menuOpen(&m, 9 + 7, 7, 4);
+    CHECK(menuVisible(&m) == MENU_ALL_ROWS - 7 && m.first + menuVisible(&m) > 4 && m.first <= 4);
+    menuOpen(&m, 9 + 10, 10, 8);
+    CHECK(menuVisible(&m) == MENU_MIN_ROWS && m.first == 9 - MENU_MIN_ROWS);
+
     // Fewer fixed rows: the list stays, and a cursor on a row that went comes back.
     menuOpen(&m, 5, 3, 1);
     menuSetFixed(&m, 1);

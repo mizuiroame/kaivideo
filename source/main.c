@@ -362,6 +362,7 @@ static void beginPlaying(App *app, uint64_t now)
     menuClose(&app->menu);
     playerSetSpeed(app->player, playbackSpeedPermille(app->speed_index), now);
     playerSetVolume(app->player, app->volume);
+    playerSetAspect(app->player, app->aspect);
     applyTrackPrefs(app, now);
     int64_t resume_at;
     bool from_start = app->open_from_start;
@@ -657,6 +658,9 @@ static void stepPlaybackOption(App *app, PlaybackOption option, int delta, uint6
     } else if (option == PLAYBACK_OPT_VOLUME && playerAudioTrackCount(p) > 0) {
         app->volume = playbackVolumeStep(app->volume, delta);
         playerSetVolume(p, app->volume);
+    } else if (option == PLAYBACK_OPT_ASPECT) {
+        app->aspect = playbackAspectStep(app->aspect, delta);
+        playerSetAspect(p, app->aspect);
     } else if (option == PLAYBACK_OPT_AUDIO_DELAY && playerAudioTrackCount(p) > 0) {
         playerSetAudioDelay(p, playbackDelayStep(playerAudioDelay(p), delta));
     } else if (option == PLAYBACK_OPT_SUBTITLE_DELAY && playerSubtitleCount(p) > 0) {
@@ -972,15 +976,15 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     int w, h;
     double aspect;
     playerSize(app->player, &w, &h, &aspect);
-    // The largest box with the video's shape that fits the screen, centered.
-    float bw = GFX_FB_WIDTH, bh = (float)(GFX_FB_WIDTH / aspect);
-    if (bh > GFX_FB_HEIGHT) {
-        bh = GFX_FB_HEIGHT;
-        bw = (float)(GFX_FB_HEIGHT * aspect);
-    }
+    // The picture's box, centered: by default the largest with its shape that
+    // fits the screen; the Playback list's Picture option can fill or reshape it.
+    float vw, vh;
+    playbackVideoBox(aspect, playerAspect(app->player), GFX_FB_WIDTH, GFX_FB_HEIGHT, &vw, &vh);
     gfxClear(GFX_RGB(0, 0, 0));
     if (frame)
-        gfxDrawVideo(frame, (GFX_FB_WIDTH - bw) / 2.0f, (GFX_FB_HEIGHT - bh) / 2.0f, bw, bh);
+        gfxDrawVideo(frame, (GFX_FB_WIDTH - vw) / 2.0f, (GFX_FB_HEIGHT - vh) / 2.0f, vw, vh);
+    // Subtitles go on the part of it that shows.
+    float bw = vw < GFX_FB_WIDTH ? vw : GFX_FB_WIDTH, bh = vh < GFX_FB_HEIGHT ? vh : GFX_FB_HEIGHT;
     // Waiting for the picture (the start, a jump): the symbol, if it takes a moment.
     if (!playerWaitingForPicture(app->player))
         app->waiting_since = 0;
@@ -1075,6 +1079,7 @@ int main(int argc, char **argv)
     static App app;
     app.speed_index = PLAYBACK_SPEED_NORMAL;
     app.volume = PLAYBACK_VOLUME_NORMAL;
+    app.aspect = PLAYBACK_ASPECT_ORIGINAL;
     char folder[BROWSER_PATH_MAX];
     loadSettings(&app, folder, sizeof(folder));
     appConfigPath(path, sizeof(path), "resume.txt");
