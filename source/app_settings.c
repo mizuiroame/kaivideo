@@ -2,13 +2,19 @@
 // right change it, A opens what a row opens (or changes it), B goes back a
 // page or closes. Changes apply at once and are kept in settings.txt. The
 // subtitles' size, color and style are changed in the player's Subtitles list.
+#include <dirent.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <switch.h>
 
 #include "app.h"
+#include "approot.h"
 #include "background.h"
+#include "font.h"
+#include "util.h"
 #include "buttons.h"
 #include "jfprobe.h"
 #include "keyboard_system.h"
@@ -31,6 +37,69 @@ void appApplySubtitleStyle(const App *app)
                        app->config.subtitle_style == SUBTITLE_BOX);
 }
 
+#define FONT_FILES_MAX 64
+
+static int compareFontNames(const void *a, const void *b)
+{
+    return utilCompareNames((const char *)a, (const char *)b);
+}
+
+// The .ttf and .otf files in the config folder's fonts folder, by name.
+static int listSubtitleFonts(char names[][SETTINGS_NAME_MAX], int max)
+{
+    char folder[APPROOT_PATH_MAX + 32];
+    appConfigPath(folder, sizeof(folder), SUBTITLE_FONTS_FOLDER);
+    DIR *dir = opendir(folder);
+    if (!dir)
+        return 0;
+    int count = 0;
+    struct dirent *entry;
+    while (count < max && (entry = readdir(dir)) != NULL) {
+        const char *name = entry->d_name;
+        if (name[0] != '.' && (utilHasExtension(name, "ttf") || utilHasExtension(name, "otf")) &&
+            strlen(name) < SETTINGS_NAME_MAX)
+            snprintf(names[count++], SETTINGS_NAME_MAX, "%s", name);
+    }
+    closedir(dir);
+    qsort(names, (size_t)count, SETTINGS_NAME_MAX, compareFontNames);
+    return count;
+}
+
+// Text subtitles in the font chosen (config.subtitle_font). False if its file can't be read.
+static bool loadSubtitleFont(const App *app)
+{
+    if (!app->config.subtitle_font[0])
+        return fontSetSubtitleFile(NULL);
+    char folder[APPROOT_PATH_MAX + 32], path[APPROOT_PATH_MAX + SETTINGS_NAME_MAX + 40];
+    appConfigPath(folder, sizeof(folder), SUBTITLE_FONTS_FOLDER);
+    snprintf(path, sizeof(path), "%s/%s", folder, app->config.subtitle_font);
+    return fontSetSubtitleFile(path);
+}
+
+bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size)
+{
+    static char names[FONT_FILES_MAX][SETTINGS_NAME_MAX];
+    int count = listSubtitleFonts(names, FONT_FILES_MAX);
+    if (count == 0) {
+        app->config.subtitle_font[0] = '\0';
+        snprintf(note, note_size, "Put .ttf or .otf fonts in the config/fonts folder next to KaiVideo.");
+        return false;
+    }
+    int index = 0;  // 0 is the built-in font, then the files.
+    for (int i = 0; i < count; i++)
+        if (!strcmp(names[i], app->config.subtitle_font))
+            index = i + 1;
+    index = ((index + delta) % (count + 1) + count + 1) % (count + 1);
+    snprintf(app->config.subtitle_font, sizeof(app->config.subtitle_font), "%s", index ? names[index - 1] : "");
+    if (!loadSubtitleFont(app)) {
+        snprintf(note, note_size, "%.80s can't be read as a font.", app->config.subtitle_font);
+        app->config.subtitle_font[0] = '\0';
+        fontSetSubtitleFile(NULL);
+        return false;
+    }
+    return true;
+}
+
 static void applyLooks(const App *app)
 {
     themeApply(app->config.theme, app->config.accent);
@@ -41,6 +110,11 @@ static void applyLooks(const App *app)
 void appSettingsStart(App *app)
 {
     applyLooks(app);
+    char fonts[APPROOT_PATH_MAX + 32];
+    appConfigPath(fonts, sizeof(fonts), SUBTITLE_FONTS_FOLDER);
+    mkdir(fonts, 0777);  // Where to put fonts for subtitles, there to be seen.
+    if (!loadSubtitleFont(app))
+        app->config.subtitle_font[0] = '\0';  // Gone or broken: the built-in one.
     netSetCheckCertificates(app->config.jf_check_certificate);
     if (app->config.background[0] &&
         !backgroundLoad(app->library_root, app->config.background, app->config.blur))

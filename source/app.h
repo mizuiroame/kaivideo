@@ -221,6 +221,9 @@ const char *appFooterHelp(const App *app);
 void appSettingsStart(App *app);
 // Applies the subtitles' size, color and style (changed in the player).
 void appApplySubtitleStyle(const App *app);
+// The Subtitles list's Font: the built-in one, then each file in config/fonts.
+// False, with what to say in note, if there are none or one can't be read.
+bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size);
 void appOpenSettings(App *app);
 void appOpenJellyfinSettings(App *app, uint64_t now);
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);

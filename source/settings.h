@@ -40,7 +40,8 @@ typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleSt
 #define SUBTITLE_COLOR_COUNT 4
 
 // The player's Subtitles list ends with these, changed with left and right.
-typedef enum { SUBOPT_SIZE, SUBOPT_COLOR, SUBOPT_STYLE, SUBOPT_COUNT } SubtitleOption;
+typedef enum { SUBOPT_SIZE, SUBOPT_COLOR, SUBOPT_STYLE, SUBOPT_FONT, SUBOPT_COUNT } SubtitleOption;
+#define SUBTITLE_FONTS_FOLDER "fonts"  // In the config folder: .ttf and .otf files for subtitles.
 
 typedef struct {
     int theme, accent;
@@ -55,6 +56,7 @@ typedef struct {
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.
+    char subtitle_font[SETTINGS_NAME_MAX];  // A file in config/fonts, or "" for the built-in font.
 } Config;
 
 void configDefaults(Config *c);
@@ -81,6 +83,7 @@ long long settingQualityBitrate(const Config *c);
 int subtitleOptionCount(bool color_applies);
 const char *subtitleOptionLabel(SubtitleOption option);
 void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size);
+// Steps an option (not the font: it needs the list of font files).
 void subtitleOptionStep(Config *c, SubtitleOption option, int delta);
 // The subtitles' text size in pixels of the 1280x720 layout, and color (0xRRGGBB).
 int settingSubtitlePx(const Config *c);

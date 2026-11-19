@@ -697,7 +697,13 @@ static void stepOption(App *app, int row, int delta, uint64_t now)
         return;
     }
     SubtitleOption option = (SubtitleOption)index;
-    subtitleOptionStep(&app->config, option, delta);
+    if (option == SUBOPT_FONT) {
+        char note[160];
+        if (!appStepSubtitleFont(app, delta, note, sizeof(note)))
+            sayInBar(app, now, "%s", note);
+    } else {
+        subtitleOptionStep(&app->config, option, delta);
+    }
     appApplySubtitleStyle(app);
     appSaveSettings(app);
 }

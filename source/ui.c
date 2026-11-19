@@ -293,13 +293,13 @@ static int wrapSubtitle(const char *text, char lines[][256], int max)
             char *cut = NULL;
             for (char *space = strchr(rest, ' '); space; space = strchr(space + 1, ' ')) {
                 *space = '\0';
-                bool fits = fontTextWidth(FONT_BOLD, SUB_PX, rest) <= SUB_MAX_W;
+                bool fits = fontTextWidth(FONT_SUBTITLE, SUB_PX, rest) <= SUB_MAX_W;
                 *space = ' ';
                 if (!fits)
                     break;
                 cut = space;
             }
-            if (fontTextWidth(FONT_BOLD, SUB_PX, rest) <= SUB_MAX_W || !cut)
+            if (fontTextWidth(FONT_SUBTITLE, SUB_PX, rest) <= SUB_MAX_W || !cut)
                 cut = NULL;
             if (cut)
                 *cut = '\0';
@@ -330,14 +330,14 @@ void uiDrawSubtitles(const char *text, bool bar_shown)
     for (int i = 0; i < count; i++) {
         float cx = GFX_WIDTH / 2.0f, cy = top + i * SUB_LINE_H + SUB_LINE_H / 2.0f;
         if (g_sub_box) {  // A dark box behind the line.
-            int w = fontTextWidth(FONT_BOLD, SUB_PX, lines[i]) + SUB_PX;
+            int w = fontTextWidth(FONT_SUBTITLE, SUB_PX, lines[i]) + SUB_PX;
             gfxBlendRect((int)cx - w / 2, (int)cy - SUB_LINE_H / 2, w, SUB_LINE_H, GFX_RGB(0, 0, 0), 175);
         } else {
             for (int o = 0; o < 8; o++)
-                fontDrawCentered(FONT_BOLD, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i],
+                fontDrawCentered(FONT_SUBTITLE, SUB_PX, cx + OUTLINE[o][0], cy + OUTLINE[o][1], lines[i],
                                  GFX_RGB(0, 0, 0));
         }
-        fontDrawCentered(FONT_BOLD, SUB_PX, cx, cy, lines[i], g_sub_color);
+        fontDrawCentered(FONT_SUBTITLE, SUB_PX, cx, cy, lines[i], g_sub_color);
     }
 }
 

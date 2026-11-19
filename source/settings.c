@@ -40,7 +40,7 @@ static const int SIZE_PX[SUBTITLES_SIZE_COUNT] = {28, 34, 42};
 static const char *const COLOR_NAMES[SUBTITLE_COLOR_COUNT] = {"White", "Yellow", "Cyan", "Green"};
 static const unsigned COLORS[SUBTITLE_COLOR_COUNT] = {0xF2F2F5, 0xFFE45C, 0x6CE4FF, 0x7CF29A};
 static const char *const STYLE_NAMES[SUBTITLE_STYLE_COUNT] = {"Outline", "Dark box"};
-static const char *const OPTION_LABELS[SUBOPT_COUNT] = {"Size", "Color", "Style"};
+static const char *const OPTION_LABELS[SUBOPT_COUNT] = {"Size", "Color", "Style", "Font"};
 
 static int inRange(int value, int count)
 {
@@ -103,6 +103,8 @@ bool configReadLine(Config *c, const char *line)
         c->subtitle_color = readChoice(value, SUBTITLE_COLOR_COUNT, 0);
     else if (isKey(line, length, "subtitle_style"))
         c->subtitle_style = readChoice(value, SUBTITLE_STYLE_COUNT, SUBTITLE_OUTLINE);
+    else if (isKey(line, length, "subtitle_font"))  // A name in the fonts folder, never a path.
+        snprintf(c->subtitle_font, sizeof(c->subtitle_font), "%s", strpbrk(value, "/\\") ? "" : value);
     else
         return false;
     return true;
@@ -118,6 +120,8 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "jellyfin_check_certificate=%d\n", c->jf_check_certificate ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
+    if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
+        fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
 }
 
 int settingsPageRows(SettingsPage page, bool signed_in, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
@@ -202,6 +206,14 @@ void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size
     case SUBOPT_SIZE: snprintf(out, size, "%s", SIZE_NAMES[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)]); break;
     case SUBOPT_COLOR: snprintf(out, size, "%s", COLOR_NAMES[inRange(c->subtitle_color, SUBTITLE_COLOR_COUNT)]); break;
     case SUBOPT_STYLE: snprintf(out, size, "%s", STYLE_NAMES[inRange(c->subtitle_style, SUBTITLE_STYLE_COUNT)]); break;
+    case SUBOPT_FONT: {  // The file's name without its extension.
+        const char *dot = strrchr(c->subtitle_font, '.');
+        int n = dot && dot != c->subtitle_font ? (int)(dot - c->subtitle_font) : (int)strlen(c->subtitle_font);
+        snprintf(out, size, "%.*s", n, c->subtitle_font[0] ? c->subtitle_font : "Built-in");
+        if (!c->subtitle_font[0])
+            snprintf(out, size, "Built-in");
+        break;
+    }
     default: out[0] = '\0'; break;
     }
 }

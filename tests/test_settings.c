@@ -79,6 +79,12 @@ void testSettings(void)
     CHECK(settingSubtitleScale(&medium) == 1.0);
     CHECK(subtitleOptionCount(true) == SUBOPT_COUNT);
     CHECK(subtitleOptionCount(false) == 1);  // Only the size, the first.
+    // The font: built in, or a file of the fonts folder (shown without its extension).
+    subtitleOptionValue(&c, SUBOPT_FONT, value, sizeof(value));
+    CHECK(!strcmp(value, "Built-in") && !strcmp(subtitleOptionLabel(SUBOPT_FONT), "Font"));
+    snprintf(c.subtitle_font, sizeof(c.subtitle_font), "%s", "Atkinson Hyperlegible.ttf");
+    subtitleOptionValue(&c, SUBOPT_FONT, value, sizeof(value));
+    CHECK(!strcmp(value, "Atkinson Hyperlegible"));
 
     // Written and read back; other keys and broken values are left alone.
     const char *file = TMP_ROOT "/settings_test.txt";
@@ -100,7 +106,8 @@ void testSettings(void)
         fclose(f);
     CHECK(back.theme == c.theme && back.accent == c.accent && !back.thumbnails && back.subtitles == SUBTITLES_LARGE &&
           back.clock_24h && !back.autoplay && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
-          strcmp(back.background, "beach.jpg") == 0);
+          strcmp(back.background, "beach.jpg") == 0 && !strcmp(back.subtitle_font, "Atkinson Hyperlegible.ttf"));
+    CHECK(configReadLine(&back, "subtitle_font=../x.ttf") && back.subtitle_font[0] == '\0');  // A name, never a path.
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));
     CHECK(configReadLine(&back, "theme=99") && back.theme == 0);
     CHECK(configReadLine(&back, "blur=x") && back.blur == 2);

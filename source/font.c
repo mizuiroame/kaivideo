@@ -1,6 +1,7 @@
 #include "font.h"
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -17,6 +18,7 @@
 #define MAX_FALLBACKS 6
 #define MAX_FILES (FONT_FACE_COUNT + MAX_FALLBACKS)
 #define BLOB_HEADER 8  // Some console font blobs start with an 8-byte header.
+#define SUBTITLE_FONT_MAX_BYTES (32L * 1024 * 1024)
 
 typedef struct {
     bool used;
@@ -78,9 +80,11 @@ static void addFallbacks(void)
     }
 }
 
+static unsigned char *g_subtitle_data;  // The subtitle font file read, or NULL for the built-in one.
+
 bool fontInit(void)
 {
-    const unsigned char *data[FONT_FACE_COUNT] = {font_regular_ttf, font_bold_ttf};
+    const unsigned char *data[FONT_FACE_COUNT] = {font_regular_ttf, font_bold_ttf, font_bold_ttf};
     for (int i = 0; i < FONT_FACE_COUNT; i++) {
         if (!initFace(&g_faces[i], data[i]))
             return false;
@@ -108,7 +112,47 @@ void fontExit(void)
 {
     flushCache();
     fontSystemUnload();
+    free(g_subtitle_data);
+    g_subtitle_data = NULL;
     g_face_count = 0;
+}
+
+// The whole file, or NULL.
+static unsigned char *readFile(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return NULL;
+    unsigned char *data = NULL;
+    long size = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
+    if (size > 0 && size <= SUBTITLE_FONT_MAX_BYTES && fseek(f, 0, SEEK_SET) == 0) {
+        data = malloc((size_t)size);
+        if (data && fread(data, 1, (size_t)size, f) != (size_t)size) {
+            free(data);
+            data = NULL;
+        }
+    }
+    fclose(f);
+    return data;
+}
+
+bool fontSetSubtitleFile(const char *path)
+{
+    unsigned char *data = path ? readFile(path) : NULL;
+    Face face;
+    bool ok = data && initFace(&face, data);
+    if (path && !ok) {
+        free(data);
+        return false;
+    }
+    flushCache();  // Glyphs of the font before.
+    if (ok)
+        g_faces[FONT_SUBTITLE] = face;
+    else
+        initFace(&g_faces[FONT_SUBTITLE], font_bold_ttf);
+    free(g_subtitle_data);
+    g_subtitle_data = ok ? data : NULL;
+    return true;
 }
 
 // Noto Sans is sized by its line height. Fallback fonts are scaled to the
@@ -128,6 +172,11 @@ static void findGlyph(Glyph *g, FontFace face, uint32_t cp)
 {
     g->file = (uint8_t)face;
     g->glyph = stbtt_FindGlyphIndex(&g_faces[face].info, (int)cp);
+    if (g->glyph == 0 && face == FONT_SUBTITLE) {  // A chosen font without it: the built-in bold one's.
+        g->glyph = stbtt_FindGlyphIndex(&g_faces[FONT_BOLD].info, (int)cp);
+        if (g->glyph != 0)
+            g->file = FONT_BOLD;
+    }
     for (int i = FONT_FACE_COUNT; g->glyph == 0 && i < g_face_count; i++) {
         g->glyph = stbtt_FindGlyphIndex(&g_faces[i].info, (int)cp);
         if (g->glyph != 0)

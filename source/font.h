@@ -9,6 +9,7 @@
 typedef enum {
     FONT_REGULAR,
     FONT_BOLD,
+    FONT_SUBTITLE,  // Text subtitles: the bold one, or a font file chosen for them.
     FONT_FACE_COUNT,
 } FontFace;
 
@@ -16,6 +17,10 @@ typedef enum {
 // and Korean when available. False only if the embedded fonts fail.
 bool fontInit(void);
 void fontExit(void);
+// Text subtitles in the font of a .ttf or .otf file (NULL: the built-in bold
+// one). Characters it hasn't come from the built-in fonts. False if the file
+// can't be read as a font: the built-in one stays.
+bool fontSetSubtitleFile(const char *path);
 
 // How many console fallback fonts loaded (0 if none: CJK shows as '?').
 int fontFallbackCount(void);
