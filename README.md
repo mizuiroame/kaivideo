@@ -17,7 +17,9 @@ of films and series, with the console's own hardware video decoder.
 |-------|----------|---------------------|
 | ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) | ![A video's details](docs/screenshots/details.png) |
 
-![The Live TV guide](docs/screenshots/live_tv.png)
+| The Live TV guide | The Playback list |
+|-------------------|-------------------|
+| ![The Live TV guide](docs/screenshots/live_tv.png) | ![The Playback list](docs/screenshots/playback.png) |
 
 The screenshots show made-up films, series and channels.
 
@@ -47,12 +49,17 @@ The screenshots show made-up films, series and channels.
   stays in sync with your other devices. See [Jellyfin](#jellyfin).
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
-  **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
-- **HEVC (H.265)**, 8-bit and 10-bit, and **10-bit H.264**, decoded on the CPU
-  with FFmpeg: the console's decoder interface doesn't offer them. Measured on
-  the console, a 1080p 10-bit episode decodes at several times its speed. It
-  uses more battery than hardware decoding. A jump shows the nearest picture
-  at once, while the exact place is decoded.
+  **AV1** and **VP8**, tried up to 1080p at 60 frames per second, and **AV1 in
+  4K**.
+- **HEVC (H.265)**, 8-bit and 10-bit, **10-bit H.264** and **10-bit VP9**,
+  decoded on the CPU with FFmpeg: the console's decoder interface doesn't offer
+  them. Measured on the console, a 1080p 10-bit episode decodes at several
+  times its speed. It uses more battery than hardware decoding. A jump shows
+  the nearest picture at once, while the exact place is decoded.
+- **4K from the card**: AV1 in hardware; H.264 and VP9 on the CPU (the
+  console's decoder doesn't take them over 1080p). Measured on the console, 4K
+  at 30 frames per second plays smoothly in all three; H.264 at 60 skips about
+  one frame in ten. The picture is shown at the screen's 1080p.
 - Sound with [FFmpeg](https://ffmpeg.org/): **AAC**, **MP3**, **Opus**,
   **Vorbis**, **FLAC**, **AC-3**, **E-AC-3** (Dolby Digital Plus), **DTS**
   and **Dolby TrueHD** (surround is mixed down to stereo).
@@ -61,13 +68,18 @@ The screenshots show made-up films, series and channels.
 - **Subtitles**: an `.srt` file next to the video (`Film.srt` or
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
   MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
-  size, color and style (outline or a dark box) are at the end of that list.
+  size, color, style (outline or a dark box) and **font** are at the end of
+  that list: put `.ttf` or `.otf` files in the `fonts` folder of KaiVideo's
+  `config` folder to choose one (characters a font lacks come from the
+  built-in ones).
 - **ASS subtitles keep their look**, drawn by [libass](https://github.com/libass/libass):
   colors, positions, rotation, movement, fades and the fonts inside the file.
   The list offers only their size.
 - **Playback list** (**↑**): the video's **chapters** (also marked on the
   progress bar), the **speed** from 0.5x to 2x with the voices' pitch kept,
-  and **audio** and **subtitle delays** for a file that's out of sync.
+  the **volume** up to 200% (with a limiter, so loud parts don't distort), the
+  **picture** (Original, Fill, Stretch, 4:3 or 16:9), an **A-B loop**, and
+  **audio** and **subtitle delays** for a file that's out of sync.
 - **Resume where you left off**: open a video you stopped halfway and it goes
   on from there (**ZL** starts it over). Videos you've started show how far
   you got.
@@ -250,7 +262,7 @@ do what, as in KaiPlayer and KaiRadio.
 | **◀** / **▶** | Back or forward 10 seconds |
 | **L** / **R** | Back or forward 1 minute |
 | **ZL** | Start over |
-| **↑** | The Playback list: chapters, speed, audio and subtitle delays |
+| **↑** | The Playback list: chapters, speed, volume, picture, A-B loop, audio and subtitle delays |
 | **↓** | Statistics: how it plays (from the card, the original file or converted), frames a second and how many came late, the network's speed and how much is ready ahead |
 | **ZR** | **Skip intro** (or recap, or credits) when its button shows |
 | **X** | The list of sound tracks |
@@ -264,9 +276,11 @@ do what, as in KaiPlayer and KaiRadio.
 In a list of tracks, **↑** / **↓** move, **A** picks and **B** closes it.
 The subtitles list stays open after you pick, for the options that apply to
 them (**◀** / **▶**). In the Playback list, **A** goes to a chapter and **◀** / **▶**
-change the speed and the delays (or tap the left or right half of their row).
-The speed stays for the next videos until KaiVideo closes; the delays are for
-the video playing.
+change the options (or tap the left or right half of their row). On **A-B
+loop**, each press sets A where the video is, then B, then turns it off; at B
+the video goes back to A. The speed, volume and picture stay for the next
+videos until KaiVideo closes; the delays and the loop are for the video
+playing.
 Any button or tap shows the bar for a few seconds. With the bar showing, tap
 the picture or the play button to pause or play (a paused video shows a big
 play symbol), or tap or drag the progress bar to go there; **Playback**,
@@ -276,10 +290,10 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 - **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown from the
   SD card; text ones are. From Jellyfin, the server draws them on.
-- **10-bit** VP9 and AV1, and **12-bit** HEVC, can't be played.
-- **HEVC** is decoded on the CPU, because the decoder interface KaiVideo uses
-  ([libounce](https://github.com/ouncebrew/libounce)) doesn't offer it. 10-bit
-  video is shown in 8 bits.
+- **10-bit AV1** and **12-bit** HEVC can't be played.
+- **HEVC** is decoded on the CPU: the console's decoder service, which
+  [libounce](https://github.com/ouncebrew/libounce) uses, doesn't offer it,
+  although the chip has it. 10-bit video is shown in 8 bits.
 - **4K HEVC** is too heavy for the CPU: measured on the console, 10-bit 4K
   decoded at 21 frames per second at 16 Mb/s and at 15 at 68 Mb/s, so frames
   are skipped to keep up with the sound.
@@ -301,7 +315,6 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 ## Plans
 
-- **HEVC in hardware**, if libounce offers it.
 - **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
 
@@ -323,7 +336,7 @@ SHA-256) with only the demuxers, parsers, bitstream filters, decoders and the
 `atempo` audio filter KaiVideo needs, and fails if the build would include GPL
 or non-free parts. Most video is decoded by the console, through
 [libounce](https://github.com/ouncebrew/libounce)'s `VideoDecoder`; FFmpeg
-decodes HEVC and 10-bit H.264.
+decodes HEVC, 10-bit H.264 and VP9, and H.264 and VP9 over 1080p.
 
 `tools/make_icon.py` draws `icon.jpg`.
 
