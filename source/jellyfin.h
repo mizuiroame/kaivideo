@@ -108,6 +108,19 @@ typedef struct {
 void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index);
 // Reads the answer. False if it says nothing playable.
 bool jfPlanParse(const char *json, JfPlan *out);
+// What playing tells the server (started, how far, stopped).
+typedef struct {
+    const char *item, *source;  // The location's ids (source is LIVE_SOURCE's "live" for a channel).
+    int64_t position_ns;
+    bool paused, converted;
+    const char *play_session;
+    const char *live_stream;    // The channel's stream the server opened, or "".
+} JfReport;
+
+// The body of a /Sessions/Playing report. A channel has no media source of
+// its own: it's left out, and the stream the server opened for it goes in.
+void jfReportBody(char *out, size_t size, const JfReport *r);
+
 // Live TV: the body asking about a channel without the server opening its stream.
 void jfLiveInfoBody(char *out, size_t size, const char *user_id);
 // From that answer, the channel's own HLS source (an http or https .m3u8 that

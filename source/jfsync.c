@@ -33,7 +33,6 @@
 #define POLL_SECONDS 2
 #define SIGN_IN_POLLS 300       // About ten minutes.
 #define REPORTS_MAX 16
-#define NS_PER_TICK 100
 #define IMAGE_QUALITY 85
 #define IMAGE_FORMAT "Jpg"  // What stb_image reads, whatever the server would prefer.
 
@@ -68,6 +67,7 @@ static struct {
     JfCatalog ready;
     bool has_ready;
     char play_session[JF_ID_MAX + 24];
+    char live_stream[JF_LIVE_STREAM_MAX];  // The playing channel's stream the server opened, or "".
     bool converted;
     bool use_password;
     char sign_in_user[CREDENTIAL_MAX], sign_in_password[CREDENTIAL_MAX];
@@ -424,11 +424,10 @@ static bool runJob(const Job *job)
     }
     static const char *const ENDPOINTS[] = {"/Sessions/Playing", "/Sessions/Playing/Progress",
                                             "/Sessions/Playing/Stopped"};
-    snprintf(body, sizeof(body),
-             "{\"ItemId\":\"%s\",\"MediaSourceId\":\"%s\",\"PositionTicks\":%" PRId64
-             ",\"IsPaused\":%s,\"CanSeek\":true,\"PlayMethod\":\"%s\",\"PlaySessionId\":\"%s\"}",
-             item, source, job->position_ns / NS_PER_TICK, job->flag ? "true" : "false",
-             job->converted ? "Transcode" : "DirectPlay", job->play_session);
+    JfReport report = {.item = item, .source = source, .position_ns = job->position_ns, .paused = job->flag,
+                       .converted = job->converted, .play_session = job->play_session,
+                       .live_stream = job->live_stream};
+    jfReportBody(body, sizeof(body), &report);
     return post(ENDPOINTS[job->kind], body, false);
 }
 
@@ -676,6 +675,8 @@ static void addJob(Job *job)
     pthread_mutex_lock(&g.lock);
     snprintf(job->play_session, sizeof(job->play_session), "%s", g.play_session);
     job->converted = g.converted;
+    if (job->type == JOB_REPORT)  // A channel's stream the server opened (closing one names its own).
+        snprintf(job->live_stream, sizeof(job->live_stream), "%s", g.live_stream);
     bool progress = job->type == JOB_REPORT && job->kind == JF_REPORT_PROGRESS;
     bool merged = false;
     for (int i = 0; progress && i < g.job_count && !merged; i++)  // Only the latest progress counts.
@@ -696,12 +697,13 @@ void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, 
     addJob(&job);
 }
 
-void jfSyncSetPlayback(const char *play_session, bool converted)
+void jfSyncSetPlayback(const char *play_session, bool converted, const char *live_stream)
 {
     if (!g.running)
         return;
     pthread_mutex_lock(&g.lock);
     snprintf(g.play_session, sizeof(g.play_session), "%s", play_session);
+    snprintf(g.live_stream, sizeof(g.live_stream), "%s", live_stream ? live_stream : "");
     g.converted = converted;
     pthread_mutex_unlock(&g.lock);
 }

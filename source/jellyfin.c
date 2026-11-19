@@ -280,6 +280,24 @@ bool jfPlanParse(const char *json, JfPlan *out)
     return ok;
 }
 
+#define REPORT_NS_PER_TICK 100
+
+void jfReportBody(char *out, size_t size, const JfReport *r)
+{
+    bool live = !strcmp(r->source, "live");
+    int n = snprintf(out, size, "{\"ItemId\":\"%s\",", r->item);
+    if (!live && n > 0 && (size_t)n < size)
+        n += snprintf(out + n, size - (size_t)n, "\"MediaSourceId\":\"%s\",", r->source);
+    if (live && r->live_stream[0] && n > 0 && (size_t)n < size)
+        n += snprintf(out + n, size - (size_t)n, "\"LiveStreamId\":\"%s\",", r->live_stream);
+    if (n > 0 && (size_t)n < size)
+        snprintf(out + n, size - (size_t)n,
+                 "\"PositionTicks\":%" PRId64 ",\"IsPaused\":%s,\"CanSeek\":%s,\"PlayMethod\":\"%s\","
+                 "\"PlaySessionId\":\"%s\"}",
+                 r->position_ns / REPORT_NS_PER_TICK, r->paused ? "true" : "false", live ? "false" : "true",
+                 r->converted ? "Transcode" : "DirectPlay", r->play_session);
+}
+
 void jfLiveInfoBody(char *out, size_t size, const char *user_id)
 {
     snprintf(out, size, "{\"UserId\":\"%s\",\"AutoOpenLiveStream\":false,\"EnableDirectPlay\":true}", user_id);

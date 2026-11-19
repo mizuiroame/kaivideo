@@ -88,27 +88,40 @@ void appJellyfinUpdate(App *app, uint64_t now)
     }
 }
 
-void appJellyfinPlaybackStarted(App *app, uint64_t now)
+// Live TV is reported too, so the server shows the channel watched; it has
+// no place to resume, so its position says nothing and is sent as 0.
+static int64_t reportedPosition(const App *app, int64_t position_ns)
 {
-    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path))
-        return;
-    app->jf_last_report = now;
-    jfSyncReport(JF_REPORT_START, app->playing_path, playerPosition(app->player), false);
+    return liveIsLocation(app->playing_path) ? 0 : position_ns;
 }
 
-void appJellyfinPlaybackTick(App *app, uint64_t now)
+void appJellyfinPlaybackStarted(App *app, uint64_t now)
 {
-    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path) || now - app->jf_last_report < REPORT_NS)
+    if (!jfIsLocation(app->playing_path))
         return;
     app->jf_last_report = now;
-    jfSyncReport(JF_REPORT_PROGRESS, app->playing_path, playerPosition(app->player), playerPaused(app->player));
+    app->jf_reported_paused = false;
+    jfSyncReport(JF_REPORT_START, app->playing_path, reportedPosition(app, playerPosition(app->player)), false);
+}
+
+// Every so often, and at once when it's paused or goes on again.
+void appJellyfinPlaybackTick(App *app, uint64_t now)
+{
+    if (!jfIsLocation(app->playing_path))
+        return;
+    bool paused = playerPaused(app->player);
+    if (paused == app->jf_reported_paused && now - app->jf_last_report < REPORT_NS)
+        return;
+    app->jf_last_report = now;
+    app->jf_reported_paused = paused;
+    jfSyncReport(JF_REPORT_PROGRESS, app->playing_path, reportedPosition(app, playerPosition(app->player)), paused);
 }
 
 void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched)
 {
-    if (!jfIsLocation(app->playing_path) || liveIsLocation(app->playing_path))
+    if (!jfIsLocation(app->playing_path))
         return;
-    jfSyncReport(JF_REPORT_STOP, app->playing_path, position_ns, false);
-    if (watched)
+    jfSyncReport(JF_REPORT_STOP, app->playing_path, reportedPosition(app, position_ns), false);
+    if (watched && !liveIsLocation(app->playing_path))
         jfSyncSetPlayed(app->playing_path, true);
 }

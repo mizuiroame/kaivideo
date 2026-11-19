@@ -82,8 +82,9 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size);
 // A text subtitle track of a location, as SubRip (free with netResponseFree).
 bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out);
-// What the reports about the video playing say about how it plays.
-void jfSyncSetPlayback(const char *play_session, bool converted);
+// What the reports about the video playing say about how it plays, and the
+// channel's stream the server opened (NULL or "" for none).
+void jfSyncSetPlayback(const char *play_session, bool converted, const char *live_stream);
 
 // The address and header for reading a location's file; for its picture.
 bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size);

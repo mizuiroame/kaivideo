@@ -305,6 +305,20 @@ static void testPlan(void)
     CHECK(!jfLivePlanParse("nonsense", &p));
     jfLiveInfoBody(body, sizeof(body), "u1");
     CHECK(strstr(body, "\"AutoOpenLiveStream\":false") && strstr(body, "\"UserId\":\"u1\""));
+
+    // What playing tells the server: a video, and a channel (which has no media source of its own).
+    JfReport report = {.item = "i1", .source = "s1", .position_ns = 12300000000ll, .paused = true,
+                       .converted = false, .play_session = "ps1", .live_stream = ""};
+    jfReportBody(body, sizeof(body), &report);
+    CHECK(strstr(body, "\"ItemId\":\"i1\"") && strstr(body, "\"MediaSourceId\":\"s1\""));
+    CHECK(strstr(body, "\"PositionTicks\":123000000,") && strstr(body, "\"IsPaused\":true"));
+    CHECK(strstr(body, "\"PlayMethod\":\"DirectPlay\"") && strstr(body, "\"PlaySessionId\":\"ps1\""));
+    CHECK(!strstr(body, "LiveStreamId"));
+    report = (JfReport){.item = "c1", .source = "live", .position_ns = 0, .paused = false, .converted = true,
+                        .play_session = "ps2", .live_stream = "ls9"};
+    jfReportBody(body, sizeof(body), &report);
+    CHECK(strstr(body, "\"ItemId\":\"c1\"") && !strstr(body, "MediaSourceId") && strstr(body, "\"LiveStreamId\":\"ls9\""));
+    CHECK(strstr(body, "\"PlayMethod\":\"Transcode\"") && strstr(body, "\"IsPaused\":false"));
 }
 
 static void testHlsLists(void)

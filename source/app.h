@@ -125,6 +125,7 @@ struct App {
     bool jf_signing;            // The sign-in panel is up.
     char jf_last_error[128];
     uint64_t jf_last_refresh, jf_last_report;
+    bool jf_reported_paused;    // What the last report said: a pause or going on is told at once.
 };
 
 // main.c

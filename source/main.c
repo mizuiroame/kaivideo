@@ -345,7 +345,7 @@ static void beginPlaying(App *app, uint64_t now)
     app->open_at_ns = 0;
     app->playing_converted = playerIsConverted(app->player);
     if (jfIsLocation(path)) {
-        jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted);
+        jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted, app->open_plan.live_stream_id);
         if (!liveIsLocation(path))
             tpfetchStart(path);  // Its pictures for the bar, if the server made them.
     }
@@ -381,7 +381,7 @@ static void releaseServerStream(App *app)
     if (!jfIsLocation(app->playing_path))
         return;
     if (!app->open_plan.direct && app->open_plan.play_session[0]) {
-        jfSyncSetPlayback(app->open_plan.play_session, true);  // This opening's, not the last video's.
+        jfSyncSetPlayback(app->open_plan.play_session, true, NULL);  // This opening's, not the last video's.
         jfSyncEndConversion(app->playing_path);
     }
     if (liveIsLocation(app->playing_path))

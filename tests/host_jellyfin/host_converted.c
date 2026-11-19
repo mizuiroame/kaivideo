@@ -85,7 +85,7 @@ static void playConverted(const char *location)
         videoClose(v);
     }
     hlsStop();
-    jfSyncSetPlayback(plan.play_session, true);
+    jfSyncSetPlayback(plan.play_session, true, NULL);
     jfSyncEndConversion(location);
 }
 
