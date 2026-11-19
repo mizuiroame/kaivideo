@@ -95,6 +95,8 @@ static struct {
         size_t size;
     } subtitle_queue[SUBTITLE_QUEUE];
     int subtitle_queued;
+    int first_segment;            // The first video segment read, -1 before one is: playback's 0.
+    int64_t playback_ns;          // Where playback is (hlsSetPlayback), -1 until told.
 } g;
 
 #define VIDEO (g.lists[0].list)
@@ -244,14 +246,24 @@ static void waitForWork(void)
 
 // --- Subtitles of a channel's own ---
 
-// The segment the picture is reading, by media sequence; -1 before it reads one.
-static int64_t pictureSequence(void)
+// The segment being shown, by media sequence: playback's time 0 is the start
+// of the first segment read (readers run ahead of what shows). -1 before it's known.
+static int64_t playbackSequence(void)
 {
-    int at = -1;
-    for (int r = 0; r < READERS; r++)
-        if (g.readers[r].owner && g.readers[r].list == 0 && g.readers[r].segment > at)
-            at = g.readers[r].segment;
-    return at < 0 ? -1 : VIDEO.sequence + at;
+    if (g.first_segment < 0 || g.first_segment >= VIDEO.count || g.playback_ns < 0)
+        return -1;
+    int first, last;
+    hlsPlaylistSpan(&VIDEO, VIDEO.starts_ns[g.first_segment] + g.playback_ns, 1, &first, &last);
+    return VIDEO.sequence + first;
+}
+
+void hlsSetPlayback(int64_t position_ns)
+{
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    g.playback_ns = position_ns;
+    pthread_mutex_unlock(&g.lock);
 }
 
 // Reads the chosen subtitles' list, the first time. Under the lock.
@@ -296,7 +308,7 @@ static bool subtitleWork(void)
         loadSubtitleList(list, choice);
         return true;
     }
-    int64_t sequence = pictureSequence();
+    int64_t sequence = playbackSequence();
     if (sequence < 0)
         return false;
     int at = (int)(sequence - m->list.sequence), from = at - SUBTITLES_BEHIND > 0 ? at - SUBTITLES_BEHIND : 0;
@@ -545,6 +557,8 @@ static bool start(const char *master_url, const char *auth, long long max_bitrat
     g.max_bitrate = max_bitrate;
     g.playlist_timeout_s = timeout_s;
     g.fetch_index = -1;
+    g.first_segment = -1;
+    g.playback_ns = -1;
     g.interrupts = mediaFileInterrupts();
     g.net = netClientOpen();
     bool ok = g.net && readPlaylists(master_url, start_ns);
@@ -709,6 +723,8 @@ static int openMemory(AVIOContext **pb, char *data, size_t size)
 
 static void noteReader(const void *owner, int list, int segment)
 {
+    if (list == 0 && g.first_segment < 0)
+        g.first_segment = segment;  // Where FFmpeg's times, and so playback's, begin.
     int r = 0;
     while (r < READERS - 1 && g.readers[r].owner && (g.readers[r].owner != owner || g.readers[r].list != list))
         r++;

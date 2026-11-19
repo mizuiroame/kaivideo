@@ -78,8 +78,10 @@ int main(int argc, char **argv)
         double t = pkt->pts == AV_NOPTS_VALUE ? -1 : pkt->pts * av_q2d(st->time_base);
         if (first_pts[s] == AV_NOPTS_VALUE)
             first_pts[s] = pkt->pts;
-        if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && pkt->pts != AV_NOPTS_VALUE)
+        if (st->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && pkt->pts != AV_NOPTS_VALUE) {
             last_video_ns = (int64_t)(t * 1e9) - shift_ns;
+            hlsSetPlayback(last_video_ns);  // Here reading is playing.
+        }
         char *data;
         size_t size;
         while (hlsTakeSubtitle(&data, &size)) {

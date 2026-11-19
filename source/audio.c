@@ -48,7 +48,7 @@ typedef struct {
 
 struct Audio {
     MediaInput input;
-    int64_t time_shift, seek_shift;  // Taken from the times of the sound's and the seek's streams.
+    int64_t seek_shift;  // Taken from the seek's stream's times (shiftPacket does the sound's).
     AVFormatContext *fmt;
     AVCodecContext *codec;
     SwrContext *swr;
@@ -398,6 +398,20 @@ static void ringsFree(Audio *a)
             av_packet_free(&a->rings[t].items[i]);
 }
 
+// Converted and live streams don't start at 0: every sound track's packets
+// (those kept for a change of track too) go back by where playback's 0 is,
+// in their own stream's time.
+static void shiftPacket(const Audio *a, AVPacket *p)
+{
+    if (!a->input.start_us || trackOfStream(a, p->stream_index) == NO_TRACK)
+        return;
+    int64_t shift = av_rescale_q(a->input.start_us, AV_TIME_BASE_Q, a->fmt->streams[p->stream_index]->time_base);
+    if (p->pts != AV_NOPTS_VALUE)
+        p->pts -= shift;
+    if (p->dts != AV_NOPTS_VALUE)
+        p->dts -= shift;
+}
+
 // From the packet before the one holding from_ns: a decoder needs one to start well.
 static void replayFrom(Audio *a, int64_t from_ns)
 {
@@ -441,12 +455,7 @@ static bool fill(Audio *a)
             avcodec_send_packet(a->codec, NULL);  // Drain what's left.
             continue;
         }
-        if (a->pkt->stream_index == a->stream && a->time_shift) {
-            if (a->pkt->pts != AV_NOPTS_VALUE)
-                a->pkt->pts -= a->time_shift;
-            if (a->pkt->dts != AV_NOPTS_VALUE)
-                a->pkt->dts -= a->time_shift;
-        }
+        shiftPacket(a, a->pkt);
         ringKeep(a, a->pkt);
         if (a->pkt->stream_index == a->stream)
             avcodec_send_packet(a->codec, a->pkt);
@@ -749,7 +758,6 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     if (a->seek_stream < 0)
         a->seek_stream = a->stream;  // Sound only: its own.
     a->seek_time_base = a->fmt->streams[a->seek_stream]->time_base;
-    a->time_shift = av_rescale_q(a->input.start_us, AV_TIME_BASE_Q, a->time_base);
     a->seek_shift = av_rescale_q(a->input.start_us, AV_TIME_BASE_Q, a->seek_time_base);
     describeSound(a, st);
     for (int i = 0; i < BUFFER_COUNT; i++) {

@@ -311,6 +311,8 @@ static void takeLiveSubtitles(Player *p)
 {
     char *data;
     size_t size;
+    if (hlsIsLocation(p->path) && hlsSubtitleCount() > 0)
+        hlsSetPlayback(p->position_ns);
     while (hlsTakeSubtitle(&data, &size)) {
         bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
         if (live)

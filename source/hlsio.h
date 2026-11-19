@@ -43,8 +43,11 @@ bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist);
 int hlsSubtitleCount(void);
 const char *hlsSubtitleName(int track);
 const char *hlsSubtitleLanguage(int track);
-// Starts fetching a track's segments near the picture's (-1: none).
+// Starts fetching a track's segments near what plays (-1: none).
 void hlsSelectSubtitle(int track);
+// Where playback is (0: the stream's start), so the subtitles fetched are
+// those of what shows, not of where the readers have got to ahead of it.
+void hlsSetPlayback(int64_t position_ns);
 // The next WebVTT segment of the chosen track (data to be freed); false if none waits.
 bool hlsTakeSubtitle(char **data, size_t *size);
 void hlsCloseInput(AVIOContext *playlist);
