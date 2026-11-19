@@ -17,7 +17,9 @@ of films and series, with the console's own hardware video decoder.
 |-------|----------|---------------------|
 | ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) | ![A video's details](docs/screenshots/details.png) |
 
-The screenshots show made-up films and series.
+![The Live TV guide](docs/screenshots/live_tv.png)
+
+The screenshots show made-up films, series and channels.
 
 > KaiVideo is an independent project. It is not affiliated with, endorsed by
 > or sponsored by Nintendo. See the [Legal notice](#legal-notice).
@@ -38,9 +40,11 @@ The screenshots show made-up films and series.
   are converted by your server, at the quality you choose. Your libraries
   are tabs, your **favorites** have a row on Home, **Skip intro** and **Skip
   credits** come up where the server marked them, dragging the bar shows a
-  **picture of that moment**, and **Live TV** has its own tab with what's on
-  now and next. What you watch stays in sync with your other devices. See
-  [Jellyfin](#jellyfin).
+  **picture of that moment**, and **picture subtitles** (PGS, VobSub) are
+  drawn onto the video by the server. **Live TV** has its own tab with a
+  **guide** of the next hours; a channel with a stream of its own plays
+  straight from it, with its own sound tracks and subtitles. What you watch
+  stays in sync with your other devices. See [Jellyfin](#jellyfin).
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
@@ -169,11 +173,18 @@ server needs video transcoding allowed for your account.
 **Video quality**, in Settings or in the Playback list (**↑**) while a video
 plays, sets the most a video may use, from **Auto** down to 420 kb/s: a
 video over it is converted to fit. On a converted video, changing the
-quality or the sound track opens it again at the same place, which takes a
-few seconds.
+quality opens it again at the same place, which takes a few seconds; changing
+the sound track doesn't stop the picture: the server converts that track
+alone, and it comes in a second or two.
 
-Separate subtitle files on the server show in the subtitles list too. The
-sign-in is kept in `config/jellyfin.txt` on the card: **Sign out** ends it on
+Separate subtitle files on the server show in the subtitles list too.
+**Picture subtitles** (PGS from Blu-ray, VobSub from DVD), which the console
+can't draw, show as "... (burned in)": chosen, the video opens again at the
+same place, converted by the server with them drawn on it; another track or
+Off goes back to the original file. KaiVideo never asks for them unless
+chosen, so a film with a picture track marked default still plays as it is.
+
+The sign-in is kept in `config/jellyfin.txt` on the card: **Sign out** ends it on
 the server.
 
 What your server adds, when it's set up for it:
@@ -190,10 +201,16 @@ What your server adds, when it's set up for it:
   its guide: a row for each channel and its programs over two hours, with a
   line at the time now. **↑** / **↓** change channel and **◀** / **▶** move
   through its programs, up to four hours ahead; the strip at the bottom says
-  what the cursor is on. **A** watches the channel, converted by the server
-  (tap a program to put the cursor on it, and tap it again to watch);
-  **L** / **R** change channel while it plays. It starts a few seconds behind
-  live, so it doesn't stop to wait for the server.
+  what the cursor is on. **A** watches the channel (tap a program to put the
+  cursor on it, and tap it again to watch); **L** / **R** change channel while
+  it plays, or while one opens, skipping as many as you press; **B** goes back
+  at once. A channel whose source is an HLS stream of its own plays straight
+  from it, at the best quality up to 1080p, with its own sound tracks (**X**)
+  and WebVTT subtitles (**Y**); live captions run a little behind the voice,
+  which a negative subtitle delay in the Playback list makes up for. Other
+  channels are converted by the server. It starts a few seconds behind live,
+  so it doesn't stop to wait. The channel you watch shows as playing on the
+  server, as videos do.
 
 ### Where KaiVideo keeps its files
 
@@ -257,8 +274,8 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 ## Limitations
 
-- **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown; text ones
-  are.
+- **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown from the
+  SD card; text ones are. From Jellyfin, the server draws them on.
 - **10-bit** VP9 and AV1, and **12-bit** HEVC, can't be played.
 - **HEVC** is decoded on the CPU, because the decoder interface KaiVideo uses
   ([libounce](https://github.com/ouncebrew/libounce)) doesn't offer it. 10-bit
@@ -273,18 +290,19 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
   the first round of pictures take longer.
 - After a jump (**◀** / **▶**, **L** / **R**, the progress bar) the picture
   can stutter for a moment.
-- **Jellyfin**: converted videos start, change sound track or quality, and
-  jump far back, in a few seconds rather than at once, while the server
-  converts from there. Their subtitles come without styles. It has been tried
-  on a home network, and over https through a test proxy with a certificate
-  of its own; not yet from outside a home network.
+- **Jellyfin**: converted videos start, change quality or picture subtitles,
+  and jump far back, in a few seconds rather than at once, while the server
+  converts from there. Their text subtitles come without styles. It has been
+  tried on a home network, and over https through a test proxy with a
+  certificate of its own; not yet from outside a home network.
 - **Live TV** has been tried with test channels a server made from video
-  files, not with a TV tuner. Programs can't be recorded.
+  files and with free channels' own streams, not with a TV tuner. A channel
+  the server converts keeps one sound track. Programs can't be recorded.
 
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
-- **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
+- **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
 
 ## Building
@@ -321,7 +339,9 @@ decodes HEVC and 10-bit H.264.
   assets. KaiVideo is built only with open-source tools and libraries.
 - **No circumvention.** KaiVideo does not circumvent any technical protection
   measure. It doesn't play DRM-protected video, and it doesn't download from
-  streaming sites. It plays the files that users put on their own card.
+  streaming sites. It plays the files that users put on their own card or
+  their own Jellyfin server, and the Live TV channels their own server lists;
+  it comes with no channels or channel lists of its own.
 - **FFmpeg and FriBidi.** KaiVideo uses FFmpeg, built under the LGPL 2.1 (no
   GPL or non-free parts), and FriBidi, under the same license. The script that
   builds FFmpeg is in this repository and FriBidi comes with the devkit, so
