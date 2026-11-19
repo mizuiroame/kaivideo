@@ -739,8 +739,8 @@ void jfSyncSetFavorite(const char *location, bool favorite)
     addJob(&job);
 }
 
-bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, JfPlan *out, char *error,
-                   size_t error_size, const volatile bool *cancel)
+bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index, JfPlan *out,
+                   char *error, size_t error_size, const volatile bool *cancel)
 {
     char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
     char *body = malloc(PLAN_BODY_MAX);
@@ -753,7 +753,7 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
         snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s%s%s", s.server, item, s.user_id,
                  live ? "" : "&mediaSourceId=", live ? "" : source);
         jfAuthHeader(&s, g.version, auth, sizeof(auth));
-        jfPlaybackBody(body, PLAN_BODY_MAX, s.user_id, max_bitrate, audio_index);
+        jfPlaybackBody(body, PLAN_BODY_MAX, s.user_id, max_bitrate, audio_index, subtitle_index);
         NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S,
                               .cancel = cancel};
         NetResponse r;

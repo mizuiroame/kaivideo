@@ -36,6 +36,7 @@ typedef struct {
     ExtState state;     // Under ext_lock.
     int stream_index;   // The server's number.
     int live_track_plus1;  // A channel's own subtitles (hlsio.h), plus 1; 0 for others.
+    int picture_plus1;     // A picture subtitle the server draws on the video: its number plus 1; 0 for others.
 } ExtSub;
 
 struct Player {
@@ -95,6 +96,9 @@ struct Player {
     int plan_audio_count;
     bool audio_restart;
     int audio_restart_index;
+    int picture_burned;        // The picture subtitle the server draws (its number), -1 for none.
+    bool subtitle_restart;     // Another (or no) picture subtitle was chosen: the server makes the video again.
+    int subtitle_restart_index;
     int64_t base_ns;           // Where a converted stream begins.
     bool reopen_wanted;
     int64_t reopen_at_ns;
@@ -258,6 +262,13 @@ static void updateExternal(Player *p)
 void playerSetSubtitle(Player *p, int track)
 {
     p->subtitle = track >= 0 && track < playerSubtitleCount(p) ? track : -1;
+    if (p->location[0]) {  // From a server: a picture subtitle is drawn by it, on a video made again.
+        int picture = p->subtitle >= 0 && p->subtitle < p->ext_count ? p->ext[p->subtitle].picture_plus1 - 1 : -1;
+        if (picture != p->picture_burned) {
+            p->subtitle_restart = true;
+            p->subtitle_restart_index = picture;
+        }
+    }
     if (hlsIsLocation(p->path) && hlsSubtitleCount() > 0) {  // A channel's own: fetched only while chosen.
         bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
         hlsSelectSubtitle(live ? p->ext[p->subtitle].live_track_plus1 - 1 : -1);
@@ -293,6 +304,17 @@ void playerAttachPlan(Player *p, const JfPlan *plan, const char *location)
             p->subtitle = p->ext_count;
         p->ext_count++;
     }
+    // Picture subtitles (PGS, VobSub): chosen, the server draws one onto the video.
+    int burned = -1;
+    for (int i = 0; i < plan->picture_count && p->ext_count < EXTERNAL_MAX; i++) {
+        ExtSub *e = &p->ext[p->ext_count];
+        jfPictureLabel(&plan->pictures[i], e->label, sizeof(e->label));
+        e->state = EXT_READY;  // Nothing to fetch or show: it's in the picture.
+        e->picture_plus1 = plan->pictures[i].index + 1;
+        if (i == plan->picture_burned)
+            burned = p->ext_count;
+        p->ext_count++;
+    }
     // A channel's own subtitles: their lines come as it plays (playerUpdate).
     for (int i = 0; hlsIsLocation(p->path) && i < hlsSubtitleCount() && p->ext_count < EXTERNAL_MAX; i++) {
         ExtSub *e = &p->ext[p->ext_count++];
@@ -303,6 +325,17 @@ void playerAttachPlan(Player *p, const JfPlan *plan, const char *location)
     }
     if (!p->converted && had_file_track && p->subtitle >= 0)  // The file's tracks moved down the list.
         p->subtitle += p->ext_count;
+    p->picture_burned = burned >= 0 ? p->ext[burned].picture_plus1 - 1 : -1;
+    if (burned >= 0)
+        p->subtitle = burned;  // What's drawn in the picture shows as the one chosen.
+}
+
+bool playerTakeSubtitleRestart(Player *p, int *stream_index)
+{
+    bool wanted = p->subtitle_restart;
+    p->subtitle_restart = false;
+    *stream_index = p->subtitle_restart_index;
+    return wanted;
 }
 
 // The chosen subtitles' lines that came for a channel's own track.

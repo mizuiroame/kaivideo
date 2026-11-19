@@ -74,10 +74,11 @@ void jfSyncEndConversion(const char *location);
 // The request stops when *cancel (may be NULL) becomes true.
 bool jfSyncLiveSource(const char *location, JfPlan *out, const volatile bool *cancel);
 // Asks the server how to play a location, from any thread. audio_index: the
-// server's number for the sound track, -1 for its choice. Stops when *cancel
-// (may be NULL) becomes true.
-bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, JfPlan *out, char *error,
-                   size_t error_size, const volatile bool *cancel);
+// server's number for the sound track, -1 for its choice; subtitle_index: a
+// picture subtitle for it to draw on the video, -1 for none. Stops when
+// *cancel (may be NULL) becomes true.
+bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index, JfPlan *out,
+                   char *error, size_t error_size, const volatile bool *cancel);
 // The address and header for a conversion the server gave (url as in the plan).
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size);
 // A text subtitle track of a location, as SubRip (free with netResponseFree).

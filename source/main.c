@@ -42,6 +42,7 @@
 #define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
+#define SUBTITLE_UNSAID (-2)         // Opening: no picture subtitle said; the one chosen before, if any.
 #define SEEK_SHORT_NS 10000000000ll
 #define STALL_NS 2000000000ull       // Playing without moving this long is logged.
 #define WAITING_NS 1000000000ull     // Without moving this long, the wait is shown.
@@ -205,6 +206,19 @@ static int preferredSound(const App *app, const JfPlan *plan)
     return -1;
 }
 
+// The picture subtitle chosen before for this video or series (by its name
+// in the list): the server's number, -1 if none of this video's is that one.
+static int preferredPicture(const App *app, const JfPlan *plan)
+{
+    char label[JF_TRACK_NAME_MAX];  // As long as the list's (player.c), so a long name matches cut as it is.
+    for (int i = 0; app->open_subs[0] && i < plan->picture_count; i++) {
+        jfPictureLabel(&plan->pictures[i], label, sizeof(label));
+        if (!strcmp(label, app->open_subs))
+            return plan->pictures[i].index;
+    }
+    return -1;
+}
+
 // Live TV: the channel straight from its own HLS source, without the server
 // converting it, when it has one the console can read. True if it plays so.
 static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
@@ -227,8 +241,9 @@ static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
 
 // Asks the server how to play the video, and starts its conversion if that's
 // the way. What to open goes in path. False, with the reason, if it can't.
-// B (open_cancelled) cuts each step short.
-static bool prepareRemote(App *app, int audio_index, bool try_direct, char *path, size_t size)
+// B (open_cancelled) cuts each step short. subtitle_index: a picture subtitle
+// for the server to draw (-1 none), or SUBTITLE_UNSAID for the one chosen before.
+static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool try_direct, char *path, size_t size)
 {
     JfPlan *plan = &app->open_plan;
     long long bitrate = settingQualityBitrate(&app->config);
@@ -236,12 +251,16 @@ static bool prepareRemote(App *app, int audio_index, bool try_direct, char *path
     const volatile bool *cancel = &app->open_cancelled;
     if (try_direct && audio_index < 0 && openLiveDirect(app, bitrate, path, size))
         return true;
-    if (app->open_cancelled ||
-        !jfSyncResolve(app->playing_path, bitrate, audio_index, plan, error, sizeof(app->open_error), cancel))
+    int subtitle = subtitle_index == SUBTITLE_UNSAID ? -1 : subtitle_index;
+    if (app->open_cancelled || !jfSyncResolve(app->playing_path, bitrate, audio_index, subtitle, plan, error,
+                                              sizeof(app->open_error), cancel))
         return false;
-    int preferred = audio_index < 0 && !plan->direct ? preferredSound(app, plan) : -1;
-    if (preferred >= 0 &&
-        !jfSyncResolve(app->playing_path, bitrate, preferred, plan, error, sizeof(app->open_error), cancel))
+    // Asked again if the sound or the picture subtitles chosen before need another conversion.
+    int sound = audio_index < 0 && !plan->direct ? preferredSound(app, plan) : -1;
+    int picture = subtitle_index == SUBTITLE_UNSAID ? preferredPicture(app, plan) : -1;
+    if ((sound >= 0 || picture >= 0) &&
+        !jfSyncResolve(app->playing_path, bitrate, sound >= 0 ? sound : audio_index, picture >= 0 ? picture : subtitle,
+                       plan, error, sizeof(app->open_error), cancel))
         return false;
     if (plan->direct) {
         snprintf(path, size, "%s", app->playing_path);
@@ -260,8 +279,10 @@ static void *openThread(void *arg)
     bool remote = jfIsLocation(app->playing_path);
     snprintf(path, sizeof(path), "%s", app->playing_path);
     int audio_index = app->next_audio_plus1 - 1;
+    int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
     app->next_audio_plus1 = 0;
-    if (!remote || prepareRemote(app, audio_index, true, path, sizeof(path)))
+    app->next_subtitle_set = false;
+    if (!remote || prepareRemote(app, audio_index, subtitle_index, true, path, sizeof(path)))
         app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
     if (!app->open_result && app->open_plan.source_url[0] && !app->open_cancelled) {
         // The channel's own stream opened but won't play here: the server converts it.
@@ -269,7 +290,7 @@ static void *openThread(void *arg)
         hlsStop();
         memset(&app->open_plan, 0, sizeof(app->open_plan));
         app->open_error[0] = '\0';
-        if (prepareRemote(app, audio_index, false, path, sizeof(path)))
+        if (prepareRemote(app, audio_index, subtitle_index, false, path, sizeof(path)))
             app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
     }
     if (app->open_result && remote && !liveIsLocation(app->playing_path))
@@ -306,6 +327,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     app->open_result = NULL;
     memset(&app->open_plan, 0, sizeof(app->open_plan));  // Nothing of the last video's is ended for this one.
     app->open_sound[0] = '\0';
+    app->open_subs[0] = '\0';
     app->quality_applied = app->config.jf_quality;
     app->open_start_ns = app->open_at_ns;
     if (!app->open_at_ns && !app->open_from_start && !resumeFind(&app->resume, path, &app->open_start_ns, NULL))
@@ -314,8 +336,10 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     int show = item >= 0 ? app->library.items[item].show : -1;
     const char *sound = NULL, *subs = NULL;
     if (jfIsLocation(path) && trackPrefsFind(&app->tracks, path, show >= 0 ? app->library.shows[show].name : NULL,
-                                             &sound, &subs))
+                                             &sound, &subs)) {
         snprintf(app->open_sound, sizeof(app->open_sound), "%s", sound);
+        snprintf(app->open_subs, sizeof(app->open_subs), "%s", subs);
+    }
     app->opening = pthread_create(&app->open_thread, NULL, openThread, app) == 0;
     if (!app->opening) {
         thumbsPause(false);
@@ -463,8 +487,9 @@ static bool reachedEnd(const Player *p)
     return duration <= 0 || duration - playerPosition(p) <= RESUME_END_MARGIN_NS;
 }
 
-// Opens the video again at position, with this sound (the server's number).
-static void reopenVideo(App *app, int audio_index, int64_t position, uint64_t now)
+// Opens the video again at position, with this sound and this picture
+// subtitle drawn on it (the server's numbers; -1 for no subtitle).
+static void reopenVideo(App *app, int audio_index, int subtitle_index, int64_t position, uint64_t now)
 {
     char path[BROWSER_PATH_MAX], name[APP_NAME_MAX];
     snprintf(path, sizeof(path), "%s", app->playing_path);
@@ -474,6 +499,8 @@ static void reopenVideo(App *app, int audio_index, int64_t position, uint64_t no
     app->open_at_ns = live ? 0 : position;
     app->open_from_start = live || position <= 0;
     app->next_audio_plus1 = audio_index + 1;
+    app->next_subtitle_set = true;
+    app->next_subtitle = subtitle_index;
     appStartVideo(app, path, name, now);
 }
 
@@ -482,6 +509,14 @@ static int currentSound(const App *app)
 {
     int track = playerAudioTrack(app->player);
     return track >= 0 && track < app->open_plan.audio_count ? app->open_plan.audio[track].index : -1;
+}
+
+// The server's number for the picture subtitle it draws, -1 if none.
+static int currentPicture(const App *app)
+{
+    const JfPlan *plan = &app->open_plan;
+    int burned = plan->picture_burned;
+    return burned >= 0 && burned < plan->picture_count ? plan->pictures[burned].index : -1;
 }
 
 // L or R on a channel: the one before or after it in the guide, at once.
@@ -547,17 +582,19 @@ static void openQueued(App *app, uint64_t now)
 
 static void reopenIfAsked(App *app, uint64_t now)
 {
-    int audio;
+    int audio, picture;
     int64_t at;
     if (!jfIsLocation(app->playing_path))
         return;
     if (playerTakeAudioRestart(app->player, &audio)) {
-        reopenVideo(app, audio, playerPosition(app->player), now);
+        reopenVideo(app, audio, currentPicture(app), playerPosition(app->player), now);
+    } else if (playerTakeSubtitleRestart(app->player, &picture)) {
+        reopenVideo(app, currentSound(app), picture, playerPosition(app->player), now);
     } else if (playerTakeReopen(app->player, now, &at)) {
-        reopenVideo(app, currentSound(app), at, now);
+        reopenVideo(app, currentSound(app), currentPicture(app), at, now);
     } else if (!app->menu.open && app->quality_applied != app->config.jf_quality) {
         appSaveSettings(app);
-        reopenVideo(app, currentSound(app), playerPosition(app->player), now);
+        reopenVideo(app, currentSound(app), currentPicture(app), playerPosition(app->player), now);
     }
 }
 

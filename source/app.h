@@ -47,7 +47,10 @@ struct App {
     int64_t open_start_ns;      // Where playback will begin: a conversion starts there.
     uint64_t open_asked;        // When the opening began, for the log.
     int next_audio_plus1;       // The server's number of the sound to open with, plus 1; 0: its choice.
+    bool next_subtitle_set;     // Opened again: the picture subtitle for the server to draw is said,
+    int next_subtitle;          // its number (-1 for none); else the one chosen before, if any.
     char open_sound[JF_TRACK_NAME_MAX];  // The sound track chosen before for this video or series.
+    char open_subs[JF_TRACK_NAME_MAX + 16];  // And the subtitles.
     JfPlan open_plan;           // How the video being opened or played comes from the server.
     bool playing_converted;
     int quality_applied;        // The quality the video playing was opened with.

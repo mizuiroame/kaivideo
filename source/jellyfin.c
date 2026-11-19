@@ -216,11 +216,13 @@ static int intOf(const json_t *object, const char *key);
     "{\"Format\":\"ass\",\"Method\":\"External\"},{\"Format\":\"ssa\",\"Method\":\"External\"},"                   \
     "{\"Format\":\"vtt\",\"Method\":\"External\"}]}"
 
-void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index)
+void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index,
+                    int subtitle_index)
 {
     int n = snprintf(out, size, "{\"UserId\":\"%s\",\"MaxStreamingBitrate\":%lld,\"EnableDirectPlay\":true,"
-                                "\"EnableDirectStream\":false,\"EnableTranscoding\":true,\"AutoOpenLiveStream\":true,",
-                     user_id, max_bitrate);
+                                "\"EnableDirectStream\":false,\"EnableTranscoding\":true,\"AutoOpenLiveStream\":true,"
+                                "\"SubtitleStreamIndex\":%d,",
+                     user_id, max_bitrate, subtitle_index);
     if (audio_index >= 0)
         n += snprintf(out + n, size - (size_t)n, "\"AudioStreamIndex\":%d,", audio_index);
     n += snprintf(out + n, size - (size_t)n, "\"DeviceProfile\":" JF_DEVICE_PROFILE "}", max_bitrate,
@@ -253,13 +255,36 @@ static void readTracks(const json_t *source, JfPlan *p)
         } else if (!strcmp(type, "Subtitle") && p->sub_count < JF_PLAN_SUBS &&
                    json_is_true(json_object_get(stream, "IsTextSubtitleStream"))) {
             readTrack(stream, &p->subs[p->sub_count]);
-            if (default_sub && p->subs[p->sub_count].index == json_integer_value(default_sub))
+            bool named = default_sub && json_integer_value(default_sub) >= 0;
+            if (named ? p->subs[p->sub_count].index == json_integer_value(default_sub)
+                      : p->sub_default < 0 && json_is_true(json_object_get(stream, "IsDefault")))
                 p->sub_default = p->sub_count;
             p->sub_count++;
+        } else if (!strcmp(type, "Subtitle") && p->picture_count < JF_PLAN_PICTURES) {
+            readTrack(stream, &p->pictures[p->picture_count++]);
         }
     }
     if (p->audio_current < 0 && p->audio_count)
         p->audio_current = 0;
+}
+
+void jfPictureLabel(const JfTrack *t, char *out, size_t size)
+{
+    snprintf(out, size, "%s (burned in)", t->name);
+}
+
+// The picture subtitle the server draws on the conversion: its address says
+// "SubtitleStreamIndex=N&SubtitleMethod=Encode". An index in pictures, -1 for none.
+static int burnedPicture(const JfPlan *p)
+{
+    const char *at = strstr(p->transcode_url, "SubtitleStreamIndex=");
+    if (!at || !strstr(p->transcode_url, "SubtitleMethod=Encode"))
+        return -1;
+    int index = atoi(at + sizeof("SubtitleStreamIndex=") - 1);
+    for (int i = 0; i < p->picture_count; i++)
+        if (p->pictures[i].index == index)
+            return i;
+    return -1;
 }
 
 bool jfPlanParse(const char *json, JfPlan *out)
@@ -275,6 +300,7 @@ bool jfPlanParse(const char *json, JfPlan *out)
         snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
         snprintf(out->live_stream_id, sizeof(out->live_stream_id), "%s", textOf(source, "LiveStreamId"));
         readTracks(source, out);
+        out->picture_burned = burnedPicture(out);
     }
     json_decref(root);
     return ok;
@@ -323,7 +349,7 @@ bool jfLivePlanParse(const char *json, JfPlan *out)
               strlen(path) < sizeof(out->source_url);
     if (ok) {
         out->direct = true;
-        out->audio_current = out->sub_default = -1;
+        out->audio_current = out->sub_default = out->picture_burned = -1;
         snprintf(out->source_url, sizeof(out->source_url), "%s", path);
         snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
     }

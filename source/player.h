@@ -84,6 +84,9 @@ int playerSubtitleCount(const Player *p);
 const char *playerSubtitleLabel(const Player *p, int track);
 int playerSubtitle(const Player *p);  // -1 for none.
 void playerSetSubtitle(Player *p, int track);
+// A picture subtitle was chosen (or the one drawn was left): the server's
+// number to make the video again with (-1 for none). False if not asked.
+bool playerTakeSubtitleRestart(Player *p, int *stream_index);
 // The text to show now ('\n' between lines); false if none.
 bool playerSubtitleText(Player *p, char *out, size_t size);
 // True if the subtitle color and style settings do something: the track shown

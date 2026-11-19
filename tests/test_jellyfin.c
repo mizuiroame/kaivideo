@@ -280,14 +280,28 @@ static void testPlan(void)
     CHECK(jfPlanParse(ANSWER, &p) && !p.direct && !strcmp(p.transcode_url, "/videos/a/master.m3u8?x=1"));
     CHECK(!strcmp(p.play_session, "ps1") && p.audio_count == 2 && p.audio_current == 1);
     CHECK(p.sub_count == 1 && p.sub_default == 0 && p.subs[0].index == 5 && p.subs[0].external);
+    CHECK(p.picture_count == 1 && p.pictures[0].index == 4 && p.picture_burned == -1);  // Not asked for.
     CHECK(!jfPlanParse("{\"MediaSources\":[{\"SupportsDirectPlay\":false}]}", &p));
     CHECK(!jfPlanParse("nonsense", &p));
 
+    // Picture subtitles the server draws onto the video it converts.
+    static const char BURNED[] =
+        "{\"MediaSources\":[{\"SupportsDirectPlay\":false,"
+        "\"TranscodingUrl\":\"/videos/a/master.m3u8?x=1&SubtitleStreamIndex=3&SubtitleMethod=Encode\",\"MediaStreams\":["
+        "{\"Type\":\"Subtitle\",\"Index\":2,\"IsTextSubtitleStream\":false,\"DisplayTitle\":\"Spanish - DVDSUB\"},"
+        "{\"Type\":\"Subtitle\",\"Index\":3,\"IsTextSubtitleStream\":false,\"DisplayTitle\":\"English - PGSSUB\"},"
+        "{\"Type\":\"Subtitle\",\"Index\":5,\"IsTextSubtitleStream\":true,\"IsDefault\":true,\"DisplayTitle\":\"Text\"}]}]}";
+    CHECK(jfPlanParse(BURNED, &p) && p.picture_count == 2 && p.picture_burned == 1);
+    CHECK(p.sub_count == 1 && p.sub_default == 0);  // Default by its own mark, when the server names none.
+
     char body[4096];
-    jfPlaybackBody(body, sizeof(body), "u1", 8000000, 3);
+    jfPlaybackBody(body, sizeof(body), "u1", 8000000, 3, -1);
     CHECK(strstr(body, "\"AudioStreamIndex\":3") && strstr(body, "\"MaxStreamingBitrate\":8000000"));
-    jfPlaybackBody(body, sizeof(body), "u1", 60000000, -1);
+    // None unless asked for: a picture track marked default would make the server convert.
+    CHECK(strstr(body, "\"SubtitleStreamIndex\":-1"));
+    jfPlaybackBody(body, sizeof(body), "u1", 60000000, -1, 7);
     CHECK(!strstr(body, "AudioStreamIndex") && strstr(body, "\"Value\":\"25000000\""));  // Never more directly.
+    CHECK(strstr(body, "\"SubtitleStreamIndex\":7"));
     CHECK(strlen(body) < sizeof(body) - 1);
 
     // Live TV: a channel's own HLS source, for the console to read itself.

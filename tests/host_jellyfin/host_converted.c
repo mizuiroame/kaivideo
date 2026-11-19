@@ -62,7 +62,7 @@ static void playConverted(const char *location)
 {
     JfPlan plan;
     char error[160] = "", url[JF_URL_MAX + JF_TRANSCODE_URL_MAX], auth[JF_AUTH_MAX];
-    EXPECT(jfSyncResolve(location, MAX_BITRATE, -1, &plan, error, sizeof(error), NULL), error);
+    EXPECT(jfSyncResolve(location, MAX_BITRATE, -1, -1, &plan, error, sizeof(error), NULL), error);
     EXPECT(!plan.direct, "the server chose to send the original");
     printf("%d sound tracks, %d text subtitle tracks\n", plan.audio_count, plan.sub_count);
     jfSyncConvertedRequest(plan.transcode_url, url, sizeof(url), auth, sizeof(auth));

@@ -81,6 +81,7 @@ int64_t jfParseDate(const char *text);
 
 #define JF_PLAN_AUDIO 8
 #define JF_PLAN_SUBS 16
+#define JF_PLAN_PICTURES 8
 #define JF_TRANSCODE_URL_MAX 1536
 #define JF_TRACK_NAME_MAX 64
 #define JF_LIVE_STREAM_MAX 192
@@ -101,13 +102,23 @@ typedef struct {
     int audio_count, sub_count;
     int audio_current;  // An index in audio, -1 if none.
     int sub_default;    // An index in subs, -1 for none.
+    // Picture subtitles (PGS, VobSub): the console can't draw them, the server
+    // can, onto the video it converts.
+    JfTrack pictures[JF_PLAN_PICTURES];
+    int picture_count;
+    int picture_burned; // The one the server draws, an index in pictures; -1 for none.
     char source_url[JF_TRANSCODE_URL_MAX];  // Live TV read straight from the channel's own HLS, or "".
 } JfPlan;
 
-// The body of a PlaybackInfo request. audio_index: the server's number, -1 for its choice.
-void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index);
+// The body of a PlaybackInfo request. audio_index: the server's number, -1 for
+// its choice. subtitle_index: a picture subtitle for it to draw on the video,
+// -1 for none (else it would draw one marked default, and convert for it).
+void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index,
+                    int subtitle_index);
 // Reads the answer. False if it says nothing playable.
 bool jfPlanParse(const char *json, JfPlan *out);
+// A picture subtitle's name in the subtitles list: "English - PGSSUB (burned in)".
+void jfPictureLabel(const JfTrack *t, char *out, size_t size);
 // What playing tells the server (started, how far, stopped).
 typedef struct {
     const char *item, *source;  // The location's ids (source is LIVE_SOURCE's "live" for a channel).
