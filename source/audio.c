@@ -325,6 +325,10 @@ static void addFrame(Audio *a, AVFrame *f)
         *start_ns = pts_ns;
     *frames += (size_t)n;
     // After a seek, drop sound before the target (seeks land on an earlier packet).
+    // One that landed at or past it (a converted stream's segment can begin
+    // later) has nothing to drop: it's ready as it is.
+    if (a->skip_until_ns > 0 && *start_ns >= a->skip_until_ns)
+        a->skip_until_ns = 0;
     if (a->skip_until_ns > 0 && *start_ns >= 0 && *start_ns < a->skip_until_ns) {
         size_t drop = (size_t)((a->skip_until_ns - *start_ns) * (int64_t)g_out_rate / 1000000000);
         if (drop > *frames)
@@ -589,7 +593,8 @@ static void restartFrom(Audio *a, int64_t target_ns)
 static void doSeek(Audio *a, int64_t target_ns)
 {
     flushOutput(a);  // Already faded out and played out: nothing is cut.
-    int64_t ts = av_rescale_q(target_ns, NS_TIME_BASE, a->seek_time_base) + a->seek_shift;
+    int64_t lead = av_rescale_q(a->input.sound_lead_us, AV_TIME_BASE_Q, a->seek_time_base);
+    int64_t ts = av_rescale_q(target_ns, NS_TIME_BASE, a->seek_time_base) + a->seek_shift - lead;
     av_seek_frame(a->fmt, a->seek_stream, ts, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(a->codec);
     ringsClear(a);  // What was kept is from another part of the file.

@@ -49,6 +49,7 @@ int64_t hlsLocationBaseNs(const char *location);
 // a reader stops waiting for a segment; fmt's opaque is taken). *playlist is
 // to be closed with hlsCloseInput after the format.
 bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist, const char *location);
+void hlsCloseInput(AVIOContext *playlist);
 
 // Subtitles of a channel's own stream (WebVTT lists FFmpeg doesn't read):
 // how many, and each one's name and language code.
@@ -59,6 +60,6 @@ const char *hlsSubtitleLanguage(int track);
 void hlsSelectSubtitle(int track);
 // Where playback is (0: the stream's start), so the subtitles fetched are
 // those of what shows, not of where the readers have got to ahead of it.
-void hlsSetPlayback(int64_t position_ns);// The next WebVTT segment of the chosen track (data to be freed); false if none waits.
+void hlsSetPlayback(int64_t position_ns);
+// The next WebVTT segment of the chosen track (data to be freed); false if none waits.
 bool hlsTakeSubtitle(char **data, size_t *size);
-void hlsCloseInput(AVIOContext *playlist);

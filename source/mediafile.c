@@ -454,6 +454,8 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
         int64_t start = streamsStart(*fmt);
         if (start != AV_NOPTS_VALUE)
             in->start_us = start - in->skipped_us;
+        if (start != AV_NOPTS_VALUE && (*fmt)->start_time != AV_NOPTS_VALUE && start > (*fmt)->start_time)
+            in->sound_lead_us = start - (*fmt)->start_time;
     }
     return true;
 }

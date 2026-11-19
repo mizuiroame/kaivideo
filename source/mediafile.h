@@ -18,6 +18,10 @@ typedef struct {
     AVIOContext *playlist; // A converted stream's.
     int64_t start_us;      // Converted streams don't start at 0: subtract this from their times.
     int64_t skipped_us;    // What a converted stream left out before its start.
+    // How far a converted stream's sound leads its picture in each segment (a
+    // conversion begun mid-video): FFmpeg's HLS seek, which counts from the
+    // earliest track, lands that much late. Seeks ask for that much earlier.
+    int64_t sound_lead_us;
 } MediaInput;
 
 // Opens location and reads its format. False if it can't be.

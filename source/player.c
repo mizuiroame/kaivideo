@@ -21,6 +21,7 @@
 #define SWITCH_GAP_NS 700000000ll    // A new track starting further on than this is sought instead.
 #define SWITCH_WAIT_NS 10000000000ull // The picture waits this long for a new track, at most.
 #define JOIN_SLACK_NS 20000000ll     // Ready this little behind the picture still joins.
+#define JOIN_RELEASE_WAIT_NS 2000000000ll  // Let go, the sound has this long to start before it's late.
 #define CUSHION_WAIT_NS 3000000000ull // A converted video waits this long, at most, for some video ahead.
 #define LIVE_CUSHION_WAIT_NS 30000000000ull  // Live TV waits longer: its next segments are still being made.
 #define MS_NS 1000000ll
@@ -67,6 +68,7 @@ struct Player {
     // one waits, ready, for the picture to reach it (joining).
     pthread_t swap_thread;
     bool swapping, joining;
+    bool join_released;        // Joining: the sound was let go at its start, and should sound soon.
     int64_t join_lead_ns;      // How far ahead sound is asked to be ready (at normal speed).
     int join_retries;          // Times it arrived late, for the log.
     // Changing track on the open file: the picture waits for the new sound.
@@ -601,6 +603,7 @@ static void startJoining(Player *p)
     audioSeek(p->audio, p->position_ns + joinLead(p));
     p->waiting_since_ns = 0;
     p->joining = true;
+    p->join_released = false;
 }
 
 void playerSetSpeed(Player *p, int permille, uint64_t now_ns)
@@ -912,12 +915,20 @@ static void join(Player *p)
     }
     if (p->paused || !audioReadyAt(p->audio, &start))
         return;
+    // Let go when the picture reached it: it sounds once its output takes it,
+    // which over a slow start can be later than the slack; only well after is it late.
+    if (p->join_released && p->position_ns < start + JOIN_RELEASE_WAIT_NS)
+        return;
+    p->join_released = false;
     if (start + JOIN_SLACK_NS < p->position_ns) {  // Late: further ahead this time.
         p->join_lead_ns = p->join_lead_ns * 2 < MAX_LEAD_NS ? p->join_lead_ns * 2 : MAX_LEAD_NS;
         p->join_retries++;
+        audioSetPaused(p->audio, true);  // It may have been let go already.
         audioSeek(p->audio, p->position_ns + joinLead(p));
-    } else if (p->position_ns >= start)
+    } else if (p->position_ns >= start) {
         audioSetPaused(p->audio, false);
+        p->join_released = true;
+    }
 }
 
 bool playerTakeAudioError(Player *p, char *out, size_t size)
