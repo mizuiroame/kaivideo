@@ -24,6 +24,8 @@
 #define PLAYLIST_MAX (8u * 1024 * 1024)
 #define SEGMENT_MAX (96u * 1024 * 1024)
 #define MASTER_MAX (16u * 1024)
+#define PROBE_BYTES (8 * 1024 * 1024)
+#define PROBE_US (15 * 1000000ll)
 #define PLAYLIST_TIMEOUT_S 30L
 #define DIRECT_TIMEOUT_S 8L   // A channel's own source: if it doesn't answer soon, the server converts instead.
 #define SEGMENT_STALL_S 40L   // The server may need a while to start converting.
@@ -889,6 +891,13 @@ bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist)
         return false;
     (*fmt)->pb = *playlist;
     (*fmt)->flags |= AVFMT_FLAG_CUSTOM_IO;
+    // FFmpeg's HLS reader looks at each list's stream with these (by default
+    // 16 KB and 4 s). A conversion begun mid-video with picture subtitles drawn
+    // on it starts its sound seconds before its picture: looking only that far,
+    // the picture's size stays unknown and nothing shows. Reading stops as
+    // soon as every track is known, so other videos don't start later.
+    (*fmt)->probesize = PROBE_BYTES;
+    (*fmt)->max_analyze_duration = PROBE_US;
     (*fmt)->io_open = ioOpen;
     (*fmt)->io_close2 = ioClose;
     return avformat_open_input(fmt, HLS_LOCAL_INDEX, av_find_input_format("hls"), NULL) >= 0;
