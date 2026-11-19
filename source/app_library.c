@@ -204,10 +204,6 @@ static void itemName(const Library *lib, int item, char *out, size_t size)
 static void playItem(App *app, int item, uint64_t now)
 {
     const LibraryItem *it = &app->library.items[item];
-    if (it->blocked) {
-        appShowMessage(app, jfPlayabilityMessage((JfPlayability)it->blocked), now);
-        return;
-    }
     char name[APP_NAME_MAX];
     itemName(&app->library, item, name, sizeof(name));
     appStartVideo(app, it->path, name, now);

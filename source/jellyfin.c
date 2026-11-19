@@ -159,10 +159,10 @@ JfPlayability jfPlayability(const JfVideoFacts *v)
 const char *jfPlayabilityMessage(JfPlayability p)
 {
     switch (p) {
-    case JF_TOO_LARGE: return "4K videos are too heavy for the console.";
-    case JF_HDR: return "HDR videos can't be played yet.";
-    case JF_TOO_HEAVY: return "This video's bitrate is too high for the console.";
-    case JF_FORMAT: return "KaiVideo can't play this video's format.";
+    case JF_TOO_LARGE: return "4K: your server converts it for the console.";
+    case JF_HDR: return "HDR: your server converts it for the console.";
+    case JF_TOO_HEAVY: return "High bitrate: your server converts it for the console.";
+    case JF_FORMAT: return "Your server converts this format for the console.";
     default: return "";
     }
 }
@@ -186,6 +186,93 @@ int64_t jfParseDate(const char *text)
     if (year < 1971 || month < 1 || month > 12 || day < 1 || day > 31)
         return 0;
     return daysFromCivil(year, month, day) * 86400 + hour * 3600 + minute * 60 + second;
+}
+
+static const char *textOf(const json_t *object, const char *key);
+static int intOf(const json_t *object, const char *key);
+
+// --- How to play a video ---
+
+// What the console takes as it is, and what the server should make otherwise.
+#define JF_DEVICE_PROFILE                                                                                              \
+    "{\"Name\":\"KaiVideo\",\"MaxStreamingBitrate\":%lld,"                                                           \
+    "\"DirectPlayProfiles\":[{\"Type\":\"Video\",\"Container\":\"mkv,matroska,mp4,m4v,mov,webm\","                   \
+    "\"VideoCodec\":\"h264,hevc,vp9,av1,vp8\",\"AudioCodec\":\"aac,mp3,opus,vorbis,flac,ac3,eac3,dts,truehd\"}],"     \
+    "\"TranscodingProfiles\":[{\"Type\":\"Video\",\"Container\":\"ts\",\"Protocol\":\"hls\","                       \
+    "\"Context\":\"Streaming\",\"VideoCodec\":\"h264\",\"AudioCodec\":\"aac\",\"MaxAudioChannels\":\"2\","          \
+    "\"MinSegments\":1,\"BreakOnNonKeyFrames\":true}],"                                                               \
+    "\"CodecProfiles\":[{\"Type\":\"Video\",\"Conditions\":["                                                       \
+    "{\"Condition\":\"EqualsAny\",\"Property\":\"VideoRangeType\",\"Value\":\"SDR\",\"IsRequired\":true},"          \
+    "{\"Condition\":\"LessThanEqual\",\"Property\":\"Width\",\"Value\":\"2000\",\"IsRequired\":true},"              \
+    "{\"Condition\":\"LessThanEqual\",\"Property\":\"VideoBitDepth\",\"Value\":\"10\",\"IsRequired\":true},"         \
+    "{\"Condition\":\"LessThanEqual\",\"Property\":\"VideoBitrate\",\"Value\":\"%lld\",\"IsRequired\":true}]},"     \
+    "{\"Type\":\"Video\",\"Codec\":\"vp9,av1,vp8\",\"Conditions\":["                                               \
+    "{\"Condition\":\"LessThanEqual\",\"Property\":\"VideoBitDepth\",\"Value\":\"8\",\"IsRequired\":true}]}],"     \
+    "\"SubtitleProfiles\":[{\"Format\":\"srt\",\"Method\":\"External\"},{\"Format\":\"subrip\",\"Method\":\"External\"},"\
+    "{\"Format\":\"ass\",\"Method\":\"External\"},{\"Format\":\"ssa\",\"Method\":\"External\"},"                   \
+    "{\"Format\":\"vtt\",\"Method\":\"External\"}]}"
+
+void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index)
+{
+    int n = snprintf(out, size, "{\"UserId\":\"%s\",\"MaxStreamingBitrate\":%lld,\"EnableDirectPlay\":true,"
+                                "\"EnableDirectStream\":false,\"EnableTranscoding\":true,\"AutoOpenLiveStream\":true,",
+                     user_id, max_bitrate);
+    if (audio_index >= 0)
+        n += snprintf(out + n, size - (size_t)n, "\"AudioStreamIndex\":%d,", audio_index);
+    n += snprintf(out + n, size - (size_t)n, "\"DeviceProfile\":" JF_DEVICE_PROFILE "}", max_bitrate,
+                  max_bitrate < JF_MAX_BITRATE ? max_bitrate : JF_MAX_BITRATE);
+    (void)n;
+}
+
+static void readTrack(const json_t *stream, JfTrack *t)
+{
+    t->index = intOf(stream, "Index");
+    t->external = json_is_true(json_object_get(stream, "IsExternal"));
+    const char *name = textOf(stream, "DisplayTitle");
+    snprintf(t->name, sizeof(t->name), "%s", name[0] ? name : textOf(stream, "Language"));
+}
+
+static void readTracks(const json_t *source, JfPlan *p)
+{
+    int wanted_audio = intOf(source, "DefaultAudioStreamIndex");
+    const json_t *default_sub = json_object_get(source, "DefaultSubtitleStreamIndex");
+    p->audio_current = p->sub_default = -1;
+    size_t i;
+    const json_t *stream;
+    json_array_foreach(json_object_get(source, "MediaStreams"), i, stream) {
+        const char *type = textOf(stream, "Type");
+        if (!strcmp(type, "Audio") && p->audio_count < JF_PLAN_AUDIO) {
+            readTrack(stream, &p->audio[p->audio_count]);
+            if (p->audio[p->audio_count].index == wanted_audio)
+                p->audio_current = p->audio_count;
+            p->audio_count++;
+        } else if (!strcmp(type, "Subtitle") && p->sub_count < JF_PLAN_SUBS &&
+                   json_is_true(json_object_get(stream, "IsTextSubtitleStream"))) {
+            readTrack(stream, &p->subs[p->sub_count]);
+            if (default_sub && p->subs[p->sub_count].index == json_integer_value(default_sub))
+                p->sub_default = p->sub_count;
+            p->sub_count++;
+        }
+    }
+    if (p->audio_current < 0 && p->audio_count)
+        p->audio_current = 0;
+}
+
+bool jfPlanParse(const char *json, JfPlan *out)
+{
+    memset(out, 0, sizeof(*out));
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *source = json_array_get(json_object_get(root, "MediaSources"), 0);
+    const char *url = textOf(source, "TranscodingUrl");
+    out->direct = json_is_true(json_object_get(source, "SupportsDirectPlay"));
+    bool ok = source && (out->direct || (url[0] && strlen(url) < sizeof(out->transcode_url)));
+    if (ok) {
+        snprintf(out->transcode_url, sizeof(out->transcode_url), "%s", url);
+        snprintf(out->play_session, sizeof(out->play_session), "%s", textOf(root, "PlaySessionId"));
+        readTracks(source, out);
+    }
+    json_decref(root);
+    return ok;
 }
 
 // --- Catalogs ---

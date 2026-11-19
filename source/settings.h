@@ -21,10 +21,11 @@ typedef enum {
     SETTING_BLUR,
     SETTING_CLOCK,
     SETTING_OPEN_JELLYFIN,  // Opens the Jellyfin page.
-    SETTING_JF_SOURCE,      // Where the library comes from.
     SETTING_JF_SERVER,      // Types the server's address.
-    SETTING_JF_ACCOUNT,     // Signs in or out.
-    SETTING_JF_REFRESH,     // Reads the library again.
+    SETTING_JF_CODE,        // Signs in with Quick Connect.
+    SETTING_JF_PASSWORD,    // Signs in with a user name and password.
+    SETTING_JF_SIGN_OUT,    // Signs out.
+    SETTING_JF_QUALITY,     // The most a video may use, from the server.
     SETTING_COUNT,
 } SettingRow;
 
@@ -46,6 +47,7 @@ typedef struct {
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the Jellyfin server.
+    int jf_quality;                      // An index in the quality list; 0 is Auto.
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.
@@ -56,8 +58,9 @@ void configDefaults(Config *c);
 bool configReadLine(Config *c, const char *line);
 void configWrite(const Config *c, FILE *f);
 
-// The rows of a page, in order. Returns how many.
-int settingsPageRows(SettingsPage page, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
+// The rows of a page, in order. Returns how many. signed_in: to Jellyfin, which
+// decides what its page offers.
+int settingsPageRows(SettingsPage page, bool signed_in, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
 const char *settingsPageTitle(SettingsPage page);
 const char *settingLabel(SettingRow row);
 // Rows changed with left and right (the others open something with A).
@@ -67,6 +70,8 @@ void settingStep(Config *c, SettingRow row, int delta);
 // The row's value as shown ("Dark", "Medium"); "" for rows that open a page.
 void settingValue(const Config *c, SettingRow row, char *out, size_t size);
 
+// The most bits per second to ask the server for, with this quality.
+long long settingQualityBitrate(const Config *c);
 // How many of the options (from the first) a list offers: subtitles with their
 // own look take only the size.
 int subtitleOptionCount(bool color_applies);

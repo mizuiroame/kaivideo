@@ -819,7 +819,7 @@ static int detailsButton(int x, int y, const char *key, const char *label, LibHi
     return w;
 }
 
-void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *blocked)
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note)
 {
     const LibraryItem *it = &lib->items[item];
     int x = (GFX_WIDTH - DETAILS_W) / 2, y = (UI_FOOTER_Y + UI_TAB_BAR_H - DETAILS_H) / 2;
@@ -856,8 +856,8 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
     detailsLine(it, line, sizeof(line));
     fontDrawClipped(FONT_REGULAR, 18, tx, ty, tw, line, COLOR_DIM);
     int text_top = ty + 36, bottom = y + DETAILS_H - DETAILS_PAD;
-    if (blocked[0]) {  // Why it can't be played takes the place of the play button's promise.
-        fontDrawClipped(FONT_BOLD, 18, tx, text_top, tw, blocked, COLOR_ERROR);
+    if (note[0]) {
+        fontDrawClipped(FONT_BOLD, 18, tx, text_top, tw, note, COLOR_ACCENT);
         text_top += 32;
     }
     int lines = (bottom - text_top) / OVERVIEW_LINE_H;
@@ -865,12 +865,9 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
                     it->overview ? it->overview : "", COLOR_TEXT);
 
     int bx = px, by = py + DETAILS_PIC_H + 24;
-    if (!blocked[0]) {
-        bx += detailsButton(bx, by, "A", progress >= 0 ? "Resume" : "Play", LIBHIT_DETAILS_PLAY) +
-              DETAILS_BUTTON_GAP;
-        if (progress >= 0)
-            bx += detailsButton(bx, by, "Y", "From start", LIBHIT_DETAILS_START) + DETAILS_BUTTON_GAP;
-    }
+    bx += detailsButton(bx, by, "A", progress >= 0 ? "Resume" : "Play", LIBHIT_DETAILS_PLAY) + DETAILS_BUTTON_GAP;
+    if (progress >= 0)
+        bx += detailsButton(bx, by, "Y", "From start", LIBHIT_DETAILS_START) + DETAILS_BUTTON_GAP;
     detailsButton(bx, by, "X", seen(lib, item) ? "Unwatched" : "Watched", LIBHIT_DETAILS_WATCHED);
 }
 

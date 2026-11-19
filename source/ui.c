@@ -402,9 +402,13 @@ static const char *menuLabel(const Player *p, UiMenuKind kind, int row)
 }
 
 // The Playback list's options: "Speed  < 1.25x >".
-static const char *playbackOption(const Player *p, PlaybackOption option, char *value, size_t size)
+static const char *playbackOption(const Player *p, const Config *config, PlaybackOption option, char *value,
+                                  size_t size)
 {
     switch (option) {
+    case PLAYBACK_OPT_QUALITY:
+        settingValue(config, SETTING_JF_QUALITY, value, size);
+        return "Video quality";
     case PLAYBACK_OPT_SPEED:
         playbackFormatSpeed(value, size, playerSpeed(p));
         return "Speed";
@@ -448,7 +452,7 @@ static void drawOptions(const Player *p, UiMenuKind kind, const Menu *m, const C
         float cy = ry + MENU_ROW_H / 2.0f;
         const char *label;
         if (kind == UI_MENU_PLAYBACK) {
-            label = playbackOption(p, (PlaybackOption)i, value, sizeof(value));
+            label = playbackOption(p, config, (PlaybackOption)i, value, sizeof(value));
         } else {
             label = subtitleOptionLabel((SubtitleOption)i);
             subtitleOptionValue(config, (SubtitleOption)i, value, sizeof(value));

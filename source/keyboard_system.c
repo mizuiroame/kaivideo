@@ -4,7 +4,7 @@
 
 #include <switch.h>
 
-SystemKeyboardResult systemKeyboardInput(const char *title, const char *initial, char *out, size_t size,
+static SystemKeyboardResult showKeyboard(const char *title, const char *initial, bool hidden, char *out, size_t size,
                                          size_t max_length)
 {
     SwkbdConfig config;
@@ -16,6 +16,8 @@ SystemKeyboardResult systemKeyboardInput(const char *title, const char *initial,
     swkbdConfigSetGuideText(&config, title);
     swkbdConfigSetInitialText(&config, initial ? initial : "");
     swkbdConfigSetStringLenMax(&config, (u32)max_length);
+    if (hidden)
+        swkbdConfigSetPasswordFlag(&config, 1);
 
     memset(out, 0, size);
     Result rc = swkbdShow(&config, out, size);
@@ -26,4 +28,15 @@ SystemKeyboardResult systemKeyboardInput(const char *title, const char *initial,
     if (rc == MAKERESULT(Module_Libnx, LibnxError_LibAppletBadExit))
         return SYSTEM_KEYBOARD_CANCELLED;
     return SYSTEM_KEYBOARD_UNAVAILABLE;
+}
+
+SystemKeyboardResult systemKeyboardInput(const char *title, const char *initial, char *out, size_t size,
+                                         size_t max_length)
+{
+    return showKeyboard(title, initial, false, out, size, max_length);
+}
+
+SystemKeyboardResult systemKeyboardPassword(const char *title, char *out, size_t size, size_t max_length)
+{
+    return showKeyboard(title, "", true, out, size, max_length);
 }

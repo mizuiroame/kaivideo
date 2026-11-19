@@ -77,8 +77,8 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
                    bool folder_set, const char *status, const char *message);
 
 // A film or episode's details over the screen: picture, title, summary, and
-// its buttons. blocked: why it can't be played, or "".
-void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *blocked);
+// its buttons. note: something to say about how it plays, or "".
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note);
 
 // The next episode (item), a card on the right of the player in an
 // episode's last seconds: its picture, what's left (fraction_left of the

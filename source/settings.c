@@ -7,17 +7,30 @@
 #include "theme.h"
 
 static const char *const LABELS[SETTING_COUNT] = {
-    "Library folder", "Look for new videos", "Thumbnails", "Play next episode", "Display", "About",
+    "SD card folder", "Update the library", "Thumbnails", "Play next episode", "Display", "About",
     "Theme", "Accent color", "Background", "Background blur", "Clock",
-    "Jellyfin", "Library from", "Server", "Account", "Update the library now",
+    "Jellyfin", "Server", "Sign in with a code", "Sign in with a password", "Sign out", "Video quality",
 };
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_AUTOPLAY, SETTING_OPEN_DISPLAY,
      SETTING_ABOUT},
     {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
-    {SETTING_JF_SOURCE, SETTING_JF_SERVER, SETTING_JF_ACCOUNT, SETTING_JF_REFRESH, SETTING_COUNT},
+    {SETTING_JF_SERVER, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_COUNT},
 };
+static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_QUALITY, SETTING_JF_SIGN_OUT, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "Jellyfin"};
+
+// Auto: the original when the console can play it, else a good conversion.
+static const struct {
+    const char *name;
+    long long bitrate;
+} QUALITIES[] = {
+    {"Auto", 25000000},    {"40 Mb/s", 40000000}, {"30 Mb/s", 30000000}, {"20 Mb/s", 20000000},
+    {"15 Mb/s", 15000000}, {"10 Mb/s", 10000000}, {"8 Mb/s", 8000000},   {"6 Mb/s", 6000000},
+    {"4 Mb/s", 4000000},   {"3 Mb/s", 3000000},   {"2 Mb/s", 2000000},   {"1.5 Mb/s", 1500000},
+    {"1 Mb/s", 1000000},   {"720 kb/s", 720000},  {"420 kb/s", 420000},
+};
+#define QUALITY_COUNT ((int)(sizeof(QUALITIES) / sizeof(QUALITIES[0])))
 
 static const char *const SIZE_NAMES[SUBTITLES_SIZE_COUNT] = {"Small", "Medium", "Large"};
 static const int SIZE_PX[SUBTITLES_SIZE_COUNT] = {28, 34, 42};
@@ -25,6 +38,11 @@ static const char *const COLOR_NAMES[SUBTITLE_COLOR_COUNT] = {"White", "Yellow",
 static const unsigned COLORS[SUBTITLE_COLOR_COUNT] = {0xF2F2F5, 0xFFE45C, 0x6CE4FF, 0x7CF29A};
 static const char *const STYLE_NAMES[SUBTITLE_STYLE_COUNT] = {"Outline", "Dark box"};
 static const char *const OPTION_LABELS[SUBOPT_COUNT] = {"Size", "Color", "Style"};
+
+static int inRange(int value, int count)
+{
+    return value >= 0 && value < count ? value : 0;
+}
 
 void configDefaults(Config *c)
 {
@@ -71,6 +89,8 @@ bool configReadLine(Config *c, const char *line)
         c->autoplay = strcmp(value, "0") != 0;
     else if (isKey(line, length, "jellyfin"))
         c->use_jellyfin = strcmp(value, "1") == 0;
+    else if (isKey(line, length, "jellyfin_quality"))
+        c->jf_quality = readChoice(value, QUALITY_COUNT, 0);
     else if (isKey(line, length, "subtitles"))
         c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
     else if (isKey(line, length, "subtitle_color"))
@@ -87,19 +107,20 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "theme=%d\naccent=%d\n", c->theme, c->accent);
     if (c->background[0] && !strpbrk(c->background, "\r\n"))
         fprintf(f, "background=%s\n", c->background);
-    fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
-            c->use_jellyfin ? 1 : 0);
+    fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\njellyfin_quality=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
+            c->use_jellyfin ? 1 : 0, c->jf_quality);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
 }
 
-int settingsPageRows(SettingsPage page, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
+int settingsPageRows(SettingsPage page, bool signed_in, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
 {
     int n = 0;
     if (page < 0 || page >= SETTINGS_PAGE_COUNT)
         return 0;
-    while (n < SETTINGS_PAGE_MAX_ROWS && PAGE_ROWS[page][n] != SETTING_COUNT) {
-        rows[n] = PAGE_ROWS[page][n];
+    const SettingRow *list = page == SETTINGS_PAGE_JELLYFIN && signed_in ? SIGNED_IN_ROWS : PAGE_ROWS[page];
+    while (n < SETTINGS_PAGE_MAX_ROWS && list[n] != SETTING_COUNT) {
+        rows[n] = list[n];
         n++;
     }
     return n;
@@ -118,7 +139,7 @@ const char *settingLabel(SettingRow row)
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
-           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_SOURCE;
+           row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY;
 }
 
 static int wrap(int value, int delta, int count)
@@ -135,6 +156,7 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_THUMBNAILS: c->thumbnails = !c->thumbnails; break;
     case SETTING_CLOCK: c->clock_24h = !c->clock_24h; break;
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
+    case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     default: break;
     }
 }
@@ -149,7 +171,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? "On" : "Off"); break;
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? "24-hour" : "12-hour"); break;
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
-    case SETTING_JF_SOURCE: snprintf(out, size, "%s", c->use_jellyfin ? "Jellyfin" : "SD card"); break;
+    case SETTING_JF_QUALITY: snprintf(out, size, "%s", QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name); break;
     default: out[0] = '\0'; break;
     }
 }
@@ -162,11 +184,6 @@ int subtitleOptionCount(bool color_applies)
 const char *subtitleOptionLabel(SubtitleOption option)
 {
     return option >= 0 && option < SUBOPT_COUNT ? OPTION_LABELS[option] : "";
-}
-
-static int inRange(int value, int count)
-{
-    return value >= 0 && value < count ? value : 0;
 }
 
 void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size)
@@ -187,6 +204,11 @@ void subtitleOptionStep(Config *c, SubtitleOption option, int delta)
     case SUBOPT_STYLE: c->subtitle_style = wrap(c->subtitle_style, delta, SUBTITLE_STYLE_COUNT); break;
     default: break;
     }
+}
+
+long long settingQualityBitrate(const Config *c)
+{
+    return QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].bitrate;
 }
 
 int settingSubtitlePx(const Config *c)

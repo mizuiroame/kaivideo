@@ -52,12 +52,12 @@ static void rowHighlight(int x, int y, int w, int h)
     gfxFillRect(x, y + 10, 3, h - 20, COLOR_ACCENT);
 }
 
-static const char *g_jf_server = "", *g_jf_account = "";
+static const char *g_jf_server = "", *g_jf_user = "";
 
-void uiSettingsSetJellyfin(const char *server, const char *account)
+void uiSettingsSetJellyfin(const char *server, const char *user)
 {
     g_jf_server = server;
-    g_jf_account = account;
+    g_jf_user = user;
 }
 
 // What a row shows on its right: a choice's value, the folder's name, the version.
@@ -71,8 +71,8 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "KaiVideo %s", version);
     } else if (row == SETTING_JF_SERVER) {
         snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : "Not set");
-    } else if (row == SETTING_JF_ACCOUNT) {
-        snprintf(out, size, "%s", g_jf_account);
+    } else if (row == SETTING_JF_SIGN_OUT || row == SETTING_OPEN_JELLYFIN) {
+        snprintf(out, size, "%s", g_jf_user);
     } else {
         settingValue(c, row, out, size);
     }
@@ -81,7 +81,7 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
 void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *library_root, const char *version)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows(page, rows);
+    int count = settingsPageRows(page, g_jf_user[0] != '\0', rows);
     int h = HEAD_H + count * ROW_H + FOOT_H;
     int x = (GFX_WIDTH - SETTINGS_W) / 2, y = (GFX_HEIGHT - h) / 2;
     dimScreen();

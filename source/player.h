@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "gfx.h"
+#include "jellyfin.h"
 #include "video.h"
 
 typedef struct Player Player;
@@ -16,6 +17,18 @@ typedef struct Player Player;
 // played; sound that can't be played is noted (playerAudioInfo) and skipped.
 Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_size);
 void playerClose(Player *p);
+
+// What the server said about the video playing (location): its tracks, and
+// for a converted one, that a sound track means opening it again.
+void playerAttachPlan(Player *p, const JfPlan *plan, const char *location);
+bool playerIsConverted(const Player *p);
+// True once after another sound track was chosen on a converted video: the
+// server's number for it. The video has to be opened again with it.
+bool playerTakeAudioRestart(Player *p, int *stream_index);
+
+// True once, when jumps to before where a converted stream begins have stopped
+// coming: the video has to be opened again at at_ns.
+bool playerTakeReopen(Player *p, uint64_t now_ns, int64_t *at_ns);
 
 // Moves the clock to now_ns and returns the frame to draw (NULL before the first).
 const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns);
@@ -60,6 +73,9 @@ void playerSize(const Player *p, int *width, int *height, double *aspect);
 VideoStats playerStats(const Player *p);
 // Its state for the log, when playback seems stuck: "paused=0 holding=1 ...".
 void playerDescribe(Player *p, char *out, size_t size);
+// Once after each start or jump, for the log: how long until it played, and
+// how much of that went to gathering video ahead.
+bool playerTakeStartTimes(Player *p, int *start_ms, int *cushion_ms);
 
 // Subtitles: an .srt next to the video (the first track, if there is one),
 // then the file's text tracks. Opens on the .srt, else a track the file

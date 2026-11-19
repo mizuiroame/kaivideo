@@ -7,7 +7,7 @@ CFLAGS  := -std=gnu11 -g -O1 -Wall -Wextra -fwrapv -I$(SRC) $(SAN) -I../third_pa
 LDFLAGS := $(SAN) -ljansson -lm
 OBJDIR  := build
 
-TESTED  := resume.c browser.c util.c subs.c approot.c clock.c menu.c naming.c library.c home.c libview.c settings.c theme.c background.c gfx.c image_impl.c thumbconv.c watched.c trackprefs.c playback.c swframe.c asscompose.c blockcache.c jellyfin.c
+TESTED  := resume.c browser.c util.c subs.c approot.c clock.c menu.c naming.c library.c home.c libview.c settings.c theme.c background.c gfx.c image_impl.c thumbconv.c watched.c trackprefs.c playback.c swframe.c asscompose.c blockcache.c jellyfin.c hlslist.c
 TESTS   := test_main.c test_subs.c test_approot.c test_clock.c test_menu.c test_naming.c test_library.c test_home.c test_libview.c test_settings.c test_thumbs.c test_watched.c test_trackprefs.c test_playback.c test_swframe.c test_asscompose.c test_jellyfin.c
 
 .PHONY: run clean

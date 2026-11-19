@@ -17,6 +17,7 @@ typedef enum {
     PLAYBACK_OPT_SPEED,
     PLAYBACK_OPT_AUDIO_DELAY,
     PLAYBACK_OPT_SUBTITLE_DELAY,
+    PLAYBACK_OPT_QUALITY,  // Only for videos from a server.
     PLAYBACK_OPT_COUNT,
 } PlaybackOption;
 

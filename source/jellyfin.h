@@ -64,6 +64,33 @@ const char *jfPlayabilityMessage(JfPlayability p);
 // Seconds since 1970 from "2024-03-09T21:15:00.123Z", 0 if it isn't a date.
 int64_t jfParseDate(const char *text);
 
+#define JF_PLAN_AUDIO 8
+#define JF_PLAN_SUBS 16
+#define JF_TRANSCODE_URL_MAX 1536
+#define JF_TRACK_NAME_MAX 64
+
+typedef struct {
+    int index;   // The server's number for the stream.
+    char name[JF_TRACK_NAME_MAX];
+    bool external;
+} JfTrack;
+
+// How the server says a video should be played.
+typedef struct {
+    bool direct;  // The original file; else the conversion at transcode_url.
+    char transcode_url[JF_TRANSCODE_URL_MAX];
+    char play_session[JF_ID_MAX + 24];
+    JfTrack audio[JF_PLAN_AUDIO], subs[JF_PLAN_SUBS];  // Subtitles: text ones only.
+    int audio_count, sub_count;
+    int audio_current;  // An index in audio, -1 if none.
+    int sub_default;    // An index in subs, -1 for none.
+} JfPlan;
+
+// The body of a PlaybackInfo request. audio_index: the server's number, -1 for its choice.
+void jfPlaybackBody(char *out, size_t size, const char *user_id, long long max_bitrate, int audio_index);
+// Reads the answer. False if it says nothing playable.
+bool jfPlanParse(const char *json, JfPlan *out);
+
 // Holds a library being read with its user data, which grows with it.
 typedef struct {
     Library library;

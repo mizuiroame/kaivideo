@@ -24,6 +24,7 @@
 #include "font_regular_ttf.h"
 #include "gfx.h"
 #include "input.h"
+#include "hlsio.h"
 #include "mediafile.h"
 #include "menu.h"
 #include "playback.h"
@@ -170,7 +171,8 @@ static void applyTrackPrefs(App *app, uint64_t now)
     const char *sound, *subs;
     if (!trackPrefsFind(&app->tracks, app->playing_path, playingSeries(app), &sound, &subs))
         return;
-    for (int i = 0; sound[0] && i < playerAudioTrackCount(p); i++)
+    // A converted video was already asked for with its sound.
+    for (int i = 0; sound[0] && !playerIsConverted(p) && i < playerAudioTrackCount(p); i++)
         if (strcmp(playerAudioTrackName(p, i), sound) == 0) {
             if (i != playerAudioTrack(p))
                 playerSetAudioTrack(p, i, now);
@@ -193,10 +195,49 @@ static void rememberTracks(App *app, const char *sound, const char *subs)
     trackPrefsSave(&app->tracks, path);
 }
 
+// The sound track with the name chosen before, if the server should use another.
+static int preferredSound(const App *app, const JfPlan *plan)
+{
+    for (int i = 0; app->open_sound[0] && i < plan->audio_count; i++)
+        if (!strcmp(plan->audio[i].name, app->open_sound))
+            return i != plan->audio_current ? plan->audio[i].index : -1;
+    return -1;
+}
+
+// Asks the server how to play the video, and starts its conversion if that's
+// the way. What to open goes in path. False, with the reason, if it can't.
+static bool prepareRemote(App *app, int audio_index, char *path, size_t size)
+{
+    JfPlan *plan = &app->open_plan;
+    long long bitrate = settingQualityBitrate(&app->config);
+    char *error = app->open_error;
+    if (!jfSyncResolve(app->playing_path, bitrate, audio_index, plan, error, sizeof(app->open_error)))
+        return false;
+    int preferred = audio_index < 0 && !plan->direct ? preferredSound(app, plan) : -1;
+    if (preferred >= 0 && !jfSyncResolve(app->playing_path, bitrate, preferred, plan, error, sizeof(app->open_error)))
+        return false;
+    if (plan->direct) {
+        snprintf(path, size, "%s", app->playing_path);
+        return true;
+    }
+    char url[JF_URL_MAX + JF_TRANSCODE_URL_MAX], auth[JF_AUTH_MAX];
+    jfSyncConvertedRequest(plan->transcode_url, url, sizeof(url), auth, sizeof(auth));
+    snprintf(path, size, HLS_LOCATION);
+    return hlsStart(url, auth, app->open_start_ns, error, sizeof(app->open_error));
+}
+
 static void *openThread(void *arg)
 {
     App *app = arg;
-    app->open_result = playerOpen(app->playing_path, nowNs(), app->open_error, sizeof(app->open_error));
+    char path[BROWSER_PATH_MAX];
+    bool remote = jfIsLocation(app->playing_path);
+    snprintf(path, sizeof(path), "%s", app->playing_path);
+    int audio_index = app->next_audio_plus1 - 1;
+    app->next_audio_plus1 = 0;
+    if (!remote || prepareRemote(app, audio_index, path, sizeof(path)))
+        app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
+    if (app->open_result && remote)
+        playerAttachPlan(app->open_result, &app->open_plan, app->playing_path);
     app->open_done = true;
     return NULL;
 }
@@ -209,9 +250,21 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
     app->open_done = false;
+    app->open_asked = now;
     app->open_cancelled = false;
     app->open_error[0] = '\0';
     app->open_result = NULL;
+    app->open_sound[0] = '\0';
+    app->quality_applied = app->config.jf_quality;
+    app->open_start_ns = app->open_at_ns;
+    if (!app->open_at_ns && !app->open_from_start && !resumeFind(&app->resume, path, &app->open_start_ns, NULL))
+        app->open_start_ns = 0;
+    int item = libraryFind(&app->library, path);
+    int show = item >= 0 ? app->library.items[item].show : -1;
+    const char *sound = NULL, *subs = NULL;
+    if (jfIsLocation(path) && trackPrefsFind(&app->tracks, path, show >= 0 ? app->library.shows[show].name : NULL,
+                                             &sound, &subs))
+        snprintf(app->open_sound, sizeof(app->open_sound), "%s", sound);
     app->opening = pthread_create(&app->open_thread, NULL, openThread, app) == 0;
     if (!app->opening) {
         thumbsPause(false);
@@ -236,8 +289,15 @@ static void beginPlaying(App *app, uint64_t now)
     applyTrackPrefs(app, now);
     int64_t resume_at;
     bool from_start = app->open_from_start;
+    int64_t open_at = app->open_at_ns;
     app->open_from_start = false;
-    if (!from_start && resumeFind(&app->resume, path, &resume_at, NULL)) {
+    app->open_at_ns = 0;
+    app->playing_converted = playerIsConverted(app->player);
+    if (jfIsLocation(path))
+        jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted);
+    if (open_at > 0) {
+        playerSeekTo(app->player, open_at, now);
+    } else if (!from_start && resumeFind(&app->resume, path, &resume_at, NULL)) {
         // Where it was left: go on from there, and say how to start over.
         playerSeekTo(app->player, resume_at, now);
         char at[16];
@@ -246,6 +306,7 @@ static void beginPlaying(App *app, uint64_t now)
         app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
     }
     appLog("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
+    appLog("  opened in %.1f s", (now - app->open_asked) / 1e9);
     for (int i = 0; i < playerAudioTrackCount(app->player); i++)
         appLog("  sound %d: %s%s", i + 1, playerAudioTrackName(app->player, i),
                i == playerAudioTrack(app->player) ? " (on)" : "");
@@ -268,14 +329,15 @@ static void finishOpening(App *app, uint64_t now)
         playerClose(app->player);
         app->player = NULL;
         thumbsPause(false);
+        hlsStop();
     } else if (app->player) {
         beginPlaying(app, now);
     } else {
+        hlsStop();
         thumbsPause(false);
         appLog("%s: %s", app->playing_path, app->open_error);
         if (!app->open_cancelled)
-            appShowMessage(app, jfIsLocation(app->playing_path) ? "The video couldn't be loaded from Jellyfin."
-                                                                : app->open_error, now);
+            appShowMessage(app, app->open_error[0] ? app->open_error : "The video couldn't be loaded.", now);
     }
 }
 
@@ -309,6 +371,10 @@ static void stopVideo(App *app, const char *error, bool ended)
     mediaFileInterruptAll();  // Nothing waits for the network now.
     playerClose(app->player);
     app->player = NULL;
+    hlsStop();
+    if (app->playing_converted)
+        jfSyncEndConversion(app->playing_path);
+    app->playing_converted = false;
     thumbsPause(false);
     appLibraryRefreshHome(app);  // Continue watching changed.
 }
@@ -320,11 +386,53 @@ static bool reachedEnd(const Player *p)
     return duration <= 0 || duration - playerPosition(p) <= RESUME_END_MARGIN_NS;
 }
 
+// Opens the video again at position, with this sound (the server's number).
+static void reopenVideo(App *app, int audio_index, int64_t position, uint64_t now)
+{
+    char path[BROWSER_PATH_MAX], name[APP_NAME_MAX];
+    snprintf(path, sizeof(path), "%s", app->playing_path);
+    snprintf(name, sizeof(name), "%s", app->playing_name);
+    stopVideo(app, NULL, false);
+    app->open_at_ns = position;
+    app->open_from_start = position <= 0;
+    app->next_audio_plus1 = audio_index + 1;
+    appStartVideo(app, path, name, now);
+}
+
+// The server's number for the sound track playing, -1 if unknown.
+static int currentSound(const App *app)
+{
+    int track = playerAudioTrack(app->player);
+    return track >= 0 && track < app->open_plan.audio_count ? app->open_plan.audio[track].index : -1;
+}
+
+static void reopenIfAsked(App *app, uint64_t now)
+{
+    int audio;
+    int64_t at;
+    if (!jfIsLocation(app->playing_path))
+        return;
+    if (playerTakeAudioRestart(app->player, &audio)) {
+        reopenVideo(app, audio, playerPosition(app->player), now);
+    } else if (playerTakeReopen(app->player, now, &at)) {
+        reopenVideo(app, currentSound(app), at, now);
+    } else if (!app->menu.open && app->quality_applied != app->config.jf_quality) {
+        appSaveSettings(app);
+        reopenVideo(app, currentSound(app), playerPosition(app->player), now);
+    }
+}
+
 static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 {
     snprintf(app->bar_note, sizeof(app->bar_note), fmt, arg);
     app->bar_note_until = now + NOTE_NS;
     app->overlay_until = now + NOTE_NS;
+}
+
+// The options under the Playback list: the quality only for videos from a server.
+static int playbackOptionRows(const App *app)
+{
+    return jfIsLocation(app->playing_path) ? PLAYBACK_OPT_COUNT : PLAYBACK_OPT_QUALITY;
 }
 
 // Opens the list of sound tracks or subtitles (or says there's nothing to choose).
@@ -341,7 +449,8 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
     if (kind == UI_MENU_PLAYBACK) {
         // On the chapter playing; without chapters, on the speed.
         int chapter = playerChapter(p);
-        menuOpen(&app->menu, playerChapterCount(p) + PLAYBACK_OPT_COUNT, PLAYBACK_OPT_COUNT, chapter > 0 ? chapter : 0);
+        int rows = playbackOptionRows(app);
+        menuOpen(&app->menu, playerChapterCount(p) + rows, rows, chapter > 0 ? chapter : 0);
     } else if (kind == UI_MENU_AUDIO && playerAudioTrackCount(p) < 2)
         sayInBar(app, now, "%s", "This video has one sound track.");
     else if (kind == UI_MENU_SUBTITLES && playerSubtitleCount(p) == 0)
@@ -369,6 +478,8 @@ static void stepPlaybackOption(App *app, PlaybackOption option, int delta, uint6
         playerSetAudioDelay(p, playbackDelayStep(playerAudioDelay(p), delta));
     } else if (option == PLAYBACK_OPT_SUBTITLE_DELAY && playerSubtitleCount(p) > 0) {
         playerSetSubtitleDelay(p, playbackDelayStep(playerSubtitleDelay(p), delta));
+    } else if (option == PLAYBACK_OPT_QUALITY) {
+        settingStep(&app->config, SETTING_JF_QUALITY, delta);  // Applied when the list closes.
     }
 }
 
@@ -718,6 +829,18 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     }
 }
 
+// While a video plays the console doesn't dim its screen or go to sleep, as
+// when KaiPlayer plays. Paused or in the library, it does as usual.
+static void updateScreenKeeping(const App *app)
+{
+    static bool kept;
+    bool keep = app->opening || (app->player && !playerPaused(app->player));
+    if (keep != kept) {
+        appletSetMediaPlaybackState(keep);
+        kept = keep;
+    }
+}
+
 int main(int argc, char **argv)
 {
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
@@ -774,11 +897,17 @@ int main(int argc, char **argv)
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
         appJellyfinUpdate(&app, now);
+        updateScreenKeeping(&app);
         thumbsUpdate();
         SysInfo sys;
         sysinfoGet(&sys, now);
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
+        if (app.player && !app.opening)
+            reopenIfAsked(&app, now);
+        int start_ms, cushion_ms;
+        if (app.player && !app.opening && playerTakeStartTimes(app.player, &start_ms, &cushion_ms))
+            appLog("  playing after %d ms (%d ms gathering video)", start_ms, cushion_ms);
         if (app.opening) {
             if ((pressed & HidNpadButton_B) && !app.open_cancelled) {
                 app.open_cancelled = true;
@@ -829,6 +958,7 @@ int main(int argc, char **argv)
     }
     if (app.player)
         stopVideo(&app, NULL, false);
+    appletSetMediaPlaybackState(false);
     appSaveSettings(&app);
     appLibraryExit(&app);
     watchedFree(&app.watched);

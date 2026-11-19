@@ -12,6 +12,7 @@
 #include <libavutil/pixdesc.h>
 #include <switch.h>
 
+#include "hlsio.h"
 #include "mediafile.h"
 #include "subs.h"
 #include "swframe.h"
@@ -45,9 +46,9 @@ typedef struct {
 } SubStream;
 
 struct Video {
-    MediaFile *file;
+    MediaInput input;
+    int64_t time_shift;            // Taken from the stream's times (converted video).
     AVFormatContext *fmt;
-    AVIOContext *io;
     AVBSFContext *bsf;
     int stream;
     AVRational time_base;
@@ -123,6 +124,12 @@ static bool interrupted(Video *v)
     bool yes = v->stop || v->seek_requested;
     pthread_mutex_unlock(&v->lock);
     return yes;
+}
+
+// For FFmpeg: a jump doesn't wait for a segment of the place being left.
+static int readInterrupted(void *opaque)
+{
+    return interrupted(opaque);
 }
 
 // The queue's next free slot, once there is one; NULL when interrupted.
@@ -330,7 +337,7 @@ static bool submit(Video *v, const AVPacket *p, bool last)
 // Goes to the keyframe before target and drops everything decoded or queued.
 static void doSeek(Video *v, int64_t target_ns)
 {
-    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, v->time_base);
+    int64_t ts = av_rescale_q(target_ns, (AVRational){1, 1000000000}, v->time_base) + v->time_shift;
     av_seek_frame(v->fmt, v->stream, ts, AVSEEK_FLAG_BACKWARD);
     if (v->bsf)
         av_bsf_flush(v->bsf);
@@ -421,6 +428,12 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
 {
     bool have_held = false;
     while (!interrupted(v) && av_read_frame(v->fmt, pkt) >= 0) {
+        if (pkt->stream_index == v->stream && v->time_shift) {
+            if (pkt->pts != AV_NOPTS_VALUE)
+                pkt->pts -= v->time_shift;
+            if (pkt->dts != AV_NOPTS_VALUE)
+                pkt->dts -= v->time_shift;
+        }
         if (pkt->stream_index != v->stream) {
             SubStream *s = subStreamFor(v, pkt->stream_index);
             if (s && s->styled_track != NO_STYLED_TRACK)
@@ -447,7 +460,7 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
         }
         av_packet_unref(pkt);
     }
-    if (!interrupted(v) && mediaFileFailed(v->file)) {  // Not the end: the network went.
+    if (!interrupted(v) && mediaFileFailed(v->input.file)) {  // Not the end: the network went.
         av_packet_unref(held);
         fail(v, "The connection to the server was lost.");
         return false;
@@ -759,25 +772,15 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     pthread_cond_init(&v->wake, NULL);
     v->clock_ns = SWFRAME_NO_CLOCK;
     v->max_threads = max_threads;
-    v->file = mediaFileOpen(path);
-    if (!v->file) {
-        snprintf(error, error_size, "The file can't be opened.");
-        videoClose(v);
-        return NULL;
-    }
-    uint8_t *buffer = av_malloc(IO_BUFFER);
-    v->io = buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, v->file, mediaFileRead, NULL, mediaFileSeek) : NULL;
     v->fmt = avformat_alloc_context();
-    if (!v->io || !v->fmt) {
-        if (!v->io)
-            av_free(buffer);
+    if (!v->fmt) {
         snprintf(error, error_size, "Out of memory.");
         videoClose(v);
         return NULL;
     }
-    v->fmt->pb = v->io;
-    v->fmt->flags |= AVFMT_FLAG_CUSTOM_IO;
-    if (avformat_open_input(&v->fmt, NULL, NULL, NULL) < 0 || avformat_find_stream_info(v->fmt, NULL) < 0) {
+    if (hlsIsLocation(path))
+        v->fmt->interrupt_callback = (AVIOInterruptCB){readInterrupted, v};
+    if (!mediaInputOpen(&v->input, &v->fmt, path, IO_BUFFER)) {
         snprintf(error, error_size, "This isn't a video KaiVideo can read (MP4, MKV or WebM).");
         videoClose(v);
         return NULL;
@@ -791,7 +794,9 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     AVStream *st = v->fmt->streams[v->stream];
     AVCodecParameters *par = st->codecpar;
     v->time_base = st->time_base;
-    v->duration_ns = v->fmt->duration > 0 ? av_rescale(v->fmt->duration, 1000000000, AV_TIME_BASE) : 0;
+    v->time_shift = av_rescale_q(v->input.start_us, AV_TIME_BASE_Q, st->time_base);
+    v->duration_ns = v->fmt->duration > 0 ? av_rescale(v->fmt->duration + v->input.skipped_us, 1000000000, AV_TIME_BASE)
+                                          : 0;
     v->width = par->width & ~1;
     v->height = par->height & ~1;
     AVRational sar = av_guess_sample_aspect_ratio(v->fmt, st, NULL);
@@ -859,11 +864,7 @@ void videoClose(Video *v)
     assSubsClose(v->styled);
     if (v->fmt)
         avformat_close_input(&v->fmt);
-    if (v->io) {
-        av_freep(&v->io->buffer);
-        avio_context_free(&v->io);
-    }
-    mediaFileClose(v->file);
+    mediaInputClose(&v->input);
     for (int i = 0; i <= VIDEO_QUEUE; i++) {
         Slot *s = i < VIDEO_QUEUE ? &v->slots[i] : &v->shown;
         free(s->y);

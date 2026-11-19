@@ -15,10 +15,20 @@ void testSettings(void)
     CHECK(c.autoplay);  // The next episode plays on its own.
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, rows) == 7 && rows[1] == SETTING_OPEN_JELLYFIN &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, rows) == 7 && rows[1] == SETTING_OPEN_JELLYFIN &&
           rows[4] == SETTING_AUTOPLAY && rows[5] == SETTING_OPEN_DISPLAY);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, rows) == 4 && rows[0] == SETTING_JF_SOURCE);
-    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
+    // Signing in is offered until it's done, and signing out only then.
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, rows) == 3 && rows[1] == SETTING_JF_CODE &&
+          rows[2] == SETTING_JF_PASSWORD);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, rows) == 3 && rows[1] == SETTING_JF_QUALITY &&
+          rows[2] == SETTING_JF_SIGN_OUT);
+    Config quality;
+    configDefaults(&quality);
+    CHECK(settingQualityBitrate(&quality) == 25000000);  // Auto.
+    settingStep(&quality, SETTING_JF_QUALITY, -1);       // Wraps to the lowest.
+    CHECK(settingQualityBitrate(&quality) == 420000 && settingIsChoice(SETTING_JF_QUALITY));
+    CHECK(configReadLine(&quality, "jellyfin_quality=3") && settingQualityBitrate(&quality) == 20000000);
+    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, false, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
 
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.

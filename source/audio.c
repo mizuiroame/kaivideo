@@ -1,6 +1,7 @@
 #include "mediafile.h"
 #include "audio.h"
 #include "clock.h"
+#include "hlsio.h"
 #include "playback.h"
 #include "video.h"
 
@@ -20,7 +21,7 @@
 #include <switch.h>
 
 #define IO_BUFFER (64 * 1024)
-#define BUFFER_COUNT 4
+#define BUFFER_COUNT 6              // A little in hand, for when the network or the CPU is busy.
 #define BUFFER_FRAMES 2048           // About 43 ms at 48 kHz: the played count moves in these steps (see clock.h).
 #define BUFFER_BYTES (BUFFER_FRAMES * 2 * sizeof(s16))
 #define FADE_FRAMES 480              // 10 ms at 48 kHz: in and out of silence without a click.
@@ -46,9 +47,9 @@ typedef struct {
 } PacketRing;
 
 struct Audio {
-    MediaFile *file;
+    MediaInput input;
+    int64_t time_shift, seek_shift;  // Taken from the times of the sound's and the seek's streams.
     AVFormatContext *fmt;
-    AVIOContext *io;
     AVCodecContext *codec;
     SwrContext *swr;
     int stream;
@@ -435,10 +436,16 @@ static bool fill(Audio *a)
         if (av_read_frame(a->fmt, a->pkt) < 0) {
             a->read_done = true;
             mutexLock(&a->lock);
-            a->read_failed = mediaFileFailed(a->file);
+            a->read_failed = mediaFileFailed(a->input.file);
             mutexUnlock(&a->lock);
             avcodec_send_packet(a->codec, NULL);  // Drain what's left.
             continue;
+        }
+        if (a->pkt->stream_index == a->stream && a->time_shift) {
+            if (a->pkt->pts != AV_NOPTS_VALUE)
+                a->pkt->pts -= a->time_shift;
+            if (a->pkt->dts != AV_NOPTS_VALUE)
+                a->pkt->dts -= a->time_shift;
         }
         ringKeep(a, a->pkt);
         if (a->pkt->stream_index == a->stream)
@@ -573,7 +580,7 @@ static void restartFrom(Audio *a, int64_t target_ns)
 static void doSeek(Audio *a, int64_t target_ns)
 {
     flushOutput(a);  // Already faded out and played out: nothing is cut.
-    int64_t ts = av_rescale_q(target_ns, NS_TIME_BASE, a->seek_time_base);
+    int64_t ts = av_rescale_q(target_ns, NS_TIME_BASE, a->seek_time_base) + a->seek_shift;
     av_seek_frame(a->fmt, a->seek_stream, ts, AVSEEK_FLAG_BACKWARD);
     avcodec_flush_buffers(a->codec);
     ringsClear(a);  // What was kept is from another part of the file.
@@ -671,6 +678,16 @@ static void audioThread(void *arg)
 
 // --- Opening ---
 
+// For FFmpeg: a jump doesn't wait for a segment of the place being left.
+static int readInterrupted(void *opaque)
+{
+    Audio *a = opaque;
+    mutexLock(&a->lock);
+    bool yes = a->stop || a->seek_requested;
+    mutexUnlock(&a->lock);
+    return yes;
+}
+
 // The file's sound streams, as video.c counts them (videoAudioTrackName).
 static void listTracks(Audio *a)
 {
@@ -692,23 +709,18 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
         return NULL;
     mutexInit(&a->lock);
     a->track_wanted = NO_TRACK;
-    a->file = mediaFileOpen(path);
-    uint8_t *buffer = av_malloc(IO_BUFFER);
-    a->io = a->file && buffer ? avio_alloc_context(buffer, IO_BUFFER, 0, a->file, mediaFileRead, NULL, mediaFileSeek) : NULL;
     a->fmt = avformat_alloc_context();
     a->pkt = av_packet_alloc();
     a->frame = av_frame_alloc();
-    if (!a->io || !a->fmt || !a->pkt || !a->frame) {
-        if (!a->io)
-            av_free(buffer);
+    if (!a->fmt || !a->pkt || !a->frame) {
         audioClose(a);
         return NULL;
     }
-    a->fmt->pb = a->io;
-    a->fmt->flags |= AVFMT_FLAG_CUSTOM_IO;
     a->fmt->codec_whitelist = av_strdup(AUDIO_DECODERS);
+    if (hlsIsLocation(path))
+        a->fmt->interrupt_callback = (AVIOInterruptCB){readInterrupted, a};
     const AVCodec *decoder = NULL;
-    if (avformat_open_input(&a->fmt, NULL, NULL, NULL) < 0 || avformat_find_stream_info(a->fmt, NULL) < 0) {
+    if (!mediaInputOpen(&a->input, &a->fmt, path, IO_BUFFER)) {
         audioClose(a);
         return NULL;  // No sound: the video plays silent.
     }
@@ -737,6 +749,8 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     if (a->seek_stream < 0)
         a->seek_stream = a->stream;  // Sound only: its own.
     a->seek_time_base = a->fmt->streams[a->seek_stream]->time_base;
+    a->time_shift = av_rescale_q(a->input.start_us, AV_TIME_BASE_Q, a->time_base);
+    a->seek_shift = av_rescale_q(a->input.start_us, AV_TIME_BASE_Q, a->seek_time_base);
     describeSound(a, st);
     for (int i = 0; i < BUFFER_COUNT; i++) {
         a->buffers[i].buffer = memalign(BUFFER_ALIGN, BUFFER_BYTES);
@@ -782,11 +796,7 @@ void audioClose(Audio *a)
     ringsFree(a);
     if (a->fmt)
         avformat_close_input(&a->fmt);
-    if (a->io) {
-        av_freep(&a->io->buffer);
-        avio_context_free(&a->io);
-    }
-    mediaFileClose(a->file);
+    mediaInputClose(&a->input);
     free(a);
 }
 

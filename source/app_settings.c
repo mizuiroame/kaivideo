@@ -21,6 +21,7 @@
 #endif
 
 #define HTTP_PREFIX "http://"
+#define CREDENTIAL_TEXT_MAX 128
 
 void appApplySubtitleStyle(const App *app)
 {
@@ -43,10 +44,15 @@ void appSettingsStart(App *app)
         app->config.background[0] = '\0';  // Gone or unreadable: not tried again every start.
 }
 
+static bool signedIn(const App *app)
+{
+    return app->jf.state == JF_SIGNED_IN;
+}
+
 static void openPage(App *app, SettingsPage page)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    settingsPageRows(page, rows);
+    settingsPageRows(page, signedIn(app), rows);
     app->settings_page = page;
     app->settings_cursor = rows[0];
 }
@@ -96,11 +102,6 @@ static void stepBackground(App *app, int delta, uint64_t now)
     }
 }
 
-static bool signedIn(const App *app)
-{
-    return app->jf.state == JF_SIGNED_IN;
-}
-
 static void openJellyfin(App *app, uint64_t now)
 {
     if (!appJellyfinEnsure(app)) {
@@ -138,13 +139,16 @@ static void typeServer(App *app, uint64_t now)
         appShowMessage(app, "That isn't a server's address.", now);
 }
 
-static void accountAction(App *app, uint64_t now)
+static void signOut(App *app)
 {
-    if (signedIn(app)) {
-        if (app->config.use_jellyfin)
-            appLibrarySetSource(app, false);
-        jfSyncSignOut();
-    } else if (!app->jf.server[0]) {
+    if (app->config.use_jellyfin)
+        appLibrarySetSource(app, false);
+    jfSyncSignOut();
+}
+
+static void codeSignIn(App *app, uint64_t now)
+{
+    if (!app->jf.server[0]) {
         appShowMessage(app, "Enter the server's address first.", now);
     } else {
         app->jf_signing = true;
@@ -152,19 +156,30 @@ static void accountAction(App *app, uint64_t now)
     }
 }
 
-static void stepSource(App *app, uint64_t now)
+static void passwordSignIn(App *app, uint64_t now)
 {
-    if (!signedIn(app) && !app->config.use_jellyfin)
-        appShowMessage(app, "Sign in to Jellyfin first.", now);
-    else
-        appLibrarySetSource(app, !app->config.use_jellyfin);
+    if (!app->jf.server[0]) {
+        appShowMessage(app, "Enter the server's address first.", now);
+        return;
+    }
+    char user[CREDENTIAL_TEXT_MAX], password[CREDENTIAL_TEXT_MAX];
+    SystemKeyboardResult result = systemKeyboardInput("Jellyfin user name", "", user, sizeof(user), sizeof(user) - 1);
+    if (result == SYSTEM_KEYBOARD_OK && user[0])
+        result = systemKeyboardPassword("Password", password, sizeof(password), sizeof(password) - 1);
+    else if (result == SYSTEM_KEYBOARD_OK)
+        return;
+    if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
+        appShowMessage(app, "The keyboard couldn't open.", now);
+    } else if (result == SYSTEM_KEYBOARD_OK) {
+        app->jf_signing = true;
+        jfSyncSignInWithPassword(user, password);
+    }
+    memset(password, 0, sizeof(password));
 }
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_JF_SOURCE) {
-        stepSource(app, now);
-    } else if (row == SETTING_BACKGROUND) {
+    if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
     } else {
         settingStep(&app->config, row, delta);
@@ -189,13 +204,9 @@ static void activate(App *app, SettingRow row, uint64_t now)
     case SETTING_OPEN_DISPLAY: openPage(app, SETTINGS_PAGE_DISPLAY); break;
     case SETTING_OPEN_JELLYFIN: openJellyfin(app, now); break;
     case SETTING_JF_SERVER: typeServer(app, now); break;
-    case SETTING_JF_ACCOUNT: accountAction(app, now); break;
-    case SETTING_JF_REFRESH:
-        if (signedIn(app))
-            jfSyncRefresh();
-        else
-            appShowMessage(app, "Sign in to Jellyfin first.", now);
-        break;
+    case SETTING_JF_CODE: codeSignIn(app, now); break;
+    case SETTING_JF_PASSWORD: passwordSignIn(app, now); break;
+    case SETTING_JF_SIGN_OUT: signOut(app); break;
     case SETTING_ABOUT: app->about_open = true; break;
     default: change(app, row, 1, now); break;
     }
@@ -205,7 +216,7 @@ static void activate(App *app, SettingRow row, uint64_t now)
 static void moveCursor(App *app, int delta)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows((SettingsPage)app->settings_page, rows), at = 0;
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), rows), at = 0;
     for (int i = 0; i < count; i++)
         if ((int)rows[i] == app->settings_cursor)
             at = i;
@@ -237,8 +248,20 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     }
 }
 
+// Signing in or out changes the page's rows: the cursor stays on one of them.
+static void keepCursorOnPage(App *app)
+{
+    SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), rows);
+    for (int i = 0; i < count; i++)
+        if ((int)rows[i] == app->settings_cursor)
+            return;
+    app->settings_cursor = rows[0];
+}
+
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
+    keepCursorOnPage(app);
     if (pressed & HidNpadButton_Plus) {
         app->quit = true;
         return;
@@ -283,7 +306,7 @@ void appSettingsDraw(const App *app)
     const char *server = app->jf.server;
     if (!strncmp(server, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
         server += sizeof(HTTP_PREFIX) - 1;
-    uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "Sign in");
+    uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "");
     if (app->jf_signing)
         uiDrawJellyfinCode(app->jf.code, server);
     else if (app->about_open)

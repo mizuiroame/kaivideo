@@ -33,8 +33,10 @@ The screenshots show made-up films and series.
 - **Settings**: themes and accent colors, your own **background** image,
   and an About page.
 - **Jellyfin**: browse your server with the same screens, sign in with Quick
-  Connect, and play its videos over your network. What you watch stays in sync
-  with your other devices. See [Jellyfin](#jellyfin).
+  Connect or a password, and play its videos over your network. What the
+  console plays as it is plays from the original file; 4K, HDR and the rest
+  are converted by your server, at the quality you choose. What you watch
+  stays in sync with your other devices. See [Jellyfin](#jellyfin).
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second.
@@ -133,8 +135,10 @@ kept:
 
 1. In **Settings** (**−**), open **Jellyfin** and type your server's address
    under **Server**, like `192.168.0.10:8096`.
-2. Choose **Account**: a code appears. In Jellyfin on your phone or computer,
-   open your profile, choose **Quick Connect** and enter it.
+2. Choose **Sign in with a code**: a code appears. In Jellyfin on your phone
+   or computer, open your profile, choose **Quick Connect** and enter it. Or
+   choose **Sign in with a password** and type your user name and password
+   (the password isn't kept).
 3. Your library appears. **X** on the library's screens, or the button next
    to KaiVideo's name, changes between Jellyfin and the SD card.
 
@@ -142,11 +146,21 @@ Films and episodes open a panel with their summary: **A** plays or resumes,
 **Y** starts from the beginning and **X** marks them watched. Where you left a
 video and what you've watched go to the server and come back from it.
 
-KaiVideo plays the server's original files and doesn't ask it to convert them,
-so 4K, HDR, bitrates over 25 Mb/s and formats the console can't play show as
-unavailable. Subtitles inside the file work; separate subtitle files on the
-server aren't shown yet. The sign-in is kept in `config/jellyfin.txt` on the
-card: **Account** signs out and ends it on the server.
+What the console can play is played from the original file: its picture,
+every sound track (changed almost at once) and its subtitles, styled ones
+included. Everything else, like 4K, HDR or very high bitrates, is converted by
+your server to H.264 up to 1080p, with HDR turned into normal colors. Your
+server needs video transcoding allowed for your account.
+
+**Video quality**, in Settings or in the Playback list (**↑**) while a video
+plays, sets the most a video may use, from **Auto** down to 420 kb/s: a
+video over it is converted to fit. On a converted video, changing the
+quality or the sound track opens it again at the same place, which takes a
+few seconds.
+
+Separate subtitle files on the server show in the subtitles list too. The
+sign-in is kept in `config/jellyfin.txt` on the card: **Sign out** ends it on
+the server.
 
 ### Where KaiVideo keeps its files
 
@@ -215,20 +229,23 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 - **4K HEVC** is too heavy for the CPU: measured on the console, 10-bit 4K
   decoded at 21 frames per second at 16 Mb/s and at 15 at 68 Mb/s, so frames
   are skipped to keep up with the sound.
-- **HDR** isn't converted: HDR videos play, with washed-out colors.
+- **HDR** on the SD card isn't converted: HDR videos play, with washed-out
+  colors. From Jellyfin, the server converts them.
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
 - After a jump (**◀** / **▶**, **L** / **R**, the progress bar) the picture
   can stutter for a moment.
-- **Jellyfin** plays original files only: nothing is converted by the server.
-  It has been tried on a home network; signing in from outside it hasn't.
+- **Jellyfin**: converted videos start, change sound track or quality, and
+  jump far back, in a few seconds rather than at once, while the server
+  converts from there. Their subtitles come without styles. It has been tried
+  on a home network; signing in from outside it hasn't.
 
 ## Plans
 
 - **HEVC in hardware**, if libounce offers it.
-- **Jellyfin**: 4K and HDR through the server's conversion, and separate
-  subtitle files.
+- **Jellyfin**: Live TV, servers outside your home over HTTPS, and a panel
+  with what's playing and how well.
 - **Picture subtitles** (PGS from Blu-ray, VobSub from DVD).
 - Smoother jumps, and checks with big libraries on the console.
 

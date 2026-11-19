@@ -378,13 +378,13 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiSettingsSetJellyfin("192.168.0.10:8096", "Sign in");
-    uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_ACCOUNT, "sdmc:/Media/Videos", "1.0.0");
+    uiSettingsSetJellyfin("192.168.0.10:8096", "");
+    uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
-    top = (GFX_HEIGHT - (76 + 4 * 48 + 60)) / 2 + 76;
-    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 2 * 48 + 20);
-    if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_ACCOUNT) {
+    top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 1 * 48 + 20);
+    if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
         g_problems++;
     }
@@ -407,6 +407,10 @@ static void libraryScenes(void)
         printf("TOUCH: home: the library's source doesn't answer a tap\n");
         g_problems++;
     }
+    LibraryItem *film = &g_lib.items[g_lib.films[0]];
+    film->overview = strdup("When the last road out of the valley closes, a fire lookout and a retired surveyor have "
+                            "one week to find the family who stayed behind, before the ash reaches the river.");
+    film->runtime_ns = 6720ll * 1000000000;
     uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "");
     uiDrawFooterHelp("[A] play  [X] watched  [B] back");
     save("details");

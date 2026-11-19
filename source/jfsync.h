@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "jellyfin.h"
+#include "net.h"
 
 typedef enum {
     JF_SIGNED_OUT,
@@ -39,6 +40,8 @@ void jfSyncGetStatus(JfStatus *out);
 // False if text can't be a server's address.
 bool jfSyncSetServer(const char *text);
 void jfSyncSignIn(void);
+// With a user name and password. The password is only kept until it's sent.
+void jfSyncSignInWithPassword(const char *user, const char *password);
 void jfSyncCancelSignIn(void);
 void jfSyncSignOut(void);
 void jfSyncRefresh(void);
@@ -48,6 +51,19 @@ bool jfSyncTakeCatalog(JfCatalog *c);
 
 void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, bool paused);
 void jfSyncSetPlayed(const char *location, bool played);
+// The server can stop converting the video that was playing.
+void jfSyncEndConversion(const char *location);
+
+// Asks the server how to play a location, from any thread. audio_index: the
+// server's number for the sound track, -1 for its choice.
+bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, JfPlan *out, char *error,
+                   size_t error_size);
+// The address and header for a conversion the server gave (url as in the plan).
+void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size);
+// A text subtitle track of a location, as SubRip (free with netResponseFree).
+bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out);
+// What the reports about the video playing say about how it plays.
+void jfSyncSetPlayback(const char *play_session, bool converted);
 
 // The address and header for reading a location's file; for its picture.
 bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size);

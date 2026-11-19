@@ -9,8 +9,10 @@
 
 #include <libavformat/avio.h>
 #include <libavutil/error.h>
+#include <libavutil/mem.h>
 
 #include "blockcache.h"
+#include "hlsio.h"
 #include "jfsync.h"
 #include "net.h"
 
@@ -20,6 +22,8 @@
 #define WAIT_STEP_MS 50
 #define NS_PER_MS 1000000L
 #define HTTP_PARTIAL 206
+
+#define REMOTE_READERS 3      // Picture, sound, and a sound being changed.
 
 static unsigned g_interrupts;    // Files opened before the last interrupt give up.
 
@@ -32,7 +36,10 @@ typedef struct {
     char url[JF_URL_MAX], authorization[JF_AUTH_MAX];
     BlockSlot slots[BLOCK_SLOTS];
     uint8_t *memory;       // BLOCK_SLOTS blocks.
-    int64_t read_block;
+    char location[LIBRARY_PATH_MAX];
+    int64_t readers[REMOTE_READERS];     // The block each is at.
+    bool reader_used[REMOTE_READERS];
+    int users;
     int64_t total;         // The file's length; -1 until known.
     int64_t fetching;      // The block on its way, or -1.
     volatile bool abort_fetch;  // The reader went elsewhere, or stop.
@@ -40,9 +47,13 @@ typedef struct {
     unsigned interrupts;   // g_interrupts when it was opened.
 } Remote;
 
+static pthread_mutex_t g_shared_lock = PTHREAD_MUTEX_INITIALIZER;
+static Remote *g_shared;         // The file being fetched, for a second reader to join.
+
 struct MediaFile {
     FILE *file;
     Remote *remote;
+    int reader;                  // Which of its readers this is.
     int64_t position;
     bool read_failed;
 };
@@ -105,12 +116,24 @@ static size_t fetchBlock(Remote *r, int64_t index, uint8_t *to, long long *total
     return 0;
 }
 
+// Where the readers are. Returns how many. Under the lock.
+static int readerBlocks(const Remote *r, int64_t out[REMOTE_READERS])
+{
+    int count = 0;
+    for (int i = 0; i < REMOTE_READERS; i++)
+        if (r->reader_used[i])
+            out[count++] = r->readers[i];
+    return count;
+}
+
 // Waits for a block to fetch and a slot for it. False to stop. Under the lock.
 static bool nextJob(Remote *r, int64_t *index, int *slot)
 {
     while (!r->stop) {
-        *index = r->failed ? -1 : blockNextWanted(r->slots, BLOCK_SLOTS, r->read_block, totalBlocks(r));
-        *slot = *index >= 0 ? blockVictim(r->slots, BLOCK_SLOTS, r->read_block) : -1;
+        int64_t blocks[REMOTE_READERS];
+        int count = readerBlocks(r, blocks);
+        *index = r->failed ? -1 : blockNextWanted(r->slots, BLOCK_SLOTS, blocks, count, totalBlocks(r));
+        *slot = *index >= 0 ? blockVictim(r->slots, BLOCK_SLOTS, blocks, count) : -1;
         if (*slot >= 0)
             return true;
         pthread_cond_wait(&r->wake, &r->lock);
@@ -168,13 +191,15 @@ static void remoteFree(Remote *r)
 }
 
 // The reader is at this block now: what's being fetched elsewhere can stop.
-static void moveReader(Remote *r, int64_t block)
+static void moveReader(Remote *r, int reader, int64_t block)
 {
-    if (block == r->read_block)
+    if (block == r->readers[reader])
         return;
-    r->read_block = block;
+    r->readers[reader] = block;
     r->failed = false;
-    if (r->fetching >= 0 && (r->fetching < block || r->fetching >= block + BLOCK_AHEAD))
+    int64_t blocks[REMOTE_READERS];
+    int count = readerBlocks(r, blocks);
+    if (r->fetching >= 0 && !blockIsWanted(r->fetching, blocks, count))
         r->abort_fetch = true;
     pthread_cond_broadcast(&r->wake);
 }
@@ -215,7 +240,7 @@ static int remoteRead(MediaFile *f, uint8_t *buf, int size)
     int64_t block = f->position / BLOCK_SIZE;
     size_t offset = (size_t)(f->position % BLOCK_SIZE);
     pthread_mutex_lock(&r->lock);
-    moveReader(r, block);
+    moveReader(r, f->reader, block);
     int result = AVERROR_EOF;
     if (r->total < 0 || f->position < r->total) {
         int slot = waitForBlock(r, block);
@@ -241,8 +266,11 @@ static Remote *remoteOpen(const char *location)
         return NULL;
     pthread_mutex_init(&r->lock, NULL);
     pthread_cond_init(&r->wake, NULL);
+    snprintf(r->location, sizeof(r->location), "%s", location);
     r->total = -1;
     r->fetching = -1;
+    r->users = 1;
+    r->reader_used[0] = true;
     r->interrupts = __atomic_load_n(&g_interrupts, __ATOMIC_RELAXED);
     r->memory = malloc((size_t)BLOCK_SLOTS * BLOCK_SIZE);
     r->net = netClientOpen();
@@ -264,13 +292,70 @@ static Remote *remoteOpen(const char *location)
     return r;
 }
 
+// Another reader of the file already being fetched, if it is. Under g_shared_lock.
+static bool joinShared(MediaFile *f, const char *location)
+{
+    Remote *r = g_shared;
+    if (!r || strcmp(r->location, location) || interrupted(r))
+        return false;
+    pthread_mutex_lock(&r->lock);
+    bool joined = false;
+    for (int i = 0; i < REMOTE_READERS && !joined; i++)
+        if (!r->reader_used[i]) {
+            r->reader_used[i] = true;
+            r->readers[i] = 0;
+            r->users++;
+            f->reader = i;
+            joined = true;
+        }
+    pthread_cond_broadcast(&r->wake);
+    pthread_mutex_unlock(&r->lock);
+    if (joined)
+        f->remote = r;
+    return joined;
+}
+
+// Picture and sound read the same file at about the same place: one download serves both.
+static void remoteAttach(MediaFile *f, const char *location)
+{
+    pthread_mutex_lock(&g_shared_lock);
+    bool joined = joinShared(f, location);
+    pthread_mutex_unlock(&g_shared_lock);
+    if (joined)
+        return;
+    f->remote = remoteOpen(location);
+    f->reader = 0;
+    pthread_mutex_lock(&g_shared_lock);
+    if (f->remote && !g_shared)
+        g_shared = f->remote;
+    pthread_mutex_unlock(&g_shared_lock);
+}
+
+static void remoteDetach(MediaFile *f)
+{
+    Remote *r = f->remote;
+    if (!r)
+        return;
+    pthread_mutex_lock(&g_shared_lock);
+    pthread_mutex_lock(&r->lock);
+    r->reader_used[f->reader] = false;
+    bool last = --r->users == 0;
+    pthread_cond_broadcast(&r->wake);
+    pthread_mutex_unlock(&r->lock);
+    if (last && g_shared == r)
+        g_shared = NULL;
+    pthread_mutex_unlock(&g_shared_lock);
+    if (last)
+        remoteFree(r);
+}
+
 MediaFile *mediaFileOpen(const char *location)
 {
     MediaFile *f = calloc(1, sizeof(*f));
     if (!f)
         return NULL;
     if (jfIsLocation(location))
-        f->remote = remoteOpen(location);
+        remoteAttach(f, location);
     else
         f->file = fopen(location, "rb");
     if (!f->file && !f->remote) {
@@ -285,9 +370,55 @@ void mediaFileInterruptAll(void)
     __atomic_add_fetch(&g_interrupts, 1, __ATOMIC_RELAXED);
 }
 
+unsigned mediaFileInterrupts(void)
+{
+    return __atomic_load_n(&g_interrupts, __ATOMIC_RELAXED);
+}
+
 bool mediaFileFailed(const MediaFile *f)
 {
-    return f->read_failed;
+    return f ? f->read_failed : hlsFailed();
+}
+
+static bool openFileInput(MediaInput *in, AVFormatContext **fmt, const char *location, int buffer_size)
+{
+    in->file = mediaFileOpen(location);
+    uint8_t *buffer = in->file ? av_malloc((size_t)buffer_size) : NULL;
+    in->io = buffer ? avio_alloc_context(buffer, buffer_size, 0, in->file, mediaFileRead, NULL, mediaFileSeek) : NULL;
+    if (!in->io) {
+        av_free(buffer);
+        return false;
+    }
+    (*fmt)->pb = in->io;
+    (*fmt)->flags |= AVFMT_FLAG_CUSTOM_IO;
+    return avformat_open_input(fmt, NULL, NULL, NULL) >= 0;
+}
+
+bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location, int buffer_size)
+{
+    memset(in, 0, sizeof(*in));
+    bool converted = hlsIsLocation(location);
+    bool ok = converted ? hlsOpenInput(fmt, &in->playlist) : openFileInput(in, fmt, location, buffer_size);
+    if (!ok || avformat_find_stream_info(*fmt, NULL) < 0)
+        return false;
+    if (converted) {
+        in->skipped_us = hlsBaseNs() / 1000;
+        if ((*fmt)->start_time != AV_NOPTS_VALUE)
+            in->start_us = (*fmt)->start_time - in->skipped_us;
+    }
+    return true;
+}
+
+void mediaInputClose(MediaInput *in)
+{
+    if (in->io) {
+        av_freep(&in->io->buffer);
+        avio_context_free(&in->io);
+    }
+    hlsCloseInput(in->playlist);
+    in->playlist = NULL;
+    mediaFileClose(in->file);
+    in->file = NULL;
 }
 
 void mediaFileClose(MediaFile *f)
@@ -296,7 +427,7 @@ void mediaFileClose(MediaFile *f)
         return;
     if (f->file)
         fclose(f->file);
-    remoteFree(f->remote);
+    remoteDetach(f);
     free(f);
 }
 

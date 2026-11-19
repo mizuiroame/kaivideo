@@ -1,12 +1,16 @@
-"""A small stand-in for a Jellyfin server, for host_jellyfin:  fake_server.py PORT VIDEO LOG BIG_FILE
-While the file LOG.fail exists, reading videos fails."""
+"""A small stand-in for a Jellyfin server, for host_jellyfin:  fake_server.py PORT VIDEO LOG BIG_FILE HLS_FOLDER
+While the file LOG.fail exists, reading videos fails. While LOG.slow exists, the
+second HLS segment doesn't come, as when the server hasn't converted it yet."""
 import json
 import os
 import re
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-PORT, VIDEO, LOG, BIG = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
+PORT, VIDEO, LOG, BIG, HLS_DIR = int(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
+SLOW_MAX_S = 20.0
+SLOW_STEP_S = 0.05
 SIZE = os.path.getsize(VIDEO)
 TOKEN = "fake-token"
 ITEM = {
@@ -59,9 +63,23 @@ class Handler(BaseHTTPRequestHandler):
             f.seek(start)
             self.wfile.write(f.read(end - start + 1))
 
+    def hls(self, name):
+        waited = 0.0
+        while name.endswith("seg1.ts") and os.path.exists(LOG + ".slow") and waited < SLOW_MAX_S:
+            time.sleep(SLOW_STEP_S)
+            waited += SLOW_STEP_S
+        with open(os.path.join(HLS_DIR, os.path.basename(name)), "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self):
         path = self.path.split("?")[0]
-        if path == "/QuickConnect/Connect":
+        if path.startswith("/hls/"):
+            self.hls(path)
+        elif path == "/QuickConnect/Connect":
             self.reply({"Authenticated": True})
         elif not self.signed():
             self.reply({}, 401)

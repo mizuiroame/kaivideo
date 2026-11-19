@@ -17,7 +17,13 @@
 #define CLOSING_TIMEOUT_S 3L     // What's left to tell when the app is closing.
 #define CLOSING_SECONDS 5        // It doesn't wait longer than this for all of it.
 #define REPORT_TRIES 3
+#define CREDENTIAL_MAX 256
+#define HTTP_UNAUTHORIZED 401
 #define MAX_ITEMS 100000         // Against a server that never says it's done.
+#define PLAN_MAX_BYTES (4u * 1024 * 1024)
+#define PLAN_BODY_MAX 4096
+#define SUBTITLE_MAX_BYTES (16u * 1024 * 1024)
+#define SUBTITLE_TIMEOUT_S 120L  // The server may have to read them out of the file first.
 #define PAGE_MAX_BYTES (32u * 1024 * 1024)
 #define SMALL_MAX_BYTES (256u * 1024)
 #define POLL_SECONDS 2
@@ -28,12 +34,14 @@
 #define IMAGE_FORMAT "Jpg"  // What stb_image reads, whatever the server would prefer.
 
 typedef struct {
-    enum { JOB_REPORT, JOB_PLAYED } type;
+    enum { JOB_REPORT, JOB_PLAYED, JOB_END_CONVERSION } type;
     JfReportKind kind;
     char location[LIBRARY_PATH_MAX];
     int64_t position_ns;
     bool flag;  // Paused; or played.
     int tries;
+    char play_session[JF_ID_MAX + 24];
+    bool converted;
 } Job;
 
 static struct {
@@ -54,6 +62,10 @@ static struct {
     int job_count;
     JfCatalog ready;
     bool has_ready;
+    char play_session[JF_ID_MAX + 24];
+    bool converted;
+    bool use_password;
+    char sign_in_user[CREDENTIAL_MAX], sign_in_password[CREDENTIAL_MAX];
 } g;
 
 static void setError(const char *message)
@@ -145,11 +157,9 @@ static bool waitApproved(const char *secret, unsigned generation)
     return false;
 }
 
-static bool finishSignIn(const char *secret)
+// Keeps the session the server gave. False if the answer doesn't hold one.
+static bool acceptSession(json_t *answer)
 {
-    char body[256];
-    snprintf(body, sizeof(body), "{\"Secret\":\"%s\"}", secret);
-    json_t *answer = callJson("/Users/AuthenticateWithQuickConnect", body);
     const json_t *user = json_object_get(answer, "User");
     const char *token = textOf(answer, "AccessToken"), *id = textOf(user, "Id");
     bool ok = token[0] && id[0] && strlen(token) < JF_TOKEN_MAX && strlen(id) < JF_ID_MAX;
@@ -168,22 +178,64 @@ static bool finishSignIn(const char *secret)
     return ok;
 }
 
+static bool finishSignIn(const char *secret)
+{
+    char body[256];
+    snprintf(body, sizeof(body), "{\"Secret\":\"%s\"}", secret);
+    return acceptSession(callJson("/Users/AuthenticateWithQuickConnect", body));
+}
+
+static bool signInWithPassword(void)
+{
+    char user[CREDENTIAL_MAX], password[CREDENTIAL_MAX];
+    pthread_mutex_lock(&g.lock);
+    memcpy(user, g.sign_in_user, sizeof(user));
+    memcpy(password, g.sign_in_password, sizeof(password));
+    memset(g.sign_in_password, 0, sizeof(g.sign_in_password));
+    pthread_mutex_unlock(&g.lock);
+    json_t *request = json_pack("{s:s, s:s}", "Username", user, "Pw", password);
+    char *body = request ? json_dumps(request, JSON_COMPACT) : NULL;
+    json_decref(request);
+    memset(password, 0, sizeof(password));
+    NetResponse r = {0};
+    bool ok = body && callText("/Users/AuthenticateByName", body, SMALL_MAX_BYTES, API_TIMEOUT_S, &r);
+    if (body) {
+        memset(body, 0, strlen(body));
+        free(body);
+    }
+    if (!ok) {
+        setError(r.status == HTTP_UNAUTHORIZED ? "Wrong user name or password."
+                 : r.status ? "The server refused that." : "The server can't be reached.");
+        return false;
+    }
+    json_t *answer = json_loads(r.data, 0, NULL);
+    netResponseFree(&r);
+    return acceptSession(answer);
+}
+
 static void signIn(void)
 {
     pthread_mutex_lock(&g.lock);
     unsigned generation = g.sign_in_generation;
+    bool with_password = g.use_password;
+    g.use_password = false;
     g.abort_call = false;
     makeDeviceId(&g.session);
     g.session.token[0] = '\0';
     pthread_mutex_unlock(&g.lock);
-    json_t *started = callJson("/QuickConnect/Initiate", "{}");
-    char secret[128] = "";
-    if (started && g.sign_in_generation == generation) {
-        snprintf(secret, sizeof(secret), "%s", textOf(started, "Secret"));
-        setState(JF_SIGN_IN_WAITING, textOf(started, "Code"));
+    bool ok;
+    if (with_password) {
+        ok = signInWithPassword();
+    } else {
+        json_t *started = callJson("/QuickConnect/Initiate", "{}");
+        char secret[128] = "";
+        if (started && g.sign_in_generation == generation) {
+            snprintf(secret, sizeof(secret), "%s", textOf(started, "Secret"));
+            setState(JF_SIGN_IN_WAITING, textOf(started, "Code"));
+        }
+        json_decref(started);
+        ok = secret[0] && waitApproved(secret, generation) && finishSignIn(secret);
     }
-    json_decref(started);
-    bool ok = secret[0] && waitApproved(secret, generation) && finishSignIn(secret);
     pthread_mutex_lock(&g.lock);
     g.abort_call = false;
     if (g.sign_in_generation != generation && !ok) {  // Called off: nothing to report, and maybe a new one waits.
@@ -309,12 +361,19 @@ static bool runJob(const Job *job)
         snprintf(path, sizeof(path), "/UserPlayedItems/%s?userId=%s", item, s.user_id);
         return post(path, "{}", !job->flag);
     }
+    if (job->type == JOB_END_CONVERSION) {
+        JfSession s = sessionCopy();
+        snprintf(path, sizeof(path), "/Videos/ActiveEncodings?deviceId=%s&playSessionId=%s", s.device_id,
+                 job->play_session);
+        return post(path, NULL, true);
+    }
     static const char *const ENDPOINTS[] = {"/Sessions/Playing", "/Sessions/Playing/Progress",
                                             "/Sessions/Playing/Stopped"};
     snprintf(body, sizeof(body),
              "{\"ItemId\":\"%s\",\"MediaSourceId\":\"%s\",\"PositionTicks\":%" PRId64
-             ",\"IsPaused\":%s,\"CanSeek\":true,\"PlayMethod\":\"DirectPlay\"}",
-             item, source, job->position_ns / NS_PER_TICK, job->flag ? "true" : "false");
+             ",\"IsPaused\":%s,\"CanSeek\":true,\"PlayMethod\":\"%s\",\"PlaySessionId\":\"%s\"}",
+             item, source, job->position_ns / NS_PER_TICK, job->flag ? "true" : "false",
+             job->converted ? "Transcode" : "DirectPlay", job->play_session);
     return post(ENDPOINTS[job->kind], body, false);
 }
 
@@ -500,6 +559,18 @@ void jfSyncSignIn(void)
     pthread_mutex_unlock(&g.lock);
 }
 
+void jfSyncSignInWithPassword(const char *user, const char *password)
+{
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    snprintf(g.sign_in_user, sizeof(g.sign_in_user), "%s", user);
+    snprintf(g.sign_in_password, sizeof(g.sign_in_password), "%s", password);
+    g.use_password = true;
+    pthread_mutex_unlock(&g.lock);
+    jfSyncSignIn();
+}
+
 void jfSyncCancelSignIn(void)
 {
     if (!g.running)
@@ -509,6 +580,8 @@ void jfSyncCancelSignIn(void)
     g.abort_call = g.status.state == JF_SIGN_IN_STARTING || g.status.state == JF_SIGN_IN_WAITING;
     if (g.want_sign_in) {  // It hadn't started.
         g.want_sign_in = false;
+        g.use_password = false;
+        memset(g.sign_in_password, 0, sizeof(g.sign_in_password));
         g.status.state = JF_SIGNED_OUT;
     }
     pthread_cond_broadcast(&g.wake);
@@ -541,11 +614,13 @@ bool jfSyncTakeCatalog(JfCatalog *c)
     return any;
 }
 
-static void addJob(const Job *job)
+static void addJob(Job *job)
 {
     if (!g.running)
         return;
     pthread_mutex_lock(&g.lock);
+    snprintf(job->play_session, sizeof(job->play_session), "%s", g.play_session);
+    job->converted = g.converted;
     bool progress = job->type == JOB_REPORT && job->kind == JF_REPORT_PROGRESS;
     bool merged = false;
     for (int i = 0; progress && i < g.job_count && !merged; i++)  // Only the latest progress counts.
@@ -566,11 +641,78 @@ void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, 
     addJob(&job);
 }
 
+void jfSyncSetPlayback(const char *play_session, bool converted)
+{
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    snprintf(g.play_session, sizeof(g.play_session), "%s", play_session);
+    g.converted = converted;
+    pthread_mutex_unlock(&g.lock);
+}
+
+void jfSyncEndConversion(const char *location)
+{
+    Job job = {.type = JOB_END_CONVERSION};
+    snprintf(job.location, sizeof(job.location), "%s", location);
+    addJob(&job);
+}
+
 void jfSyncSetPlayed(const char *location, bool played)
 {
     Job job = {.type = JOB_PLAYED, .flag = played};
     snprintf(job.location, sizeof(job.location), "%s", location);
     addJob(&job);
+}
+
+bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, JfPlan *out, char *error,
+                   size_t error_size)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
+    char *body = malloc(PLAN_BODY_MAX);
+    NetClient *net = netClientOpen();
+    bool ok = false;
+    snprintf(error, error_size, "The server can't be reached.");
+    if (g.running && body && net && jfLocationIds(location, item, source)) {
+        JfSession s = sessionCopy();
+        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s&mediaSourceId=%s", s.server, item, s.user_id, source);
+        jfAuthHeader(&s, g.version, auth, sizeof(auth));
+        jfPlaybackBody(body, PLAN_BODY_MAX, s.user_id, max_bitrate, audio_index);
+        NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S};
+        NetResponse r;
+        if (netFetchText(net, &request, PLAN_MAX_BYTES, &r)) {
+            ok = jfPlanParse(r.data, out);
+            netResponseFree(&r);
+            if (!ok)
+                snprintf(error, error_size, "The server can't play this video here.");
+        }
+    }
+    netClientClose(net);
+    free(body);
+    return ok;
+}
+
+void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size)
+{
+    JfSession s = sessionCopy();
+    snprintf(full, full_size, "%s%s", s.server, url);
+    jfAuthHeader(&s, g.version, authorization, auth_size);
+}
+
+bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
+    memset(out, 0, sizeof(*out));
+    NetClient *net = g.running && jfLocationIds(location, item, source) ? netClientOpen() : NULL;
+    if (!net)
+        return false;
+    JfSession s = sessionCopy();
+    snprintf(url, sizeof(url), "%s/Videos/%s/%s/Subtitles/%d/0/Stream.srt", s.server, item, source, stream_index);
+    jfAuthHeader(&s, g.version, auth, sizeof(auth));
+    NetRequest request = {.url = url, .authorization = auth, .cancel = cancel, .timeout_s = SUBTITLE_TIMEOUT_S};
+    bool ok = netFetchText(net, &request, SUBTITLE_MAX_BYTES, out);
+    netClientClose(net);
+    return ok;
 }
 
 bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size)

@@ -6,6 +6,7 @@
 
 #include "blockcache.h"
 #include "check.h"
+#include "hlslist.h"
 #include "jellyfin.h"
 #include "thumbgen.h"
 
@@ -161,22 +162,98 @@ static void testSession(void)
 static void testBlocks(void)
 {
     BlockSlot s[BLOCK_SLOTS] = {{0}};
-    CHECK(blockNextWanted(s, BLOCK_SLOTS, 0, -1) == 0);   // Length unknown: the first.
+    int64_t at = 0;
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, -1) == 0);   // Length unknown: the first.
     s[0] = (BlockSlot){.index = 0, .state = BLOCK_READY};
-    CHECK(blockNextWanted(s, BLOCK_SLOTS, 0, -1) == -1);  // Only that until the length is known.
-    CHECK(blockNextWanted(s, BLOCK_SLOTS, 0, 100) == 1);
-    CHECK(blockNextWanted(s, BLOCK_SLOTS, 0, 1) == -1);   // The file ends there.
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, -1) == -1);  // Only that until the length is known.
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, 100) == 1);
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, 1) == -1);   // The file ends there.
     CHECK(blockFind(s, BLOCK_SLOTS, 0) == 0 && blockFind(s, BLOCK_SLOTS, 5) < 0);
     for (int i = 0; i < BLOCK_SLOTS; i++)
         s[i] = (BlockSlot){.index = i + 10, .state = BLOCK_READY};
-    CHECK(blockNextWanted(s, BLOCK_SLOTS, 12, 100) == -1);
-    CHECK(blockVictim(s, BLOCK_SLOTS, 12) == 0);          // Furthest behind.
-    CHECK(blockVictim(s, BLOCK_SLOTS, 10) == BLOCK_SLOTS - 1);  // Nothing behind: furthest past the window.
+    at = 12;
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, 100) == -1);
+    CHECK(blockVictim(s, BLOCK_SLOTS, &at, 1) == 0);          // Furthest behind.
+    at = 10;
+    CHECK(blockVictim(s, BLOCK_SLOTS, &at, 1) == BLOCK_SLOTS - 1);  // Nothing behind: furthest past the window.
     s[BLOCK_SLOTS - 1].state = BLOCK_LOADING;
-    CHECK(blockVictim(s, BLOCK_SLOTS, 10) == BLOCK_SLOTS - 2);  // Not one on its way.
+    CHECK(blockVictim(s, BLOCK_SLOTS, &at, 1) == BLOCK_SLOTS - 2);  // Not one on its way.
+    // Two readers: what either needs stays, and what's missing nearest to one comes first.
+    int64_t two[2] = {10, 12 + BLOCK_SLOTS};
+    CHECK(blockNextWanted(s, BLOCK_SLOTS, two, 2, 1000) == two[1]);
+    CHECK(blockIsWanted(11, two, 2) && blockIsWanted(two[1] + 1, two, 2) && !blockIsWanted(20, two, 2));
     for (int i = 0; i < BLOCK_SLOTS; i++)
         s[i] = (BlockSlot){.index = i < BLOCK_AHEAD ? i + 20 : 0, .state = i < BLOCK_AHEAD ? BLOCK_READY : BLOCK_LOADING};
-    CHECK(blockVictim(s, BLOCK_SLOTS, 20) == -1);         // All needed.
+    at = 20;
+    CHECK(blockVictim(s, BLOCK_SLOTS, &at, 1) == -1);         // All needed.
+}
+
+static void testPlan(void)
+{
+    static const char ANSWER[] =
+        "{\"PlaySessionId\":\"ps1\",\"MediaSources\":[{\"SupportsDirectPlay\":false,"
+        "\"TranscodingUrl\":\"/videos/a/master.m3u8?x=1\",\"DefaultAudioStreamIndex\":2,"
+        "\"DefaultSubtitleStreamIndex\":5,\"MediaStreams\":["
+        "{\"Type\":\"Video\",\"Index\":0},"
+        "{\"Type\":\"Audio\",\"Index\":1,\"DisplayTitle\":\"English\"},"
+        "{\"Type\":\"Audio\",\"Index\":2,\"DisplayTitle\":\"French\"},"
+        "{\"Type\":\"Subtitle\",\"Index\":4,\"IsTextSubtitleStream\":false,\"DisplayTitle\":\"Picture\"},"
+        "{\"Type\":\"Subtitle\",\"Index\":5,\"IsTextSubtitleStream\":true,\"IsExternal\":true,"
+        "\"DisplayTitle\":\"Spanish\"}]}]}";
+    JfPlan p;
+    CHECK(jfPlanParse(ANSWER, &p) && !p.direct && !strcmp(p.transcode_url, "/videos/a/master.m3u8?x=1"));
+    CHECK(!strcmp(p.play_session, "ps1") && p.audio_count == 2 && p.audio_current == 1);
+    CHECK(p.sub_count == 1 && p.sub_default == 0 && p.subs[0].index == 5 && p.subs[0].external);
+    CHECK(!jfPlanParse("{\"MediaSources\":[{\"SupportsDirectPlay\":false}]}", &p));
+    CHECK(!jfPlanParse("nonsense", &p));
+
+    char body[4096];
+    jfPlaybackBody(body, sizeof(body), "u1", 8000000, 3);
+    CHECK(strstr(body, "\"AudioStreamIndex\":3") && strstr(body, "\"MaxStreamingBitrate\":8000000"));
+    jfPlaybackBody(body, sizeof(body), "u1", 60000000, -1);
+    CHECK(!strstr(body, "AudioStreamIndex") && strstr(body, "\"Value\":\"25000000\""));  // Never more directly.
+    CHECK(strlen(body) < sizeof(body) - 1);
+}
+
+static void testHlsLists(void)
+{
+    char out[256];
+    CHECK(hlsResolveUrl("http://h:1/videos/a/master.m3u8?x=1", "main.m3u8?y=2", out, sizeof(out)) &&
+          !strcmp(out, "http://h:1/videos/a/main.m3u8?y=2"));
+    CHECK(hlsResolveUrl("http://h:1/videos/a/m.m3u8", "/other/b.ts", out, sizeof(out)) &&
+          !strcmp(out, "http://h:1/other/b.ts"));
+    CHECK(hlsResolveUrl("http://h:1/a", "http://x/y", out, sizeof(out)) && !strcmp(out, "http://x/y"));
+    CHECK(hlsFirstEntry("#EXTM3U\r\n#TAG\r\nmain.m3u8?a=1\r\n", out, sizeof(out)) && !strcmp(out, "main.m3u8?a=1"));
+    CHECK(!hlsFirstEntry("#EXTM3U\n", out, sizeof(out)));
+
+    HlsPlaylist p;
+    static const char LIST[] = "#EXTM3U\n#EXTINF:3.0,\nhls/0.ts?k=1\n#EXTINF:3.0,\nhls/1.ts?k=1\n#EXT-X-ENDLIST\n";
+    CHECK(hlsPlaylistParse(LIST, "http://h:1/videos/a/main.m3u8?z", 3500000000ll, &p));
+    CHECK(p.base_ns == 3000000000ll && !strstr(p.text, HLS_LOCAL_PREFIX "0.ts") && p.count == 2);
+    CHECK(strstr(p.text, "#EXTINF:3.0,\n" HLS_LOCAL_PREFIX "1.ts\n") != NULL);
+    hlsPlaylistFree(&p);
+    CHECK(hlsPlaylistParse(LIST, "http://h:1/videos/a/main.m3u8?z", 999000000000ll, &p));  // Past the end.
+    CHECK(p.base_ns == 0 && strstr(p.text, HLS_LOCAL_PREFIX "0.ts"));
+    hlsPlaylistFree(&p);
+    CHECK(hlsPlaylistParse(LIST, "http://h:1/videos/a/main.m3u8?z", 0, &p) && p.base_ns == 0);
+    CHECK(p.count == 2 && !strcmp(p.urls[1], "http://h:1/videos/a/hls/1.ts?k=1"));
+    CHECK(strstr(p.text, HLS_LOCAL_PREFIX "1.ts\n") && strstr(p.text, "#EXT-X-ENDLIST") && !strstr(p.text, "k=1"));
+    hlsPlaylistFree(&p);
+    CHECK(!hlsPlaylistParse("#EXTM3U\n", "http://h/a", 0, &p));
+
+    static const char THREE[] = "#EXTM3U\n#EXTINF:3.0,\n0.ts\n#EXTINF:3.0,\n1.ts\n#EXTINF:3.0,\n2.ts\n#EXT-X-ENDLIST\n";
+    int first = -1, last = -1;
+    CHECK(hlsPlaylistParse(THREE, "http://h/a.m3u8", 0, &p));
+    hlsPlaylistSpan(&p, 3500000000ll, 4000000000ll, &first, &last);  // 3.5 to 7.5 s.
+    CHECK(first == 1 && last == 2);
+    hlsPlaylistSpan(&p, 0, 3000000000ll, &first, &last);  // Exactly the first segment.
+    CHECK(first == 0 && last == 0);
+    hlsPlaylistSpan(&p, 8000000000ll, 4000000000ll, &first, &last);  // Runs past the end.
+    CHECK(first == 2 && last == 2);
+    hlsPlaylistFree(&p);
+
+    CHECK(hlsLocalSegment(HLS_LOCAL_PREFIX "12.ts") == 12);
+    CHECK(hlsLocalSegment(HLS_LOCAL_PREFIX "x.ts") == -1 && hlsLocalSegment("http://h/1.ts") == -1);
 }
 
 static void testFit(void)
@@ -195,6 +272,8 @@ static void testFit(void)
 
 void testJellyfin(void)
 {
+    testPlan();
+    testHlsLists();
     testFit();
     testAddresses();
     testPlayability();

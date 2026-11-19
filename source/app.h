@@ -33,6 +33,14 @@ struct App {
     // A video being opened by a thread, while the loading screen shows.
     bool opening, open_cancelled;
     bool open_from_start;       // Not from where it was left.
+    int64_t open_at_ns;         // From here (opened again, for another quality or sound); 0: as usual.
+    int64_t open_start_ns;      // Where playback will begin: a conversion starts there.
+    uint64_t open_asked;        // When the opening began, for the log.
+    int next_audio_plus1;       // The server's number of the sound to open with, plus 1; 0: its choice.
+    char open_sound[JF_TRACK_NAME_MAX];  // The sound track chosen before for this video or series.
+    JfPlan open_plan;           // How the video being opened or played comes from the server.
+    bool playing_converted;
+    int quality_applied;        // The quality the video playing was opened with.
     pthread_t open_thread;
     volatile bool open_done;
     Player *open_result;

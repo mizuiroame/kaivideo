@@ -12,6 +12,7 @@
 #include <libavutil/error.h>
 
 #include "blockcache.h"
+#include "hlsio.h"
 #include "jfsync.h"
 #include "mediafile.h"
 #include "video.h"
@@ -164,6 +165,89 @@ static void testInterrupt(const char *folder)
     printf("interrupted after %d ms\n", (int)waited);
 }
 
+// A converted stream started partway: its times are the video's, and its length the whole.
+static void testConvertedStart(const char *server)
+{
+    enum { START_S = 9, WHOLE_MIN_S = 9 };
+    char url[PATH_MAX_LEN], error[160] = "";
+    snprintf(url, sizeof(url), "%s/hls/master.m3u8", server);
+    EXPECT(hlsStart(url, "none", START_S * 1000000000ll, error, sizeof(error)), error);
+    EXPECT(hlsBaseNs() > 0 && hlsBaseNs() <= START_S * 1000000000ll, "the stream didn't start partway");
+    Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
+    EXPECT(v != NULL, error);
+    if (v) {
+        int64_t pts = -1;
+        bool got = false;
+        for (int i = 0; i < WAIT_MS && !got; i++) {
+            got = videoNextPts(v, &pts);
+            sleepMs(1);
+        }
+        EXPECT(got && pts >= hlsBaseNs() - 100 * NS_PER_MS && pts < hlsBaseNs() + 3000 * NS_PER_MS,
+               "the first frame isn't at the start asked for");
+        EXPECT(videoDuration(v) >= WHOLE_MIN_S * 1000000000ll, "the length isn't the whole video's");
+        printf("started at %.2f s, first frame %.2f s, %.1f s long\n", hlsBaseNs() / 1e9, pts / 1e9,
+               videoDuration(v) / 1e9);
+        videoClose(v);
+    }
+    hlsStop();
+}
+
+static void setSegmentSlow(const char *folder, bool slow)
+{
+    char path[PATH_MAX_LEN];
+    snprintf(path, sizeof(path), "%s/log.slow", folder);
+    if (!slow) {
+        remove(path);
+        return;
+    }
+    FILE *f = fopen(path, "w");
+    if (f)
+        fclose(f);
+}
+
+// A frame at or after at_ns, within limit_ms. How long it took, -1 if it didn't come.
+static int waitForFrame(Video *v, int64_t at_ns, int limit_ms)
+{
+    int64_t start = nowMs(), pts;
+    while (nowMs() - start < limit_ms) {
+        if (videoNextPts(v, &pts) && pts >= at_ns)
+            return (int)(nowMs() - start);
+        sleepMs(1);
+    }
+    return -1;
+}
+
+// The server is late with a segment: a jump elsewhere doesn't wait for it, and
+// playback doesn't count on it until it's here.
+static void testJumpWhileWaiting(const char *server, const char *folder)
+{
+    enum { IN_SECOND_S = 9, BACK_S = 1, NEAR_END_OF_FIRST_S = 7 };
+    char url[PATH_MAX_LEN], error[160] = "";
+    snprintf(url, sizeof(url), "%s/hls/master.m3u8", server);
+    setSegmentSlow(folder, true);
+    EXPECT(hlsStart(url, "none", 0, error, sizeof(error)), error);
+    Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
+    EXPECT(v != NULL, error);
+    if (v) {
+        EXPECT(waitForFrame(v, 0, WAIT_MS) >= 0, "no first frame");
+        EXPECT(hlsCushionReady(0), "the first segment alone covers its start");
+        EXPECT(!hlsCushionReady(NEAR_END_OF_FIRST_S * 1000000000ll), "counted on a segment that isn't here");
+        videoSeek(v, IN_SECOND_S * 1000000000ll);
+        sleepMs(INTERRUPT_AFTER_MS);  // It's waiting for the late segment now.
+        videoSeek(v, BACK_S * 1000000000ll);
+        int waited = waitForFrame(v, BACK_S * 1000000000ll, QUICK_MS);
+        EXPECT(waited >= 0, "a jump waited for a segment it doesn't need");
+        printf("jumped away from a late segment in %d ms\n", waited);
+        setSegmentSlow(folder, false);
+        for (int i = 0; i < WAIT_MS && !hlsCushionReady(NEAR_END_OF_FIRST_S * 1000000000ll); i++)
+            sleepMs(1);
+        EXPECT(hlsCushionReady(NEAR_END_OF_FIRST_S * 1000000000ll), "the late segment never counted");
+        videoClose(v);
+    }
+    setSegmentSlow(folder, false);
+    hlsStop();
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3)
@@ -182,6 +266,8 @@ int main(int argc, char **argv)
         char location[LIBRARY_PATH_MAX];
         snprintf(location, sizeof(location), "%s", c.library.items[0].path);
         playIt(location);
+        testConvertedStart(argv[1]);
+        testJumpWhileWaiting(argv[1], argv[2]);
         testServerFails(argv[2]);
         testInterrupt(argv[2]);
         jfSyncReport(JF_REPORT_START, location, 0, false);
