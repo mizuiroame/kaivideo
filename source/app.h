@@ -33,7 +33,8 @@ struct App {
     Browser browser;            // The Files tab.
     Player *player;
     // A video being opened by a thread, while the loading screen shows.
-    bool opening, open_cancelled;
+    bool opening;
+    volatile bool open_cancelled;  // Set by the main loop: the opening's requests stop at once.
     bool open_from_start;       // Not from where it was left.
     int64_t open_at_ns;         // From here (opened again, for another quality or sound); 0: as usual.
     int64_t open_start_ns;      // Where playback will begin: a conversion starts there.

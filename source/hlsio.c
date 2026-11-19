@@ -61,6 +61,7 @@ static struct {
     bool stop, failed;
     long long max_bitrate;        // For choosing a master list's variant; 0: no limit.
     long playlist_timeout_s;
+    const volatile bool *start_cancel;  // The caller's, while starting; may be NULL.
     char media_url[HLS_URL_MAX];  // Read again while the list grows (live TV).
     int64_t base_ns;              // The list's start: set at start, read without the lock.
     uint64_t grew_ns;             // When a live list last grew.
@@ -231,7 +232,9 @@ static void *fetchThread(void *arg)
 
 static bool getText(const char *url, NetResponse *r)
 {
-    NetRequest request = {.url = url, .authorization = authorization(), .cancel = &g.abort_fetch,  // Stopping cuts it short.
+    // While starting, the caller's cancel cuts it short; afterwards, stopping does.
+    const volatile bool *cancel = !g.running && g.start_cancel ? g.start_cancel : &g.abort_fetch;
+    NetRequest request = {.url = url, .authorization = authorization(), .cancel = cancel,
                           .timeout_s = g.playlist_timeout_s};
     return netFetchText(g.net, &request, PLAYLIST_MAX, r);
 }
@@ -268,12 +271,14 @@ int64_t hlsBaseNs(void)
     return g.running ? g.base_ns : 0;
 }
 
-static bool start(const char *master_url, const char *auth, long long max_bitrate, long timeout_s, int64_t start_ns)
+static bool start(const char *master_url, const char *auth, long long max_bitrate, long timeout_s, int64_t start_ns,
+                  const volatile bool *cancel)
 {
     hlsStop();
     memset(&g, 0, sizeof(g));
     pthread_mutex_init(&g.lock, NULL);
     pthread_cond_init(&g.wake, NULL);
+    g.start_cancel = cancel;
     snprintf(g.authorization, sizeof(g.authorization), "%s", auth ? auth : "");
     g.max_bitrate = max_bitrate;
     g.playlist_timeout_s = timeout_s;
@@ -292,17 +297,19 @@ static bool start(const char *master_url, const char *auth, long long max_bitrat
     return g.running;
 }
 
-bool hlsStartDirect(const char *url, long long max_bitrate, char *error, size_t error_size)
+bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool *cancel, char *error,
+                    size_t error_size)
 {
-    bool ok = start(url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0);
+    bool ok = start(url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
     if (!ok)
         snprintf(error, error_size, "The channel's own stream can't be read.");
     return ok;
 }
 
-bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, char *error, size_t error_size)
+bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, const volatile bool *cancel,
+              char *error, size_t error_size)
 {
-    bool ok = start(master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns);
+    bool ok = start(master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
     if (!ok)
         snprintf(error, error_size, "The server didn't start converting this video.");
     return ok;

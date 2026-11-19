@@ -205,16 +205,15 @@ static int preferredSound(const App *app, const JfPlan *plan)
     return -1;
 }
 
-// Asks the server how to play the video, and starts its conversion if that's
-// the way. What to open goes in path. False, with the reason, if it can't.
 // Live TV: the channel straight from its own HLS source, without the server
 // converting it, when it has one the console can read. True if it plays so.
 static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
 {
     JfPlan *plan = &app->open_plan;
-    if (!liveIsLocation(app->playing_path) || !jfSyncLiveSource(app->playing_path, plan))
+    const volatile bool *cancel = &app->open_cancelled;
+    if (!liveIsLocation(app->playing_path) || !jfSyncLiveSource(app->playing_path, plan, cancel))
         return false;
-    if (!hlsStartDirect(plan->source_url, bitrate, app->open_error, sizeof(app->open_error))) {
+    if (!hlsStartDirect(plan->source_url, bitrate, cancel, app->open_error, sizeof(app->open_error))) {
         appLog("  %s: the server converts it instead", app->open_error);
         memset(plan, 0, sizeof(*plan));
         app->open_error[0] = '\0';
@@ -225,17 +224,23 @@ static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
     return true;
 }
 
+// Asks the server how to play the video, and starts its conversion if that's
+// the way. What to open goes in path. False, with the reason, if it can't.
+// B (open_cancelled) cuts each step short.
 static bool prepareRemote(App *app, int audio_index, bool try_direct, char *path, size_t size)
 {
     JfPlan *plan = &app->open_plan;
     long long bitrate = settingQualityBitrate(&app->config);
     char *error = app->open_error;
+    const volatile bool *cancel = &app->open_cancelled;
     if (try_direct && audio_index < 0 && openLiveDirect(app, bitrate, path, size))
         return true;
-    if (!jfSyncResolve(app->playing_path, bitrate, audio_index, plan, error, sizeof(app->open_error)))
+    if (app->open_cancelled ||
+        !jfSyncResolve(app->playing_path, bitrate, audio_index, plan, error, sizeof(app->open_error), cancel))
         return false;
     int preferred = audio_index < 0 && !plan->direct ? preferredSound(app, plan) : -1;
-    if (preferred >= 0 && !jfSyncResolve(app->playing_path, bitrate, preferred, plan, error, sizeof(app->open_error)))
+    if (preferred >= 0 &&
+        !jfSyncResolve(app->playing_path, bitrate, preferred, plan, error, sizeof(app->open_error), cancel))
         return false;
     if (plan->direct) {
         snprintf(path, size, "%s", app->playing_path);
@@ -244,7 +249,7 @@ static bool prepareRemote(App *app, int audio_index, bool try_direct, char *path
     char url[JF_URL_MAX + JF_TRANSCODE_URL_MAX], auth[JF_AUTH_MAX];
     jfSyncConvertedRequest(plan->transcode_url, url, sizeof(url), auth, sizeof(auth));
     snprintf(path, size, HLS_LOCATION);
-    return hlsStart(url, auth, app->open_start_ns, error, sizeof(app->open_error));
+    return hlsStart(url, auth, app->open_start_ns, cancel, error, sizeof(app->open_error));
 }
 
 static void *openThread(void *arg)

@@ -173,7 +173,7 @@ static void testConvertedStart(const char *server)
     enum { START_S = 9, WHOLE_MIN_S = 9 };
     char url[PATH_MAX_LEN], error[160] = "";
     snprintf(url, sizeof(url), "%s/hls/master.m3u8", server);
-    EXPECT(hlsStart(url, "none", START_S * 1000000000ll, error, sizeof(error)), error);
+    EXPECT(hlsStart(url, "none", START_S * 1000000000ll, NULL, error, sizeof(error)), error);
     EXPECT(hlsBaseNs() > 0 && hlsBaseNs() <= START_S * 1000000000ll, "the stream didn't start partway");
     Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
     EXPECT(v != NULL, error);
@@ -227,7 +227,7 @@ static void testJumpWhileWaiting(const char *server, const char *folder)
     char url[PATH_MAX_LEN], error[160] = "";
     snprintf(url, sizeof(url), "%s/hls/master.m3u8", server);
     setSegmentSlow(folder, true);
-    EXPECT(hlsStart(url, "none", 0, error, sizeof(error)), error);
+    EXPECT(hlsStart(url, "none", 0, NULL, error, sizeof(error)), error);
     Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
     EXPECT(v != NULL, error);
     if (v) {
@@ -259,7 +259,7 @@ static void testLiveList(const char *server)
     enum { INTO_SECOND_S = 9, LIVE_WAIT_MS = 30000 };
     char url[PATH_MAX_LEN], error[160] = "";
     snprintf(url, sizeof(url), "%s/hlslive/master.m3u8", server);
-    EXPECT(hlsStart(url, "none", 0, error, sizeof(error)), error);
+    EXPECT(hlsStart(url, "none", 0, NULL, error, sizeof(error)), error);
     // Only the first segment is made yet: playing from it would catch up with the server.
     EXPECT(hlsIsLive() && !hlsCushionReady(0), "live TV would start at the edge of what's made");
     Video *v = videoOpen(HLS_LOCATION, error, sizeof(error));
