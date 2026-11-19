@@ -36,6 +36,8 @@
 #define SUBTITLE_WAIT_NS 1500000000ull  // A subtitle segment not here by then is skipped.
 #define SUBTITLE_QUEUE 8      // Subtitle segments fetched and not yet taken by the player.
 #define SUBTITLES_BEHIND 1    // Subtitle segments fetched from before the picture's.
+#define SUBTITLES_AHEAD 3     // And this many after it, before the picture's own: they're small, and
+                              // live captions run late, so shown earlier (a delay below 0) they must be here.
 #define LIVE_KEEP 6           // A live list starts with this many of its last segments (FFmpeg starts 3 from the end).
 #define LIVE_KEEP_BEHIND 2    // And then keeps this many behind its earliest reader.
 
@@ -347,7 +349,7 @@ static bool subtitleWork(void)
     if (g.subtitle_next < from)
         g.subtitle_next = from;  // Placed, or caught up after falling behind.
     int index = g.subtitle_next;
-    if (index >= m->list.count || index > at + AHEAD_SUBTITLES || g.subtitle_queued >= SUBTITLE_QUEUE)
+    if (index >= m->list.count || index > at + SUBTITLES_AHEAD || g.subtitle_queued >= SUBTITLE_QUEUE)
         return false;
     char url[HLS_URL_MAX];
     snprintf(url, sizeof(url), "%s", m->list.urls[index]);
@@ -385,7 +387,7 @@ static bool subtitleUrgent(void)
     if (sequence < 0)
         return false;
     int at = (int)(sequence - m->list.sequence);
-    return g.subtitle_next <= at && g.subtitle_next < m->list.count;
+    return g.subtitle_next <= at + SUBTITLES_AHEAD && g.subtitle_next < m->list.count;
 }
 
 static void dropSubtitleQueue(void)
