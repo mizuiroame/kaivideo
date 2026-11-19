@@ -10,6 +10,7 @@
 #include "hlsio.h"
 #include "jellyfin.h"
 #include "jfsync.h"
+#include "livetv.h"
 #include "subs.h"
 #include "webvtt.h"
 
@@ -76,6 +77,13 @@ struct Player {
     bool swap_done;            // Under swap_lock.
     Audio *swap_old, *swap_new;
     int swap_track;
+    // A converted video's sound track changes to one the server converts alone
+    // (HLS_AUDIO_LOCATION): the picture's conversion goes on untouched.
+    bool swap_converted;
+    int swap_audio_index;          // The server's number for the track.
+    int64_t swap_start_ns;         // Where its conversion begins: a little ahead of the picture.
+    char swap_session[48];         // Its play session, from the swap thread.
+    char audio_session[48];        // The one playing, ended on the server when left; "" for none.
     char swap_error[160];
     bool swap_failed;          // Taken by playerTakeAudioError.
 
@@ -180,6 +188,8 @@ void playerClose(Player *p)
     p->ext_cancel = true;
     if (p->ext_thread_started)
         pthread_join(p->ext_thread, NULL);
+    if (p->audio_session[0])  // A track the server converted alone: ended there too.
+        jfSyncEndConversionOf(p->location, p->audio_session);
     pthread_mutex_destroy(&p->swap_lock);
     pthread_mutex_destroy(&p->ext_lock);
     audioClose(p->audio);
@@ -735,12 +745,29 @@ int playerAudioTrack(const Player *p)
     return p->audio_track;
 }
 
+// The server converts the chosen track alone, from swap_start_ns; it opens
+// from there. NULL, with the reason, if it can't.
+static Audio *openConvertedTrack(Player *p, char *error, size_t error_size)
+{
+    char url[JF_URL_MAX + 512], auth[JF_AUTH_MAX];
+    p->swap_session[0] = '\0';
+    if (!jfSyncAudioConversion(p->location, p->swap_audio_index, url, sizeof(url), auth, sizeof(auth),
+                               p->swap_session, sizeof(p->swap_session))) {
+        snprintf(error, error_size, "The server can't convert this sound track.");
+        return NULL;
+    }
+    if (!hlsStartAudio(url, auth, p->swap_start_ns, &p->ext_cancel, error, error_size))
+        return NULL;
+    return audioOpen(HLS_AUDIO_LOCATION, 0, error, error_size);
+}
+
 static void *swapThread(void *arg)
 {
     Player *p = arg;
     audioClose(p->swap_old);  // Fades out and plays out what it had queued.
     char error[160];
-    Audio *a = audioOpen(p->path, p->swap_track, error, sizeof(error));  // Paused: it gets ready.
+    Audio *a = p->swap_converted ? openConvertedTrack(p, error, sizeof(error))
+                                 : audioOpen(p->path, p->swap_track, error, sizeof(error));  // Paused: it gets ready.
     pthread_mutex_lock(&p->swap_lock);
     p->swap_new = a;
     snprintf(p->swap_error, sizeof(p->swap_error), "%s", a ? "" : error[0] ? error : "No sound");
@@ -781,12 +808,17 @@ void playerSetAudioTrack(Player *p, int track, uint64_t now_ns)
 {
     if (p->swapping || track < 0 || track >= playerAudioTrackCount(p))
         return;
-    if (p->converted) {  // The server has to make the video with that sound.
+    if (p->converted && (liveIsLocation(p->location) || !p->audio)) {
+        // A channel: the server converts its picture and sound only together.
         p->audio_restart = true;
         p->audio_restart_index = p->plan_audio[track].index;
         return;
     }
-    if (p->audio) {
+    if (p->converted) {  // The server converts that track alone; the picture goes on meanwhile.
+        p->swap_converted = true;
+        p->swap_audio_index = p->plan_audio[track].index;
+        p->swap_start_ns = p->position_ns + joinLead(p);
+    } else if (p->audio) {
         audioSetPaused(p->audio, true);
         audioSwitchTrack(p->audio, track, p->position_ns);
         p->audio_track = track;
@@ -832,10 +864,25 @@ static void finishSwap(Player *p)
     p->swapping = false;
     p->audio = p->swap_new;
     p->swap_new = NULL;
+    bool converted = p->swap_converted;
+    p->swap_converted = false;
+    if (!p->audio && converted) {
+        // The track alone couldn't be had: the server makes the whole video again with it.
+        if (p->swap_session[0])
+            jfSyncEndConversionOf(p->location, p->swap_session);
+        p->audio_restart = true;
+        p->audio_restart_index = p->swap_audio_index;
+        return;
+    }
     if (!p->audio) {
         snprintf(p->audio_info, sizeof(p->audio_info), "%s", p->swap_error);
         p->swap_failed = true;
         return;
+    }
+    if (converted) {  // The track converted alone before this one isn't needed any more.
+        if (p->audio_session[0])
+            jfSyncEndConversionOf(p->location, p->audio_session);
+        snprintf(p->audio_session, sizeof(p->audio_session), "%s", p->swap_session);
     }
     snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
     audioSetSpeed(p->audio, p->speed);

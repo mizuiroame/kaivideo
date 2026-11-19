@@ -9,7 +9,11 @@
 #include <libavformat/avformat.h>
 
 #define HLS_LOCATION "jellyfin-converted:"
+// A sound track converted on its own, beside the video's conversion: a
+// second session, so changing track doesn't make the picture again.
+#define HLS_AUDIO_LOCATION "jellyfin-converted-audio:"
 
+// Either session's location.
 bool hlsIsLocation(const char *path);
 // Reads the playlists from the server and starts fetching, from the segment
 // holding start_ns. False, with a reason, if it can't. Reading the playlists
@@ -33,10 +37,18 @@ bool hlsCushionReady(int64_t from_ns);
 bool hlsIsLive(void);
 // Seconds of video in memory from from_ns on, without a gap; -1 if no stream runs.
 double hlsSecondsReady(int64_t from_ns);
-// Opens the running stream into *fmt (allocated, with what the caller set on
-// it, such as an interrupt_callback: while it says so, a reader stops waiting
-// for a segment). *playlist is to be closed with hlsCloseInput after the format.
-bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist);
+// The sound-alone session (HLS_AUDIO_LOCATION): a server's conversion of one
+// track, read from the segment holding start_ns. Its stop.
+bool hlsStartAudio(const char *url, const char *authorization, int64_t start_ns, const volatile bool *cancel,
+                   char *error, size_t error_size);
+void hlsStopAudio(void);
+// hlsBaseNs of the session a location names.
+int64_t hlsLocationBaseNs(const char *location);
+// Opens the running stream of location's session into *fmt (allocated, with
+// what the caller set on it, such as an interrupt_callback: while it says so,
+// a reader stops waiting for a segment; fmt's opaque is taken). *playlist is
+// to be closed with hlsCloseInput after the format.
+bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist, const char *location);
 
 // Subtitles of a channel's own stream (WebVTT lists FFmpeg doesn't read):
 // how many, and each one's name and language code.

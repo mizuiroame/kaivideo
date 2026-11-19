@@ -65,7 +65,7 @@ typedef struct {
 
 // List 0 is the video's (and, from a server, the only one); a channel's own
 // master list can add its other sound tracks and subtitles as lists 1 on.
-static struct {
+typedef struct {
     bool running;
     pthread_t thread;
     pthread_mutex_t lock;
@@ -103,51 +103,54 @@ static struct {
     int subtitle_queued;
     int first_segment;            // The first video segment read, -1 before one is: playback's 0.
     int64_t playback_ns;          // Where playback is (hlsSetPlayback), -1 until told.
-} g;
+} HlsSession;
 
-#define VIDEO (g.lists[0].list)
+static HlsSession g_main, g_audio;  // The video's, and a sound track converted on its own.
+
+#define VIDEO (ses->lists[0].list)
 
 bool hlsIsLocation(const char *path)
 {
-    return strncmp(path, HLS_LOCATION, sizeof(HLS_LOCATION) - 1) == 0;
+    return strncmp(path, HLS_LOCATION, sizeof(HLS_LOCATION) - 1) == 0 ||
+           strncmp(path, HLS_AUDIO_LOCATION, sizeof(HLS_AUDIO_LOCATION) - 1) == 0;
 }
 
 // --- What to fetch ---
 
-static int aheadOf(int list)
+static int aheadOf(HlsSession *ses, int list)
 {
-    return g.lists[list].list.subtitles ? AHEAD_SUBTITLES : AHEAD;
+    return ses->lists[list].list.subtitles ? AHEAD_SUBTITLES : AHEAD;
 }
 
-static int findSlot(int list, int index)
+static int findSlot(HlsSession *ses, int list, int index)
 {
     for (int i = 0; i < SLOTS; i++)
-        if (g.slots[i].state != SLOT_EMPTY && g.slots[i].list == list && g.slots[i].index == index)
+        if (ses->slots[i].state != SLOT_EMPTY && ses->slots[i].list == list && ses->slots[i].index == index)
             return i;
     return -1;
 }
 
-static bool wanted(int list, int index)
+static bool wanted(HlsSession *ses, int list, int index)
 {
     for (int r = 0; r < READERS; r++) {
-        const Reader *reader = &g.readers[r];
+        const Reader *reader = &ses->readers[r];
         if (reader->owner && reader->list == list && index >= reader->segment &&
-            index < reader->segment + aheadOf(list))
+            index < reader->segment + aheadOf(ses, list))
             return true;
     }
     return false;
 }
 
 // The nearest missing segment to any reader: false if there's none.
-static bool nextSegment(int *list, int *index)
+static bool nextSegment(HlsSession *ses, int *list, int *index)
 {
     for (int distance = 0; distance < AHEAD; distance++)
         for (int r = 0; r < READERS; r++) {
-            const Reader *reader = &g.readers[r];
-            if (!reader->owner || distance >= aheadOf(reader->list))
+            const Reader *reader = &ses->readers[r];
+            if (!reader->owner || distance >= aheadOf(ses, reader->list))
                 continue;
             int at = reader->segment + distance;
-            if (at < g.lists[reader->list].list.count && findSlot(reader->list, at) < 0) {
+            if (at < ses->lists[reader->list].list.count && findSlot(ses, reader->list, at) < 0) {
                 *list = reader->list;
                 *index = at;
                 return true;
@@ -156,14 +159,14 @@ static bool nextSegment(int *list, int *index)
     return false;
 }
 
-static int freeSlot(void)
+static int freeSlot(HlsSession *ses)
 {
     int victim = -1;
     for (int i = 0; i < SLOTS; i++) {
-        if (g.slots[i].state == SLOT_EMPTY)
+        if (ses->slots[i].state == SLOT_EMPTY)
             return i;
-        if (g.slots[i].state == SLOT_READY && !wanted(g.slots[i].list, g.slots[i].index) &&
-            (victim < 0 || g.slots[i].index < g.slots[victim].index))
+        if (ses->slots[i].state == SLOT_READY && !wanted(ses, ses->slots[i].list, ses->slots[i].index) &&
+            (victim < 0 || ses->slots[i].index < ses->slots[victim].index))
             victim = i;
     }
     return victim;
@@ -172,19 +175,19 @@ static int freeSlot(void)
 // --- The thread ---
 
 // The server's sign-in, or none: a channel's own source never gets it.
-static const char *authorization(void)
+static const char *authorization(HlsSession *ses)
 {
-    return g.authorization[0] ? g.authorization : NULL;
+    return ses->authorization[0] ? ses->authorization : NULL;
 }
 
-static bool fetchSegment(int list, int index, NetResponse *r)
+static bool fetchSegment(HlsSession *ses, int list, int index, NetResponse *r)
 {
-    NetRequest request = {.url = g.lists[list].list.urls[index], .authorization = authorization(),
-                          .cancel = &g.abort_fetch, .stall_s = SEGMENT_STALL_S};
-    for (int attempt = 0; attempt < FETCH_TRIES && !g.abort_fetch; attempt++) {
-        if (netFetchText(g.net, &request, SEGMENT_MAX, r))
+    NetRequest request = {.url = ses->lists[list].list.urls[index], .authorization = authorization(ses),
+                          .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S};
+    for (int attempt = 0; attempt < FETCH_TRIES && !ses->abort_fetch; attempt++) {
+        if (netFetchText(ses->net, &request, SEGMENT_MAX, r))
             return true;
-        if (!g.abort_fetch)
+        if (!ses->abort_fetch)
             nanosleep(&(struct timespec){0, RETRY_WAIT_NS}, NULL);
     }
     return false;
@@ -197,265 +200,271 @@ static uint64_t monotonicNs(void)
     return (uint64_t)t.tv_sec * NS_PER_S + (uint64_t)t.tv_nsec;
 }
 
-static bool getText(const char *url, NetResponse *r);
+static bool getText(HlsSession *ses, const char *url, NetResponse *r);
 
 // The earliest segment any reader of a list is at, -1 if none reads it.
-static int earliestReader(int list)
+static int earliestReader(HlsSession *ses, int list)
 {
     int at = -1;
     for (int r = 0; r < READERS; r++)
-        if (g.readers[r].owner && g.readers[r].list == list && (at < 0 || g.readers[r].segment < at))
-            at = g.readers[r].segment;
+        if (ses->readers[r].owner && ses->readers[r].list == list && (at < 0 || ses->readers[r].segment < at))
+            at = ses->readers[r].segment;
     return at;
 }
 
 // A live list's text keeps only what's near its readers: a channel's list
 // can hold hours, and FFmpeg reads the whole text each time. Subtitles are
 // read by KaiVideo itself, from the segments' addresses: they need none.
-static void trimLive(int list)
+static void trimLive(HlsSession *ses, int list)
 {
-    HlsPlaylist *p = &g.lists[list].list;
+    HlsPlaylist *p = &ses->lists[list].list;
     if (p->ended)
         return;
     if (p->subtitles) {
         hlsPlaylistTrim(p, p->count);
         return;
     }
-    int reader = earliestReader(list);
+    int reader = earliestReader(ses, list);
     if (reader >= 0)
         hlsPlaylistTrim(p, reader - LIVE_KEEP_BEHIND);
 }
 
 // Live lists: read them again, and take what was added (segments keep their numbers). Under the lock.
-static void reread(void)
+static void reread(HlsSession *ses)
 {
-    for (int i = 0; i < g.list_count && !g.stop; i++) {
-        bool unchosen = g.lists[i].list.subtitles && i != g.subtitle_list;  // Read again only while shown.
-        if (!g.lists[i].loaded || g.lists[i].list.ended || unchosen)
+    for (int i = 0; i < ses->list_count && !ses->stop; i++) {
+        bool unchosen = ses->lists[i].list.subtitles && i != ses->subtitle_list;  // Read again only while shown.
+        if (!ses->lists[i].loaded || ses->lists[i].list.ended || unchosen)
             continue;
-        g.abort_fetch = false;  // Left set by a fetch called off; stopping sets it again.
+        ses->abort_fetch = false;  // Left set by a fetch called off; stopping sets it again.
         char url[HLS_URL_MAX];
-        snprintf(url, sizeof(url), "%s", g.lists[i].url);
-        pthread_mutex_unlock(&g.lock);
+        snprintf(url, sizeof(url), "%s", ses->lists[i].url);
+        pthread_mutex_unlock(&ses->lock);
         NetResponse media;
-        bool ok = getText(url, &media);
-        pthread_mutex_lock(&g.lock);
+        bool ok = getText(ses, url, &media);
+        pthread_mutex_lock(&ses->lock);
         if (!ok)
             continue;
         // New segments go at the end, by their numbers: a channel's own list
         // drops its old ones as it goes, the server's keeps them all.
-        int added = hlsPlaylistAppend(&g.lists[i].list, media.data, url);
+        int added = hlsPlaylistAppend(&ses->lists[i].list, media.data, url);
         netResponseFree(&media);
-        trimLive(i);
+        trimLive(ses, i);
         if (i == 0 && added > 0)
-            g.grew_ns = monotonicNs();
+            ses->grew_ns = monotonicNs();
         if (added >= 0)
-            pthread_cond_broadcast(&g.wake);
+            pthread_cond_broadcast(&ses->wake);
     }
-    g.next_reread_ns = monotonicNs() + REREAD_NS;  // From when this one ended: long lists take a while.
-    if (!VIDEO.ended && monotonicNs() - g.grew_ns > LIVE_STALL_NS) {
-        g.failed = true;  // Readers waiting for more give up: playback ends, and says so.
-        pthread_cond_broadcast(&g.wake);
+    ses->next_reread_ns = monotonicNs() + REREAD_NS;  // From when this one ended: long lists take a while.
+    if (!VIDEO.ended && monotonicNs() - ses->grew_ns > LIVE_STALL_NS) {
+        ses->failed = true;  // Readers waiting for more give up: playback ends, and says so.
+        pthread_cond_broadcast(&ses->wake);
     }
 }
 
 // Waits for something to do; a growing list is read again on time. Under the lock.
-static void waitForWork(void)
+static void waitForWork(HlsSession *ses)
 {
     if (VIDEO.ended) {
-        pthread_cond_wait(&g.wake, &g.lock);
+        pthread_cond_wait(&ses->wake, &ses->lock);
         return;
     }
     struct timespec until;
     clock_gettime(CLOCK_REALTIME, &until);
-    uint64_t now = monotonicNs(), left = g.next_reread_ns > now ? g.next_reread_ns - now : 0;
+    uint64_t now = monotonicNs(), left = ses->next_reread_ns > now ? ses->next_reread_ns - now : 0;
     until.tv_sec += (time_t)(left / NS_PER_S);
     until.tv_nsec += (long)(left % NS_PER_S);
     if (until.tv_nsec >= NS_PER_S) {
         until.tv_sec++;
         until.tv_nsec -= NS_PER_S;
     }
-    pthread_cond_timedwait(&g.wake, &g.lock, &until);
+    pthread_cond_timedwait(&ses->wake, &ses->lock, &until);
 }
 
 // --- Subtitles of a channel's own ---
 
 // The segment being shown, by media sequence: playback's time 0 is the start
 // of the first segment read (readers run ahead of what shows). -1 before it's known.
-static int64_t playbackSequence(void)
+static int64_t playbackSequence(HlsSession *ses)
 {
-    if (g.first_segment < 0 || g.first_segment >= VIDEO.count || g.playback_ns < 0)
+    if (ses->first_segment < 0 || ses->first_segment >= VIDEO.count || ses->playback_ns < 0)
         return -1;
     int first, last;
-    hlsPlaylistSpan(&VIDEO, VIDEO.starts_ns[g.first_segment] + g.playback_ns, 1, &first, &last);
+    hlsPlaylistSpan(&VIDEO, VIDEO.starts_ns[ses->first_segment] + ses->playback_ns, 1, &first, &last);
     return VIDEO.sequence + first;
 }
 
 void hlsSetPlayback(int64_t position_ns)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return;
-    pthread_mutex_lock(&g.lock);
-    g.playback_ns = position_ns;
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
+    ses->playback_ns = position_ns;
+    pthread_mutex_unlock(&ses->lock);
 }
 
 // Reads the chosen subtitles' list, the first time. Under the lock.
-static void loadSubtitleList(int list, unsigned choice)
+static void loadSubtitleList(HlsSession *ses, int list, unsigned choice)
 {
     char url[HLS_URL_MAX];
-    snprintf(url, sizeof(url), "%s", hlsMasterListUrl(&g.master, list));
-    g.abort_fetch = false;
-    pthread_mutex_unlock(&g.lock);
+    snprintf(url, sizeof(url), "%s", hlsMasterListUrl(&ses->master, list));
+    ses->abort_fetch = false;
+    pthread_mutex_unlock(&ses->lock);
     NetResponse r;
     HlsPlaylist fresh;
-    bool ok = getText(url, &r);
+    bool ok = getText(ses, url, &r);
     if (ok) {
         ok = hlsPlaylistParseList(r.data, url, 0, list, true, &fresh);
         netResponseFree(&r);
     }
     if (ok)
         hlsPlaylistTrim(&fresh, fresh.count);  // No text needed: KaiVideo reads its segments itself.
-    pthread_mutex_lock(&g.lock);
-    MediaList *m = &g.lists[list];
-    if (ok && choice == g.subtitle_choice) {
+    pthread_mutex_lock(&ses->lock);
+    MediaList *m = &ses->lists[list];
+    if (ok && choice == ses->subtitle_choice) {
         hlsPlaylistFree(&m->list);
         m->list = fresh;
         snprintf(m->url, sizeof(m->url), "%s", url);
         m->loaded = true;
-        g.subtitle_next = -1;
+        ses->subtitle_next = -1;
     } else if (ok) {
         hlsPlaylistFree(&fresh);  // Another was chosen meanwhile.
-    } else if (choice == g.subtitle_choice) {
-        g.subtitle_list = 0;  // It can't be had: none shows.
+    } else if (choice == ses->subtitle_choice) {
+        ses->subtitle_list = 0;  // It can't be had: none shows.
     }
 }
 
 // Fetches the chosen subtitles' next segment, near the picture's (by media
 // sequence), for the player to take. False if there's nothing to do. Under the lock.
-static bool subtitleWork(void)
+static bool subtitleWork(HlsSession *ses)
 {
-    int list = g.subtitle_list;
-    unsigned choice = g.subtitle_choice;
-    if (!list || g.stop)
+    int list = ses->subtitle_list;
+    unsigned choice = ses->subtitle_choice;
+    if (!list || ses->stop)
         return false;
-    MediaList *m = &g.lists[list];
+    MediaList *m = &ses->lists[list];
     if (!m->loaded) {
-        loadSubtitleList(list, choice);
+        loadSubtitleList(ses, list, choice);
         return true;
     }
-    int64_t sequence = playbackSequence();
+    int64_t sequence = playbackSequence(ses);
     if (sequence < 0)
         return false;
     int at = (int)(sequence - m->list.sequence), from = at - SUBTITLES_BEHIND > 0 ? at - SUBTITLES_BEHIND : 0;
-    if (g.subtitle_next < from)
-        g.subtitle_next = from;  // Placed, or caught up after falling behind.
-    int index = g.subtitle_next;
-    if (index >= m->list.count || index > at + SUBTITLES_AHEAD || g.subtitle_queued >= SUBTITLE_QUEUE)
+    if (ses->subtitle_next < from)
+        ses->subtitle_next = from;  // Placed, or caught up after falling behind.
+    int index = ses->subtitle_next;
+    if (index >= m->list.count || index > at + SUBTITLES_AHEAD || ses->subtitle_queued >= SUBTITLE_QUEUE)
         return false;
     char url[HLS_URL_MAX];
     snprintf(url, sizeof(url), "%s", m->list.urls[index]);
-    g.abort_fetch = false;
-    pthread_mutex_unlock(&g.lock);
+    ses->abort_fetch = false;
+    pthread_mutex_unlock(&ses->lock);
     NetResponse r;
-    NetRequest request = {.url = url, .authorization = authorization(), .cancel = &g.abort_fetch,
+    NetRequest request = {.url = url, .authorization = authorization(ses), .cancel = &ses->abort_fetch,
                           .timeout_s = PLAYLIST_TIMEOUT_S};
-    bool ok = netFetchText(g.net, &request, PLAYLIST_MAX, &r);
-    pthread_mutex_lock(&g.lock);
-    if (choice != g.subtitle_choice) {
+    bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, &r);
+    pthread_mutex_lock(&ses->lock);
+    if (choice != ses->subtitle_choice) {
         if (ok)
             netResponseFree(&r);
         return true;
     }
-    g.subtitle_next = index + 1;  // One that failed is skipped: the next lines matter more.
+    ses->subtitle_next = index + 1;  // One that failed is skipped: the next lines matter more.
     if (ok) {
-        g.subtitle_queue[g.subtitle_queued].data = r.data;
-        g.subtitle_queue[g.subtitle_queued].size = r.size;
-        g.subtitle_queued++;
+        ses->subtitle_queue[ses->subtitle_queued].data = r.data;
+        ses->subtitle_queue[ses->subtitle_queued].size = r.size;
+        ses->subtitle_queued++;
     }
     return true;
 }
 
 // The subtitles of what shows now haven't come: they go before the picture's
 // segments further ahead. Under the lock.
-static bool subtitleUrgent(void)
+static bool subtitleUrgent(HlsSession *ses)
 {
-    if (!g.subtitle_list || g.subtitle_queued >= SUBTITLE_QUEUE)
+    if (!ses->subtitle_list || ses->subtitle_queued >= SUBTITLE_QUEUE)
         return false;
-    const MediaList *m = &g.lists[g.subtitle_list];
+    const MediaList *m = &ses->lists[ses->subtitle_list];
     if (!m->loaded)
         return true;
-    int64_t sequence = playbackSequence();
+    int64_t sequence = playbackSequence(ses);
     if (sequence < 0)
         return false;
     int at = (int)(sequence - m->list.sequence);
-    return g.subtitle_next <= at + SUBTITLES_AHEAD && g.subtitle_next < m->list.count;
+    return ses->subtitle_next <= at + SUBTITLES_AHEAD && ses->subtitle_next < m->list.count;
 }
 
-static void dropSubtitleQueue(void)
+static void dropSubtitleQueue(HlsSession *ses)
 {
-    for (int i = 0; i < g.subtitle_queued; i++)
-        free(g.subtitle_queue[i].data);
-    g.subtitle_queued = 0;
+    for (int i = 0; i < ses->subtitle_queued; i++)
+        free(ses->subtitle_queue[i].data);
+    ses->subtitle_queued = 0;
 }
 
-static const HlsRendition *subtitleRendition(int track)
+static const HlsRendition *subtitleRendition(HlsSession *ses, int track)
 {
-    if (!g.running || track < 0 || track >= g.subtitle_count)
+    if (!ses->running || track < 0 || track >= ses->subtitle_count)
         return NULL;
-    for (int i = 0; i < g.master.count; i++)
-        if (g.master.renditions[i].list == g.subtitle_lists[track])
-            return &g.master.renditions[i];
+    for (int i = 0; i < ses->master.count; i++)
+        if (ses->master.renditions[i].list == ses->subtitle_lists[track])
+            return &ses->master.renditions[i];
     return NULL;
 }
 
 int hlsSubtitleCount(void)
 {
-    return g.running ? g.subtitle_count : 0;
+    HlsSession *ses = &g_main;
+    return ses->running ? ses->subtitle_count : 0;
 }
 
 const char *hlsSubtitleName(int track)
 {
-    const HlsRendition *r = subtitleRendition(track);
+    HlsSession *ses = &g_main;
+    const HlsRendition *r = subtitleRendition(ses, track);
     return r ? r->name : "";
 }
 
 const char *hlsSubtitleLanguage(int track)
 {
-    const HlsRendition *r = subtitleRendition(track);
+    HlsSession *ses = &g_main;
+    const HlsRendition *r = subtitleRendition(ses, track);
     return r ? r->language : "";
 }
 
 void hlsSelectSubtitle(int track)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return;
-    pthread_mutex_lock(&g.lock);
-    int list = track >= 0 && track < g.subtitle_count ? g.subtitle_lists[track] : 0;
-    if (list != g.subtitle_list) {
-        g.subtitle_list = list;
-        g.subtitle_choice++;
-        g.subtitle_next = -1;
-        dropSubtitleQueue();
-        pthread_cond_broadcast(&g.wake);
+    pthread_mutex_lock(&ses->lock);
+    int list = track >= 0 && track < ses->subtitle_count ? ses->subtitle_lists[track] : 0;
+    if (list != ses->subtitle_list) {
+        ses->subtitle_list = list;
+        ses->subtitle_choice++;
+        ses->subtitle_next = -1;
+        dropSubtitleQueue(ses);
+        pthread_cond_broadcast(&ses->wake);
     }
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
 }
 
 bool hlsTakeSubtitle(char **data, size_t *size)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return false;
-    pthread_mutex_lock(&g.lock);
-    bool any = g.subtitle_queued > 0;
+    pthread_mutex_lock(&ses->lock);
+    bool any = ses->subtitle_queued > 0;
     if (any) {
-        *data = g.subtitle_queue[0].data;
-        *size = g.subtitle_queue[0].size;
-        memmove(&g.subtitle_queue[0], &g.subtitle_queue[1], (size_t)(g.subtitle_queued - 1) * sizeof(g.subtitle_queue[0]));
-        g.subtitle_queued--;
-        pthread_cond_broadcast(&g.wake);  // Room for the next.
+        *data = ses->subtitle_queue[0].data;
+        *size = ses->subtitle_queue[0].size;
+        memmove(&ses->subtitle_queue[0], &ses->subtitle_queue[1], (size_t)(ses->subtitle_queued - 1) * sizeof(ses->subtitle_queue[0]));
+        ses->subtitle_queued--;
+        pthread_cond_broadcast(&ses->wake);  // Room for the next.
     }
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     return any;
 }
 
@@ -463,63 +472,63 @@ bool hlsTakeSubtitle(char **data, size_t *size)
 
 static void *fetchThread(void *arg)
 {
-    (void)arg;
-    pthread_mutex_lock(&g.lock);
-    while (!g.stop) {
-        if (!VIDEO.ended && monotonicNs() >= g.next_reread_ns) {
-            reread();
+    HlsSession *ses = arg;
+    pthread_mutex_lock(&ses->lock);
+    while (!ses->stop) {
+        if (!VIDEO.ended && monotonicNs() >= ses->next_reread_ns) {
+            reread(ses);
             continue;
         }
-        if (!g.failed && subtitleUrgent() && subtitleWork())
+        if (!ses->failed && subtitleUrgent(ses) && subtitleWork(ses))
             continue;
         int list = 0, index = -1;
-        int slot = !g.failed && nextSegment(&list, &index) ? freeSlot() : -1;
+        int slot = !ses->failed && nextSegment(ses, &list, &index) ? freeSlot(ses) : -1;
         if (slot < 0) {
-            if (!g.failed && subtitleWork())
+            if (!ses->failed && subtitleWork(ses))
                 continue;
-            waitForWork();
+            waitForWork(ses);
             continue;
         }
-        free(g.slots[slot].data);
-        g.slots[slot] = (Slot){.list = list, .index = index, .state = SLOT_LOADING};
-        g.fetch_list = list;
-        g.fetch_index = index;
-        g.abort_fetch = false;
-        pthread_mutex_unlock(&g.lock);
+        free(ses->slots[slot].data);
+        ses->slots[slot] = (Slot){.list = list, .index = index, .state = SLOT_LOADING};
+        ses->fetch_list = list;
+        ses->fetch_index = index;
+        ses->abort_fetch = false;
+        pthread_mutex_unlock(&ses->lock);
         NetResponse r;
-        bool ok = fetchSegment(list, index, &r);
-        pthread_mutex_lock(&g.lock);
-        bool aborted = g.abort_fetch;
-        g.fetch_index = -1;
-        g.slots[slot].state = ok ? SLOT_READY : SLOT_EMPTY;
-        g.slots[slot].data = ok ? r.data : NULL;
-        g.slots[slot].size = ok ? r.size : 0;
+        bool ok = fetchSegment(ses, list, index, &r);
+        pthread_mutex_lock(&ses->lock);
+        bool aborted = ses->abort_fetch;
+        ses->fetch_index = -1;
+        ses->slots[slot].state = ok ? SLOT_READY : SLOT_EMPTY;
+        ses->slots[slot].data = ok ? r.data : NULL;
+        ses->slots[slot].size = ok ? r.size : 0;
         if (!ok && !aborted && list == 0)
-            g.failed = true;  // A track of its own that fails leaves the picture playing.
-        pthread_cond_broadcast(&g.wake);
+            ses->failed = true;  // A track of its own that fails leaves the picture playing.
+        pthread_cond_broadcast(&ses->wake);
     }
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     return NULL;
 }
 
 // --- Starting ---
 
-static bool getText(const char *url, NetResponse *r)
+static bool getText(HlsSession *ses, const char *url, NetResponse *r)
 {
     // While starting, the caller's cancel cuts it short; afterwards, stopping does.
-    const volatile bool *cancel = !g.running && g.start_cancel ? g.start_cancel : &g.abort_fetch;
-    NetRequest request = {.url = url, .authorization = authorization(), .cancel = cancel,
-                          .timeout_s = g.playlist_timeout_s};
-    return netFetchText(g.net, &request, PLAYLIST_MAX, r);
+    const volatile bool *cancel = !ses->running && ses->start_cancel ? ses->start_cancel : &ses->abort_fetch;
+    NetRequest request = {.url = url, .authorization = authorization(ses), .cancel = cancel,
+                          .timeout_s = ses->playlist_timeout_s};
+    return netFetchText(ses->net, &request, PLAYLIST_MAX, r);
 }
 
-// Reads list number list (-1: the only one) from url into g.lists.
-static bool loadList(int slot, int list, bool subtitles, const char *url, int64_t start_ns)
+// Reads list number list (-1: the only one) from url into ses->lists.
+static bool loadList(HlsSession *ses, int slot, int list, bool subtitles, const char *url, int64_t start_ns)
 {
     NetResponse media;
-    if (!getText(url, &media))
+    if (!getText(ses, url, &media))
         return false;
-    MediaList *m = &g.lists[slot];
+    MediaList *m = &ses->lists[slot];
     bool ok = hlsPlaylistParseList(media.data, url, start_ns, list, subtitles, &m->list);
     netResponseFree(&media);
     if (ok && !m->list.ended)  // Live: what FFmpeg is told of starts near the end.
@@ -532,109 +541,113 @@ static bool loadList(int slot, int list, bool subtitles, const char *url, int64_
 // The master list's other sound tracks, as lists 1 on: those that can't be
 // read are left out of the master list FFmpeg gets. Subtitles stay out of it
 // (FFmpeg's HLS reader takes none): their lists are read once chosen.
-static void loadRenditions(void)
+static void loadRenditions(HlsSession *ses)
 {
     static HlsMaster local;  // What FFmpeg is told of.
-    local = g.master;
+    local = ses->master;
     local.count = 0;
-    g.list_count = g.master.list_count;
-    for (int i = 0; i < g.master.count; i++) {
-        const HlsRendition *r = &g.master.renditions[i];
+    ses->list_count = ses->master.list_count;
+    for (int i = 0; i < ses->master.count; i++) {
+        const HlsRendition *r = &ses->master.renditions[i];
         if (r->type == HLS_RENDITION_SUBTITLES) {
-            g.subtitle_lists[g.subtitle_count++] = r->list;
+            ses->subtitle_lists[ses->subtitle_count++] = r->list;
             continue;
         }
         if (r->list)
-            loadList(r->list, r->list, false, r->url, 0);
-        if (r->list == 0 || g.lists[r->list].loaded)
+            loadList(ses, r->list, r->list, false, r->url, 0);
+        if (r->list == 0 || ses->lists[r->list].loaded)
             local.renditions[local.count++] = *r;
     }
-    g.master_text = malloc(MASTER_MAX);
-    if (g.master_text && hlsLocalMaster(&local, g.master_text, MASTER_MAX)) {
-        g.master_size = strlen(g.master_text);
+    ses->master_text = malloc(MASTER_MAX);
+    if (ses->master_text && hlsLocalMaster(&local, ses->master_text, MASTER_MAX)) {
+        ses->master_size = strlen(ses->master_text);
     } else {
-        free(g.master_text);
-        g.master_text = NULL;
+        free(ses->master_text);
+        ses->master_text = NULL;
     }
 }
 
 // The media playlist behind the master one (its best variant) into list 0,
 // with the variant's own sound tracks and subtitles, if it has any, as more
 // lists. A list that has segments already is the media one itself.
-static bool readPlaylists(const char *master_url, int64_t start_ns)
+static bool readPlaylists(HlsSession *ses, const char *master_url, int64_t start_ns)
 {
     NetResponse first;
-    if (!getText(master_url, &first))
+    if (!getText(ses, master_url, &first))
         return false;
-    HlsMaster *master = &g.master;
-    bool is_master = hlsMasterParse(first.data, master_url, g.max_bitrate, master);
+    HlsMaster *master = &ses->master;
+    bool is_master = hlsMasterParse(first.data, master_url, ses->max_bitrate, master);
     bool several = is_master && master->list_count > 1;
     bool ok;
-    g.list_count = 1;
+    ses->list_count = 1;
     if (!is_master) {  // Already the one with the segments.
         ok = hlsPlaylistParse(first.data, master_url, start_ns, &VIDEO);
         if (ok && !VIDEO.ended)  // Live: what FFmpeg is told of starts near the end.
             hlsPlaylistTrim(&VIDEO, VIDEO.count - LIVE_KEEP);
-        snprintf(g.lists[0].url, sizeof(g.lists[0].url), "%s", master_url);
-        g.lists[0].loaded = ok;
+        snprintf(ses->lists[0].url, sizeof(ses->lists[0].url), "%s", master_url);
+        ses->lists[0].loaded = ok;
         netResponseFree(&first);
     } else {
         netResponseFree(&first);
-        ok = loadList(0, several ? 0 : -1, false, master->variant_url, start_ns);
+        ok = loadList(ses, 0, several ? 0 : -1, false, master->variant_url, start_ns);
         if (ok && several)
-            loadRenditions();
+            loadRenditions(ses);
     }
-    g.base_ns = VIDEO.base_ns;
-    g.grew_ns = monotonicNs();
-    g.next_reread_ns = monotonicNs() + REREAD_NS;
+    ses->base_ns = VIDEO.base_ns;
+    ses->grew_ns = monotonicNs();
+    ses->next_reread_ns = monotonicNs() + REREAD_NS;
     return ok;
 }
 
 int64_t hlsBaseNs(void)
 {
-    return g.running ? g.base_ns : 0;
+    HlsSession *ses = &g_main;
+    return ses->running ? ses->base_ns : 0;
 }
 
-static void freeLists(void)
+static void freeLists(HlsSession *ses)
 {
     for (int i = 0; i < HLS_LISTS_MAX; i++)
-        hlsPlaylistFree(&g.lists[i].list);
-    free(g.master_text);
-    g.master_text = NULL;
+        hlsPlaylistFree(&ses->lists[i].list);
+    free(ses->master_text);
+    ses->master_text = NULL;
 }
 
-static bool start(const char *master_url, const char *auth, long long max_bitrate, long timeout_s, int64_t start_ns,
-                  const volatile bool *cancel)
+static void stopSession(HlsSession *ses);
+
+static bool start(HlsSession *ses, const char *master_url, const char *auth, long long max_bitrate, long timeout_s,
+                  int64_t start_ns, const volatile bool *cancel)
 {
-    hlsStop();
-    memset(&g, 0, sizeof(g));
-    pthread_mutex_init(&g.lock, NULL);
-    pthread_cond_init(&g.wake, NULL);
-    g.start_cancel = cancel;
-    snprintf(g.authorization, sizeof(g.authorization), "%s", auth ? auth : "");
-    g.max_bitrate = max_bitrate;
-    g.playlist_timeout_s = timeout_s;
-    g.fetch_index = -1;
-    g.first_segment = -1;
-    g.playback_ns = -1;
-    g.interrupts = mediaFileInterrupts();
-    g.net = netClientOpen();
-    bool ok = g.net && readPlaylists(master_url, start_ns);
-    g.running = ok && pthread_create(&g.thread, NULL, fetchThread, NULL) == 0;
-    if (!g.running) {
-        freeLists();
-        netClientClose(g.net);
-        g.net = NULL;
-        pthread_cond_destroy(&g.wake);
-        pthread_mutex_destroy(&g.lock);
+    stopSession(ses);
+    memset(ses, 0, sizeof(*ses));
+    pthread_mutex_init(&ses->lock, NULL);
+    pthread_cond_init(&ses->wake, NULL);
+    ses->start_cancel = cancel;
+    snprintf(ses->authorization, sizeof(ses->authorization), "%s", auth ? auth : "");
+    ses->max_bitrate = max_bitrate;
+    ses->playlist_timeout_s = timeout_s;
+    ses->fetch_index = -1;
+    ses->first_segment = -1;
+    ses->playback_ns = -1;
+    ses->interrupts = mediaFileInterrupts();
+    ses->net = netClientOpen();
+    bool ok = ses->net && readPlaylists(ses, master_url, start_ns);
+    ses->running = ok && pthread_create(&ses->thread, NULL, fetchThread, ses) == 0;
+    if (!ses->running) {
+        freeLists(ses);
+        netClientClose(ses->net);
+        ses->net = NULL;
+        pthread_cond_destroy(&ses->wake);
+        pthread_mutex_destroy(&ses->lock);
     }
-    return g.running;
+    return ses->running;
 }
 
 bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool *cancel, char *error,
                     size_t error_size)
 {
-    bool ok = start(url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
+    HlsSession *ses = &g_main;
+    bool ok = start(ses, url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
     if (!ok)
         snprintf(error, error_size, "The channel's own stream can't be read.");
     return ok;
@@ -643,57 +656,91 @@ bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool 
 bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, const volatile bool *cancel,
               char *error, size_t error_size)
 {
-    bool ok = start(master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
+    HlsSession *ses = &g_main;
+    bool ok = start(ses, master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
     if (!ok)
         snprintf(error, error_size, "The server didn't start converting this video.");
     return ok;
 }
 
+bool hlsStartAudio(const char *url, const char *authorization, int64_t start_ns, const volatile bool *cancel,
+                   char *error, size_t error_size)
+{
+    bool ok = start(&g_audio, url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
+    if (!ok)
+        snprintf(error, error_size, "The server didn't start converting this sound track.");
+    return ok;
+}
+
 void hlsStop(void)
 {
-    if (!g.running)
+    stopSession(&g_main);
+}
+
+void hlsStopAudio(void)
+{
+    stopSession(&g_audio);
+}
+
+static HlsSession *sessionOf(const char *location)
+{
+    return !strncmp(location, HLS_AUDIO_LOCATION, sizeof(HLS_AUDIO_LOCATION) - 1) ? &g_audio : &g_main;
+}
+
+int64_t hlsLocationBaseNs(const char *location)
+{
+    HlsSession *ses = sessionOf(location);
+    return ses->running ? ses->base_ns : 0;
+}
+
+static void stopSession(HlsSession *ses)
+{
+    if (!ses->running)
         return;
-    pthread_mutex_lock(&g.lock);
-    g.stop = true;
-    g.abort_fetch = true;
-    pthread_cond_broadcast(&g.wake);
-    pthread_mutex_unlock(&g.lock);
-    pthread_join(g.thread, NULL);
-    g.running = false;
+    pthread_mutex_lock(&ses->lock);
+    ses->stop = true;
+    ses->abort_fetch = true;
+    pthread_cond_broadcast(&ses->wake);
+    pthread_mutex_unlock(&ses->lock);
+    pthread_join(ses->thread, NULL);
+    ses->running = false;
     for (int i = 0; i < SLOTS; i++)
-        free(g.slots[i].data);
-    dropSubtitleQueue();
-    freeLists();
-    netClientClose(g.net);
-    pthread_cond_destroy(&g.wake);
-    pthread_mutex_destroy(&g.lock);
+        free(ses->slots[i].data);
+    dropSubtitleQueue(ses);
+    freeLists(ses);
+    netClientClose(ses->net);
+    pthread_cond_destroy(&ses->wake);
+    pthread_mutex_destroy(&ses->lock);
 }
 
 bool hlsFailed(void)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return false;
-    pthread_mutex_lock(&g.lock);
-    bool failed = g.failed;
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
+    bool failed = ses->failed;
+    pthread_mutex_unlock(&ses->lock);
     return failed;
 }
 
 bool hlsIsLive(void)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return false;
-    pthread_mutex_lock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
     bool live = !VIDEO.ended;
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     return live;
 }
 
 bool hlsCushionReady(int64_t from_ns)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return true;
-    pthread_mutex_lock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
     // Live TV is made as it plays: a segment as long as the longest, and a
     // margin, must be there already, or playback catches up with the server.
     bool live = !VIDEO.ended;
@@ -704,29 +751,30 @@ bool hlsCushionReady(int64_t from_ns)
         last = first + AHEAD - 1;  // Only this many are fetched ahead.
     bool ready = !live || from_ns + span <= VIDEO.end_ns;
     for (int i = first; i <= last && ready; i++) {
-        int slot = findSlot(0, i);
-        ready = slot >= 0 && g.slots[slot].state == SLOT_READY;
+        int slot = findSlot(ses, 0, i);
+        ready = slot >= 0 && ses->slots[slot].state == SLOT_READY;
     }
-    ready = ready || g.failed;
-    pthread_mutex_unlock(&g.lock);
+    ready = ready || ses->failed;
+    pthread_mutex_unlock(&ses->lock);
     return ready;
 }
 
 double hlsSecondsReady(int64_t from_ns)
 {
-    if (!g.running)
+    HlsSession *ses = &g_main;
+    if (!ses->running)
         return -1;
-    pthread_mutex_lock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
     int first, last;
     hlsPlaylistSpan(&VIDEO, from_ns, 1, &first, &last);
     int64_t until = from_ns;
     for (int i = first; i < VIDEO.count; i++) {
-        int slot = findSlot(0, i);
-        if (slot < 0 || g.slots[slot].state != SLOT_READY)
+        int slot = findSlot(ses, 0, i);
+        if (slot < 0 || ses->slots[slot].state != SLOT_READY)
             break;
         until = i + 1 < VIDEO.count ? VIDEO.starts_ns[i + 1] : until;  // The last one's end isn't known.
     }
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     return until > from_ns ? (until - from_ns) / 1e9 : 0.0;
 }
 
@@ -779,47 +827,47 @@ static int openMemory(AVIOContext **pb, char *data, size_t size)
     return 0;
 }
 
-static void noteReader(const void *owner, int list, int segment)
+static void noteReader(HlsSession *ses, const void *owner, int list, int segment)
 {
-    if (list == 0 && g.first_segment < 0)
-        g.first_segment = segment;  // Where FFmpeg's times, and so playback's, begin.
+    if (list == 0 && ses->first_segment < 0)
+        ses->first_segment = segment;  // Where FFmpeg's times, and so playback's, begin.
     int r = 0;
-    while (r < READERS - 1 && g.readers[r].owner && (g.readers[r].owner != owner || g.readers[r].list != list))
+    while (r < READERS - 1 && ses->readers[r].owner && (ses->readers[r].owner != owner || ses->readers[r].list != list))
         r++;
-    g.readers[r] = (Reader){owner, list, segment};
-    if (g.fetch_index >= 0 && !wanted(g.fetch_list, g.fetch_index))
-        g.abort_fetch = true;
-    pthread_cond_broadcast(&g.wake);
+    ses->readers[r] = (Reader){owner, list, segment};
+    if (ses->fetch_index >= 0 && !wanted(ses, ses->fetch_list, ses->fetch_index))
+        ses->abort_fetch = true;
+    pthread_cond_broadcast(&ses->wake);
 }
 
 // True if the reader has something better to do than wait. Its callback takes
 // the reader's own lock, so ours isn't held meanwhile.
-static bool readerInterrupted(const AVFormatContext *s)
+static bool readerInterrupted(HlsSession *ses, const AVFormatContext *s)
 {
     if (!s->interrupt_callback.callback)
         return false;
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     bool yes = s->interrupt_callback.callback(s->interrupt_callback.opaque) != 0;
-    pthread_mutex_lock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
     return yes;
 }
 
 // A copy of the segment, waiting for it. NULL if it won't be had, or the
 // reader was interrupted. Under the lock.
-static char *waitForSegment(const AVFormatContext *s, int list, int index, size_t *size)
+static char *waitForSegment(HlsSession *ses, const AVFormatContext *s, int list, int index, size_t *size)
 {
     // The picture's reader also reads the subtitles: one late must not hold it up.
-    uint64_t give_up = g.lists[list].list.subtitles ? monotonicNs() + SUBTITLE_WAIT_NS : 0;
+    uint64_t give_up = ses->lists[list].list.subtitles ? monotonicNs() + SUBTITLE_WAIT_NS : 0;
     for (;;) {
-        int slot = findSlot(list, index);
-        if (slot >= 0 && g.slots[slot].state == SLOT_READY) {
-            char *copy = malloc(g.slots[slot].size ? g.slots[slot].size : 1);
+        int slot = findSlot(ses, list, index);
+        if (slot >= 0 && ses->slots[slot].state == SLOT_READY) {
+            char *copy = malloc(ses->slots[slot].size ? ses->slots[slot].size : 1);
             if (copy)
-                memcpy(copy, g.slots[slot].data, g.slots[slot].size);
-            *size = g.slots[slot].size;
+                memcpy(copy, ses->slots[slot].data, ses->slots[slot].size);
+            *size = ses->slots[slot].size;
             return copy;
         }
-        if (g.stop || g.failed || mediaFileInterrupts() != g.interrupts || readerInterrupted(s))
+        if (ses->stop || ses->failed || mediaFileInterrupts() != ses->interrupts || readerInterrupted(ses, s))
             return NULL;
         if (give_up && monotonicNs() >= give_up)
             return NULL;  // FFmpeg goes on to the next subtitle segment.
@@ -830,7 +878,7 @@ static char *waitForSegment(const AVFormatContext *s, int list, int index, size_
             until.tv_sec++;
             until.tv_nsec -= NS_PER_S;
         }
-        pthread_cond_timedwait(&g.wake, &g.lock, &until);
+        pthread_cond_timedwait(&ses->wake, &ses->lock, &until);
     }
 }
 
@@ -847,25 +895,26 @@ static int ioOpen(AVFormatContext *s, AVIOContext **pb, const char *url, int fla
 {
     (void)flags;
     (void)options;
+    HlsSession *ses = s->opaque;  // hlsOpenInput put it there.
     char *data = NULL;
     size_t size = 0;
     int list, index;
-    pthread_mutex_lock(&g.lock);
+    pthread_mutex_lock(&ses->lock);
     if (!strcmp(url, HLS_LOCAL_INDEX)) {  // The master list, or the only list.
-        bool master = g.master_text != NULL;
-        size = master ? g.master_size : VIDEO.size;
-        data = copyText(master ? g.master_text : VIDEO.text, size);
-    } else if (hlsLocalName(url, &list, &index) && list >= 0 && list < g.list_count && g.lists[list].loaded) {
-        HlsPlaylist *p = &g.lists[list].list;
+        bool master = ses->master_text != NULL;
+        size = master ? ses->master_size : VIDEO.size;
+        data = copyText(master ? ses->master_text : VIDEO.text, size);
+    } else if (hlsLocalName(url, &list, &index) && list >= 0 && list < ses->list_count && ses->lists[list].loaded) {
+        HlsPlaylist *p = &ses->lists[list].list;
         if (index < 0) {
             size = p->size;
             data = copyText(p->text, size);
         } else if (index < p->count) {
-            noteReader(s, list, index);
-            data = waitForSegment(s, list, index, &size);
+            noteReader(ses, s, list, index);
+            data = waitForSegment(ses, s, list, index, &size);
         }
     }
-    pthread_mutex_unlock(&g.lock);
+    pthread_mutex_unlock(&ses->lock);
     if (data)
         return openMemory(pb, data, size);
     bool interrupted = s->interrupt_callback.callback && s->interrupt_callback.callback(s->interrupt_callback.opaque);
@@ -885,9 +934,11 @@ static int ioClose(AVFormatContext *s, AVIOContext *pb)
     return 0;
 }
 
-bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist)
+bool hlsOpenInput(AVFormatContext **fmt, AVIOContext **playlist, const char *location)
 {
-    if (!g.running || ioOpen(*fmt, playlist, HLS_LOCAL_INDEX, 0, NULL) < 0)
+    HlsSession *ses = sessionOf(location);
+    (*fmt)->opaque = ses;  // For ioOpen, which FFmpeg calls with the context.
+    if (!ses->running || ioOpen(*fmt, playlist, HLS_LOCAL_INDEX, 0, NULL) < 0)
         return false;
     (*fmt)->pb = *playlist;
     (*fmt)->flags |= AVFMT_FLAG_CUSTOM_IO;

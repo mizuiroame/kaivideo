@@ -48,7 +48,7 @@ int main(int argc, char **argv)
     }
     AVFormatContext *fmt = avformat_alloc_context();
     AVIOContext *playlist = NULL;
-    if (!hlsOpenInput(&fmt, &playlist) || avformat_find_stream_info(fmt, NULL) < 0) {
+    if (!hlsOpenInput(&fmt, &playlist, HLS_LOCATION) || avformat_find_stream_info(fmt, NULL) < 0) {
         printf("FAIL open\n");
         return 1;
     }

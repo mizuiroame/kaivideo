@@ -423,11 +423,13 @@ static void finishOpening(App *app, uint64_t now)
         app->player = NULL;
         thumbsPause(false);
         hlsStop();
+        hlsStopAudio();
         releaseServerStream(app);
     } else if (app->player) {
         beginPlaying(app, now);
     } else {
         hlsStop();
+        hlsStopAudio();
         releaseServerStream(app);
         thumbsPause(false);
         appLog("%s: %s", app->playing_path, app->open_error);
@@ -470,6 +472,7 @@ static void stopVideo(App *app, const char *error, bool ended)
     playerClose(app->player);
     app->player = NULL;
     hlsStop();
+    hlsStopAudio();
     if (app->playing_converted)
         jfSyncEndConversion(app->playing_path);
     if (live)

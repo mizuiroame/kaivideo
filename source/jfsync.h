@@ -79,6 +79,12 @@ bool jfSyncLiveSource(const char *location, JfPlan *out, const volatile bool *ca
 // *cancel (may be NULL) becomes true.
 bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index, JfPlan *out,
                    char *error, size_t error_size, const volatile bool *cancel);
+// A conversion of one sound track of a location alone, as HLS (not for Live
+// TV): its media list's address and header, and its own play session.
+bool jfSyncAudioConversion(const char *location, int audio_index, char *url, size_t url_size, char *authorization,
+                           size_t auth_size, char *play_session, size_t session_size);
+// Ends such a conversion on the server.
+void jfSyncEndConversionOf(const char *location, const char *play_session);
 // The address and header for a conversion the server gave (url as in the plan).
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size);
 // A text subtitle track of a location, as SubRip (free with netResponseFree).

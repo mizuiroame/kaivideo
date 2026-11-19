@@ -46,6 +46,7 @@ typedef struct {
     char play_session[JF_ID_MAX + 24];
     char live_stream[JF_LIVE_STREAM_MAX];  // JOB_CLOSE_LIVE's.
     bool converted;
+    bool own_session;  // play_session is the job's own (a sound track converted alone), not the video's.
 } Job;
 
 static struct {
@@ -673,7 +674,8 @@ static void addJob(Job *job)
     if (!g.running)
         return;
     pthread_mutex_lock(&g.lock);
-    snprintf(job->play_session, sizeof(job->play_session), "%s", g.play_session);
+    if (!job->own_session)
+        snprintf(job->play_session, sizeof(job->play_session), "%s", g.play_session);
     job->converted = g.converted;
     if (job->type == JOB_REPORT)  // A channel's stream the server opened (closing one names its own).
         snprintf(job->live_stream, sizeof(job->live_stream), "%s", g.live_stream);
@@ -852,6 +854,33 @@ int jfSyncFetchSegments(const char *location, JfSegment *out, int max)
     }
     netClientClose(net);
     return count;
+}
+
+bool jfSyncAudioConversion(const char *location, int audio_index, char *url, size_t url_size, char *authorization,
+                           size_t auth_size, char *play_session, size_t session_size)
+{
+    char item[JF_ID_MAX], source[JF_ID_MAX];
+    if (!jfLocationIds(location, item, source) || !strcmp(source, LIVE_SOURCE))
+        return false;
+    JfSession s = sessionCopy();
+    // Its own play session, so it can be ended without ending the video's.
+    snprintf(play_session, session_size, "%08x%08x%08x%08x", (unsigned)rand(), (unsigned)rand(), (unsigned)time(NULL),
+             (unsigned)audio_index);
+    int n = snprintf(url, url_size,
+                     "%s/Audio/%s/main.m3u8?MediaSourceId=%s&DeviceId=%s&PlaySessionId=%s&AudioStreamIndex=%d"
+                     "&AudioCodec=aac&MaxAudioChannels=2&AudioBitrate=192000&AudioSampleRate=48000"
+                     "&SegmentContainer=ts&BreakOnNonKeyFrames=True",
+                     s.server, item, source, s.device_id, play_session, audio_index);
+    jfAuthHeader(&s, g.version, authorization, auth_size);
+    return n > 0 && (size_t)n < url_size;
+}
+
+void jfSyncEndConversionOf(const char *location, const char *play_session)
+{
+    Job job = {.type = JOB_END_CONVERSION, .own_session = true};
+    snprintf(job.location, sizeof(job.location), "%s", location);
+    snprintf(job.play_session, sizeof(job.play_session), "%s", play_session);
+    addJob(&job);
 }
 
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size)
