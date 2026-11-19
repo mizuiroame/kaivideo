@@ -51,6 +51,9 @@ bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_
 // at its end, and its text is made again. How many were added, -1 if the
 // list can't be read (p unchanged).
 int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base);
+// Leaves the segments before first out of p's text (a live list read for
+// hours); they keep their numbers. False if out of memory.
+bool hlsPlaylistTrim(HlsPlaylist *p, int first);
 void hlsPlaylistFree(HlsPlaylist *p);
 // The segments holding length_ns of video from from_ns on; past the end, the last one.
 void hlsPlaylistSpan(const HlsPlaylist *p, int64_t from_ns, int64_t length_ns, int *first, int *last);

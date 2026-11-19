@@ -216,40 +216,71 @@ static bool rebuildText(HlsPlaylist *p)
     return true;
 }
 
+// Makes room for more segments in p. False if there's none.
+static bool grow(HlsPlaylist *p, int more)
+{
+    char **urls = realloc(p->urls, (size_t)(p->count + more) * sizeof(char *));
+    if (!urls)
+        return false;
+    p->urls = urls;
+    int64_t *starts = realloc(p->starts_ns, (size_t)(p->count + more) * sizeof(int64_t));
+    if (!starts)
+        return false;
+    p->starts_ns = starts;
+    return true;
+}
+
+// Only the segments p hasn't got are read: a channel's list can hold hours of them.
 int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base)
 {
-    HlsPlaylist fresh;
-    if (!hlsPlaylistParse(playlist, base, 0, &fresh))
+    int total = countSegments(playlist);
+    if (total == 0)
         return -1;
+    const char *tag = strstr(playlist, MEDIA_SEQUENCE);
+    int64_t sequence = tag ? strtoll(tag + sizeof(MEDIA_SEQUENCE) - 1, NULL, 10) : 0;
     int64_t have = p->sequence + p->count;  // The sequence number the next new segment has.
-    int start = fresh.sequence + fresh.count > have ? (int)(have > fresh.sequence ? have - fresh.sequence : 0) : fresh.count;
-    int added = fresh.count - start;
-    char **urls = added ? realloc(p->urls, (size_t)(p->count + added) * sizeof(char *)) : p->urls;
-    if (urls)
-        p->urls = urls;
-    int64_t *starts = added && urls ? realloc(p->starts_ns, (size_t)(p->count + added) * sizeof(int64_t)) : p->starts_ns;
-    if (!urls || !starts) {
-        hlsPlaylistFree(&fresh);
+    int start = sequence + total > have ? (int)(have > sequence ? have - sequence : 0) : total;
+    int added = total - start;
+    bool was_ended = p->ended;
+    p->ended = strstr(playlist, "#EXT-X-ENDLIST") != NULL;
+    if (added && !grow(p, added))
         return -1;
-    }
-    p->starts_ns = starts;
-    for (int i = start; i < fresh.count; i++) {
-        int64_t length = segmentLength(&fresh, i);
-        p->urls[p->count] = fresh.urls[i];
-        fresh.urls[i] = NULL;  // Now p's.
-        p->starts_ns[p->count++] = p->end_ns;
-        p->end_ns += length;
-        if (length > p->longest_ns)
-            p->longest_ns = length;
-    }
     // A gap (the list slid past segments never read): numbering goes on from the new ones.
-    if (added && fresh.sequence + start > have)
-        p->sequence = fresh.sequence + start - (p->count - added);
-    p->ended = fresh.ended;
-    hlsPlaylistFree(&fresh);
-    if ((added || p->ended) && !rebuildText(p))
+    if (added && sequence + start > have)
+        p->sequence = sequence + start - p->count;
+    int64_t length = 0;
+    int index = 0;
+    for (const char *line = playlist; *line;) {
+        size_t n = lineLength(line);
+        if (!strncmp(line, EXTINF, sizeof(EXTINF) - 1)) {
+            length = (int64_t)(strtod(line + sizeof(EXTINF) - 1, NULL) * NS_PER_S);
+        } else if (n && line[0] != '#') {
+            if (index++ >= start) {
+                int at = p->count;
+                if (!addSegment(p, line, n, base))
+                    return -1;
+                p->starts_ns[at] = p->end_ns;
+                p->end_ns += length;
+                if (length > p->longest_ns)
+                    p->longest_ns = length;
+            }
+            length = 0;
+        }
+        line = nextLine(line, n);
+    }
+    if ((added || p->ended != was_ended) && !rebuildText(p))
         return -1;
     return added;
+}
+
+bool hlsPlaylistTrim(HlsPlaylist *p, int first)
+{
+    if (first > p->count)
+        first = p->count;
+    if (first <= p->first)
+        return true;
+    p->first = first;
+    return rebuildText(p);
 }
 
 // --- Master lists ---

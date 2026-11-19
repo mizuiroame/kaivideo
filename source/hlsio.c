@@ -36,6 +36,8 @@
 #define SUBTITLE_WAIT_NS 1500000000ull  // A subtitle segment not here by then is skipped.
 #define SUBTITLE_QUEUE 8      // Subtitle segments fetched and not yet taken by the player.
 #define SUBTITLES_BEHIND 1    // Subtitle segments fetched from before the picture's.
+#define LIVE_KEEP 6           // A live list starts with this many of its last segments (FFmpeg starts 3 from the end).
+#define LIVE_KEEP_BEHIND 2    // And then keeps this many behind its earliest reader.
 
 typedef enum { SLOT_EMPTY, SLOT_LOADING, SLOT_READY } SlotState;
 
@@ -193,10 +195,36 @@ static uint64_t monotonicNs(void)
 
 static bool getText(const char *url, NetResponse *r);
 
+// The earliest segment any reader of a list is at, -1 if none reads it.
+static int earliestReader(int list)
+{
+    int at = -1;
+    for (int r = 0; r < READERS; r++)
+        if (g.readers[r].owner && g.readers[r].list == list && (at < 0 || g.readers[r].segment < at))
+            at = g.readers[r].segment;
+    return at;
+}
+
+// A live list's text keeps only what's near its readers: a channel's list
+// can hold hours, and FFmpeg reads the whole text each time. Subtitles are
+// read by KaiVideo itself, from the segments' addresses: they need none.
+static void trimLive(int list)
+{
+    HlsPlaylist *p = &g.lists[list].list;
+    if (p->ended)
+        return;
+    if (p->subtitles) {
+        hlsPlaylistTrim(p, p->count);
+        return;
+    }
+    int reader = earliestReader(list);
+    if (reader >= 0)
+        hlsPlaylistTrim(p, reader - LIVE_KEEP_BEHIND);
+}
+
 // Live lists: read them again, and take what was added (segments keep their numbers). Under the lock.
 static void reread(void)
 {
-    g.next_reread_ns = monotonicNs() + REREAD_NS;
     for (int i = 0; i < g.list_count && !g.stop; i++) {
         bool unchosen = g.lists[i].list.subtitles && i != g.subtitle_list;  // Read again only while shown.
         if (!g.lists[i].loaded || g.lists[i].list.ended || unchosen)
@@ -214,11 +242,13 @@ static void reread(void)
         // drops its old ones as it goes, the server's keeps them all.
         int added = hlsPlaylistAppend(&g.lists[i].list, media.data, url);
         netResponseFree(&media);
+        trimLive(i);
         if (i == 0 && added > 0)
             g.grew_ns = monotonicNs();
         if (added >= 0)
             pthread_cond_broadcast(&g.wake);
     }
+    g.next_reread_ns = monotonicNs() + REREAD_NS;  // From when this one ended: long lists take a while.
     if (!VIDEO.ended && monotonicNs() - g.grew_ns > LIVE_STALL_NS) {
         g.failed = true;  // Readers waiting for more give up: playback ends, and says so.
         pthread_cond_broadcast(&g.wake);
@@ -280,6 +310,8 @@ static void loadSubtitleList(int list, unsigned choice)
         ok = hlsPlaylistParseList(r.data, url, 0, list, true, &fresh);
         netResponseFree(&r);
     }
+    if (ok)
+        hlsPlaylistTrim(&fresh, fresh.count);  // No text needed: KaiVideo reads its segments itself.
     pthread_mutex_lock(&g.lock);
     MediaList *m = &g.lists[list];
     if (ok && choice == g.subtitle_choice) {
@@ -340,6 +372,22 @@ static bool subtitleWork(void)
     return true;
 }
 
+// The subtitles of what shows now haven't come: they go before the picture's
+// segments further ahead. Under the lock.
+static bool subtitleUrgent(void)
+{
+    if (!g.subtitle_list || g.subtitle_queued >= SUBTITLE_QUEUE)
+        return false;
+    const MediaList *m = &g.lists[g.subtitle_list];
+    if (!m->loaded)
+        return true;
+    int64_t sequence = playbackSequence();
+    if (sequence < 0)
+        return false;
+    int at = (int)(sequence - m->list.sequence);
+    return g.subtitle_next <= at && g.subtitle_next < m->list.count;
+}
+
 static void dropSubtitleQueue(void)
 {
     for (int i = 0; i < g.subtitle_queued; i++)
@@ -390,6 +438,21 @@ void hlsSelectSubtitle(int track)
     pthread_mutex_unlock(&g.lock);
 }
 
+void hlsSubtitleStatus(char *out, size_t size)
+{
+    if (!g.running) {
+        snprintf(out, size, "not running");
+        return;
+    }
+    pthread_mutex_lock(&g.lock);
+    int list = g.subtitle_list;
+    const HlsPlaylist *p = list ? &g.lists[list].list : NULL;
+    snprintf(out, size, "list %d loaded %d segments %d seq %lld next %d queued %d | playback %.1f s first %d shows seq %lld",
+             list, list ? g.lists[list].loaded : 0, p ? p->count : 0, p ? (long long)p->sequence : 0LL,
+             g.subtitle_next, g.subtitle_queued, g.playback_ns / 1e9, g.first_segment, (long long)playbackSequence());
+    pthread_mutex_unlock(&g.lock);
+}
+
 bool hlsTakeSubtitle(char **data, size_t *size)
 {
     if (!g.running)
@@ -418,6 +481,8 @@ static void *fetchThread(void *arg)
             reread();
             continue;
         }
+        if (!g.failed && subtitleUrgent() && subtitleWork())
+            continue;
         int list = 0, index = -1;
         int slot = !g.failed && nextSegment(&list, &index) ? freeSlot() : -1;
         if (slot < 0) {
@@ -468,6 +533,8 @@ static bool loadList(int slot, int list, bool subtitles, const char *url, int64_
     MediaList *m = &g.lists[slot];
     bool ok = hlsPlaylistParseList(media.data, url, start_ns, list, subtitles, &m->list);
     netResponseFree(&media);
+    if (ok && !m->list.ended)  // Live: what FFmpeg is told of starts near the end.
+        hlsPlaylistTrim(&m->list, m->list.count - LIVE_KEEP);
     snprintf(m->url, sizeof(m->url), "%s", url);
     m->loaded = ok;
     return ok;
@@ -517,6 +584,8 @@ static bool readPlaylists(const char *master_url, int64_t start_ns)
     g.list_count = 1;
     if (!is_master) {  // Already the one with the segments.
         ok = hlsPlaylistParse(first.data, master_url, start_ns, &VIDEO);
+        if (ok && !VIDEO.ended)  // Live: what FFmpeg is told of starts near the end.
+            hlsPlaylistTrim(&VIDEO, VIDEO.count - LIVE_KEEP);
         snprintf(g.lists[0].url, sizeof(g.lists[0].url), "%s", master_url);
         g.lists[0].loaded = ok;
         netResponseFree(&first);

@@ -382,6 +382,14 @@ static void testHlsLists(void)
     CHECK(strstr(p.text, HLS_LOCAL_PREFIX "0.ts\n") && !strstr(p.text, "#EXT-X-ENDLIST"));
     CHECK(hlsPlaylistAppend(&p, SLIDE2, "https://cdn/x/live.m3u8") == 0 && p.count == 5);  // Nothing new.
     CHECK(hlsPlaylistAppend(&p, "#EXTM3U\n", "https://cdn/x/live.m3u8") == -1 && p.count == 5);
+    // Hours of a channel: the text keeps only what's near, under the same numbers.
+    CHECK(hlsPlaylistTrim(&p, 3) && p.first == 3 && strstr(p.text, "#EXT-X-MEDIA-SEQUENCE:103\n"));
+    CHECK(!strstr(p.text, HLS_LOCAL_PREFIX "2.ts") && strstr(p.text, HLS_LOCAL_PREFIX "3.ts\n"));
+    CHECK(hlsPlaylistTrim(&p, 1) && p.first == 3);  // Never back.
+    static const char SLIDE3[] = "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:104\n#EXTINF:4.0,\ns104.ts\n#EXTINF:6.0,\ns105.ts\n";
+    CHECK(hlsPlaylistAppend(&p, SLIDE3, "https://cdn/x/live.m3u8") == 1 && p.count == 6);
+    CHECK(strstr(p.text, "#EXT-X-MEDIA-SEQUENCE:103\n") && strstr(p.text, HLS_LOCAL_PREFIX "5.ts\n"));
+    CHECK(p.starts_ns[5] == 28000000000ll && p.end_ns == 34000000000ll);
     // A list that grows from the start (as the server's conversions do) appends the same way.
     hlsPlaylistFree(&p);
     CHECK(hlsPlaylistParse("#EXTM3U\n#EXTINF:8.0,\nhls/0.ts\n", "http://h/a.m3u8", 0, &p) && p.sequence == 0);

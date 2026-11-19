@@ -26,6 +26,7 @@
 #define EXTERNAL_MAX (JF_PLAN_SUBS + 1)
 #define REOPEN_SETTLE_NS 600000000ull  // Jumps closer together than this count as one.
 #define PREFETCH_AFTER_FRAMES 1200   // About 20 s in, the other subtitle tracks are got ready.
+#define LIVE_LOG_FRAMES 300          // About every 5 s: how a channel's subtitles are doing, in the log.
 
 // Subtitles that aren't inside what's being read: an .srt next to the video,
 // or a track the server gives (fetched when first chosen).
@@ -102,6 +103,7 @@ struct Player {
     uint64_t reopen_since_ns;  // The last jump that asked for it.
     volatile bool ext_cancel;  // Closing: subtitles on their way are dropped.
     int frames_seen;
+    unsigned live_log_frames;  // Counts updates, to log a channel's subtitles now and then.
 };
 
 // The .srt's label: its language from "name.es.srt", and that it's a file.
@@ -306,18 +308,31 @@ void playerAttachPlan(Player *p, const JfPlan *plan, const char *location)
         p->subtitle += p->ext_count;
 }
 
+void appLog(const char *fmt, ...);
+
 // The chosen subtitles' lines that came for a channel's own track.
 static void takeLiveSubtitles(Player *p)
 {
     char *data;
     size_t size;
-    if (hlsIsLocation(p->path) && hlsSubtitleCount() > 0)
-        hlsSetPlayback(p->position_ns);
+    if (!hlsIsLocation(p->path) || hlsSubtitleCount() == 0)
+        return;
+    hlsSetPlayback(p->position_ns);
+    bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
     while (hlsTakeSubtitle(&data, &size)) {
-        bool live = p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].live_track_plus1;
-        if (live)
-            webvttAdd(&p->ext[p->subtitle].track, data, size, videoStartNs(p->video));
+        if (live) {
+            SubTrack *t = &p->ext[p->subtitle].track;
+            int added = webvttAdd(t, data, size, videoStartNs(p->video));
+            appLog("  live subtitles: %zu bytes, %d lines (%s) at %.1f s; start %.1f s; first line %.1f s", size, added,
+                   added < 0 ? "not WebVTT" : "ok", p->position_ns / 1e9, videoStartNs(p->video) / 1e9,
+                   t->count ? t->cues[t->count - 1].start_ns / 1e9 : -1.0);
+        }
         free(data);
+    }
+    if (live && ++p->live_log_frames % LIVE_LOG_FRAMES == 0) {
+        char status[256];
+        hlsSubtitleStatus(status, sizeof(status));
+        appLog("  live subtitles: %s", status);
     }
 }
 

@@ -48,6 +48,8 @@ void hlsSelectSubtitle(int track);
 // Where playback is (0: the stream's start), so the subtitles fetched are
 // those of what shows, not of where the readers have got to ahead of it.
 void hlsSetPlayback(int64_t position_ns);
+// What the subtitle fetching is doing, for the log.
+void hlsSubtitleStatus(char *out, size_t size);
 // The next WebVTT segment of the chosen track (data to be freed); false if none waits.
 bool hlsTakeSubtitle(char **data, size_t *size);
 void hlsCloseInput(AVIOContext *playlist);
