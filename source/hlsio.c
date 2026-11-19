@@ -440,21 +440,6 @@ void hlsSelectSubtitle(int track)
     pthread_mutex_unlock(&g.lock);
 }
 
-void hlsSubtitleStatus(char *out, size_t size)
-{
-    if (!g.running) {
-        snprintf(out, size, "not running");
-        return;
-    }
-    pthread_mutex_lock(&g.lock);
-    int list = g.subtitle_list;
-    const HlsPlaylist *p = list ? &g.lists[list].list : NULL;
-    snprintf(out, size, "list %d loaded %d segments %d seq %lld next %d queued %d | playback %.1f s first %d shows seq %lld",
-             list, list ? g.lists[list].loaded : 0, p ? p->count : 0, p ? (long long)p->sequence : 0LL,
-             g.subtitle_next, g.subtitle_queued, g.playback_ns / 1e9, g.first_segment, (long long)playbackSequence());
-    pthread_mutex_unlock(&g.lock);
-}
-
 bool hlsTakeSubtitle(char **data, size_t *size)
 {
     if (!g.running)
