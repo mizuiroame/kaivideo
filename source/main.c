@@ -361,6 +361,7 @@ static void beginPlaying(App *app, uint64_t now)
     app->bar_note[0] = '\0';
     menuClose(&app->menu);
     playerSetSpeed(app->player, playbackSpeedPermille(app->speed_index), now);
+    playerSetVolume(app->player, app->volume);
     applyTrackPrefs(app, now);
     int64_t resume_at;
     bool from_start = app->open_from_start;
@@ -653,6 +654,9 @@ static void stepPlaybackOption(App *app, PlaybackOption option, int delta, uint6
     if (option == PLAYBACK_OPT_SPEED) {
         app->speed_index = playbackSpeedStep(app->speed_index, delta);
         playerSetSpeed(p, playbackSpeedPermille(app->speed_index), now);
+    } else if (option == PLAYBACK_OPT_VOLUME && playerAudioTrackCount(p) > 0) {
+        app->volume = playbackVolumeStep(app->volume, delta);
+        playerSetVolume(p, app->volume);
     } else if (option == PLAYBACK_OPT_AUDIO_DELAY && playerAudioTrackCount(p) > 0) {
         playerSetAudioDelay(p, playbackDelayStep(playerAudioDelay(p), delta));
     } else if (option == PLAYBACK_OPT_SUBTITLE_DELAY && playerSubtitleCount(p) > 0) {
@@ -1070,6 +1074,7 @@ int main(int argc, char **argv)
 
     static App app;
     app.speed_index = PLAYBACK_SPEED_NORMAL;
+    app.volume = PLAYBACK_VOLUME_NORMAL;
     char folder[BROWSER_PATH_MAX];
     loadSettings(&app, folder, sizeof(folder));
     appConfigPath(path, sizeof(path), "resume.txt");

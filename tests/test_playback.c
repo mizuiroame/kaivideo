@@ -83,9 +83,41 @@ static void testChapters(void)
     playbackChaptersPrepare(c, 0);                     // Nothing to do, and no crash.
 }
 
+static void testVolume(void)
+{
+    CHECK(playbackVolumeStep(PLAYBACK_VOLUME_NORMAL, 1) == PLAYBACK_VOLUME_NORMAL + PLAYBACK_VOLUME_STEP);
+    CHECK(playbackVolumeStep(PLAYBACK_VOLUME_MAX, 1) == PLAYBACK_VOLUME_MAX);
+    CHECK(playbackVolumeStep(PLAYBACK_VOLUME_MIN, -1) == PLAYBACK_VOLUME_MIN);
+    char text[16];
+    playbackFormatVolume(text, sizeof(text), 150);
+    CHECK(!strcmp(text, "150%"));
+
+    // 100%: untouched. Below: quieter, in proportion.
+    int16_t pcm[6] = {1000, -1000, 32767, -32768, 0, 20000};
+    int16_t copy[6];
+    memcpy(copy, pcm, sizeof(pcm));
+    playbackApplyVolume(copy, 6, PLAYBACK_VOLUME_NORMAL);
+    CHECK(!memcmp(copy, pcm, sizeof(pcm)));
+    memcpy(copy, pcm, sizeof(pcm));
+    playbackApplyVolume(copy, 6, 50);
+    CHECK(copy[0] == 500 && copy[1] == -500 && copy[4] == 0);
+
+    // Louder: quiet sound doubles; loud sound bends under the limit instead of clipping.
+    memcpy(copy, pcm, sizeof(pcm));
+    playbackApplyVolume(copy, 6, 200);
+    CHECK(copy[0] == 2000 && copy[1] == -2000);
+    CHECK(copy[2] < 32767 && copy[2] > 30000 && copy[3] > -32768 && copy[3] < -30000);
+    CHECK(copy[5] > 20000 && copy[5] < 32767);
+    // Louder input stays louder (no folding back).
+    int16_t ramp[4] = {15000, 20000, 25000, 30000};
+    playbackApplyVolume(ramp, 4, 200);
+    CHECK(ramp[0] < ramp[1] && ramp[1] < ramp[2] && ramp[2] < ramp[3]);
+}
+
 void testPlayback(void)
 {
     testSpeed();
     testDelay();
     testChapters();
+    testVolume();
 }

@@ -1,5 +1,6 @@
 #include "playback.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -42,6 +43,45 @@ void playbackFormatDelay(char *out, size_t size, int delay_ms)
     int magnitude = abs(delay_ms);
     snprintf(out, size, "%s%d.%d s", delay_ms > 0 ? "+" : delay_ms < 0 ? "-" : "", magnitude / 1000,
              magnitude % 1000 / 100);
+}
+
+int playbackVolumeStep(int percent, int delta)
+{
+    int next = percent + delta * PLAYBACK_VOLUME_STEP;
+    return next > PLAYBACK_VOLUME_MAX ? PLAYBACK_VOLUME_MAX : next < PLAYBACK_VOLUME_MIN ? PLAYBACK_VOLUME_MIN : next;
+}
+
+void playbackFormatVolume(char *out, size_t size, int percent)
+{
+    snprintf(out, size, "%d%%", percent);
+}
+
+#define SAMPLE_TOP 32767.0f
+#define LIMIT_KNEE 0.6f  // Of the top: louder than this, sound is bent under the top.
+
+// The limiter's curve over the knee: rises like the input there, and nears
+// the top without reaching it.
+static float limit(float x)
+{
+    float knee = LIMIT_KNEE * SAMPLE_TOP, room = SAMPLE_TOP - knee;
+    float magnitude = fabsf(x);
+    if (magnitude <= knee)
+        return x;
+    float bent = knee + room * tanhf((magnitude - knee) / room);
+    return x < 0 ? -bent : bent;
+}
+
+void playbackApplyVolume(int16_t *pcm, size_t samples, int percent)
+{
+    if (percent == PLAYBACK_VOLUME_NORMAL)
+        return;
+    float gain = percent / 100.0f;
+    for (size_t i = 0; i < samples; i++) {
+        float y = pcm[i] * gain;
+        if (percent > PLAYBACK_VOLUME_NORMAL)
+            y = limit(y);
+        pcm[i] = (int16_t)lrintf(y > SAMPLE_TOP ? SAMPLE_TOP : y < -SAMPLE_TOP ? -SAMPLE_TOP : y);
+    }
 }
 
 static int compareChapters(const void *a, const void *b)

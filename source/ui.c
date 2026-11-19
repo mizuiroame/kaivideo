@@ -417,6 +417,12 @@ static const char *playbackOption(const Player *p, const Config *config, Playbac
     case PLAYBACK_OPT_SPEED:
         playbackFormatSpeed(value, size, playerSpeed(p));
         return "Speed";
+    case PLAYBACK_OPT_VOLUME:
+        if (playerAudioTrackCount(p) > 0)
+            playbackFormatVolume(value, size, playerVolume(p));
+        else
+            snprintf(value, size, "No sound");
+        return "Volume";
     case PLAYBACK_OPT_AUDIO_DELAY:
         if (playerAudioTrackCount(p) > 0)
             playbackFormatDelay(value, size, playerAudioDelay(p));

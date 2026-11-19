@@ -32,7 +32,7 @@ struct Player {
     bool paused;
     int audio, subtitle;
     int audio_count, subtitle_count;
-    int speed, audio_delay, subtitle_delay;
+    int speed, volume, audio_delay, subtitle_delay;
     int chapter_count;
     bool live;  // Live TV: no length.
 };
@@ -55,6 +55,7 @@ int playerSubtitleCount(const Player *p) { return p->subtitle_count; }
 const char *playerSubtitleLabel(const Player *p, int track) { (void)p; return SUBS[track]; }
 int playerSubtitle(const Player *p) { return p->subtitle; }
 int playerSpeed(const Player *p) { return p->speed ? p->speed : PLAYBACK_PERMILLE; }
+int playerVolume(const Player *p) { return p->volume ? p->volume : PLAYBACK_VOLUME_NORMAL; }
 int playerAudioDelay(const Player *p) { return p->audio_delay; }
 int playerSubtitleDelay(const Player *p) { return p->subtitle_delay; }
 int playerChapterCount(const Player *p) { return p->chapter_count; }

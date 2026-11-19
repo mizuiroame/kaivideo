@@ -46,6 +46,9 @@ void playerSeekTo(Player *p, int64_t target_ns, uint64_t now_ns);
 // changes to it, with its pitch kept. It stays through seeks and track changes.
 void playerSetSpeed(Player *p, int permille, uint64_t now_ns);
 int playerSpeed(const Player *p);
+// The sound's volume in percent (playback.h): 100 as it is, up to 200 louder.
+void playerSetVolume(Player *p, int percent);
+int playerVolume(const Player *p);
 // How much later the sound (or, negative, earlier) goes than the picture.
 void playerSetAudioDelay(Player *p, int delay_ms);
 int playerAudioDelay(const Player *p);

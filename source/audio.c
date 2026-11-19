@@ -99,6 +99,7 @@ struct Audio {
     char switch_error[96];        // Why the last change failed. Under lock.
     int64_t skip_until_ns;        // After a seek: sound before this is dropped.
     int speed, speed_wanted;      // Thousandths; speed changes with a seek, under lock.
+    int volume;                   // Percent (playback.h), read as each buffer is queued.
     bool read_done, finished;
     bool read_failed;             // The network went. Under lock.
 
@@ -496,6 +497,7 @@ static void queueBuffer(Audio *a, int i, Fade fade)
     if (n < BUFFER_FRAMES)
         memset((s16 *)b->buffer + n * 2, 0, (BUFFER_FRAMES - n) * 2 * sizeof(s16));
     applyFade(b->buffer, fade);
+    playbackApplyVolume(b->buffer, BUFFER_FRAMES * 2, __atomic_load_n(&a->volume, __ATOMIC_RELAXED));
     int64_t pts = a->pending_pts_ns;
     memmove(a->pending, a->pending + n * 2, (a->pending_frames - n) * 2 * sizeof(s16));
     a->pending_frames -= n;
@@ -723,6 +725,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
         return NULL;
     mutexInit(&a->lock);
     a->track_wanted = NO_TRACK;
+    a->volume = PLAYBACK_VOLUME_NORMAL;
     a->fmt = avformat_alloc_context();
     a->pkt = av_packet_alloc();
     a->frame = av_frame_alloc();
@@ -876,6 +879,11 @@ bool audioTakeSwitchError(Audio *a, char *out, size_t size)
     }
     mutexUnlock(&a->lock);
     return failed;
+}
+
+void audioSetVolume(Audio *a, int percent)
+{
+    __atomic_store_n(&a->volume, percent, __ATOMIC_RELAXED);  // From the next buffer on.
 }
 
 void audioSetSpeed(Audio *a, int permille)

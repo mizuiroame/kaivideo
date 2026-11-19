@@ -37,6 +37,8 @@ bool audioTakeSwitchError(Audio *a, char *out, size_t size);
 // The speed to play at (thousandths, playback.h), pitch unchanged. It takes
 // effect with the next audioSeek: the clock then runs at that speed.
 void audioSetSpeed(Audio *a, int permille);
+// Percent of the sound's volume (playback.h), from the next buffer on.
+void audioSetVolume(Audio *a, int percent);
 // The speed in effect: normal if the wanted one couldn't be set up.
 int audioSpeed(Audio *a);
 // True if the sound stopped because the network failed.

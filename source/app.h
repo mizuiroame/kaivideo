@@ -75,6 +75,7 @@ struct App {
     Menu menu;                  // The open drop-down list, if any, over the player.
     UiMenuKind menu_kind;
     int speed_index;            // The playback speed (playback.h), kept from video to video.
+    int volume;                 // The sound's volume in percent (playback.h), kept likewise.
     unsigned seeks;
     uint64_t started;
     char message[200];

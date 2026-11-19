@@ -49,6 +49,7 @@ struct Player {
     char audio_info[160];
     bool paused;
     int speed;               // Thousandths (playback.h).
+    int volume;              // Percent (playback.h).
     int audio_delay_ms, subtitle_delay_ms;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
     int64_t position_ns;     // Where playback is, in the file's time.
@@ -161,6 +162,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     }
     snprintf(p->path, sizeof(p->path), "%s", path);
     p->speed = PLAYBACK_PERMILLE;
+    p->volume = PLAYBACK_VOLUME_NORMAL;
     pthread_mutex_init(&p->ext_lock, NULL);
     p->join_lead_ns = jfIsLocation(path) || !strncmp(path, "jellyfin-", 9) ? REMOTE_LEAD_NS : SWITCH_LEAD_NS;
     pthread_mutex_init(&p->swap_lock, NULL);
@@ -629,6 +631,18 @@ int playerSpeed(const Player *p)
     return p->speed;
 }
 
+void playerSetVolume(Player *p, int percent)
+{
+    p->volume = percent;
+    if (p->audio)
+        audioSetVolume(p->audio, percent);
+}
+
+int playerVolume(const Player *p)
+{
+    return p->volume;
+}
+
 void playerSetAudioDelay(Player *p, int delay_ms)
 {
     p->audio_delay_ms = delay_ms;
@@ -889,6 +903,7 @@ static void finishSwap(Player *p)
     }
     snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
     audioSetSpeed(p->audio, p->speed);
+    audioSetVolume(p->audio, p->volume);
     if (p->holding) {
         // A seek is under way: the sound waits for its first frame, as usual.
         audioSeek(p->audio, p->position_ns);
