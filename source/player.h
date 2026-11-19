@@ -52,6 +52,9 @@ void playerSetVolume(Player *p, int percent);
 int playerVolume(const Player *p);
 // How the picture fills the screen (playback.h); the screen draws it so.
 void playerSetAspect(Player *p, PlaybackAspect aspect);
+// The A-B loop of this video (playback.h); the main loop goes back to A at B.
+void playerSetLoop(Player *p, PlaybackLoop loop);
+PlaybackLoop playerLoop(const Player *p);
 PlaybackAspect playerAspect(const Player *p);
 // How much later the sound (or, negative, earlier) goes than the picture.
 void playerSetAudioDelay(Player *p, int delay_ms);

@@ -138,6 +138,32 @@ static void testAspect(void)
     CHECK(playbackAspectStep(PLAYBACK_ASPECT_ORIGINAL, -1) == PLAYBACK_ASPECT_16_9);
 }
 
+static void testLoop(void)
+{
+    PlaybackLoop loop = PLAYBACK_LOOP_OFF;
+    char text[32];
+    int64_t to;
+    playbackFormatLoop(text, sizeof(text), &loop);
+    CHECK(!strcmp(text, "Off") && !playbackLoopJump(&loop, 100 * S, &to));
+    playbackLoopStep(&loop, 83 * S);                     // A.
+    playbackFormatLoop(text, sizeof(text), &loop);
+    CHECK(!strcmp(text, "A 1:23") && !playbackLoopJump(&loop, 200 * S, &to));
+    playbackLoopStep(&loop, 83 * S + S / 2);             // B too close to A: A moves there instead.
+    CHECK(loop.a_ns == 83 * S + S / 2 && loop.b_ns < 0);
+    playbackLoopStep(&loop, 125 * S);                    // B.
+    playbackFormatLoop(text, sizeof(text), &loop);
+    CHECK(!strcmp(text, "1:23 - 2:05"));
+    CHECK(!playbackLoopJump(&loop, 124 * S, &to));
+    CHECK(playbackLoopJump(&loop, 125 * S, &to) && to == loop.a_ns);
+    CHECK(playbackLoopJump(&loop, 300 * S, &to));        // Jumped past B: back to A too.
+    playbackLoopStep(&loop, 10 * S);                     // Off.
+    CHECK(loop.a_ns < 0 && loop.b_ns < 0);
+    playbackLoopStep(&loop, 3725 * S);
+    playbackLoopStep(&loop, 3790 * S);
+    playbackFormatLoop(text, sizeof(text), &loop);
+    CHECK(!strcmp(text, "1:02:05 - 1:03:10"));
+}
+
 void testPlayback(void)
 {
     testSpeed();
@@ -145,4 +171,5 @@ void testPlayback(void)
     testChapters();
     testVolume();
     testAspect();
+    testLoop();
 }

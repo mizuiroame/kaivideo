@@ -77,6 +77,7 @@ struct App {
     int speed_index;            // The playback speed (playback.h), kept from video to video.
     int volume;                 // The sound's volume in percent (playback.h), kept likewise.
     PlaybackAspect aspect;      // How the picture fills the screen, kept likewise.
+    uint64_t loop_jumped_at;    // When the A-B loop last went back to A.
     unsigned seeks;
     uint64_t started;
     char message[200];

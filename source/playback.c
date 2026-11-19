@@ -115,6 +115,51 @@ void playbackVideoBox(double video_aspect, PlaybackAspect aspect, float screen_w
     }
 }
 
+void playbackLoopStep(PlaybackLoop *loop, int64_t pos_ns)
+{
+    if (loop->a_ns < 0) {
+        loop->a_ns = pos_ns;
+    } else if (loop->b_ns < 0) {
+        if (pos_ns >= loop->a_ns + PLAYBACK_LOOP_MIN_NS)
+            loop->b_ns = pos_ns;
+        else
+            loop->a_ns = pos_ns;  // Too close (or before): A goes here instead.
+    } else {
+        *loop = PLAYBACK_LOOP_OFF;
+    }
+}
+
+// "1:23", or "1:02:05" from an hour.
+static void formatTime(char *out, size_t size, int64_t ns)
+{
+    int64_t s = ns / 1000000000ll;
+    if (s >= 3600)
+        snprintf(out, size, "%d:%02d:%02d", (int)(s / 3600), (int)(s / 60 % 60), (int)(s % 60));
+    else
+        snprintf(out, size, "%d:%02d", (int)(s / 60), (int)(s % 60));
+}
+
+void playbackFormatLoop(char *out, size_t size, const PlaybackLoop *loop)
+{
+    char a[16], b[16];
+    formatTime(a, sizeof(a), loop->a_ns);
+    formatTime(b, sizeof(b), loop->b_ns);
+    if (loop->a_ns < 0)
+        snprintf(out, size, "Off");
+    else if (loop->b_ns < 0)
+        snprintf(out, size, "A %s", a);
+    else
+        snprintf(out, size, "%s - %s", a, b);
+}
+
+bool playbackLoopJump(const PlaybackLoop *loop, int64_t pos_ns, int64_t *to)
+{
+    if (loop->a_ns < 0 || loop->b_ns < 0 || pos_ns < loop->b_ns)
+        return false;
+    *to = loop->a_ns;
+    return true;
+}
+
 static int compareChapters(const void *a, const void *b)
 {
     int64_t x = ((const PlaybackChapter *)a)->start_ns, y = ((const PlaybackChapter *)b)->start_ns;

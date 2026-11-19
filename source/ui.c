@@ -426,6 +426,11 @@ static const char *playbackOption(const Player *p, const Config *config, Playbac
     case PLAYBACK_OPT_ASPECT:
         snprintf(value, size, "%s", playbackAspectName(playerAspect(p)));
         return "Picture";
+    case PLAYBACK_OPT_LOOP: {
+        PlaybackLoop loop = playerLoop(p);
+        playbackFormatLoop(value, size, &loop);
+        return "A-B loop";
+    }
     case PLAYBACK_OPT_AUDIO_DELAY:
         if (playerAudioTrackCount(p) > 0)
             playbackFormatDelay(value, size, playerAudioDelay(p));

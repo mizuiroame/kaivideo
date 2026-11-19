@@ -2,6 +2,7 @@
 // chapters of a video. Pure logic; player.c and ui.c use it.
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -21,6 +22,7 @@ typedef enum {
     PLAYBACK_OPT_SPEED,
     PLAYBACK_OPT_VOLUME,
     PLAYBACK_OPT_ASPECT,
+    PLAYBACK_OPT_LOOP,
     PLAYBACK_OPT_AUDIO_DELAY,
     PLAYBACK_OPT_SUBTITLE_DELAY,
     PLAYBACK_OPT_QUALITY,  // Only for videos from a server.
@@ -69,6 +71,20 @@ const char *playbackAspectName(PlaybackAspect aspect);
 // The picture's size on a screen_w x screen_h screen, centered on it (it may
 // be larger, for FILL). video_aspect: its shape, width over height; 0 if unknown.
 void playbackVideoBox(double video_aspect, PlaybackAspect aspect, float screen_w, float screen_h, float *w, float *h);
+
+// A-B loop: playing reaches B and goes back to A. -1 for a point not set.
+typedef struct {
+    int64_t a_ns, b_ns;
+} PlaybackLoop;
+#define PLAYBACK_LOOP_OFF ((PlaybackLoop){-1, -1})
+#define PLAYBACK_LOOP_MIN_NS 1000000000ll  // B this close after A moves A instead.
+
+// The loop's next state from pos_ns: off, then A here, then B here, then off.
+void playbackLoopStep(PlaybackLoop *loop, int64_t pos_ns);
+// "Off", "A 1:23", "1:23 - 2:05".
+void playbackFormatLoop(char *out, size_t size, const PlaybackLoop *loop);
+// True if playing at pos_ns has reached B: *to is A.
+bool playbackLoopJump(const PlaybackLoop *loop, int64_t pos_ns, int64_t *to);
 
 // Puts chapters in order of time and names those without a title ("Chapter 2").
 void playbackChaptersPrepare(PlaybackChapter *chapters, int count);

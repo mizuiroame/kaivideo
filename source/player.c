@@ -51,6 +51,7 @@ struct Player {
     int speed;               // Thousandths (playback.h).
     int volume;              // Percent (playback.h).
     PlaybackAspect aspect;   // How the picture fills the screen.
+    PlaybackLoop loop;       // A-B loop (playback.h), for this video.
     int audio_delay_ms, subtitle_delay_ms;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
     int64_t position_ns;     // Where playback is, in the file's time.
@@ -164,6 +165,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     snprintf(p->path, sizeof(p->path), "%s", path);
     p->speed = PLAYBACK_PERMILLE;
     p->volume = PLAYBACK_VOLUME_NORMAL;
+    p->loop = PLAYBACK_LOOP_OFF;
     pthread_mutex_init(&p->ext_lock, NULL);
     p->join_lead_ns = jfIsLocation(path) || !strncmp(path, "jellyfin-", 9) ? REMOTE_LEAD_NS : SWITCH_LEAD_NS;
     pthread_mutex_init(&p->swap_lock, NULL);
@@ -642,6 +644,16 @@ void playerSetVolume(Player *p, int percent)
 int playerVolume(const Player *p)
 {
     return p->volume;
+}
+
+void playerSetLoop(Player *p, PlaybackLoop loop)
+{
+    p->loop = loop;
+}
+
+PlaybackLoop playerLoop(const Player *p)
+{
+    return p->loop;
 }
 
 void playerSetAspect(Player *p, PlaybackAspect aspect)

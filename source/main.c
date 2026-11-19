@@ -43,6 +43,7 @@
 #define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
 #define SUBTITLE_UNSAID (-2)         // Opening: no picture subtitle said; the one chosen before, if any.
+#define LOOP_SETTLE_NS 500000000ull  // After going back to A, the next look at B waits this long.
 #define SEEK_SHORT_NS 10000000000ll
 #define STALL_NS 2000000000ull       // Playing without moving this long is logged.
 #define WAITING_NS 1000000000ull     // Without moving this long, the wait is shown.
@@ -585,6 +586,19 @@ static void openQueued(App *app, uint64_t now)
     }
 }
 
+// The A-B loop: at B, back to A (not again while that jump is under way).
+static void followLoop(App *app, uint64_t now)
+{
+    PlaybackLoop loop = playerLoop(app->player);
+    int64_t to;
+    if (appPlayingLive(app) || now - app->loop_jumped_at < LOOP_SETTLE_NS ||
+        !playbackLoopJump(&loop, playerPosition(app->player), &to))
+        return;
+    app->loop_jumped_at = now;
+    playerSeekTo(app->player, to, now);
+    app->seeks++;
+}
+
 static void reopenIfAsked(App *app, uint64_t now)
 {
     int audio, picture;
@@ -661,6 +675,10 @@ static void stepPlaybackOption(App *app, PlaybackOption option, int delta, uint6
     } else if (option == PLAYBACK_OPT_ASPECT) {
         app->aspect = playbackAspectStep(app->aspect, delta);
         playerSetAspect(p, app->aspect);
+    } else if (option == PLAYBACK_OPT_LOOP && !appPlayingLive(app)) {
+        PlaybackLoop loop = playerLoop(p);  // Each press: A here, B here, off.
+        playbackLoopStep(&loop, playerPosition(p));
+        playerSetLoop(p, loop);
     } else if (option == PLAYBACK_OPT_AUDIO_DELAY && playerAudioTrackCount(p) > 0) {
         playerSetAudioDelay(p, playbackDelayStep(playerAudioDelay(p), delta));
     } else if (option == PLAYBACK_OPT_SUBTITLE_DELAY && playerSubtitleCount(p) > 0) {
@@ -1176,6 +1194,7 @@ int main(int argc, char **argv)
                     appLibraryPlay(&app, next, now);
                 appLibraryDraw(&app, now);
             } else {
+                followLoop(&app, now);
                 appJellyfinPlaybackTick(&app, now);
                 drawPlayer(&app, playerUpdate(app.player, now), now);
             }
