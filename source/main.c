@@ -214,7 +214,8 @@ static bool openLiveDirect(App *app, long long bitrate, char *path, size_t size)
     if (!liveIsLocation(app->playing_path) || !jfSyncLiveSource(app->playing_path, plan, cancel))
         return false;
     if (!hlsStartDirect(plan->source_url, bitrate, cancel, app->open_error, sizeof(app->open_error))) {
-        appLog("  %s: the server converts it instead", app->open_error);
+        if (!app->open_cancelled)
+            appLog("  %s: the server converts it instead", app->open_error);
         memset(plan, 0, sizeof(*plan));
         app->open_error[0] = '\0';
         return false;
@@ -281,8 +282,19 @@ static void *openThread(void *arg)
 
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
+    if (app->opening && app->open_dismissed) {  // The one let go still ends: this one opens after it.
+        app->queued = true;
+        app->queued_from_start = app->open_from_start;
+        app->queued_at_ns = app->open_at_ns;
+        snprintf(app->queued_path, sizeof(app->queued_path), "%s", path);
+        snprintf(app->queued_name, sizeof(app->queued_name), "%s", name);
+        app->open_from_start = false;
+        app->open_at_ns = 0;
+        return true;
+    }
     if (app->opening)
         return false;
+    app->open_dismissed = false;
     thumbsPause(true);  // The decoder is the player's now.
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
@@ -517,6 +529,18 @@ static void openPendingChannel(App *app, uint64_t now)
     app->open_from_start = true;
     if (!appStartVideo(app, location, name, now))
         app->open_from_start = false;
+}
+
+// The video asked for while a dismissed opening ended.
+static void openQueued(App *app, uint64_t now)
+{
+    app->queued = false;
+    app->open_from_start = app->queued_from_start;
+    app->open_at_ns = app->queued_at_ns;
+    if (!appStartVideo(app, app->queued_path, app->queued_name, now)) {
+        app->open_from_start = false;
+        app->open_at_ns = 0;
+    }
 }
 
 static void reopenIfAsked(App *app, uint64_t now)
@@ -1046,21 +1070,36 @@ int main(int argc, char **argv)
         if (app.player && !app.opening && playerTakeStartTimes(app.player, &start_ms, &cushion_ms))
             appLog("  playing after %d ms (%d ms gathering video)", start_ms, cushion_ms);
         if (app.opening) {
-            if (pressed & HidNpadButton_B) {
-                app.live_pending = 0;  // B: no channel after this one either.
-                if (!app.open_cancelled) {
-                    app.open_cancelled = true;
-                    mediaFileInterruptAll();
+            if (!app.open_dismissed) {
+                if (pressed & HidNpadButton_B) {
+                    // B: back to the library at once; the opening ends out of sight
+                    // (a server or a name lookup may take a moment to let go).
+                    app.live_pending = 0;
+                    app.open_dismissed = true;
+                    if (!app.open_cancelled) {
+                        app.open_cancelled = true;
+                        mediaFileInterruptAll();
+                    }
+                } else {
+                    switchWhileOpening(&app, pressed);
                 }
+                pressed = 0;  // Not for the video that's about to show.
+            } else if (app.queued) {
+                if (pressed & HidNpadButton_B)
+                    app.queued = false;  // The one waiting to open isn't wanted either.
+                pressed = 0;
             }
-            switchWhileOpening(&app, pressed);
-            pressed = 0;  // Not for the video that's about to show.
             if (app.open_done)
                 finishOpening(&app, now);
             if (!app.opening && app.live_pending)
                 openPendingChannel(&app, now);
+            else if (!app.opening && app.queued)
+                openQueued(&app, now);
         }
-        if (app.opening) {
+        if (app.opening && app.open_dismissed && app.queued) {
+            uiDrawLoading(app.queued_name, spinnerAngle(now), false);  // Waiting for the last one to let go.
+            uiDrawFooterHelp("[B] cancel");
+        } else if (app.opening && !app.open_dismissed) {
             bool switching = app.live_pending != 0;
             uiDrawLoading(switching ? app.live_pending_name : app.playing_name, spinnerAngle(now),
                           app.open_cancelled && !switching);

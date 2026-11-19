@@ -35,6 +35,13 @@ struct App {
     // A video being opened by a thread, while the loading screen shows.
     bool opening;
     volatile bool open_cancelled;  // Set by the main loop: the opening's requests stop at once.
+    bool open_dismissed;        // B: the loading screen is gone; the opening ends out of sight.
+    // A video asked for while a dismissed opening still ends: it opens after.
+    bool queued;
+    bool queued_from_start;
+    int64_t queued_at_ns;
+    char queued_name[APP_NAME_MAX];
+    char queued_path[BROWSER_PATH_MAX];
     bool open_from_start;       // Not from where it was left.
     int64_t open_at_ns;         // From here (opened again, for another quality or sound); 0: as usual.
     int64_t open_start_ns;      // Where playback will begin: a conversion starts there.
