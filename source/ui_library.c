@@ -19,6 +19,12 @@
 #define TAB_SIZE 20
 #define TAB_SIZE_MIN 17       // Smaller, before the tabs slide.
 #define TAB_SIDE_GAP 16       // Between the tabs' ZL and ZR and what the header shows at its sides.
+#define TAB_FADE_STEPS 12     // More tabs past an edge: it fades out over this many steps,
+#define TAB_FADE_SOLID 5      // the first ones solid,
+#define TAB_FADE_STEP 6       // each this wide,
+#define TAB_ARROW_W 10        // with an arrow this long
+#define TAB_ARROW_H 8         // and half this tall,
+#define TAB_ARROW_INSET 16    // its tip this far in from the edge.
 #define BATTERY_LOW 15
 #define COLOR_CHARGING GFX_RGB(0x5B, 0xD6, 0x7A)
 #define MENU_PANEL_W 640       // The + menu.
@@ -226,6 +232,20 @@ static int tabsStart(const int widths[LIBVIEW_TABS], int count, int active, int 
     return x;
 }
 
+// More tabs past an edge: the edge fades out, with an arrow that way.
+static void drawMoreMark(int edge, int direction)
+{
+    for (int i = 0; i < TAB_FADE_STEPS; i++) {
+        int x = direction < 0 ? edge + i * TAB_FADE_STEP : edge - (i + 1) * TAB_FADE_STEP;
+        int fading = i - TAB_FADE_SOLID;  // Solid under the arrow, then fading out.
+        gfxBlendRect(x, 8, TAB_FADE_STEP, UI_TAB_BAR_H - 16, COLOR_BG,
+                     fading < 0 ? 255u : (unsigned)(255 - fading * 255 / (TAB_FADE_STEPS - TAB_FADE_SOLID)));
+    }
+    float tip = (float)(edge - direction * TAB_ARROW_INSET), back = tip - (float)(direction * TAB_ARROW_W);
+    gfxTriangle(tip, TAB_TEXT_MIDDLE, back, TAB_TEXT_MIDDLE - TAB_ARROW_H, back, TAB_TEXT_MIDDLE + TAB_ARROW_H,
+                COLOR_ACCENT);
+}
+
 // The tabs, between left and right (what the header shows at its sides).
 static void drawTabs(const LibView *v, const Library *lib, int left, int right)
 {
@@ -255,8 +275,13 @@ static void drawTabs(const LibView *v, const Library *lib, int left, int right)
             gfxFillRoundRect(x, 48, widths[i], 3, 1, COLOR_ACCENT);
         x += widths[i] + TAB_GAP;
     }
-    if (slides)
+    if (slides) {
         gfxResetClip();
+        if (first_x < left)  // Some before: ZL goes to them.
+            drawMoreMark(left - TAB_GAP / 2, -1);
+        if (x - TAB_GAP > right)  // Some after: ZR.
+            drawMoreMark(right + TAB_GAP / 2, 1);
+    }
     int zl_x = slides ? left - HINT_GAP - uiButtonWidth("ZL") : first_x - HINT_GAP - uiButtonWidth("ZL");
     int zr_x = slides ? right + HINT_GAP : x - TAB_GAP + HINT_GAP;
     uiDrawButton(zl_x, TAB_TEXT_MIDDLE, "ZL", COLOR_SURFACE_HI, COLOR_DIM);

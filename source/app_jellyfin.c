@@ -36,11 +36,10 @@ static void finishSignIn(App *app, uint64_t now)
     if (app->jf.state != JF_SIGNED_IN)
         return;
     char message[JF_SERVER_MAX + JF_NAME_MAX + 32];
-    if (app->config.server_kind == SERVER_PLEX)
-        snprintf(message, sizeof(message), "Connected to %s as %s.", app->jf.server, app->jf.user);
-    else
-        snprintf(message, sizeof(message), "Connected to %s as %s.",
-                 serverKindName((ServerKind)app->config.server_kind), app->jf.user);
+    const char *where = app->config.server_kind == SERVER_PLEX ? app->jf.server
+                                                               : serverKindName((ServerKind)app->config.server_kind);
+    snprintf(message, sizeof(message), "Connected to %s as %s. Loading its library...", where, app->jf.user);
+    app->jf_arriving = app->config.server_kind + 1;
     app->settings_open = false;
     if (!app->config.use_jellyfin)  // Already the servers': it stays as it is until the new one's videos come.
         appLibrarySetSource(app, true);
@@ -89,6 +88,13 @@ void appJellyfinUpdate(App *app, uint64_t now)
             appLibraryInstallCatalog(app, &catalog);
         jfCatalogFree(&catalog);
         app->jf_last_refresh = now;
+        if (app->jf_arriving && !app->jf.refreshing) {  // The server just signed in: its videos are here.
+            char message[96];
+            snprintf(message, sizeof(message), "%s's videos are in the library.",
+                     serverKindName((ServerKind)(app->jf_arriving - 1)));
+            appShowMessage(app, message, now);
+            app->jf_arriving = 0;
+        }
     }
     bool idle = !app->player && !app->opening && !app->jf.refreshing && jfSyncAnySignedIn();
     if (idle && app->config.use_jellyfin && now - app->jf_last_refresh > REFRESH_NS) {

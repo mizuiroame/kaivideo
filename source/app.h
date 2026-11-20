@@ -129,6 +129,7 @@ struct App {
     // Jellyfin (app_jellyfin.c).
     JfStatus jf;
     bool jf_signing;            // The sign-in panel is up.
+    int jf_arriving;            // A server just signed in (ServerKind + 1): said when its videos come; 0 for none.
     char jf_last_error[128];
     uint64_t jf_last_refresh, jf_last_report;
     bool jf_reported_paused;    // What the last report said: a pause or going on is told at once.
