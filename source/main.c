@@ -250,6 +250,7 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
     long long bitrate = settingQualityBitrate(&app->config);
     char *error = app->open_error;
     const volatile bool *cancel = &app->open_cancelled;
+    uint64_t asked = nowNs();
     if (try_direct && audio_index < 0 && openLiveDirect(app, bitrate, path, size))
         return true;
     int subtitle = subtitle_index == SUBTITLE_UNSAID ? -1 : subtitle_index;
@@ -263,6 +264,8 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
         !jfSyncResolve(app->playing_path, bitrate, sound >= 0 ? sound : audio_index, picture >= 0 ? picture : subtitle,
                        plan, error, sizeof(app->open_error), cancel))
         return false;
+    // Where the time to open goes: the server's answer, then its conversion's first pieces.
+    appLog("  the server answered in %.1f s: %s", (nowNs() - asked) / 1e9, plan->direct ? "the file itself" : "converted");
     if (plan->direct) {
         snprintf(path, size, "%s", app->playing_path);
         return true;
@@ -270,7 +273,10 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
     char url[JF_URL_MAX + JF_TRANSCODE_URL_MAX], auth[JF_AUTH_MAX];
     jfSyncConvertedRequest(plan->transcode_url, url, sizeof(url), auth, sizeof(auth));
     snprintf(path, size, HLS_LOCATION);
-    return hlsStart(url, auth, app->open_start_ns, cancel, error, sizeof(app->open_error));
+    asked = nowNs();
+    bool started = hlsStart(url, auth, app->open_start_ns, cancel, error, sizeof(app->open_error));
+    appLog("  the conversion's first pieces in %.1f s", (nowNs() - asked) / 1e9);
+    return started;
 }
 
 static void *openThread(void *arg)
