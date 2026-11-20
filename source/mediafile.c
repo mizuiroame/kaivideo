@@ -354,7 +354,7 @@ MediaFile *mediaFileOpen(const char *location)
     MediaFile *f = calloc(1, sizeof(*f));
     if (!f)
         return NULL;
-    if (jfIsLocation(location))
+    if (jfIsRemoteLocation(location))
         remoteAttach(f, location);
     else
         f->file = fopen(location, "rb");

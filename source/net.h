@@ -28,6 +28,7 @@ typedef struct {
     const volatile bool *cancel;  // Stops the transfer when it becomes true; may be NULL.
     long timeout_s;               // For the whole transfer; 0: as long as data keeps coming.
     long stall_s;                 // Gives up connecting, or with no data, after this; 0: the usual.
+    bool accept_json;             // Asks for JSON (Plex answers XML otherwise).
 } NetRequest;
 
 // Takes a piece of the answer. False stops the transfer, which then counts as fine.

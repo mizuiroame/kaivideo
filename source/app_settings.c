@@ -129,7 +129,7 @@ static bool signedIn(const App *app)
 static void openPage(App *app, SettingsPage page)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    settingsPageRows(page, signedIn(app), rows);
+    settingsPageRows(page, signedIn(app), app->config.use_plex, rows);
     app->settings_page = page;
     app->settings_cursor = rows[0];
 }
@@ -254,9 +254,24 @@ static void passwordSignIn(App *app, uint64_t now)
     memset(password, 0, sizeof(password));
 }
 
+// Jellyfin or Plex: the other one's session stays for when it's chosen again.
+// A library from the server comes from the new one, or the card if it isn't signed in.
+static void serverKindChanged(App *app)
+{
+    jfSyncUsePlex(app->config.use_plex);
+    jfSyncGetStatus(&app->jf);
+    if (app->config.use_jellyfin)
+        appLibrarySetSource(app, app->jf.state == JF_SIGNED_IN);
+}
+
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_BACKGROUND) {
+    if (row == SETTING_SERVER_KIND && app->jf_signing)
+        return;
+    if (row == SETTING_SERVER_KIND) {
+        settingStep(&app->config, row, delta);
+        serverKindChanged(app);
+    } else if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
     } else {
         settingStep(&app->config, row, delta);
@@ -298,6 +313,11 @@ static void activate(App *app, SettingRow row, uint64_t now)
     case SETTING_OPEN_JELLYFIN: openJellyfin(app, now); break;
     case SETTING_JF_SERVER: typeServer(app, now); break;
     case SETTING_JF_CODE: codeSignIn(app, now); break;
+    case SETTING_PLEX_CODE:
+        app->jf_signing = true;
+        jfSyncSignIn();
+        break;
+    case SETTING_PLEX_SERVER: appShowMessage(app, "The server comes from your Plex account.", now); break;
     case SETTING_JF_PASSWORD: passwordSignIn(app, now); break;
     case SETTING_JF_SIGN_OUT: signOut(app); break;
     case SETTING_JF_FIND:
@@ -316,7 +336,7 @@ static void activate(App *app, SettingRow row, uint64_t now)
 static void moveCursor(App *app, int delta)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), rows), at = 0;
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), app->config.use_plex, rows), at = 0;
     for (int i = 0; i < count; i++)
         if ((int)rows[i] == app->settings_cursor)
             at = i;
@@ -352,7 +372,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
 static void keepCursorOnPage(App *app)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), rows);
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), app->config.use_plex, rows);
     for (int i = 0; i < count; i++)
         if ((int)rows[i] == app->settings_cursor)
             return;
@@ -408,7 +428,7 @@ void appSettingsDraw(const App *app)
         server += sizeof(HTTP_PREFIX) - 1;
     uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "");
     if (app->jf_signing)
-        uiDrawJellyfinCode(app->jf.code, server);
+        uiDrawSignInCode(app->config.use_plex, app->jf.code, server);
     else if (app->about_open)
         uiDrawAbout(KAIVIDEO_VERSION);
     else

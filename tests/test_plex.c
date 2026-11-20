@@ -43,6 +43,51 @@ static const char EPISODES[] =
     "\"Media\":[{\"videoCodec\":\"hevc\",\"width\":1920,\"bitrate\":3000,\"container\":\"mkv\",\"videoProfile\":\"main 10\","
     "\"Part\":[{\"id\":12,\"size\":100}]}]}]}}";
 
+static const char META[] =
+    "{\"MediaContainer\":{\"Metadata\":[{\"ratingKey\":\"20\",\"Media\":[{\"videoCodec\":\"h264\",\"width\":1280,"
+    "\"bitrate\":2784,\"container\":\"mkv\",\"videoProfile\":\"high\",\"Part\":[{\"id\":21,\"Stream\":["
+    "{\"id\":6,\"streamType\":1,\"codec\":\"h264\",\"bitDepth\":8},"
+    "{\"id\":7,\"streamType\":2,\"codec\":\"aac\",\"displayTitle\":\"Español (AAC Mono)\","
+    "\"extendedDisplayTitle\":\"Low tone (Español AAC Mono)\"},"
+    "{\"id\":8,\"streamType\":2,\"codec\":\"aac\",\"displayTitle\":\"English (AAC Mono)\",\"selected\":true},"
+    "{\"id\":9,\"streamType\":3,\"codec\":\"vobsub\",\"displayTitle\":\"Español\"},"
+    "{\"id\":11,\"streamType\":3,\"codec\":\"ass\",\"displayTitle\":\"English\"},"
+    "{\"id\":19,\"streamType\":3,\"codec\":\"srt\",\"displayTitle\":\"Español\",\"key\":\"/library/streams/19\","
+    "\"selected\":true}]}]}]}]}}";
+
+static const char META_HDR[] =
+    "{\"MediaContainer\":{\"Metadata\":[{\"Media\":[{\"videoCodec\":\"hevc\",\"width\":1920,\"bitrate\":9000,"
+    "\"container\":\"mkv\",\"videoProfile\":\"main 10\",\"Part\":[{\"id\":3,\"Stream\":["
+    "{\"id\":1,\"streamType\":1,\"codec\":\"hevc\",\"colorTrc\":\"smpte2084\"}]}]}]}]}}";
+
+static void testPlans(void)
+{
+    JfPlan plan;
+    CHECK(plexPlanParse(META, 25000000, -1, &plan));
+    CHECK(plan.direct && plan.audio_count == 2 && plan.audio_current == 1);
+    CHECK(plan.audio[0].index == 7 && !strcmp(plan.audio[0].name, "Low tone (Español AAC Mono)"));
+    CHECK(!strcmp(plan.audio[1].name, "English (AAC Mono)"));
+    // Direct: the file holds its own text subtitles; the external one is fetched.
+    CHECK(plan.sub_count == 1 && plan.subs[0].index == 19 && plan.subs[0].external && plan.sub_default == 0);
+    CHECK(plan.picture_count == 1 && plan.pictures[0].index == 9 && plan.picture_burned == -1);
+
+    CHECK(plexPlanParse(META, 2000000, -1, &plan) && !plan.direct);  // Over the quality chosen.
+    CHECK(plan.sub_count == 1 && plan.picture_count == 2 && plan.pictures[1].index == 11);
+
+    CHECK(plexPlanParse(META, 25000000, 9, &plan) && !plan.direct && plan.picture_burned == 0);
+    CHECK(plexPlanParse(META_HDR, 25000000, -1, &plan) && !plan.direct);
+    CHECK(!plexPlanParse("{\"MediaContainer\":{}}", 0, -1, &plan));
+
+    char path[1024];
+    plexTranscodePath(path, sizeof(path), "20", "s1", 8000000, true, false, "X-Plex-Product=KaiVideo");
+    CHECK(strstr(path, "/video/:/transcode/universal/start.m3u8?path=%2Flibrary%2Fmetadata%2F20&") == path);
+    CHECK(strstr(path, "&maxVideoBitrate=8000&") && strstr(path, "&subtitles=burn&") && strstr(path, "&session=s1&"));
+    CHECK(strstr(path, "videoResolution=1920x1080") && strstr(path, "add-transcode-target"));
+    CHECK(strstr(path, "&X-Plex-Product=KaiVideo") && !strstr(path, "Token"));
+    plexTranscodePath(path, sizeof(path), "20", "s2", 8000000, false, true, "");
+    CHECK(strstr(path, "videoResolution=320x180") && strstr(path, "&subtitles=none&"));
+}
+
 static void testLocations(void)
 {
     char item[PLEX_ID_MAX], part[PLEX_ID_MAX], location[64];
@@ -155,5 +200,6 @@ void testPlex(void)
     testServers();
     testCatalog();
     testReports();
+    testPlans();
     testSession();
 }

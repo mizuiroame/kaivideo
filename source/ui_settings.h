@@ -11,4 +11,5 @@ void uiDrawAbout(const char *version);
 // What the Jellyfin rows say: the server's address, and who is signed in ("" for nobody).
 void uiSettingsSetJellyfin(const char *server, const char *user);
 // Signing in: the code to approve on another device ("" while it's asked for).
-void uiDrawJellyfinCode(const char *code, const char *server);
+// The code to approve: in Jellyfin's Quick Connect, or at plex.tv/link.
+void uiDrawSignInCode(bool plex, const char *code, const char *server);

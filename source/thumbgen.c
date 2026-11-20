@@ -130,7 +130,7 @@ static void makeRemote(const Request *r)
 // Makes one picture. False only when paused or stopped meanwhile (asked again later).
 static bool make(const Request *r)
 {
-    if (jfIsLocation(r->path)) {
+    if (jfIsRemoteLocation(r->path)) {
         makeRemote(r);
         return !g_stop && !g_paused;
     }

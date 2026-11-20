@@ -20,7 +20,7 @@ typedef enum {
     SETTING_BACKGROUND,
     SETTING_BLUR,
     SETTING_CLOCK,
-    SETTING_OPEN_JELLYFIN,  // Opens the Jellyfin page.
+    SETTING_OPEN_JELLYFIN,  // Opens the Media server page (Jellyfin or Plex).
     SETTING_JF_SERVER,      // Types the server's address.
     SETTING_JF_CODE,        // Signs in with Quick Connect.
     SETTING_JF_PASSWORD,    // Signs in with a user name and password.
@@ -29,6 +29,9 @@ typedef enum {
     SETTING_JF_FIND,        // Looks for servers on the network.
     SETTING_JF_TEST,        // Tries the server, step by step.
     SETTING_JF_CERTIFICATE, // Whether an https server's certificate must be trusted.
+    SETTING_SERVER_KIND,    // Jellyfin or Plex.
+    SETTING_PLEX_CODE,      // Signs in with a code typed at plex.tv/link.
+    SETTING_PLEX_SERVER,    // The Plex server in use (shown, not chosen).
     SETTING_COUNT,
 } SettingRow;
 
@@ -50,7 +53,8 @@ typedef struct {
     bool thumbnails;                     // Pictures from the videos on their cards.
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
-    bool use_jellyfin;                   // The library comes from the Jellyfin server.
+    bool use_jellyfin;                   // The library comes from the media server.
+    bool use_plex;                       // The media server is Plex's, not Jellyfin's.
     int jf_quality;                      // An index in the quality list; 0 is Auto.
     bool jf_check_certificate;           // Off: an https server's own certificate is taken too.
     int subtitles;                       // SubtitleSize.
@@ -64,9 +68,9 @@ void configDefaults(Config *c);
 bool configReadLine(Config *c, const char *line);
 void configWrite(const Config *c, FILE *f);
 
-// The rows of a page, in order. Returns how many. signed_in: to Jellyfin, which
-// decides what its page offers.
-int settingsPageRows(SettingsPage page, bool signed_in, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
+// The rows of a page, in order. Returns how many. signed_in: to the media
+// server, and plex: which one it is, decide what its page offers.
+int settingsPageRows(SettingsPage page, bool signed_in, bool plex, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
 const char *settingsPageTitle(SettingsPage page);
 const char *settingLabel(SettingRow row);
 // Rows changed with left and right (the others open something with A).

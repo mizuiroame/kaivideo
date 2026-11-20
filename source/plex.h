@@ -25,6 +25,7 @@
 typedef struct {
     char client_id[PLEX_ID_MAX];  // This console's, made once and kept.
     char token[PLEX_TOKEN_MAX];   // The account's, "" when signed out.
+    char user_name[PLEX_NAME_MAX];
     char server_name[PLEX_NAME_MAX];
     char server_id[PLEX_ID_MAX];
     char server_token[PLEX_TOKEN_MAX];  // For the server; the account's own on a server it owns.
@@ -68,6 +69,21 @@ void plexTimelinePath(char *out, size_t size, const char *item, const char *stat
                       int64_t duration_ns);
 // Marks an item watched or not.
 void plexPlayedPath(char *out, size_t size, const char *item, bool played);
+
+// How to play an item, from its /library/metadata/<item> answer: its sound
+// tracks (the server's stream ids), its subtitles, and whether the console can
+// read the file itself at max_bitrate (direct). Played directly, only external
+// subtitles are fetched (the file holds the rest); converted, subtitles inside
+// the file can only be drawn on by the server, so they join the picture ones.
+// The chosen picture subtitle (burn_id, -1 for none) is marked burned and
+// makes it converted. False if it has no file.
+bool plexPlanParse(const char *json, long long max_bitrate, int burn_id, JfPlan *out);
+
+// The conversion's address after the server's (no token: the caller adds it
+// with plexClientQuery). burn: subtitles drawn onto the video. A small one
+// (picture 320x180) is for a sound track alone.
+void plexTranscodePath(char *out, size_t size, const char *item, const char *session, long long max_bitrate,
+                       bool burn, bool small, const char *client_query);
 
 bool plexSessionLoad(PlexSession *s, const char *file);
 bool plexSessionSave(const PlexSession *s, const char *file);

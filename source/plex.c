@@ -52,7 +52,7 @@ void plexClientQuery(const char *client_id, const char *version, const char *tok
 {
     int n = snprintf(out, size,
                      "X-Plex-Product=" PLEX_PRODUCT "&X-Plex-Version=%s&X-Plex-Client-Identifier=%s"
-                     "&X-Plex-Platform=Nintendo%%20Switch%%202&X-Plex-Device=Nintendo%%20Switch%%202"
+                     "&X-Plex-Platform=Generic&X-Plex-Device=Nintendo%%20Switch%%202"
                      "&X-Plex-Device-Name=" PLEX_PRODUCT,
                      version, client_id);
     if (token && token[0] && n > 0 && (size_t)n < size)
@@ -299,6 +299,109 @@ int plexCatalogAddPage(JfCatalog *c, const char *json, int *total)
     return count;
 }
 
+// --- Playing ---
+
+#define HDR_TRANSFERS "smpte2084 arib-std-b67"
+#define KBPS 1000
+
+static bool isPictureCodec(const char *codec)
+{
+    return !strcmp(codec, "pgs") || !strcmp(codec, "vobsub") || !strcmp(codec, "dvd_subtitle") ||
+           !strcmp(codec, "hdmv_pgs_subtitle") || !strcmp(codec, "dvb_subtitle");
+}
+
+static void readTrack(const json_t *stream, JfTrack *t)
+{
+    const char *name = textOf(stream, "extendedDisplayTitle");
+    t->index = (int)numberOf(stream, "id");
+    t->external = json_object_get(stream, "key") != NULL;
+    snprintf(t->name, sizeof(t->name), "%s", name[0] ? name : textOf(stream, "displayTitle"));
+}
+
+static bool videoIsSdr(const json_t *part)
+{
+    size_t i;
+    const json_t *s;
+    json_array_foreach(json_object_get(part, "Stream"), i, s) {
+        const char *transfer = textOf(s, "colorTrc");
+        if (numberOf(s, "streamType") == 1 && transfer[0] && strstr(HDR_TRANSFERS, transfer))
+            return false;
+    }
+    return true;
+}
+
+static void addSubtitle(JfPlan *p, const json_t *s, int burn_id)
+{
+    bool picture = isPictureCodec(textOf(s, "codec")), external = json_object_get(s, "key") != NULL;
+    if (picture || (!p->direct && !external)) {  // Only the server can show it: it draws it.
+        if (p->picture_count >= JF_PLAN_PICTURES)
+            return;
+        readTrack(s, &p->pictures[p->picture_count]);
+        if (p->pictures[p->picture_count].index == burn_id)
+            p->picture_burned = p->picture_count;
+        p->picture_count++;
+    } else if (external && p->sub_count < JF_PLAN_SUBS) {
+        readTrack(s, &p->subs[p->sub_count]);
+        if (json_is_true(json_object_get(s, "selected")))
+            p->sub_default = p->sub_count;
+        p->sub_count++;
+    }
+}
+
+static void readStreams(const json_t *part, int burn_id, JfPlan *p)
+{
+    size_t i;
+    const json_t *s;
+    json_array_foreach(json_object_get(part, "Stream"), i, s) {
+        long long type = numberOf(s, "streamType");
+        if (type == 2 && p->audio_count < JF_PLAN_AUDIO) {
+            readTrack(s, &p->audio[p->audio_count]);
+            if (json_is_true(json_object_get(s, "selected")))
+                p->audio_current = p->audio_count;
+            p->audio_count++;
+        } else if (type == 3) {
+            addSubtitle(p, s, burn_id);
+        }
+    }
+    if (p->audio_current < 0 && p->audio_count)
+        p->audio_current = 0;
+}
+
+bool plexPlanParse(const char *json, long long max_bitrate, int burn_id, JfPlan *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->audio_current = out->sub_default = out->picture_burned = -1;
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *item = json_array_get(container(root, "Metadata"), 0);
+    const json_t *media = json_array_get(json_object_get(item, "Media"), 0);
+    const json_t *part = json_array_get(json_object_get(media, "Part"), 0);
+    bool ok = part != NULL;
+    if (ok) {
+        long long bitrate = numberOf(media, "bitrate") * KBPS;
+        out->direct = burn_id < 0 && playability(media) == JF_PLAYABLE && videoIsSdr(part) &&
+                      (max_bitrate <= 0 || bitrate <= max_bitrate);
+        readStreams(part, burn_id, out);
+    }
+    json_decref(root);
+    return ok;
+}
+
+void plexTranscodePath(char *out, size_t size, const char *item, const char *session, long long max_bitrate,
+                       bool burn, bool small, const char *client_query)
+{
+    // Without a profile of its own, Plex finds no way to convert for an unknown
+    // app: this one says H.264 and AAC in MPEG-TS over HLS.
+    snprintf(out, size,
+             "/video/:/transcode/universal/start.m3u8?path=%%2Flibrary%%2Fmetadata%%2F%s&mediaIndex=0&partIndex=0"
+             "&protocol=hls&directPlay=0&directStream=1&directStreamAudio=0&fastSeek=1&copyts=1"
+             "&videoResolution=%s&maxVideoBitrate=%lld&audioChannelCount=2&subtitles=%s&session=%s"
+             "&X-Plex-Session-Identifier=%s&X-Plex-Client-Profile-Extra=add-transcode-target%%28type%%3DvideoProfile"
+             "%%26context%%3Dstreaming%%26protocol%%3Dhls%%26container%%3Dmpegts%%26videoCodec%%3Dh264"
+             "%%26audioCodec%%3Daac%%29%s%s",
+             item, small ? "320x180" : "1920x1080", small ? 200ll : max_bitrate / KBPS, burn ? "burn" : "none",
+             session, session, client_query[0] ? "&" : "", client_query);
+}
+
 // --- Telling the server ---
 
 void plexTimelinePath(char *out, size_t size, const char *item, const char *state, int64_t position_ns,
@@ -325,6 +428,7 @@ static void readSessionLine(PlexSession *s, const char *line)
     } FIELDS[] = {
         {"client=", offsetof(PlexSession, client_id), PLEX_ID_MAX},
         {"token=", offsetof(PlexSession, token), PLEX_TOKEN_MAX},
+        {"user=", offsetof(PlexSession, user_name), PLEX_NAME_MAX},
         {"server_name=", offsetof(PlexSession, server_name), PLEX_NAME_MAX},
         {"server_id=", offsetof(PlexSession, server_id), PLEX_ID_MAX},
         {"server_token=", offsetof(PlexSession, server_token), PLEX_TOKEN_MAX},
@@ -359,7 +463,7 @@ bool plexSessionSave(const PlexSession *s, const char *file)
     FILE *f = fopen(file, "w");
     if (!f)
         return false;
-    fprintf(f, "client=%s\ntoken=%s\nserver_name=%s\nserver_id=%s\nserver_token=%s\nserver_uri=%s\n", s->client_id,
-            s->token, s->server_name, s->server_id, s->server_token, s->server_uri);
+    fprintf(f, "client=%s\ntoken=%s\nuser=%s\nserver_name=%s\nserver_id=%s\nserver_token=%s\nserver_uri=%s\n",
+            s->client_id, s->token, s->user_name, s->server_name, s->server_id, s->server_token, s->server_uri);
     return fclose(f) == 0;
 }

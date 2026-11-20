@@ -277,7 +277,7 @@ static void *openThread(void *arg)
 {
     App *app = arg;
     char path[BROWSER_PATH_MAX];
-    bool remote = jfIsLocation(app->playing_path);
+    bool remote = jfIsRemoteLocation(app->playing_path);
     snprintf(path, sizeof(path), "%s", app->playing_path);
     int audio_index = app->next_audio_plus1 - 1;
     int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
@@ -336,7 +336,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     int item = libraryFind(&app->library, path);
     int show = item >= 0 ? app->library.items[item].show : -1;
     const char *sound = NULL, *subs = NULL;
-    if (jfIsLocation(path) && trackPrefsFind(&app->tracks, path, show >= 0 ? app->library.shows[show].name : NULL,
+    if (jfIsRemoteLocation(path) && trackPrefsFind(&app->tracks, path, show >= 0 ? app->library.shows[show].name : NULL,
                                              &sound, &subs)) {
         snprintf(app->open_sound, sizeof(app->open_sound), "%s", sound);
         snprintf(app->open_subs, sizeof(app->open_subs), "%s", subs);
@@ -371,7 +371,7 @@ static void beginPlaying(App *app, uint64_t now)
     app->open_from_start = false;
     app->open_at_ns = 0;
     app->playing_converted = playerIsConverted(app->player);
-    if (jfIsLocation(path)) {
+    if (jfIsRemoteLocation(path)) {
         jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted, app->open_plan.live_stream_id);
         if (!liveIsLocation(path))
             tpfetchStart(path);  // Its pictures for the bar, if the server made them.
@@ -405,7 +405,7 @@ static void beginPlaying(App *app, uint64_t now)
 // a channel's stream holding a tuner) is ended.
 static void releaseServerStream(App *app)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsRemoteLocation(app->playing_path))
         return;
     if (!app->open_plan.direct && app->open_plan.play_session[0]) {
         jfSyncSetPlayback(app->open_plan.play_session, true, NULL);  // This opening's, not the last video's.
@@ -603,7 +603,7 @@ static void reopenIfAsked(App *app, uint64_t now)
 {
     int audio, picture;
     int64_t at;
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsRemoteLocation(app->playing_path))
         return;
     if (playerTakeAudioRestart(app->player, &audio)) {
         reopenVideo(app, audio, currentPicture(app), playerPosition(app->player), now);
@@ -627,7 +627,7 @@ static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 // The options under the Playback list: the quality only for videos from a server.
 static int playbackOptionRows(const App *app)
 {
-    return jfIsLocation(app->playing_path) ? PLAYBACK_OPT_COUNT : PLAYBACK_OPT_QUALITY;
+    return jfIsRemoteLocation(app->playing_path) ? PLAYBACK_OPT_COUNT : PLAYBACK_OPT_QUALITY;
 }
 
 // Opens the list of sound tracks or subtitles (or says there's nothing to choose).
@@ -1020,7 +1020,7 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         uiDrawWaiting(spinnerAngle(now), "Tuning in...");  // Live TV waits once at the start, a moment behind the edge.
     else if (waiting)
         uiDrawSpinner(GFX_WIDTH / 2.0f, GFX_HEIGHT / 2.0f, spinnerAngle(now));
-    else if (stalled && jfIsLocation(app->playing_path))
+    else if (stalled && jfIsRemoteLocation(app->playing_path))
         uiDrawWaiting(spinnerAngle(now), "Waiting for the server...");
     char error[160];
     if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.

@@ -18,10 +18,13 @@ bool appJellyfinEnsure(App *app)
 {
     if (jfSyncRunning())
         return true;
-    char session[FILE_NAME_MAX], catalog[FILE_NAME_MAX];
+    char session[FILE_NAME_MAX], catalog[FILE_NAME_MAX], plex[FILE_NAME_MAX], plex_catalog[FILE_NAME_MAX];
     appConfigPath(session, sizeof(session), "jellyfin.txt");
     appConfigPath(catalog, sizeof(catalog), "jellyfin_library.txt");
-    return jfSyncStart(session, catalog, KAIVIDEO_VERSION, app->config.use_jellyfin);
+    appConfigPath(plex, sizeof(plex), "plex.txt");
+    appConfigPath(plex_catalog, sizeof(plex_catalog), "plex_library.txt");
+    return jfSyncStart(session, plex, catalog, plex_catalog, KAIVIDEO_VERSION, app->config.use_jellyfin,
+                       app->config.use_plex);
 }
 
 static void finishSignIn(App *app, uint64_t now)
@@ -31,8 +34,11 @@ static void finishSignIn(App *app, uint64_t now)
     app->jf_signing = false;
     if (app->jf.state != JF_SIGNED_IN)
         return;
-    char message[160];
-    snprintf(message, sizeof(message), "Connected to Jellyfin as %s.", app->jf.user);
+    char message[JF_SERVER_MAX + JF_NAME_MAX + 32];
+    if (app->config.use_plex)
+        snprintf(message, sizeof(message), "Connected to %s as %s.", app->jf.server, app->jf.user);
+    else
+        snprintf(message, sizeof(message), "Connected to Jellyfin as %s.", app->jf.user);
     app->settings_open = false;
     appLibrarySetSource(app, true);
     appShowMessage(app, message, now);
@@ -97,7 +103,7 @@ static int64_t reportedPosition(const App *app, int64_t position_ns)
 
 void appJellyfinPlaybackStarted(App *app, uint64_t now)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsRemoteLocation(app->playing_path))
         return;
     app->jf_last_report = now;
     app->jf_reported_paused = false;
@@ -107,7 +113,7 @@ void appJellyfinPlaybackStarted(App *app, uint64_t now)
 // Every so often, and at once when it's paused or goes on again.
 void appJellyfinPlaybackTick(App *app, uint64_t now)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsRemoteLocation(app->playing_path))
         return;
     bool paused = playerPaused(app->player);
     if (paused == app->jf_reported_paused && now - app->jf_last_report < REPORT_NS)
@@ -119,7 +125,7 @@ void appJellyfinPlaybackTick(App *app, uint64_t now)
 
 void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched)
 {
-    if (!jfIsLocation(app->playing_path))
+    if (!jfIsRemoteLocation(app->playing_path))
         return;
     jfSyncReport(JF_REPORT_STOP, app->playing_path, reportedPosition(app, position_ns), false);
     if (watched && !liveIsLocation(app->playing_path))

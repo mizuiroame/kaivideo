@@ -167,7 +167,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     p->volume = PLAYBACK_VOLUME_NORMAL;
     p->loop = PLAYBACK_LOOP_OFF;
     pthread_mutex_init(&p->ext_lock, NULL);
-    p->join_lead_ns = jfIsLocation(path) || !strncmp(path, "jellyfin-", 9) ? REMOTE_LEAD_NS : SWITCH_LEAD_NS;
+    p->join_lead_ns = jfIsRemoteLocation(path) || !strncmp(path, "jellyfin-", 9) ? REMOTE_LEAD_NS : SWITCH_LEAD_NS;
     pthread_mutex_init(&p->swap_lock, NULL);
     char why[160];
     p->audio = audioOpen(path, -1, why, sizeof(why));

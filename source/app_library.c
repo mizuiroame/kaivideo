@@ -220,7 +220,7 @@ static void openRef(App *app, LibraryRef ref, uint64_t now)
 {
     if (ref.is_show)
         libviewOpenShow(&app->view, &app->library, ref.index, -1);
-    else if (jfIsLocation(app->library.items[ref.index].path))
+    else if (jfIsRemoteLocation(app->library.items[ref.index].path))
         app->view.details = ref.index;
     else
         playItem(app, ref.index, now);
@@ -232,7 +232,7 @@ static void setWatched(App *app, int item)
     bool watched = !watchedHas(&app->watched, path);
     watchedSet(&app->watched, path, watched);
     appSaveWatched(app);
-    if (jfIsLocation(path))
+    if (jfIsRemoteLocation(path))
         jfSyncSetPlayed(path, watched);
     appLibraryRefreshHome(app);  // Up next changed.
 }
@@ -254,7 +254,7 @@ static bool favoriteLocation(const Library *lib, LibraryRef ref, const char **ou
     } else {
         *out = lib->items[ref.index].path;
     }
-    return *out && jfIsLocation(*out);
+    return *out && jfIsRemoteLocation(*out);
 }
 
 // Kept until the next catalog comes, which may have been read before it.
@@ -685,7 +685,7 @@ void appLibraryDraw(App *app, uint64_t now)
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
-    uiLibrarySetSource(app->config.use_jellyfin ? "Jellyfin" : "SD card");
+    uiLibrarySetSource(!app->config.use_jellyfin ? "SD card" : app->config.use_plex ? "Plex" : "Jellyfin");
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));

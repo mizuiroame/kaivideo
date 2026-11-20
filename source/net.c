@@ -115,13 +115,15 @@ static int onProgress(void *user, curl_off_t a, curl_off_t b, curl_off_t c, curl
 static struct curl_slist *buildHeaders(const NetRequest *r)
 {
     struct curl_slist *headers = NULL;
-    if (r->authorization) {
+    if (r->authorization && r->authorization[0]) {
         char line[HEADER_MAX];
         snprintf(line, sizeof(line), "Authorization: %s", r->authorization);
         headers = curl_slist_append(headers, line);
     }
     if (r->post_json)
         headers = curl_slist_append(headers, "Content-Type: application/json");
+    if (r->accept_json)
+        headers = curl_slist_append(headers, "Accept: application/json");
     return headers;
 }
 

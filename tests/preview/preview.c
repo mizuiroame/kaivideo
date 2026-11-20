@@ -555,15 +555,35 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
-    top = (GFX_HEIGHT - (76 + 6 * 48 + 60)) / 2 + 76;
-    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
+    top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20);
     if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
         g_problems++;
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawJellyfinCode("482913", "192.168.0.10:8096");
+    Config plex_config = config;
+    plex_config.use_plex = true;
+    uiSettingsSetJellyfin("", "");
+    uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    save("settings_plex");
+    top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
+    LibHit plex_code = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 1 * 48 + 20);
+    LibHit plex_kind = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 20);
+    if (plex_code.kind != LIBHIT_SETTING || plex_code.a != SETTING_PLEX_CODE || plex_kind.a != SETTING_SERVER_KIND) {
+        printf("TOUCH: settings_plex: the sign-in or server type row doesn't answer a tap\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSignInCode(true, "K7QX", "");
+    uiDrawFooterHelp("[B] cancel");
+    save("plex_code");
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSignInCode(false, "482913", "192.168.0.10:8096");
     uiDrawFooterHelp("[B] cancel");
     save("jellyfin_code");
     begin();

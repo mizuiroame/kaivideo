@@ -11,6 +11,7 @@
 
 #include "livetv.h"
 #include "net.h"
+#include "plexsync.h"
 
 #define FILE_PATH_MAX 600
 #define API_TIMEOUT_S 30L
@@ -56,6 +57,7 @@ static struct {
     pthread_cond_t wake;
     NetClient *net;
     char session_file[FILE_PATH_MAX], catalog_file[FILE_PATH_MAX], version[32];
+    char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX];
     // Under the lock:
     JfSession session;
     JfStatus status;
@@ -72,6 +74,10 @@ static struct {
     bool converted;
     bool use_password;
     char sign_in_user[CREDENTIAL_MAX], sign_in_password[CREDENTIAL_MAX];
+    bool plex;                 // The server is Plex's: plex_session is the one used.
+    PlexSession plex_session;
+    char plex_item[PLEX_ID_MAX];  // The video last asked about, and its length: Plex's reports want it.
+    int64_t plex_duration_ns;
 } g;
 
 static void setError(const char *message)
@@ -95,6 +101,42 @@ static JfSession sessionCopy(void)
     JfSession s = g.session;
     pthread_mutex_unlock(&g.lock);
     return s;
+}
+
+// The library kept for the server in use.
+static const char *catalogFile(void)
+{
+    return g.plex ? g.plex_catalog_file : g.catalog_file;
+}
+
+static PlexSession plexCopy(void)
+{
+    pthread_mutex_lock(&g.lock);
+    PlexSession s = g.plex_session;
+    pthread_mutex_unlock(&g.lock);
+    return s;
+}
+
+static bool usingPlex(void)
+{
+    pthread_mutex_lock(&g.lock);
+    bool plex = g.plex;
+    pthread_mutex_unlock(&g.lock);
+    return plex;
+}
+
+// What the status says of who's signed in where.
+static void showSession(void)
+{
+    if (g.plex) {
+        snprintf(g.status.server, sizeof(g.status.server), "%s", g.plex_session.server_name);
+        snprintf(g.status.user, sizeof(g.status.user), "%s", g.plex_session.user_name);
+        g.status.state = g.plex_session.token[0] && g.plex_session.server_uri[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
+    } else {
+        snprintf(g.status.server, sizeof(g.status.server), "%s", g.session.server);
+        snprintf(g.status.user, sizeof(g.status.user), "%s", g.session.user_name);
+        g.status.state = g.session.token[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
+    }
 }
 
 // --- Requests ---
@@ -219,6 +261,54 @@ static bool signInWithPassword(void)
     return acceptSession(answer);
 }
 
+static void makeClientId(PlexSession *s)
+{
+    if (s->client_id[0])
+        return;
+    unsigned seed = (unsigned)time(NULL) ^ (unsigned)(uintptr_t)s;
+    snprintf(s->client_id, sizeof(s->client_id), "kaivideo-%08x%08x", rand_r(&seed), rand_r(&seed));
+}
+
+// Waits for the code to be approved at plex.tv/link, then finds the account's server.
+static bool plexSignIn(unsigned generation)
+{
+    pthread_mutex_lock(&g.lock);
+    makeClientId(&g.plex_session);
+    g.plex_session.token[0] = g.plex_session.server_uri[0] = '\0';
+    PlexSession s = g.plex_session;
+    pthread_mutex_unlock(&g.lock);
+    long long id = 0;
+    char code[16], error[128] = "";
+    if (!plexNetStartPin(g.net, &s, g.version, &id, code, sizeof(code), &g.abort_call)) {
+        setError("plex.tv can't be reached.");
+        return false;
+    }
+    if (g.sign_in_generation != generation)
+        return false;
+    setState(JF_SIGN_IN_WAITING, code);
+    bool approved = false;
+    for (int polls = 0; polls < SIGN_IN_POLLS && !approved && g.sign_in_generation == generation && !g.stop; polls++) {
+        struct timespec until;
+        clock_gettime(CLOCK_REALTIME, &until);
+        until.tv_sec += POLL_SECONDS;
+        pthread_mutex_lock(&g.lock);
+        pthread_cond_timedwait(&g.wake, &g.lock, &until);
+        pthread_mutex_unlock(&g.lock);
+        approved = g.sign_in_generation == generation && plexNetPollPin(g.net, &s, g.version, id, &g.abort_call);
+    }
+    if (!approved || !plexNetPickServer(g.net, &s, g.version, error, sizeof(error), &g.abort_call)) {
+        setError(error);
+        return false;
+    }
+    pthread_mutex_lock(&g.lock);
+    g.plex_session = s;
+    g.status.error[0] = '\0';
+    showSession();
+    pthread_mutex_unlock(&g.lock);
+    plexSessionSave(&s, g.plex_file);
+    return true;
+}
+
 static void signIn(void)
 {
     pthread_mutex_lock(&g.lock);
@@ -226,11 +316,15 @@ static void signIn(void)
     bool with_password = g.use_password;
     g.use_password = false;
     g.abort_call = false;
-    makeDeviceId(&g.session);
-    g.session.token[0] = '\0';
+    if (!g.plex) {
+        makeDeviceId(&g.session);
+        g.session.token[0] = '\0';
+    }
     pthread_mutex_unlock(&g.lock);
     bool ok;
-    if (with_password) {
+    if (usingPlex()) {
+        ok = plexSignIn(generation);
+    } else if (with_password) {
         ok = signInWithPassword();
     } else {
         json_t *started = callJson("/QuickConnect/Initiate", "{}");
@@ -258,6 +352,20 @@ static void signIn(void)
 
 static void signOut(void)
 {
+    if (usingPlex()) {  // Plex keeps this console's sign-in on the account's page; it's forgotten here.
+        pthread_mutex_lock(&g.lock);
+        char client[PLEX_ID_MAX];
+        snprintf(client, sizeof(client), "%s", g.plex_session.client_id);
+        memset(&g.plex_session, 0, sizeof(g.plex_session));
+        snprintf(g.plex_session.client_id, sizeof(g.plex_session.client_id), "%s", client);
+        showSession();
+        PlexSession saved = g.plex_session;
+        g.job_count = 0;
+        pthread_mutex_unlock(&g.lock);
+        plexSessionSave(&saved, g.plex_file);
+        remove(catalogFile());
+        return;
+    }
     NetResponse r;
     if (callText("/Sessions/Logout", "{}", SMALL_MAX_BYTES, REPORT_TIMEOUT_S, &r))
         netResponseFree(&r);
@@ -269,7 +377,7 @@ static void signOut(void)
     g.job_count = 0;
     pthread_mutex_unlock(&g.lock);
     jfSessionSave(&saved, g.session_file);
-    remove(g.catalog_file);
+    remove(catalogFile());
 }
 
 // --- The library ---
@@ -364,18 +472,29 @@ static bool readPages(JfCatalog *c, const char *user)
     return true;
 }
 
+static void plexProgress(int loaded, int total)
+{
+    setProgress(true, loaded, total);
+}
+
 static void refresh(void)
 {
     JfSession s = sessionCopy();
-    if (!s.token[0])
+    PlexSession ps = plexCopy();
+    bool plex = usingPlex();
+    if (plex ? !ps.server_uri[0] : !s.token[0])
         return;
     setProgress(true, 0, 0);
     JfCatalog c;
     jfCatalogInit(&c);
-    if (readPages(&c, s.user_id)) {
+    bool ok = plex ? plexNetReadLibrary(g.net, &ps, g.version, &c, plexProgress, &g.abort_call)
+                   : readPages(&c, s.user_id);
+    if (plex && !ok)
+        setError("The Plex library couldn't be read.");
+    if (ok) {
         setError("");
         libraryBuild(&c.library);
-        jfCatalogSave(&c, g.catalog_file);
+        jfCatalogSave(&c, catalogFile());
         publish(&c);
     } else {
         jfCatalogFree(&c);
@@ -401,9 +520,37 @@ static bool post(const char *path, const char *body, bool remove_it)
     return ok || r.status != 0;  // An answer, even a refusal, won't change by asking again.
 }
 
+// Plex's side of a job. False if it should be tried again.
+static bool runPlexJob(const Job *job)
+{
+    char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[320];
+    if (!plexLocationIds(job->location, item, part))
+        return true;
+    if (job->type == JOB_FAVORITE || job->type == JOB_CLOSE_LIVE)
+        return true;  // Plex has neither.
+    if (job->type == JOB_PLAYED)
+        plexPlayedPath(path, sizeof(path), item, job->flag);
+    else if (job->type == JOB_END_CONVERSION)
+        snprintf(path, sizeof(path), "/video/:/transcode/universal/stop?session=%s", job->play_session);
+    else {
+        static const char *const STATES[] = {"playing", "playing", "stopped"};
+        pthread_mutex_lock(&g.lock);
+        int64_t duration = !strcmp(g.plex_item, item) ? g.plex_duration_ns : 0;
+        pthread_mutex_unlock(&g.lock);
+        plexTimelinePath(path, sizeof(path), item, job->flag && job->kind != JF_REPORT_STOP ? "paused" : STATES[job->kind],
+                         job->position_ns, duration);
+    }
+    PlexSession s = plexCopy();
+    long status = 0;
+    bool ok = plexNetCall(g.net, &s, g.version, path, false, g.stop ? CLOSING_TIMEOUT_S : REPORT_TIMEOUT_S, &status);
+    return ok || status != 0;
+}
+
 // False if it should be tried again.
 static bool runJob(const Job *job)
 {
+    if (plexIsLocation(job->location))
+        return runPlexJob(job);
     char item[JF_ID_MAX], source[JF_ID_MAX], path[256], body[320];
     if (!jfLocationIds(job->location, item, source))
         return true;
@@ -457,11 +604,11 @@ static bool takeJob(Job *out)
 
 static void loadKept(void)
 {
-    if (!g.load_library || !sessionCopy().token[0])
+    if (!g.load_library || !(usingPlex() ? plexCopy().server_uri[0] : sessionCopy().token[0]))
         return;
     JfCatalog c;
     jfCatalogInit(&c);
-    if (jfCatalogLoad(&c, g.catalog_file))
+    if (jfCatalogLoad(&c, catalogFile()))
         publish(&c);
     else
         jfCatalogFree(&c);
@@ -519,7 +666,8 @@ bool jfSyncRunning(void)
     return g.running;
 }
 
-bool jfSyncStart(const char *session_file, const char *catalog_file, const char *version, bool load_library)
+bool jfSyncStart(const char *session_file, const char *plex_file, const char *catalog_file,
+                 const char *plex_catalog_file, const char *version, bool load_library, bool plex)
 {
     if (g.running)
         return true;
@@ -530,12 +678,14 @@ bool jfSyncStart(const char *session_file, const char *catalog_file, const char 
     snprintf(g.session_file, sizeof(g.session_file), "%s", session_file);
     snprintf(g.catalog_file, sizeof(g.catalog_file), "%s", catalog_file);
     snprintf(g.version, sizeof(g.version), "%s", version);
+    snprintf(g.plex_file, sizeof(g.plex_file), "%s", plex_file);
+    snprintf(g.plex_catalog_file, sizeof(g.plex_catalog_file), "%s", plex_catalog_file);
     jfSessionLoad(&g.session, session_file);
-    snprintf(g.status.server, sizeof(g.status.server), "%s", g.session.server);
-    snprintf(g.status.user, sizeof(g.status.user), "%s", g.session.user_name);
-    g.status.state = g.session.token[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
+    plexSessionLoad(&g.plex_session, plex_file);
+    g.plex = plex;
+    showSession();
     g.load_library = load_library;
-    g.want_refresh = load_library && g.session.token[0] != '\0';
+    g.want_refresh = load_library && g.status.state == JF_SIGNED_IN;
     g.net = netClientOpen();
     g.running = g.net && pthread_create(&g.thread, NULL, syncThread, NULL) == 0;
     if (!g.running) {
@@ -583,6 +733,33 @@ static void wakeWith(bool *flag)
     *flag = true;
     pthread_cond_broadcast(&g.wake);
     pthread_mutex_unlock(&g.lock);
+}
+
+void jfSyncUsePlex(bool plex)
+{
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    if (g.plex != plex) {
+        g.plex = plex;
+        g.sign_in_generation++;  // A sign-in under way was for the other one.
+        g.abort_call = true;
+        g.want_sign_in = false;
+        g.job_count = 0;
+        g.status.error[0] = g.status.code[0] = '\0';
+        if (g.has_ready) {
+            jfCatalogFree(&g.ready);
+            g.has_ready = false;
+        }
+        showSession();
+        pthread_cond_broadcast(&g.wake);
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+bool jfSyncUsingPlex(void)
+{
+    return g.running && usingPlex();
 }
 
 bool jfSyncSetServer(const char *text)
@@ -741,9 +918,30 @@ void jfSyncSetFavorite(const char *location, bool favorite)
     addJob(&job);
 }
 
+static bool plexResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index,
+                        JfPlan *out, char *error, size_t error_size, const volatile bool *cancel)
+{
+    NetClient *net = netClientOpen();
+    PlexSession s = plexCopy();
+    int64_t duration = 0;
+    bool ok = net && plexNetResolve(net, &s, g.version, location, max_bitrate, audio_index, subtitle_index, out,
+                                    &duration, error, error_size, cancel);
+    netClientClose(net);
+    char item[PLEX_ID_MAX], part[PLEX_ID_MAX];
+    if (ok && plexLocationIds(location, item, part)) {
+        pthread_mutex_lock(&g.lock);
+        snprintf(g.plex_item, sizeof(g.plex_item), "%s", item);
+        g.plex_duration_ns = duration;
+        pthread_mutex_unlock(&g.lock);
+    }
+    return ok;
+}
+
 bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index, JfPlan *out,
                    char *error, size_t error_size, const volatile bool *cancel)
 {
+    if (g.running && plexIsLocation(location))
+        return plexResolve(location, max_bitrate, audio_index, subtitle_index, out, error, error_size, cancel);
     char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
     char *body = malloc(PLAN_BODY_MAX);
     NetClient *net = netClientOpen();
@@ -814,6 +1012,8 @@ static void isoTime(int64_t s, char *out, size_t size)
 
 int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
 {
+    if (!g.running || usingPlex())
+        return -1;  // Live TV comes from Jellyfin only.
     NetClient *net = netClientOpen();
     JfSession s = sessionCopy();
     char path[512], from[32], to[32];
@@ -859,6 +1059,16 @@ int jfSyncFetchSegments(const char *location, JfSegment *out, int max)
 bool jfSyncAudioConversion(const char *location, int audio_index, char *url, size_t url_size, char *authorization,
                            size_t auth_size, char *play_session, size_t session_size)
 {
+    if (plexIsLocation(location)) {
+        NetClient *net = g.running ? netClientOpen() : NULL;
+        PlexSession s = plexCopy();
+        bool ok = net && plexNetAudioConversion(net, &s, g.version, location, audio_index, url, url_size, play_session,
+                                                session_size);
+        netClientClose(net);
+        if (auth_size)
+            authorization[0] = '\0';
+        return ok;
+    }
     char item[JF_ID_MAX], source[JF_ID_MAX];
     if (!jfLocationIds(location, item, source) || !strcmp(source, LIVE_SOURCE))
         return false;
@@ -889,6 +1099,13 @@ void jfSyncEndConversionOf(const char *location, const char *play_session)
 
 void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size)
 {
+    if (usingPlex()) {  // The token goes in the address; the conversion's own lists and pieces need none.
+        PlexSession ps = plexCopy();
+        plexServerUrl(&ps, g.version, url, full, full_size);
+        if (auth_size)
+            authorization[0] = '\0';
+        return;
+    }
     JfSession s = sessionCopy();
     snprintf(full, full_size, "%s%s", s.server, url);
     jfAuthHeader(&s, g.version, authorization, auth_size);
@@ -896,6 +1113,14 @@ void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char 
 
 bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out)
 {
+    if (plexIsLocation(location)) {
+        memset(out, 0, sizeof(*out));
+        NetClient *net = g.running ? netClientOpen() : NULL;
+        PlexSession s = plexCopy();
+        bool ok = net && plexNetFetchSubtitle(net, &s, g.version, stream_index, cancel, out);
+        netClientClose(net);
+        return ok;
+    }
     char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
     memset(out, 0, sizeof(*out));
     NetClient *net = g.running && jfLocationIds(location, item, source) ? netClientOpen() : NULL;
@@ -912,6 +1137,12 @@ bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile 
 
 bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size)
 {
+    if (plexIsLocation(location)) {
+        PlexSession s = plexCopy();
+        if (auth_size)
+            authorization[0] = '\0';
+        return g.running && plexStreamUrl(&s, g.version, location, url, url_size);
+    }
     char item[JF_ID_MAX], source[JF_ID_MAX];
     if (!g.running || !jfLocationIds(location, item, source))
         return false;
@@ -939,6 +1170,12 @@ bool jfSyncTrickplayRequest(const char *location, int width, int sheet, char *ur
 bool jfSyncImageRequest(const char *location, const char *kind, int max_width, char *url, size_t url_size,
                         char *authorization, size_t auth_size)
 {
+    if (plexIsLocation(location)) {
+        PlexSession s = plexCopy();
+        if (auth_size)
+            authorization[0] = '\0';
+        return g.running && plexImageUrl(&s, g.version, location, kind, max_width, url, url_size);
+    }
     char item[JF_ID_MAX], source[JF_ID_MAX];
     if (!g.running || !jfLocationIds(location, item, source))
         return false;
