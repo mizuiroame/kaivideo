@@ -19,9 +19,9 @@ hardware video decoder.
 |-------|----------|---------------------|
 | ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) | ![A video's details](docs/screenshots/details.png) |
 
-| The Live TV guide | The Playback list |
-|-------------------|-------------------|
-| ![The Live TV guide](docs/screenshots/live_tv.png) | ![The Playback list](docs/screenshots/playback.png) |
+| The Live TV guide | The Playback list | Downloads |
+|-------------------|-------------------|-----------|
+| ![The Live TV guide](docs/screenshots/live_tv.png) | ![The Playback list](docs/screenshots/playback.png) | ![The Downloads tab](docs/screenshots/downloads.png) |
 
 The screenshots show made-up films, series and channels.
 
@@ -399,6 +399,12 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
   Jellyfin has been tried on a home network, and over https through a test
   proxy with a certificate of its own; Emby and Plex with test servers on a
   home network. None yet from outside a home network.
+- **Downloads** keep one subtitle file a video (the one its server shows
+  first, else the first); picture subtitles (PGS, VobSub) don't come with a
+  converted one. While a video streams from a server, downloads wait for it.
+  Downloads have been tried on the console with a home Jellyfin server, and
+  with Emby and Plex test servers from a PC. After the network comes back, where you left a
+  downloaded episode offline may only show in the library once you open it.
 - **Live TV** has been tried with test channels a server made from video
   files and with free channels' own streams, not with a TV tuner. A channel
   the server converts keeps one sound track. Programs can't be recorded.
