@@ -564,7 +564,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     Config plex_config = config;
-    plex_config.use_plex = true;
+    plex_config.server_kind = SERVER_PLEX;
     uiSettingsSetJellyfin("", "");
     uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");

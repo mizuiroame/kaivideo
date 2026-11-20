@@ -25,6 +25,9 @@ static const SettingRow SIGNED_IN_ROWS[] = {SETTING_SERVER_KIND, SETTING_JF_SERV
 static const SettingRow PLEX_ROWS[] = {SETTING_SERVER_KIND, SETTING_PLEX_CODE, SETTING_JF_QUALITY, SETTING_COUNT};
 static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_SERVER_KIND, SETTING_PLEX_SERVER, SETTING_JF_QUALITY,
                                                  SETTING_JF_SIGN_OUT, SETTING_COUNT};
+// Emby has no Quick Connect: a user name and password.
+static const SettingRow EMBY_ROWS[] = {SETTING_SERVER_KIND, SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST,
+                                       SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "Media server"};
 
 // Auto: the original when the console can play it, else a good conversion.
@@ -98,7 +101,7 @@ bool configReadLine(Config *c, const char *line)
     else if (isKey(line, length, "jellyfin"))
         c->use_jellyfin = strcmp(value, "1") == 0;
     else if (isKey(line, length, "server"))
-        c->use_plex = strcmp(value, "plex") == 0;
+        c->server_kind = !strcmp(value, "plex") ? SERVER_PLEX : !strcmp(value, "emby") ? SERVER_EMBY : SERVER_JELLYFIN;
     else if (isKey(line, length, "jellyfin_quality"))
         c->jf_quality = readChoice(value, QUALITY_COUNT, 0);
     else if (isKey(line, length, "jellyfin_check_certificate"))
@@ -124,21 +127,23 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\njellyfin_quality=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
             c->use_jellyfin ? 1 : 0, c->jf_quality);
     fprintf(f, "jellyfin_check_certificate=%d\nserver=%s\n", c->jf_check_certificate ? 1 : 0,
-            c->use_plex ? "plex" : "jellyfin");
+            c->server_kind == SERVER_PLEX ? "plex" : c->server_kind == SERVER_EMBY ? "emby" : "jellyfin");
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
 }
 
-int settingsPageRows(SettingsPage page, bool signed_in, bool plex, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
+int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
 {
     int n = 0;
     if (page < 0 || page >= SETTINGS_PAGE_COUNT)
         return 0;
     const SettingRow *list = PAGE_ROWS[page];
-    if (page == SETTINGS_PAGE_JELLYFIN && plex)
+    if (page == SETTINGS_PAGE_JELLYFIN && kind == SERVER_PLEX)
         list = signed_in ? PLEX_SIGNED_IN_ROWS : PLEX_ROWS;
+    else if (page == SETTINGS_PAGE_JELLYFIN && kind == SERVER_EMBY && !signed_in)
+        list = EMBY_ROWS;
     else if (page == SETTINGS_PAGE_JELLYFIN && signed_in)
         list = SIGNED_IN_ROWS;
     while (n < SETTINGS_PAGE_MAX_ROWS && list[n] != SETTING_COUNT) {
@@ -181,7 +186,7 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
-    case SETTING_SERVER_KIND: c->use_plex = !c->use_plex; break;
+    case SETTING_SERVER_KIND: c->server_kind = wrap(c->server_kind, delta, SERVER_KIND_COUNT); break;
     default: break;
     }
 }
@@ -198,7 +203,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
     case SETTING_JF_QUALITY: snprintf(out, size, "%s", QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name); break;
     case SETTING_JF_CERTIFICATE: snprintf(out, size, "%s", c->jf_check_certificate ? "On" : "Off: any certificate"); break;
-    case SETTING_SERVER_KIND: snprintf(out, size, "%s", c->use_plex ? "Plex" : "Jellyfin"); break;
+    case SETTING_SERVER_KIND: snprintf(out, size, "%s", serverKindName((ServerKind)c->server_kind)); break;
     default: out[0] = '\0'; break;
     }
 }

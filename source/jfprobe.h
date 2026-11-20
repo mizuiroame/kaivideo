@@ -25,5 +25,7 @@ bool jfProbeStartTest(const char *server);
 // Asks the network (target: JF_PROBE_BROADCAST, or one address) who runs Jellyfin.
 bool jfProbeStartFind(const char *target);
 bool jfProbeRunning(void);
+// Which kind of server the next test or search is for (Jellyfin at first).
+void jfProbeSetKind(ServerKind kind);
 // The answer, once, when it's there.
 bool jfProbeTake(JfProbeResult *out);

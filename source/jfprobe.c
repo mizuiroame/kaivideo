@@ -32,7 +32,15 @@ static struct {
     char server[JF_SERVER_MAX];
     char target[INET_ADDRSTRLEN];
     JfProbeResult result;
+    ServerKind kind;
 } g = {.lock = PTHREAD_MUTEX_INITIALIZER};
+
+void jfProbeSetKind(ServerKind kind)
+{
+    pthread_mutex_lock(&g.lock);
+    g.kind = kind;
+    pthread_mutex_unlock(&g.lock);
+}
 
 static void runTest(JfProbeResult *r)
 {
@@ -45,7 +53,8 @@ static void runTest(JfProbeResult *r)
         netFetchText(client, &request, ANSWER_MAX, &answer);
     else
         answer.problem = NET_OTHER;
-    r->ok = jfConnectionVerdict(answer.problem, answer.status, answer.data, g.server, r->message, sizeof(r->message));
+    r->ok = jfConnectionVerdictFor(g.kind, answer.problem, answer.status, answer.data, g.server, r->message,
+                                   sizeof(r->message));
     netResponseFree(&answer);
     netClientClose(client);
 }
@@ -114,8 +123,8 @@ static bool sendQuestion(int sock, uint32_t address)
 {
     struct sockaddr_in to = {.sin_family = AF_INET, .sin_port = htons(JF_DISCOVERY_PORT)};
     to.sin_addr.s_addr = htonl(address);
-    return sendto(sock, JF_DISCOVERY_QUESTION, sizeof(JF_DISCOVERY_QUESTION) - 1, 0, (struct sockaddr *)&to,
-                  sizeof(to)) > 0;
+    const char *question = g.kind == SERVER_EMBY ? EMBY_DISCOVERY_QUESTION : JF_DISCOVERY_QUESTION;
+    return sendto(sock, question, strlen(question), 0, (struct sockaddr *)&to, sizeof(to)) > 0;
 }
 
 // Asks the target; when it's the whole network, also the home network's own

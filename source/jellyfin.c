@@ -26,6 +26,12 @@ bool jfIsLocation(const char *path)
     return strncmp(path, JF_PREFIX, sizeof(JF_PREFIX) - 1) == 0;
 }
 
+const char *serverKindName(ServerKind kind)
+{
+    static const char *const NAMES[SERVER_KIND_COUNT] = {"Jellyfin", "Emby", "Plex"};
+    return kind >= 0 && kind < SERVER_KIND_COUNT ? NAMES[kind] : NAMES[0];
+}
+
 bool jfIsRemoteLocation(const char *path)
 {
     return jfIsLocation(path) || strncmp(path, PLEX_PREFIX, sizeof(PLEX_PREFIX) - 1) == 0;
@@ -36,7 +42,7 @@ static bool isId(const char *text, size_t length)
     if (length == 0 || length >= JF_ID_MAX)
         return false;
     for (size_t i = 0; i < length; i++)
-        if (!isalnum((unsigned char)text[i]) && text[i] != '-')
+        if (!isalnum((unsigned char)text[i]) && text[i] != '-' && text[i] != '_')  // Emby: "mediasource_17".
             return false;
     return true;
 }
@@ -770,13 +776,29 @@ static const char *problemAdvice(NetProblem problem)
 
 bool jfConnectionVerdict(NetProblem problem, long status, const char *body, const char *server, char *out, size_t size)
 {
+    return jfConnectionVerdictFor(SERVER_JELLYFIN, problem, status, body, server, out, size);
+}
+
+// Jellyfin names itself; Emby says nothing of its product, only its version and id.
+static bool answersAs(ServerKind kind, const json_t *root)
+{
+    const char *product = textOf(root, "ProductName");
+    if (kind == SERVER_EMBY)
+        return !strstr(product, "Jellyfin") && textOf(root, "Version")[0] && textOf(root, "Id")[0];
+    return strstr(product, "Jellyfin") != NULL;
+}
+
+bool jfConnectionVerdictFor(ServerKind kind, NetProblem problem, long status, const char *body, const char *server,
+                            char *out, size_t size)
+{
+    const char *name = serverKindName(kind);
     if (problem == NET_STATUS && status == HTTP_BAD_REQUEST && !strncmp(server, "http://", 7)) {
         // What a server answers when plain http comes to its https port.
         snprintf(out, size, "That port may want a secure connection: write https:// before the address.");
         return false;
     }
     if (problem == NET_STATUS) {
-        snprintf(out, size, "That address answers (%ld), but not as Jellyfin. Check the port and the path.", status);
+        snprintf(out, size, "That address answers (%ld), but not as %s. Check the port and the path.", status, name);
         return false;
     }
     if (problem != NET_OK) {
@@ -784,13 +806,12 @@ bool jfConnectionVerdict(NetProblem problem, long status, const char *body, cons
         return false;
     }
     json_t *root = body ? json_loads(body, 0, NULL) : NULL;
-    const char *product = textOf(root, "ProductName");
-    bool jellyfin = strstr(product, "Jellyfin") != NULL;
+    bool jellyfin = answersAs(kind, root);
     if (!jellyfin) {
-        snprintf(out, size, "That address answers, but it isn't Jellyfin. Check the port (usually 8096).");
+        snprintf(out, size, "That address answers, but it isn't %s. Check the port (usually 8096).", name);
     } else {
         bool plain = strncmp(server, "https://", 8) != 0 && !jfAddressIsLocal(server);
-        snprintf(out, size, "Jellyfin %s on %s answers.%s", textOf(root, "Version"),
+        snprintf(out, size, "%s %s on %s answers.%s", name, textOf(root, "Version"),
                  textOf(root, "ServerName")[0] ? textOf(root, "ServerName") : "the server",
                  plain ? " The connection isn't encrypted: use https outside your home." : "");
     }

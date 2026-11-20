@@ -18,13 +18,14 @@ bool appJellyfinEnsure(App *app)
 {
     if (jfSyncRunning())
         return true;
-    char session[FILE_NAME_MAX], catalog[FILE_NAME_MAX], plex[FILE_NAME_MAX], plex_catalog[FILE_NAME_MAX];
-    appConfigPath(session, sizeof(session), "jellyfin.txt");
-    appConfigPath(catalog, sizeof(catalog), "jellyfin_library.txt");
-    appConfigPath(plex, sizeof(plex), "plex.txt");
-    appConfigPath(plex_catalog, sizeof(plex_catalog), "plex_library.txt");
-    return jfSyncStart(session, plex, catalog, plex_catalog, KAIVIDEO_VERSION, app->config.use_jellyfin,
-                       app->config.use_plex);
+    static char paths[6][FILE_NAME_MAX];
+    static const char *const NAMES[6] = {"jellyfin.txt", "jellyfin_library.txt", "emby.txt",
+                                         "emby_library.txt", "plex.txt", "plex_library.txt"};
+    for (int i = 0; i < 6; i++)
+        appConfigPath(paths[i], sizeof(paths[i]), NAMES[i]);
+    JfSyncFiles files = {paths[0], paths[1], paths[2], paths[3], paths[4], paths[5]};
+    jfProbeSetKind((ServerKind)app->config.server_kind);
+    return jfSyncStart(&files, KAIVIDEO_VERSION, app->config.use_jellyfin, (ServerKind)app->config.server_kind);
 }
 
 static void finishSignIn(App *app, uint64_t now)
@@ -35,10 +36,11 @@ static void finishSignIn(App *app, uint64_t now)
     if (app->jf.state != JF_SIGNED_IN)
         return;
     char message[JF_SERVER_MAX + JF_NAME_MAX + 32];
-    if (app->config.use_plex)
+    if (app->config.server_kind == SERVER_PLEX)
         snprintf(message, sizeof(message), "Connected to %s as %s.", app->jf.server, app->jf.user);
     else
-        snprintf(message, sizeof(message), "Connected to Jellyfin as %s.", app->jf.user);
+        snprintf(message, sizeof(message), "Connected to %s as %s.",
+                 serverKindName((ServerKind)app->config.server_kind), app->jf.user);
     app->settings_open = false;
     appLibrarySetSource(app, true);
     appShowMessage(app, message, now);

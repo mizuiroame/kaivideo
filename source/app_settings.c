@@ -129,7 +129,7 @@ static bool signedIn(const App *app)
 static void openPage(App *app, SettingsPage page)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    settingsPageRows(page, signedIn(app), app->config.use_plex, rows);
+    settingsPageRows(page, signedIn(app), (ServerKind)app->config.server_kind, rows);
     app->settings_page = page;
     app->settings_cursor = rows[0];
 }
@@ -208,8 +208,9 @@ static void typeServer(App *app, uint64_t now)
     const char *initial = app->jf.server;
     if (!strncmp(initial, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
         initial += sizeof(HTTP_PREFIX) - 1;
-    SystemKeyboardResult result = systemKeyboardInput("Jellyfin server, like 192.168.0.10:8096", initial, text,
-                                                      sizeof(text), JF_SERVER_MAX - 1);
+    char prompt[80];
+    snprintf(prompt, sizeof(prompt), "%s server, like 192.168.0.10:8096", serverKindName((ServerKind)app->config.server_kind));
+    SystemKeyboardResult result = systemKeyboardInput(prompt, initial, text, sizeof(text), JF_SERVER_MAX - 1);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE)
         appShowMessage(app, "The keyboard couldn't open.", now);
     else if (result == SYSTEM_KEYBOARD_OK && !jfSyncSetServer(text))
@@ -240,7 +241,9 @@ static void passwordSignIn(App *app, uint64_t now)
         return;
     }
     char user[CREDENTIAL_TEXT_MAX], password[CREDENTIAL_TEXT_MAX];
-    SystemKeyboardResult result = systemKeyboardInput("Jellyfin user name", "", user, sizeof(user), sizeof(user) - 1);
+    char prompt[64];
+    snprintf(prompt, sizeof(prompt), "%s user name", serverKindName((ServerKind)app->config.server_kind));
+    SystemKeyboardResult result = systemKeyboardInput(prompt, "", user, sizeof(user), sizeof(user) - 1);
     if (result == SYSTEM_KEYBOARD_OK && user[0])
         result = systemKeyboardPassword("Password", password, sizeof(password), sizeof(password) - 1);
     else if (result == SYSTEM_KEYBOARD_OK)
@@ -258,7 +261,8 @@ static void passwordSignIn(App *app, uint64_t now)
 // A library from the server comes from the new one, or the card if it isn't signed in.
 static void serverKindChanged(App *app)
 {
-    jfSyncUsePlex(app->config.use_plex);
+    jfSyncUseKind((ServerKind)app->config.server_kind);
+    jfProbeSetKind((ServerKind)app->config.server_kind);
     jfSyncGetStatus(&app->jf);
     if (app->config.use_jellyfin)
         appLibrarySetSource(app, app->jf.state == JF_SIGNED_IN);
@@ -289,8 +293,11 @@ static void askNetwork(App *app, SettingRow row, uint64_t now)
     if (jfProbeRunning()) {
         appShowMessage(app, "Still asking the network...", now);
     } else if (row == SETTING_JF_FIND) {
+        char looking[80];
+        snprintf(looking, sizeof(looking), "Looking for %s servers on this network...",
+                 serverKindName((ServerKind)app->config.server_kind));
         if (jfProbeStartFind(JF_PROBE_BROADCAST))
-            appShowMessage(app, "Looking for Jellyfin servers on this network...", now);
+            appShowMessage(app, looking, now);
     } else if (!app->jf.server[0]) {
         appShowMessage(app, "Enter the server's address first, or find it on this network.", now);
     } else if (jfProbeStartTest(app->jf.server)) {
@@ -336,7 +343,7 @@ static void activate(App *app, SettingRow row, uint64_t now)
 static void moveCursor(App *app, int delta)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), app->config.use_plex, rows), at = 0;
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), (ServerKind)app->config.server_kind, rows), at = 0;
     for (int i = 0; i < count; i++)
         if ((int)rows[i] == app->settings_cursor)
             at = i;
@@ -372,7 +379,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
 static void keepCursorOnPage(App *app)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), app->config.use_plex, rows);
+    int count = settingsPageRows((SettingsPage)app->settings_page, signedIn(app), (ServerKind)app->config.server_kind, rows);
     for (int i = 0; i < count; i++)
         if ((int)rows[i] == app->settings_cursor)
             return;
@@ -428,7 +435,7 @@ void appSettingsDraw(const App *app)
         server += sizeof(HTTP_PREFIX) - 1;
     uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "");
     if (app->jf_signing)
-        uiDrawSignInCode(app->config.use_plex, app->jf.code, server, app->jf.linked);
+        uiDrawSignInCode(app->config.server_kind == SERVER_PLEX, app->jf.code, server, app->jf.linked);
     else if (app->about_open)
         uiDrawAbout(KAIVIDEO_VERSION);
     else

@@ -685,7 +685,7 @@ void appLibraryDraw(App *app, uint64_t now)
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
-    uiLibrarySetSource(!app->config.use_jellyfin ? "SD card" : app->config.use_plex ? "Plex" : "Jellyfin");
+    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName((ServerKind)app->config.server_kind) : "SD card");
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));

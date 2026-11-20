@@ -1,4 +1,4 @@
-// Talking to the Jellyfin or Plex server, in a thread of its own so the screens stay
+// Talking to the Jellyfin, Emby or Plex server, in a thread of its own so the screens stay
 // live: signing in with Quick Connect, reading the library, and telling the
 // server what's being watched.
 #pragma once
@@ -33,12 +33,16 @@ typedef enum { JF_REPORT_START, JF_REPORT_PROGRESS, JF_REPORT_STOP } JfReportKin
 // Starts the network and the thread (once), reading the session from its file.
 // load_library: also reads the kept library and asks for a new one. False if
 // the network can't be used.
-// plex: the server is Plex's (its session in plex_file), not Jellyfin's.
-bool jfSyncStart(const char *session_file, const char *plex_file, const char *catalog_file,
-                 const char *plex_catalog_file, const char *version, bool load_library, bool plex);
-// Changes which server is used; the other's session stays for later.
-void jfSyncUsePlex(bool plex);
-bool jfSyncUsingPlex(void);
+// Where each kind of server's session and library are kept.
+typedef struct {
+    const char *jellyfin, *jellyfin_library, *emby, *emby_library, *plex, *plex_library;
+} JfSyncFiles;
+
+// kind: the server used (each kind keeps its own session and library).
+bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_library, ServerKind kind);
+// Changes which server is used; the others' sessions stay for later.
+void jfSyncUseKind(ServerKind kind);
+ServerKind jfSyncKind(void);
 // Sends what's waiting to be told and stops.
 void jfSyncStop(void);
 bool jfSyncRunning(void);

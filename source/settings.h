@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "jellyfin.h"
+
 #define SETTINGS_NAME_MAX 128
 #define SETTINGS_PAGE_MAX_ROWS 7
 
@@ -54,7 +56,7 @@ typedef struct {
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the media server.
-    bool use_plex;                       // The media server is Plex's, not Jellyfin's.
+    int server_kind;                     // ServerKind: Jellyfin, Emby or Plex.
     int jf_quality;                      // An index in the quality list; 0 is Auto.
     bool jf_check_certificate;           // Off: an https server's own certificate is taken too.
     int subtitles;                       // SubtitleSize.
@@ -69,8 +71,8 @@ bool configReadLine(Config *c, const char *line);
 void configWrite(const Config *c, FILE *f);
 
 // The rows of a page, in order. Returns how many. signed_in: to the media
-// server, and plex: which one it is, decide what its page offers.
-int settingsPageRows(SettingsPage page, bool signed_in, bool plex, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
+// server, and kind: which one it is, decide what its page offers.
+int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
 const char *settingsPageTitle(SettingsPage page);
 const char *settingLabel(SettingRow row);
 // Rows changed with left and right (the others open something with A).

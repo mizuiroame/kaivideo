@@ -17,6 +17,11 @@
 #define JF_PREFIX "jellyfin:"
 #define JF_ROOT "jellyfin:"     // The root of a library that comes from the server.
 #define PLEX_PREFIX "plex:"
+
+// The media servers KaiVideo talks to. Emby speaks Jellyfin's language (Jellyfin
+// began as a fork of it) with a few addresses of its own; Plex has its own.
+typedef enum { SERVER_JELLYFIN, SERVER_EMBY, SERVER_PLEX, SERVER_KIND_COUNT } ServerKind;
+const char *serverKindName(ServerKind kind);
 #define JF_SERVER_MAX 256
 #define JF_ID_MAX 40
 #define JF_NAME_MAX 64
@@ -61,10 +66,14 @@ bool jfServerNormalize(const char *text, char *out, size_t size);
 #define JF_VERDICT_MAX 200
 #define JF_DISCOVERY_PORT 7359
 #define JF_DISCOVERY_QUESTION "Who is JellyfinServer?"
+#define EMBY_DISCOVERY_QUESTION "who is EmbyServer?"
 // What a test of the connection found, from the answer to /System/Info/Public
 // (body may be NULL): who answered, or which step failed and what to check.
 // True if a Jellyfin server answered.
 bool jfConnectionVerdict(NetProblem problem, long status, const char *body, const char *server, char *out, size_t size);
+// The same for a kind of server (Jellyfin or Emby).
+bool jfConnectionVerdictFor(ServerKind kind, NetProblem problem, long status, const char *body, const char *server,
+                            char *out, size_t size);
 // True for an address on a home network (private ranges, names without a dot, .local).
 bool jfAddressIsLocal(const char *server);
 // A server's answer to JF_DISCOVERY_QUESTION, which came from sender_ip: its

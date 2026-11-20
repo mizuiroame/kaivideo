@@ -58,6 +58,7 @@ static struct {
     NetClient *net;
     char session_file[FILE_PATH_MAX], catalog_file[FILE_PATH_MAX], version[32];
     char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX], plex_favorites_file[FILE_PATH_MAX];
+    char emby_file[FILE_PATH_MAX], emby_catalog_file[FILE_PATH_MAX];
     // Under the lock:
     JfSession session;
     JfStatus status;
@@ -74,7 +75,7 @@ static struct {
     bool converted;
     bool use_password;
     char sign_in_user[CREDENTIAL_MAX], sign_in_password[CREDENTIAL_MAX];
-    bool plex;                 // The server is Plex's: plex_session is the one used.
+    ServerKind kind;           // Plex: plex_session is the one used; Jellyfin and Emby: session.
     PlexSession plex_session;
     char plex_item[PLEX_ID_MAX];  // The video last asked about, and its length: Plex's reports want it.
     int64_t plex_duration_ns;
@@ -106,7 +107,21 @@ static JfSession sessionCopy(void)
 // The library kept for the server in use.
 static const char *catalogFile(void)
 {
-    return g.plex ? g.plex_catalog_file : g.catalog_file;
+    return g.kind == SERVER_PLEX ? g.plex_catalog_file : g.kind == SERVER_EMBY ? g.emby_catalog_file : g.catalog_file;
+}
+
+// Where the Jellyfin or Emby session in use is kept.
+static const char *sessionFile(void)
+{
+    return g.kind == SERVER_EMBY ? g.emby_file : g.session_file;
+}
+
+static bool usingEmby(void)
+{
+    pthread_mutex_lock(&g.lock);
+    bool emby = g.kind == SERVER_EMBY;
+    pthread_mutex_unlock(&g.lock);
+    return emby;
 }
 
 static PlexSession plexCopy(void)
@@ -120,7 +135,7 @@ static PlexSession plexCopy(void)
 static bool usingPlex(void)
 {
     pthread_mutex_lock(&g.lock);
-    bool plex = g.plex;
+    bool plex = g.kind == SERVER_PLEX;
     pthread_mutex_unlock(&g.lock);
     return plex;
 }
@@ -128,7 +143,7 @@ static bool usingPlex(void)
 // What the status says of who's signed in where.
 static void showSession(void)
 {
-    if (g.plex) {
+    if (g.kind == SERVER_PLEX) {
         snprintf(g.status.server, sizeof(g.status.server), "%s", g.plex_session.server_name);
         snprintf(g.status.user, sizeof(g.status.user), "%s", g.plex_session.user_name);
         g.status.state = g.plex_session.token[0] && g.plex_session.server_uri[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
@@ -220,7 +235,7 @@ static bool acceptSession(json_t *answer)
         g.status.error[0] = '\0';
         JfSession saved = g.session;
         pthread_mutex_unlock(&g.lock);
-        jfSessionSave(&saved, g.session_file);
+        jfSessionSave(&saved, sessionFile());
     }
     json_decref(answer);
     return ok;
@@ -322,7 +337,7 @@ static void signIn(void)
     bool with_password = g.use_password;
     g.use_password = false;
     g.abort_call = false;
-    if (!g.plex) {
+    if (g.kind != SERVER_PLEX) {
         makeDeviceId(&g.session);
         g.session.token[0] = '\0';
     }
@@ -382,7 +397,7 @@ static void signOut(void)
     JfSession saved = g.session;
     g.job_count = 0;
     pthread_mutex_unlock(&g.lock);
-    jfSessionSave(&saved, g.session_file);
+    jfSessionSave(&saved, sessionFile());
     remove(catalogFile());
 }
 
@@ -439,7 +454,10 @@ static bool readCollection(JfCatalog *c, const char *user, const char *parent, i
 static int readViews(JfCatalog *c, const char *user)
 {
     char path[256];
-    snprintf(path, sizeof(path), "/UserViews?userId=%s", user);
+    if (usingEmby())  // Emby keeps the older address.
+        snprintf(path, sizeof(path), "/Users/%s/Views", user);
+    else
+        snprintf(path, sizeof(path), "/UserViews?userId=%s", user);
     NetResponse r;
     if (!callText(path, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, &r))
         return -1;
@@ -566,8 +584,11 @@ static bool runJob(const Job *job)
         return true;
     if (job->type == JOB_PLAYED || job->type == JOB_FAVORITE) {
         JfSession s = sessionCopy();
-        snprintf(path, sizeof(path), "/%s/%s?userId=%s",
-                 job->type == JOB_PLAYED ? "UserPlayedItems" : "UserFavoriteItems", item, s.user_id);
+        const char *what = job->type == JOB_PLAYED ? "PlayedItems" : "FavoriteItems";
+        if (usingEmby())  // Emby keeps the older addresses.
+            snprintf(path, sizeof(path), "/Users/%s/%s/%s", s.user_id, what, item);
+        else
+            snprintf(path, sizeof(path), "/User%s/%s?userId=%s", what, item, s.user_id);
         return post(path, "{}", !job->flag);
     }
     if (job->type == JOB_CLOSE_LIVE) {
@@ -676,8 +697,7 @@ bool jfSyncRunning(void)
     return g.running;
 }
 
-bool jfSyncStart(const char *session_file, const char *plex_file, const char *catalog_file,
-                 const char *plex_catalog_file, const char *version, bool load_library, bool plex)
+bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_library, ServerKind kind)
 {
     if (g.running)
         return true;
@@ -685,17 +705,19 @@ bool jfSyncStart(const char *session_file, const char *plex_file, const char *ca
         return false;
     pthread_mutex_init(&g.lock, NULL);
     pthread_cond_init(&g.wake, NULL);
-    snprintf(g.session_file, sizeof(g.session_file), "%s", session_file);
-    snprintf(g.catalog_file, sizeof(g.catalog_file), "%s", catalog_file);
+    snprintf(g.session_file, sizeof(g.session_file), "%s", files->jellyfin);
+    snprintf(g.catalog_file, sizeof(g.catalog_file), "%s", files->jellyfin_library);
+    snprintf(g.emby_file, sizeof(g.emby_file), "%s", files->emby);
+    snprintf(g.emby_catalog_file, sizeof(g.emby_catalog_file), "%s", files->emby_library);
     snprintf(g.version, sizeof(g.version), "%s", version);
-    snprintf(g.plex_file, sizeof(g.plex_file), "%s", plex_file);
-    snprintf(g.plex_catalog_file, sizeof(g.plex_catalog_file), "%s", plex_catalog_file);
+    snprintf(g.plex_file, sizeof(g.plex_file), "%s", files->plex);
+    snprintf(g.plex_catalog_file, sizeof(g.plex_catalog_file), "%s", files->plex_library);
     // Plex has no favorites: they're kept beside its library, as "<library>_favorites.txt".
-    size_t stem = strlen(plex_catalog_file) > 4 ? strlen(plex_catalog_file) - 4 : 0;
-    snprintf(g.plex_favorites_file, sizeof(g.plex_favorites_file), "%.*s_favorites.txt", (int)stem, plex_catalog_file);
-    jfSessionLoad(&g.session, session_file);
-    plexSessionLoad(&g.plex_session, plex_file);
-    g.plex = plex;
+    size_t stem = strlen(files->plex_library) > 4 ? strlen(files->plex_library) - 4 : 0;
+    snprintf(g.plex_favorites_file, sizeof(g.plex_favorites_file), "%.*s_favorites.txt", (int)stem, files->plex_library);
+    g.kind = kind >= 0 && kind < SERVER_KIND_COUNT ? kind : SERVER_JELLYFIN;
+    jfSessionLoad(&g.session, sessionFile());
+    plexSessionLoad(&g.plex_session, g.plex_file);
     showSession();
     g.load_library = load_library;
     g.want_refresh = load_library && g.status.state == JF_SIGNED_IN;
@@ -748,13 +770,15 @@ static void wakeWith(bool *flag)
     pthread_mutex_unlock(&g.lock);
 }
 
-void jfSyncUsePlex(bool plex)
+void jfSyncUseKind(ServerKind kind)
 {
-    if (!g.running)
+    if (!g.running || kind < 0 || kind >= SERVER_KIND_COUNT)
         return;
     pthread_mutex_lock(&g.lock);
-    if (g.plex != plex) {
-        g.plex = plex;
+    if (g.kind != kind) {
+        g.kind = kind;
+        if (kind != SERVER_PLEX)  // Jellyfin's and Emby's sessions are kept apart.
+            jfSessionLoad(&g.session, sessionFile());
         g.sign_in_generation++;  // A sign-in under way was for the other one.
         g.abort_call = true;
         g.want_sign_in = false;
@@ -770,9 +794,14 @@ void jfSyncUsePlex(bool plex)
     pthread_mutex_unlock(&g.lock);
 }
 
-bool jfSyncUsingPlex(void)
+ServerKind jfSyncKind(void)
 {
-    return g.running && usingPlex();
+    if (!g.running)
+        return SERVER_JELLYFIN;
+    pthread_mutex_lock(&g.lock);
+    ServerKind kind = g.kind;
+    pthread_mutex_unlock(&g.lock);
+    return kind;
 }
 
 bool jfSyncSetServer(const char *text)
@@ -785,7 +814,7 @@ bool jfSyncSetServer(const char *text)
     snprintf(g.status.server, sizeof(g.status.server), "%s", server);
     JfSession saved = g.session;
     pthread_mutex_unlock(&g.lock);
-    jfSessionSave(&saved, g.session_file);
+    jfSessionSave(&saved, sessionFile());
     return true;
 }
 

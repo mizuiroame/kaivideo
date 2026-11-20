@@ -81,7 +81,7 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
 void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *library_root, const char *version)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows(page, g_jf_user[0] != '\0', c->use_plex, rows);
+    int count = settingsPageRows(page, g_jf_user[0] != '\0', (ServerKind)c->server_kind, rows);
     int h = HEAD_H + count * ROW_H + FOOT_H;
     int x = (GFX_WIDTH - SETTINGS_W) / 2, y = (GFX_HEIGHT - h) / 2;
     dimScreen();

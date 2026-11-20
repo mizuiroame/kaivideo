@@ -457,6 +457,14 @@ static void testConnectionVerdict(void)
     CHECK(!strstr(out, "encrypted"));
 
     CHECK(!jfConnectionVerdict(NET_OK, 200, "<html>router</html>", "http://192.168.0.1", out, sizeof(out)));
+    // Emby says its version and id, not its product; Jellyfin isn't Emby.
+    const char *emby_info = "{\"ServerName\":\"den\",\"Version\":\"4.10.2.0\",\"Id\":\"abc\"}";
+    CHECK(jfConnectionVerdictFor(SERVER_EMBY, NET_OK, 200, emby_info, "http://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(strstr(out, "Emby 4.10.2.0 on den answers.") == out);
+    CHECK(!jfConnectionVerdictFor(SERVER_EMBY, NET_OK, 200, INFO, "http://192.168.0.20:8096", out, sizeof(out)));
+    CHECK(!jfConnectionVerdict(NET_OK, 200, emby_info, "http://192.168.0.20:8096", out, sizeof(out)));
+    char emby_item[JF_ID_MAX], emby_source[JF_ID_MAX];
+    CHECK(jfLocationIds(JF_PREFIX "17/mediasource_17", emby_item, emby_source) && !strcmp(emby_source, "mediasource_17"));
     CHECK(strstr(out, "isn't Jellyfin") != NULL);
     CHECK(!jfConnectionVerdict(NET_STATUS, 404, "", "http://192.168.0.20:80", out, sizeof(out)));
     CHECK(strstr(out, "404") != NULL && !strstr(out, "https://"));
