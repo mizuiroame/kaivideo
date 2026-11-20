@@ -141,18 +141,38 @@ void uiDrawSkipButton(const char *label, bool bar_shown)
     uiLibraryAddHit(x, y, w, SKIP_H, LIBHIT_SKIP, 0, 0);
 }
 
-void uiDrawShowFavorite(bool favorite)
+// A series page's pill at the top right, ending at right. Returns its width.
+static int showPill(int right, const char *key, const char *label, bool lit, LibHitKind hit)
 {
-    const char *label = favorite ? "In Favorites" : "Add to Favorites";
-    int w = uiButtonWidth("R") + fontTextWidth(FONT_BOLD, 18, label) + 34;
-    int x = GFX_WIDTH - MARGIN - w, y = UI_TAB_BAR_H + 18;
-    gfxFillRoundRect(x, y, w, 40, 20, favorite ? COLOR_ACCENT : COLOR_SURFACE_HI);
-    uiDrawButton(x + 12, y + 20.0f, "R", COLOR_SURFACE, COLOR_TEXT);
-    fontDrawMiddle(FONT_BOLD, 18, x + 22 + uiButtonWidth("R"), y + 20.0f, label, favorite ? COLOR_BG : COLOR_TEXT);
-    uiLibraryAddHit(x, y, w, 40, LIBHIT_FAVORITE, 0, 0);
+    int w = uiButtonWidth(key) + fontTextWidth(FONT_BOLD, 18, label) + 34;
+    int x = right - w, y = UI_TAB_BAR_H + 18;
+    gfxFillRoundRect(x, y, w, 40, 20, lit ? COLOR_ACCENT : COLOR_SURFACE_HI);
+    uiDrawButton(x + 12, y + 20.0f, key, COLOR_SURFACE, COLOR_TEXT);
+    fontDrawMiddle(FONT_BOLD, 18, x + 22 + uiButtonWidth(key), y + 20.0f, label, lit ? COLOR_BG : COLOR_TEXT);
+    uiLibraryAddHit(x, y, w, 40, hit, 0, 0);
+    return w;
 }
 
-void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note, bool favorites)
+static const char *favoriteLabel(bool favorite)
+{
+    return favorite ? "In Favorites" : "Add to Favorites";
+}
+
+void uiDrawShowFavorite(bool favorite)
+{
+    showPill(GFX_WIDTH - MARGIN, "R", favoriteLabel(favorite), favorite, LIBHIT_FAVORITE);
+}
+
+void uiDrawShowDownload(const char *label, bool done, bool favorite_shown, bool favorite)
+{
+    int right = GFX_WIDTH - MARGIN;
+    if (favorite_shown)
+        right -= uiButtonWidth("R") + fontTextWidth(FONT_BOLD, 18, favoriteLabel(favorite)) + 34 + 12;
+    showPill(right, "L", label, done, LIBHIT_SHOW_DOWNLOAD);
+}
+
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note, bool favorites,
+                   const char *download)
 {
     const LibraryItem *it = &lib->items[item];
     int x = (GFX_WIDTH - DETAILS_W) / 2, y = (UI_FOOTER_Y + UI_TAB_BAR_H - DETAILS_H) / 2;
@@ -207,6 +227,8 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
         bool favorite = it->favorite;
         const char *label = it->show >= 0 ? (favorite ? "Series in Favorites" : "Favorite series")
                                           : (favorite ? "In Favorites" : "Favorite");
-        detailsButton(bx, by, "R", label, LIBHIT_FAVORITE);
+        bx += detailsButton(bx, by, "R", label, LIBHIT_FAVORITE) + DETAILS_BUTTON_GAP;
     }
+    if (download)
+        detailsButton(bx, by, "L", download, LIBHIT_DETAILS_DOWNLOAD);
 }

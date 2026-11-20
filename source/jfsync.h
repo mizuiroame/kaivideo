@@ -110,6 +110,25 @@ bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile 
 // channel's stream the server opened (NULL or "" for none).
 void jfSyncSetPlayback(const char *play_session, bool converted, const char *live_stream);
 
+// --- Downloads (jfoffline.c) ---
+
+// Who a server's location is watched as now: "<kind>|<server>|<user>"
+// (downloads.h's account). False, with "", if its server isn't signed in.
+bool jfSyncAccountOf(const char *location, char *out, size_t size);
+
+typedef enum {
+    DL_SEND_DONE,          // The server took it.
+    DL_SEND_SERVER_NEWER,  // The server heard of the video later (watched elsewhere): what it says stays.
+    DL_SEND_DROPPED,       // The server doesn't have the video any more, or refused: nothing to try again.
+    DL_SEND_LATER,         // No answer, or its user isn't signed in now: try again later.
+} DlSendResult;
+
+// Tells the server where a video downloaded as account was left without the
+// network (when: seconds since 1970), unless it heard of it later. Waits for
+// the answer; the requests stop when *cancel (may be NULL) becomes true.
+DlSendResult jfSyncSendOffline(const char *location, const char *account, int64_t position_ns, bool played,
+                               int64_t when, const volatile bool *cancel);
+
 // The address and header for reading a location's file; for its picture.
 bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size);
 bool jfSyncImageRequest(const char *location, const char *kind, int max_width, char *url, size_t url_size,

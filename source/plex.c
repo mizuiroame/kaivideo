@@ -556,3 +556,24 @@ bool plexSessionSave(const PlexSession *s, const char *file)
             s->client_id, s->token, s->user_name, s->server_name, s->server_id, s->server_token, s->server_uri);
     return fclose(f) == 0;
 }
+
+// --- Where the user left a video, told later ---
+
+bool plexUserDataParse(const char *json, JfUserData *out)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *item = json_array_get(container(root, "Metadata"), 0);
+    bool ok = json_is_object(item);
+    if (ok)
+        *out = (JfUserData){.position_ns = numberOf(item, "viewOffset") * MS_TO_NS,
+                            .last_played = numberOf(item, "lastViewedAt"),
+                            .played = numberOf(item, "viewCount") > 0};
+    json_decref(root);
+    return ok;
+}
+
+void plexProgressPath(char *out, size_t size, const char *item, int64_t position_ns)
+{
+    snprintf(out, size, "/:/progress?key=%s&identifier=com.plexapp.plugins.library&time=%lld&state=stopped", item,
+             (long long)(position_ns > 0 ? position_ns / MS_TO_NS : 0));
+}

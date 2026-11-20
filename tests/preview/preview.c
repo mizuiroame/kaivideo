@@ -16,6 +16,7 @@
 #include "player.h"
 #include "resume.h"
 #include "ui.h"
+#include "ui_downloads.h"
 #include "ui_library.h"
 #include "settings.h"
 #include "theme.h"
@@ -441,6 +442,67 @@ static void collectionScene(void)
     libraryFree(&lib);
 }
 
+// Downloads of the sample library: one of each kind, by episode.
+static int fakeDownload(const char *path, const void *user, double *fraction)
+{
+    (void)user;
+    *fraction = 0.42;
+    if (strstr(path, "S02E01") || strstr(path, "Lanterns"))
+        return UI_DL_DONE;
+    if (strstr(path, "S02E02") || strstr(path, "Ashfall"))
+        return UI_DL_ACTIVE;
+    if (strstr(path, "S02E03"))
+        return UI_DL_QUEUED;
+    if (strstr(path, "S02E04"))
+        return UI_DL_PAUSED;
+    if (strstr(path, "S02E05"))
+        return UI_DL_FAILED;
+    return UI_DL_NONE;
+}
+
+// The Downloads panel: one of each state, more rows than fit, and its touch targets.
+static void downloadsScene(void)
+{
+    static const UiDownloadRow ROWS[] = {
+        {"Paper Lanterns (1998)", "Film", "On the card \xC2\xB7 4.2 GB", 1, true, false},
+        {"Dry Creek", "Prairie Road \xC2\xB7 S09E06", "1.1 GB of 2.3 GB", 0.48, false, false},
+        {"Lamentia", "Rook \xC2\xB7 S01E03", "Waiting", 0, false, false},
+        {"Pawns", "Rook \xC2\xB7 S01E02", "Paused \xC2\xB7 12%", 0.12, false, false},
+        {"Quiet Harbor (2017)", "Film", "The card needs 2.1 GB more free for it.", 0.3, false, true},
+        {"Ashfall (2010)", "Film", "Waiting", 0, false, false},
+        {"Kite Hill (2004)", "Film", "Waiting", 0, false, false},
+    };
+    int count = (int)(sizeof(ROWS) / sizeof(ROWS[0]));
+    Scroll s = {.cursor = 1};
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawDownloads(ROWS, count, &s, 3,
+                    "1 on the card, 4 to come \xC2\xB7 2 watched offline, told to the server when it's back", "");
+    uiDrawFooterHelp("[A] play / pause / go on  [X] delete  [B] close");
+    save("downloads");
+    bool rows = false, deletes = false;
+    for (int y = 0; y < GFX_HEIGHT; y += 4)
+        for (int x = 0; x < GFX_WIDTH; x += 8) {
+            LibHit hit = uiLibraryTap(x, y);
+            rows = rows || (hit.kind == LIBHIT_DOWNLOAD_ROW && hit.a == UI_DOWNLOAD_ROWS - 1);
+            deletes = deletes || (hit.kind == LIBHIT_DOWNLOAD_DELETE && hit.a == 0);
+        }
+    if (!rows || !deletes || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: downloads: a row, a delete button or the outside doesn't answer a tap\n");
+        g_problems++;
+    }
+    if (uiLibraryTap(GFX_WIDTH / 2, 655).kind == LIBHIT_DOWNLOAD_ROW) {
+        printf("TOUCH: downloads: a row below the list answers a tap\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawDownloads(ROWS, 0, &s, -1, "0 on the card, 0 to come",
+                    "Nothing yet: open a film or episode from a server and press L to download it.");
+    uiDrawFooterHelp("[A] play / pause / go on  [X] delete  [B] close");
+    save("downloads_empty");
+}
+
 static void libraryScenes(void)
 {
     SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
@@ -478,15 +540,41 @@ static void libraryScenes(void)
         if (strstr(g_lib.shows[s].name, "Prairie"))
             libviewOpenShow(&g_view, &g_lib, (int)s, -1);
     libviewShowMove(&g_view, &g_lib, 1, 3);
+    uiLibrarySetDownloads(fakeDownload, NULL);
+    uiLibrarySetDownloadsPill("2 \xC2\xB7 42%", 0.42);
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawShowFavorite(false);
-    uiDrawFooterHelp("[A] play  [X] watched  [R] favorite  [<>] season  [B] back  [ZL][ZR] tabs  [+] menu");
+    uiDrawShowDownload("Download season", false, true, false);
+    uiDrawFooterHelp("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs");
     save("lib_show_server");
+    bool pill = false;
+    for (int x = GFX_WIDTH / 2; x < GFX_WIDTH; x += 4)
+        pill = pill || uiLibraryTap(x, 30).kind == LIBHIT_DOWNLOADS;
+    if (!pill) {
+        printf("TOUCH: lib_show_server: the downloads pill doesn't answer a tap\n");
+        g_problems++;
+    }
     if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, UI_TAB_BAR_H + 38).kind != LIBHIT_FAVORITE) {
         printf("TOUCH: lib_show_server: the favorite button doesn't answer a tap\n");
         g_problems++;
     }
+    bool season_download = false;
+    for (int x = GFX_WIDTH / 3; x < GFX_WIDTH; x += 4)
+        season_download = season_download || uiLibraryTap(x, UI_TAB_BAR_H + 38).kind == LIBHIT_SHOW_DOWNLOAD;
+    if (!season_download) {
+        printf("TOUCH: lib_show_server: the season's download button doesn't answer a tap\n");
+        g_problems++;
+    }
+    g_view.show = -1;
+    g_view.tab = TAB_FILMS;
+    libraryScene("lib_films_downloads", true, NULL, NULL);
+    for (size_t s = 0; s < g_lib.show_count; s++)
+        if (strstr(g_lib.shows[s].name, "Prairie"))
+            libviewOpenShow(&g_view, &g_lib, (int)s, -1);
+    libviewShowMove(&g_view, &g_lib, 1, 3);
+    uiLibrarySetDownloads(NULL, NULL);
+    uiLibrarySetDownloadsPill("", 0);
     libraryScene("lib_show", true, NULL, NULL);
     if (uiLibraryTap(MARGIN + 10, 100).kind != LIBHIT_BACK) {
         printf("TOUCH: lib_show: Back doesn't answer a tap\n");
@@ -656,18 +744,20 @@ static void libraryScenes(void)
                             "one week to find the family who stayed behind, before the ash reaches the river.");
     film->runtime_ns = 6720ll * 1000000000;
     film->favorite = true;
-    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "", true);
-    uiDrawFooterHelp("[A] play  [Y] from the start  [X] watched  [R] favorite  [B] back");
+    // The longest labels side by side: Resume, From start, Unwatched, In Favorites, Downloading.
+    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "", true, "Downloading 42%");
+    uiDrawFooterHelp("[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back");
     save("details");
     film->favorite = false;
-    bool played = false, marked = false;
+    bool played = false, marked = false, download = false;
     for (int y = 0; y < GFX_HEIGHT; y += 4)
         for (int x = 0; x < GFX_WIDTH; x += 8) {
             LibHitKind kind = uiLibraryTap(x, y).kind;
             played = played || kind == LIBHIT_DETAILS_PLAY;
             marked = marked || kind == LIBHIT_DETAILS_WATCHED;
+            download = download || kind == LIBHIT_DETAILS_DOWNLOAD;
         }
-    if (!played || !marked || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE) {
+    if (!played || !marked || !download || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE) {
         printf("TOUCH: details: a button or the outside doesn't answer a tap\n");
         g_problems++;
     }
@@ -676,16 +766,17 @@ static void libraryScenes(void)
     uiDrawAbout("1.0.0");
     uiDrawFooterHelp("[A][B] back");
     save("about");
+    downloadsScene();
 
     // The + menu, and its question.
-    static const char *const MENU[] = {"Look for new videos", "Settings", "Exit KaiVideo"};
+    static const char *const MENU[] = {"Downloads", "Look for new videos", "Settings", "Exit KaiVideo"};
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawMenu("KaiVideo", "1.0.0", MENU, 3, 1);
+    uiDrawMenu("KaiVideo", "1.0.0", MENU, 4, 2);
     uiDrawFooterHelp("[A] choose  [B] close  [+] exit");
     save("menu");
-    LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 3 * 48 + 20)) / 2 + 76 + 2 * 48 + 20);
-    if (item.kind != LIBHIT_MENU_ITEM || item.a != 2 || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
+    LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 4 * 48 + 20)) / 2 + 76 + 3 * 48 + 20);
+    if (item.kind != LIBHIT_MENU_ITEM || item.a != 3 || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
         printf("TOUCH: menu: an item or the outside doesn't answer as drawn\n");
         g_problems++;
     }

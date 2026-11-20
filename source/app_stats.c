@@ -25,7 +25,7 @@ void appStatsDraw(const App *app)
     settingValue(&app->config, SETTING_JF_QUALITY, quality, sizeof(quality));
     bool converted = playerIsConverted(p);
     StatsInfo info = {
-        .source = converted ? STATS_CONVERTED : jfIsRemoteLocation(app->playing_path) ? STATS_DIRECT : STATS_CARD,
+        .source = converted ? STATS_CONVERTED : jfIsRemoteLocation(app->playing_path) && !app->open_copy[0] ? STATS_DIRECT : STATS_CARD,
         .quality = quality,
         .video = playerVideoInfo(p),
         .sound = playerAudioInfo(p),

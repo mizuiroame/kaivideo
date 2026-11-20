@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "browser.h"
+#include "downloads.h"
 #include "home.h"
 #include "jfsync.h"
 #include "kinetic.h"
@@ -16,6 +17,7 @@
 #include "menu.h"
 #include "player.h"
 #include "resume.h"
+#include "scroll.h"
 #include "settings.h"
 #include "stats.h"
 #include "touch.h"
@@ -140,6 +142,15 @@ struct App {
     char jf_last_error[128];
     uint64_t jf_last_refresh, jf_last_report;
     bool jf_reported_paused;    // What the last report said: a pause or going on is told at once.
+
+    // Downloads (app_downloads.c).
+    DownloadList downloads;     // A copy of the download thread's list.
+    unsigned dl_changes, dl_finished;  // What the thread's counts were when it was taken.
+    bool downloads_open;        // The Downloads panel (+ menu).
+    Scroll downloads_scroll;
+    int downloads_confirm;      // The row whose delete was pressed once, -1 for none.
+    // The server's video being opened or played comes from its download on the card: its file, else "".
+    char open_copy[LIBRARY_PATH_MAX];
 };
 
 // main.c
@@ -173,8 +184,12 @@ void appLibraryToggleSource(App *app, uint64_t now);
 void appLibrarySetSource(App *app, bool jellyfin);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
 void appLibraryInstallCatalog(App *app, JfCatalog *c);
+// app_scroll.c
 // A finger drags a list of the library's screens (Live TV's guide included).
 void appLibraryDrag(App *app, TouchEvent touch, uint64_t now);
+// A finger came down, let go, or nothing: a list glides on, or stops (a tap
+// that stopped a glide is taken out of touch).
+void appLibraryGlide(App *app, uint64_t pressed, TouchEvent *touch, uint64_t now);
 // The accent is the server's color while its library (or a video of it) shows,
 // else the one chosen in Display.
 void appApplyViewAccent(const App *app);
@@ -225,6 +240,42 @@ void appTrickplayAboveBar(const App *app, bool bar);
 // Measures the video playing, and draws the panel if ↓ turned it on.
 void appStatsUpdate(App *app, uint64_t now);
 void appStatsDraw(const App *app);
+
+// app_downloads.c
+void appDownloadsStart(App *app);  // After the settings are read.
+void appDownloadsExit(App *app);
+// Once a frame: downloads wait while a server's video streams; a finished one
+// is looked for in the card's library.
+void appDownloadsUpdate(App *app, uint64_t now);
+// The whole download of a server's video (any user's), or NULL.
+const char *appDownloadedCopy(const App *app, const char *location);
+// The same, if its file is still on the card: what a server's video plays from.
+const char *appPlayableCopy(const App *app, const char *location);
+// What the details panel's download button says for item, NULL for no button.
+const char *appDownloadLabel(const App *app, int item, char *out, size_t size);
+// L on a film or episode's details: downloads it, or pauses, goes on, tries again.
+void appDownloadItem(App *app, int item, uint64_t now);
+// What a series page's button says for its season shown; NULL for none (not a server's).
+// done: every episode is on the card.
+const char *appSeasonDownloadLabel(const App *app, int show, int season, bool *done, char *out, size_t size);
+// L on a series page: the season shown, every episode not yet downloaded.
+void appDownloadSeason(App *app, int show, int season, uint64_t now);
+// A video stopped: if it's a download (or a server's video played from one),
+// both its places keep where it was left, and its server will be told.
+void appDownloadsPlayed(App *app, int64_t position_ns, bool finished);
+// A video was marked watched or not by hand: the same for its download's other place, and its server is told.
+void appDownloadsMarked(App *app, const char *path, bool watched);
+// A server's library came (kind): downloads of it take what it says of them,
+// unless they were watched here since; what waits to be told goes now.
+void appDownloadsCatalogCame(App *app, ServerKind kind);
+// Downloads on the card take their server's names (the card's library, built again).
+void appDownloadsNameLibrary(const App *app, Library *lib);
+// The Downloads panel.
+void appDownloadsOpen(App *app);
+void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appDownloadsDraw(const App *app);
+// A finger moves its list by px. False at an end.
+bool appDownloadsScrollPx(App *app, int px);
 
 // app_menu.c
 void appOpenMenu(App *app);

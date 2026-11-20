@@ -48,6 +48,9 @@ The screenshots show made-up films, series and channels.
   credits** come up where the server marked them, and **picture subtitles**
   (PGS, VobSub) are drawn onto the video by the server. What you watch stays
   in sync with your other devices. See [Media servers](#media-servers).
+- **Downloads** to watch without the network: a film, an episode or a whole
+  season goes from your server to the SD card, and what you watch meanwhile
+  reaches the server when it's back. See [Downloads](#downloads).
 - **Live TV** from Jellyfin has its own tab with a **guide** of the next
   hours; a channel with a stream of its own plays straight from it, with its
   own sound tracks and subtitles. On Jellyfin, dragging the bar shows a
@@ -255,11 +258,43 @@ What your server adds, when it's set up for it:
   so it doesn't stop to wait. The channel you watch shows as playing on the
   server, as videos do.
 
+### Downloads
+
+On a server's film or episode, **L** in its panel downloads it to the SD card;
+on a series' page, **L** downloads the season shown (or the episodes of it not
+asked for yet). They come one at a time,
+in the order asked for, into a `KaiVideo Downloads` folder inside your library
+folder (`Films` and `Series` in it), so the SD card's library shows them with
+their server's names. With no library folder chosen yet, `sdmc:/KaiVideo
+Downloads` becomes it. The server's subtitle file comes with the video;
+subtitles inside the video are in it already.
+
+**+** > **Downloads** shows them all, with how far each has come: **A** plays
+one that's whole, or pauses one and lets it go on; **X** twice deletes it from
+the card. A download cut off (the network, the console asleep, KaiVideo
+closed) goes on from where it stopped. Downloads wait while a video from a
+server plays, so it keeps the network to itself, and one that won't fit on the
+card says how much room it needs.
+
+A film or episode downloaded has a mark beside its watched circle (and on its
+card): an SD card in a filled circle when it's on the card, a ring that fills while it comes, faint
+while it waits, two bars when paused, red when it failed. While downloads are
+on their way, a pill at the top of the screen says how many and how far
+they've come; a tap on it opens Downloads. A video on the card plays from it
+even when you open it from the server, with the network or without. Where you leave it
+and what you finish are kept on the console and told to its server, for the
+user who downloaded it, as soon as the server can be reached again. If you
+watched it somewhere else since, what the server says stays.
+
+Only videos the console plays as they are can be downloaded for now; a
+download the server converts first is planned.
+
 ### Where KaiVideo keeps its files
 
 Your library folder, the list of videos found in it, where you left each
-video, what you've watched, the sound tracks and subtitles you chose and a
-log are kept in a `config` folder next to `KaiVideo.nro`, in its own folder:
+video, what you've watched, the sound tracks and subtitles you chose, the
+downloads (`downloads.txt`) and what waits to be told to a server
+(`offline_sync.txt`), and a log are kept in a `config` folder next to `KaiVideo.nro`, in its own folder:
 `sdmc:/switch/kaivideo/config/` (or `sdmc:/brewstore/apps/kaivideo/config/`
 when brewstore installs it). Your videos aren't touched.
 
@@ -275,7 +310,8 @@ when brewstore installs it). Your videos aren't touched.
 | **B** | Back from a series (in Files: the folder above) |
 | **Y** | Search |
 | **−** | Settings |
-| **+** | The menu: Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
+| **L** | On a server's film or episode (its panel) or series' page: download it, or the season |
+| **+** | The menu: Downloads, Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
 On **Live TV**, **↑** / **↓** change channel, **◀** / **▶** move through the
 guide and **A** watches the channel. On a series, **◀** / **▶** change the season and **X** marks the episode
@@ -347,6 +383,8 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 ## Plans
 
+- **Downloads** of videos the server converts first (4K, HDR), and network
+  folders (SMB, WebDAV, FTP, SFTP, HTTP) as libraries.
 - **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
 

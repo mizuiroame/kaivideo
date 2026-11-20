@@ -218,3 +218,9 @@ bool jfCatalogLoad(JfCatalog *c, const char *file);
 // Makes resume and watched say what the server says about its videos; what
 // they hold about files on the card stays.
 void jfMergeUserData(const JfCatalog *c, ResumeList *resume, Watched *watched);
+
+// Where the user left an item, from a /Users/<user>/Items/<item> answer. False if it says none.
+bool jfUserDataParse(const char *json, JfUserData *out);
+// The body that sets it (UserData of an item): where it was left, whether it
+// was watched, and when (seconds since 1970) that happened.
+void jfUserDataBody(char *out, size_t size, int64_t position_ns, bool played, int64_t when);

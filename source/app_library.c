@@ -59,6 +59,7 @@ static void loadCardLibrary(App *app)
         libraryFree(&app->library);
         libraryInit(&app->library, app->library_root);
     }
+    appDownloadsNameLibrary(app, &app->library);
     appLibraryRefreshHome(app);
     startScan(app);
 }
@@ -148,6 +149,8 @@ void appLibraryServerCatalog(App *app, ServerKind kind, JfCatalog *c)
         installCopy(app, c);
     else if (viewed)  // Signed out: the next server, or the card.
         appLibrarySetSource(app, nextSignedIn(-1) >= 0);
+    if (c)
+        appDownloadsCatalogCame(app, kind);
 }
 
 static void reapplyFavoriteChanges(App *app);
@@ -212,6 +215,7 @@ void appLibraryUpdate(App *app)
         libraryFree(&found);
         return;
     }
+    appDownloadsNameLibrary(app, &found);
     libraryFree(&app->library);
     app->library = found;
     char path[LIBRARY_PATH_MAX];
@@ -285,6 +289,7 @@ static void setWatched(App *app, int item)
     const char *path = app->library.items[item].path;
     bool watched = !watchedHas(&app->watched, path);
     watchedSet(&app->watched, path, watched);
+    appDownloadsMarked(app, path, watched);
     appSaveWatched(app);
     if (jfIsRemoteLocation(path))
         jfSyncSetPlayed(path, watched);
@@ -395,6 +400,14 @@ static bool hasResume(const App *app, int item)
     return resumeFind(&app->resume, app->library.items[item].path, &at, NULL);
 }
 
+// The series page shown is a server's: its season can be downloaded.
+static bool seasonDownloadable(const App *app)
+{
+    char label[64];
+    bool done;
+    return appSeasonDownloadLabel(app, app->view.show, app->view.season, &done, label, sizeof(label)) != NULL;
+}
+
 static void detailsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     LibView *v = &app->view;
@@ -404,6 +417,8 @@ static void detailsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t 
         setWatched(app, item);
     } else if ((pressed & HidNpadButton_R) || hit.kind == LIBHIT_FAVORITE) {
         toggleFavorite(app, (LibraryRef){false, item}, now);
+    } else if ((pressed & HidNpadButton_L) || hit.kind == LIBHIT_DETAILS_DOWNLOAD) {
+        appDownloadItem(app, item, now);
     } else if ((pressed & HidNpadButton_A) || hit.kind == LIBHIT_DETAILS_PLAY) {
         v->details = -1;
         playItem(app, item, now);
@@ -543,6 +558,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     switch (hit.kind) {
     case LIBHIT_TAB: libviewGoToTab(v, hit.a); break;
     case LIBHIT_MENU: appOpenMenu(app); break;
+    case LIBHIT_DOWNLOADS: appDownloadsOpen(app); break;
     case LIBHIT_SOURCE: appLibraryToggleSource(app, now); break;
     case LIBHIT_HOME_CARD:
         v->home_row = hit.a;
@@ -575,129 +591,22 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     }
 }
 
-// --- Following a finger ---
-
-typedef enum {
-    SCROLL_NONE,
-    SCROLL_HOME,
-    SCROLL_HOME_ROW,
-    SCROLL_GRID,
-    SCROLL_EPISODES,
-    SCROLL_RESULTS,
-    SCROLL_FILES,
-    SCROLL_LIVE,
-} ScrollTarget;
-
-// What's on screen: a list being scrolled stops if this changes.
-static int viewKey(const App *app)
-{
-    const LibView *v = &app->view;
-    return (((v->tab * 64 + v->collection + 1) * 65536 + v->show + 1) * 64 + v->season) * 2 + app->picking;
-}
-
-// Moves the list being scrolled by px (positive: up, or left across a Home row).
-// False if it reached an end.
-static bool scrollTarget(App *app, int px)
-{
-    LibView *v = &app->view;
-    if (viewKey(app) != app->scroll_view)
-        return false;
-    int grid = libviewGrid(v), first, count;
-    switch ((ScrollTarget)app->scroll_target) {
-    case SCROLL_HOME: return libviewHomeScrollPx(v, &app->home, px);
-    case SCROLL_HOME_ROW:
-        v->home_row = app->scroll_row;  // The row a finger moves along is the one chosen.
-        return libviewHomeRowScrollPx(v, &app->home, app->scroll_row, px);
-    case SCROLL_GRID:
-        return grid >= 0 && scrollPx(&v->grid[grid], px, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
-                                            libviewGridCount(v, &app->library, grid));
-    case SCROLL_EPISODES:
-        libviewSeasonRange(&app->library, v->show, v->season, &first, &count);
-        return scrollPx(&v->episodes, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, count);
-    case SCROLL_RESULTS:
-        return scrollPx(&v->results_scroll, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, v->result_count);
-    case SCROLL_FILES: return app->scroll_browser && browserScrollPx(app->scroll_browser, px, UI_ROW_H, UI_ROWS);
-    case SCROLL_LIVE: return scrollPx(&v->live, px, LIBVIEW_LIVE_ROW_PX, LIBVIEW_LIVE_ROWS, 1, app->live.count);
-    default: return false;
-    }
-}
-
-// A drag begins: which list it moves (across a Home row if it went more
-// across than down, as a phone decides).
-static void startScroll(App *app, TouchEvent touch)
-{
-    LibView *v = &app->view;
-    app->scroll_target = SCROLL_NONE;
-    app->scroll_view = viewKey(app);
-    if (app->picking || (v->tab == TAB_FILES && v->show < 0)) {  // The file list, under its folder's line.
-        app->scroll_browser = app->picking ? &app->picker : &app->browser;
-        app->scroll_target = touch.start_y >= UI_LIST_Y ? SCROLL_FILES : SCROLL_NONE;
-        return;
-    }
-    if (touch.start_y < UI_TAB_BAR_H)
-        return;
-    if (v->tab == TAB_LIVE && v->show < 0) {
-        app->scroll_target = SCROLL_LIVE;
-    } else if (v->show >= 0) {
-        app->scroll_target = SCROLL_EPISODES;
-    } else if (v->tab == TAB_HOME) {
-        LibHit hit = uiLibraryTap(touch.start_x, touch.start_y);
-        bool across = abs(touch.x - touch.start_x) > abs(touch.y - touch.start_y);
-        app->scroll_target = hit.kind == LIBHIT_HOME_CARD && across ? SCROLL_HOME_ROW : SCROLL_HOME;
-        app->scroll_row = hit.a;
-    } else if (libviewGrid(v) >= 0) {
-        app->scroll_target = SCROLL_GRID;
-    } else if (v->tab == TAB_SEARCH) {
-        app->scroll_target = SCROLL_RESULTS;
-    }
-}
-
-void appLibraryDrag(App *app, TouchEvent touch, uint64_t now)
-{
-    bool starting = !app->kinetic.dragging;
-    if (starting) {
-        startScroll(app, touch);
-        kineticDrag(&app->kinetic, 0, now);
-    }
-    // The content goes with the finger: dragging up shows what's below.
-    int px = app->scroll_target == SCROLL_HOME_ROW ? -touch.dx : -touch.dy;
-    scrollTarget(app, px);
-    if (!starting)
-        kineticDrag(&app->kinetic, px, now);
-}
-
-// A finger came down, let go, or nothing: a list glides on, or stops.
-static void glideInput(App *app, uint64_t pressed, TouchEvent *touch, uint64_t now)
-{
-    if (touch->type == TOUCH_PRESS) {  // A press stops a glide, and isn't a tap on what it stopped over.
-        app->swallow_tap = kineticGliding(&app->kinetic);
-        kineticStop(&app->kinetic);
-    } else if (touch->type == TOUCH_TAP && app->swallow_tap) {
-        touch->type = TOUCH_NONE;
-    }
-    if (touch->type != TOUCH_PRESS && touch->type != TOUCH_DRAG)
-        app->swallow_tap = false;
-    if (touch->type == TOUCH_DRAG_END && app->kinetic.dragging)
-        kineticRelease(&app->kinetic, now);
-    if (pressed)
-        kineticStop(&app->kinetic);  // A button takes over from the finger.
-    int px = kineticStep(&app->kinetic, now);
-    if (px && !scrollTarget(app, px))
-        kineticStop(&app->kinetic);  // An end, or another view.
-}
-
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     if (app->app_menu != APP_MENU_NONE || app->settings_open)
         kineticStop(&app->kinetic);
     else
-        glideInput(app, pressed, &touch, now);
+        appLibraryGlide(app, pressed, &touch, now);
     if (app->app_menu != APP_MENU_NONE) {
         appMenuInput(app, pressed, touch, now);
         return;
     }
     if (app->settings_open) {
         appSettingsInput(app, pressed, touch, now);
+        return;
+    }
+    if (app->downloads_open) {
+        appDownloadsInput(app, pressed, touch, now);
         return;
     }
     if (pressed & HidNpadButton_Plus) {
@@ -724,6 +633,12 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         toggleFavorite(app, shown, now);
         return;
     }
+    // And L downloads the season shown (ZL still changes tab).
+    bool season_download = v->show >= 0 && (size_t)v->show < app->library.show_count && seasonDownloadable(app);
+    if (season_download && (pressed & HidNpadButton_L)) {
+        appDownloadSeason(app, v->show, v->season, now);
+        return;
+    }
     if (pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)) {
         libviewNextTab(v, (pressed & BUTTONS_TAB_LEFT) ? -1 : 1);
         return;  // A tap this frame was aimed at the old tab.
@@ -741,15 +656,17 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     LibHit hit = touch.type == TOUCH_TAP ? uiLibraryTap(touch.x, touch.y) : (LibHit){LIBHIT_NONE, 0, 0};
+    bool header = hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU || hit.kind == LIBHIT_SOURCE ||
+                  hit.kind == LIBHIT_DOWNLOADS;
     if (v->tab == TAB_FILES && v->show < 0) {
-        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU || hit.kind == LIBHIT_SOURCE)
+        if (header)
             tapInput(app, hit, now);
         else if (!(pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)))
             folderInput(app, &app->browser, false, pressed, touch, now);
         return;
     }
     if (v->tab == TAB_LIVE && v->show < 0) {
-        if (hit.kind == LIBHIT_TAB || hit.kind == LIBHIT_MENU || hit.kind == LIBHIT_SOURCE)
+        if (header)
             tapInput(app, hit, now);
         else
             appLiveInput(app, pressed, touch, now);
@@ -758,6 +675,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     buttonInput(app, pressed, now);
     if (hit.kind == LIBHIT_FAVORITE && favorite_here)
         toggleFavorite(app, shown, now);
+    else if (hit.kind == LIBHIT_SHOW_DOWNLOAD && season_download)
+        appDownloadSeason(app, v->show, v->season, now);
     else if (hit.kind != LIBHIT_NONE)
         tapInput(app, hit, now);
     else if (touch.type == TOUCH_DRAG)
@@ -779,11 +698,26 @@ void appLibraryRescan(App *app, uint64_t now)
     }
 }
 
+// A series page's buttons at the top right: favorite (R) and download the season (L).
+static void drawShowButtons(const App *app)
+{
+    const LibView *v = &app->view;
+    if (v->show < 0 || (size_t)v->show >= app->library.show_count)
+        return;
+    LibraryRef shown = {true, v->show};
+    bool favorites = canBeFavorite(app, shown), favorite = app->library.shows[v->show].favorite, done;
+    if (favorites)
+        uiDrawShowFavorite(favorite);
+    char label[64];
+    if (appSeasonDownloadLabel(app, v->show, v->season, &done, label, sizeof(label)))
+        uiDrawShowDownload(label, done, favorites, favorite);
+}
+
 void appLibraryDraw(App *app, uint64_t now)
 {
     appApplyViewAccent(app);
     const char *message = now < app->message_until ? app->message : NULL;
-    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
+    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE || app->downloads_open;
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
@@ -819,16 +753,17 @@ void appLibraryDraw(App *app, uint64_t now)
                       app->library_root[0] != '\0' || app->config.use_jellyfin, status, under);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
             appLiveDraw(app);
-        LibraryRef shown = {true, app->view.show};
-        if (app->view.show >= 0 && (size_t)app->view.show < app->library.show_count && canBeFavorite(app, shown))
-            uiDrawShowFavorite(app->library.shows[app->view.show].favorite);
+        drawShowButtons(app);
     }
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count) {
         int item = app->view.details;
+        char download[64];
         uiDrawDetails(&app->library, item, &app->resume,
                       jfPlayabilityMessage((JfPlayability)app->library.items[item].blocked),
-                      canBeFavorite(app, (LibraryRef){false, item}));
+                      canBeFavorite(app, (LibraryRef){false, item}),
+                      appDownloadLabel(app, item, download, sizeof(download)));
     }
+    appDownloadsDraw(app);
     appSettingsDraw(app);
     appMenuDraw(app);
     if (overlay)

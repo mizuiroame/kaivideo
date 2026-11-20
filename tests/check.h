@@ -41,3 +41,4 @@ void testTrickplay(void);
 void testLiveTv(void);
 void testKinetic(void);
 void testHlsMaster(void);
+void testDownloads(void);

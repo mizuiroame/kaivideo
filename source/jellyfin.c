@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 
 #include <jansson.h>
 
@@ -948,4 +949,27 @@ const char *jfSegmentLabel(JfSegmentKind kind)
     case JF_SEGMENT_OUTRO: return "Skip credits";
     }
     return "Skip";
+}
+
+// --- Where the user left a video, told later ---
+
+bool jfUserDataParse(const char *json, JfUserData *out)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    bool ok = json_is_object(json_object_get(root, "UserData"));
+    if (ok)
+        readUserData(root, out);
+    json_decref(root);
+    return ok;
+}
+
+void jfUserDataBody(char *out, size_t size, int64_t position_ns, bool played, int64_t when)
+{
+    time_t t = (time_t)when;
+    struct tm tm;
+    char date[32] = "";
+    if (gmtime_r(&t, &tm))
+        strftime(date, sizeof(date), "%Y-%m-%dT%H:%M:%S.0000000Z", &tm);
+    snprintf(out, size, "{\"PlaybackPositionTicks\":%lld,\"Played\":%s,\"LastPlayedDate\":\"%s\"}",
+             (long long)(position_ns > 0 ? position_ns / TICKS_TO_NS : 0), played ? "true" : "false", date);
 }

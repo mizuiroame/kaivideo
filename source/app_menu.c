@@ -14,6 +14,7 @@
 #endif
 
 typedef enum {
+    ITEM_DOWNLOADS,
     ITEM_RESCAN,
     ITEM_SETTINGS,
     ITEM_BACK_TO_LIBRARY,
@@ -22,11 +23,12 @@ typedef enum {
     ITEM_CANCEL,
 } MenuItemId;
 
-#define ITEMS_MAX 4
+#define ITEMS_MAX 5
 
 static const char *itemLabel(MenuItemId id)
 {
     switch (id) {
+    case ITEM_DOWNLOADS: return "Downloads";
     case ITEM_RESCAN: return "Look for new videos";
     case ITEM_SETTINGS: return "Settings";
     case ITEM_BACK_TO_LIBRARY: return "Back to the library";
@@ -48,6 +50,7 @@ static int items(const App *app, MenuItemId out[ITEMS_MAX])
     if (app->player) {
         out[n++] = ITEM_BACK_TO_LIBRARY;
     } else {
+        out[n++] = ITEM_DOWNLOADS;
         if (app->library_root[0])
             out[n++] = ITEM_RESCAN;
         out[n++] = ITEM_SETTINGS;
@@ -77,6 +80,7 @@ static void run(App *app, MenuItemId id, uint64_t now)
 {
     app->app_menu = APP_MENU_NONE;
     switch (id) {
+    case ITEM_DOWNLOADS: appDownloadsOpen(app); break;
     case ITEM_RESCAN: appLibraryRescan(app, now); break;
     case ITEM_SETTINGS: appOpenSettings(app); break;
     case ITEM_BACK_TO_LIBRARY: app->stop_requested = true; break;
@@ -139,6 +143,8 @@ const char *appFooterHelp(const App *app)
         return "[A] choose  [B] cancel  [+] exit";
     if (app->app_menu == APP_MENU_MAIN)
         return "[A] choose  [B] close  [+] exit";
+    if (app->downloads_open)
+        return "[A] play / pause / go on  [X] delete  [B] close";
     if (app->settings_open && app->jf_signing)
         return "[B] cancel";
     if (app->settings_open && app->about_open)
@@ -151,10 +157,10 @@ const char *appFooterHelp(const App *app)
                                     : "[A] open  [B] folder above  [X] use this folder  [+] menu";
     bool server = app->config.use_jellyfin;  // Favorites are kept on the server.
     if (app->view.details >= 0)
-        return server ? "[A] play  [Y] from the start  [X] watched  [R] favorite  [B] back"
+        return server ? "[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back"
                       : "[A] play  [Y] from the start  [X] watched  [B] back";
     if (app->view.show >= 0)
-        return server ? "[A] play  [X] watched  [R] favorite  [<>] season  [B] back  [ZL][ZR] tabs  [+] menu"
+        return server ? "[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs"
                       : "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {
     case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";

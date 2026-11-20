@@ -69,6 +69,10 @@ void plexTimelinePath(char *out, size_t size, const char *item, const char *stat
                       int64_t duration_ns);
 // Marks an item watched or not.
 void plexPlayedPath(char *out, size_t size, const char *item, bool played);
+// Where the user left an item, from its /library/metadata/<item> answer. False if it has none.
+bool plexUserDataParse(const char *json, JfUserData *out);
+// Sets where an item was left, without a player's session (what was watched offline).
+void plexProgressPath(char *out, size_t size, const char *item, int64_t position_ns);
 
 // How to play an item, from its /library/metadata/<item> answer: its sound
 // tracks (the server's stream ids), its subtitles, and whether the console can

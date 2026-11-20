@@ -131,7 +131,7 @@ void gfxFillRoundRect(int x, int y, int w, int h, int radius, Color color)
             int xs[2] = {x + dx, x + w - 1 - dx}, ys[2] = {y + dy, y + h - 1 - dy};
             for (int i = 0; i < 4; i++) {
                 int px = xs[i & 1], py = ys[i >> 1];
-                if (g_pixels && px >= 0 && px < GFX_FB_WIDTH && py >= 0 && py < GFX_FB_HEIGHT)
+                if (g_pixels && px >= g_clip_x0 && px < g_clip_x1 && py >= g_clip_y0 && py < g_clip_y1)
                     blendPixel(g_pixels + (size_t)py * g_stride + px, color, a);
             }
         }

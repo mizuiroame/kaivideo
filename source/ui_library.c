@@ -1,5 +1,7 @@
 #include "ui_library.h"
 
+#include "ui_downloads.h"
+
 #include <stdio.h>
 #include <string.h>
 
@@ -116,6 +118,29 @@ void uiLibrarySetThumbnails(bool on)
 void uiLibrarySetWatched(const Watched *watched)
 {
     g_watched = watched;
+}
+
+static UiDownloadOf g_download_of;
+static const void *g_download_user;
+static char g_pill_label[48];
+static double g_pill_fraction;
+
+void uiLibrarySetDownloads(UiDownloadOf download_of, const void *user)
+{
+    g_download_of = download_of;
+    g_download_user = user;
+}
+
+void uiLibrarySetDownloadsPill(const char *label, double fraction)
+{
+    snprintf(g_pill_label, sizeof(g_pill_label), "%s", label);
+    g_pill_fraction = fraction;
+}
+
+static UiDownloadMark downloadMark(const char *path, double *fraction)
+{
+    *fraction = 0;
+    return g_download_of ? (UiDownloadMark)g_download_of(path, g_download_user, fraction) : UI_DL_NONE;
 }
 
 bool uiLibSeen(const Library *lib, int item)
@@ -408,6 +433,8 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
         left = x + w;
     }
     int right = drawStatus(status);
+    if (g_pill_label[0])
+        right = uiDrawDownloadsPill(right - 4, g_pill_label, g_pill_fraction) - 8;
     drawTabs(v, lib, left + TAB_SIDE_GAP, right - TAB_SIDE_GAP);
 }
 
@@ -631,6 +658,12 @@ static void drawRefCard(const Library *lib, const ResumeList *resume, LibraryRef
     double progress = ref.is_show ? -1 : uiLibWatched(lib, resume, ref.index);
     drawCard(x, y, w, h, name, tag_over ? tag_over : tag, progress, focused, uiLibPicture(lib, ref),
              !ref.is_show && progress < 0 && uiLibSeen(lib, ref.index));
+    double fraction;
+    UiDownloadMark mark = ref.is_show ? UI_DL_NONE : downloadMark(lib->items[ref.index].path, &fraction);
+    if (mark != UI_DL_NONE) {  // Top left, on a dark disc so it reads over the picture.
+        gfxFillCircle(x + 22, y + 22, 15, GFX_RGB(0, 0, 0));
+        uiDrawDownloadMark(x + 22.0f, y + 22.0f, 12, mark, fraction);
+    }
     fontDrawClipped(FONT_REGULAR, 17, x + 2, y + h + 10, w - 4, below, focused ? COLOR_TEXT : COLOR_DIM);
 }
 
@@ -720,7 +753,7 @@ static void drawGrid(const LibView *v, int grid, const Library *lib, const Resum
 
 // watched: 1 or 0 draws the row's watched circle (filled, or a ring), -1 none.
 static void drawListRow(int y, bool focused, const char *number, const char *title, const char *detail,
-                        double progress, const uint32_t *picture, int watched_mark)
+                        double progress, const uint32_t *picture, int watched_mark, const char *path)
 {
     if (focused) {
         gfxFillRoundRect(MARGIN - 12, y + 2, GFX_WIDTH - 2 * (MARGIN - 12), LIST_ROW_H - 4, 10, COLOR_SURFACE_HI);
@@ -743,6 +776,12 @@ static void drawListRow(int y, bool focused, const char *number, const char *tit
     if (watched_mark >= 0) {
         drawSeenCircle(right - CHECK_R, y + LIST_ROW_H / 2.0f, CHECK_R, watched_mark == 1, true);
         right -= 2 * CHECK_R + 20;
+    }
+    double fraction;
+    UiDownloadMark mark = path ? downloadMark(path, &fraction) : UI_DL_NONE;
+    if (mark != UI_DL_NONE) {  // Its download, beside the watched circle.
+        uiDrawDownloadMark(right - CHECK_R, y + LIST_ROW_H / 2.0f, CHECK_R, mark, fraction);
+        right -= 2 * CHECK_R + 16;
     }
     int detail_w = detail && detail[0] ? fontTextWidth(FONT_REGULAR, 17, detail) : 0;
     int title_w = right - x - (detail_w ? detail_w + 24 : 0);
@@ -826,7 +865,7 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
             snprintf(title, sizeof(title), "Episode %d", it->name.episode);
         formatSize(it->size, size, sizeof(size));
         drawListRow(y, e == v->episodes.cursor, number, title, size, uiLibWatched(lib, resume, item),
-                    uiLibPicture(lib, (LibraryRef){false, item}), uiLibSeen(lib, item) ? 1 : 0);
+                    uiLibPicture(lib, (LibraryRef){false, item}), uiLibSeen(lib, item) ? 1 : 0, it->path);
         addListHit(0, y, GFX_WIDTH, LIST_ROW_H, SHOW_LIST_Y, list_bottom, LIBHIT_EPISODE, e, 0);
         // The circle on the right marks it watched or not (X).
         addListHit(GFX_WIDTH - MARGIN - 2 * CHECK_R - 16, y, 2 * CHECK_R + 16 + MARGIN, LIST_ROW_H, SHOW_LIST_Y,
@@ -878,7 +917,8 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
         const char *detail = episode ? name : below;
         int y = SEARCH_LIST_Y + (i - s->first) * LIST_ROW_H - s->offset;
         drawListRow(y, i == s->cursor, NULL, title, detail, ref.is_show ? -1 : uiLibWatched(lib, resume, ref.index),
-                    uiLibPicture(lib, ref), !ref.is_show && uiLibSeen(lib, ref.index) ? 1 : -1);
+                    uiLibPicture(lib, ref), !ref.is_show && uiLibSeen(lib, ref.index) ? 1 : -1,
+                    ref.is_show ? NULL : lib->items[ref.index].path);
         addListHit(0, y, GFX_WIDTH, LIST_ROW_H, SEARCH_LIST_Y, list_bottom, LIBHIT_RESULT, i, 0);
     }
     gfxResetClip();

@@ -45,6 +45,11 @@ typedef enum {
     LIBHIT_SKIP,             // The player's "Skip intro" button.
     LIBHIT_LIVE_ROW,         // a: a Live TV channel.
     LIBHIT_LIVE_PROGRAM,     // a: a Live TV channel, b: one of its programs in the guide.
+    LIBHIT_DETAILS_DOWNLOAD, // The details panel's download button.
+    LIBHIT_SHOW_DOWNLOAD,    // A series page's button to download the season shown.
+    LIBHIT_DOWNLOAD_ROW,     // a: a row of the Downloads panel.
+    LIBHIT_DOWNLOAD_DELETE,  // a: its delete button.
+    LIBHIT_DOWNLOADS,        // The header's downloads pill: the Downloads panel.
 } LibHitKind;
 
 typedef struct {
@@ -58,6 +63,13 @@ void uiDrawBackground(void);
 void uiLibrarySetThumbnails(bool on);
 // What was watched, for the marks on episodes and films (NULL: none).
 void uiLibrarySetWatched(const Watched *watched);
+// How a server's video (its location) is downloaded: a UiDownloadMark
+// (ui_downloads.h), with how far it has come in *fraction.
+typedef int (*UiDownloadOf)(const char *location, const void *user, double *fraction);
+// Cards and episode rows show their download's mark (NULL: none do).
+void uiLibrarySetDownloads(UiDownloadOf download_of, const void *user);
+// The header's downloads pill says this ("" for none), its ring at fraction.
+void uiLibrarySetDownloadsPill(const char *label, double fraction);
 // The clock and battery for the header, and how the clock reads.
 void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h);
 // Forgets the touch targets: each frame starts with none.
@@ -90,9 +102,14 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
 // A film or episode's details over the screen: picture, title, summary, and
 // its buttons. note: something to say about how it plays, or "". favorites:
 // the film, or the episode's series, can be marked as a favorite (R).
-void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note, bool favorites);
+// download: what its download button (L) says, NULL for none.
+void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const char *note, bool favorites,
+                   const char *download);
 // A series page's favorite button (R), at the top right.
 void uiDrawShowFavorite(bool favorite);
+// Its button (L) to download the season shown, left of the favorite one if
+// that's shown; lit when the season is on the card (done).
+void uiDrawShowDownload(const char *label, bool done, bool favorite_shown, bool favorite);
 // "Skip intro" (ZR) at the bottom right of a playing video, above the bar when it shows.
 void uiDrawSkipButton(const char *label, bool bar_shown);
 // A trickplay picture (w x h) above the progress bar, where a finger drags it (fraction 0-1).

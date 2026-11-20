@@ -279,12 +279,18 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
     return started;
 }
 
+// What's opening or playing comes from a server over the network (not from its download).
+static bool playingStream(const App *app)
+{
+    return jfIsRemoteLocation(app->playing_path) && !app->open_copy[0];
+}
+
 static void *openThread(void *arg)
 {
     App *app = arg;
     char path[BROWSER_PATH_MAX];
-    bool remote = jfIsRemoteLocation(app->playing_path);
-    snprintf(path, sizeof(path), "%s", app->playing_path);
+    bool remote = playingStream(app);  // A server's video with a download is read from the card.
+    snprintf(path, sizeof(path), "%s", app->open_copy[0] ? app->open_copy : app->playing_path);
     int audio_index = app->next_audio_plus1 - 1;
     int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
     app->next_audio_plus1 = 0;
@@ -331,6 +337,8 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     thumbsPause(true);  // The decoder is the player's now.
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
+    const char *copy = jfIsRemoteLocation(path) ? appPlayableCopy(app, path) : NULL;
+    snprintf(app->open_copy, sizeof(app->open_copy), "%s", copy ? copy : "");
     app->open_done = false;
     app->open_asked = now;
     app->segment_count = 0;
@@ -382,10 +390,12 @@ static void beginPlaying(App *app, uint64_t now)
     app->open_from_start = false;
     app->open_at_ns = 0;
     app->playing_converted = playerIsConverted(app->player);
-    if (jfIsRemoteLocation(path)) {
+    if (playingStream(app)) {
         jfSyncSetPlayback(app->open_plan.play_session, app->playing_converted, app->open_plan.live_stream_id);
         if (!liveIsLocation(path))
             tpfetchStart(path);  // Its pictures for the bar, if the server made them.
+    } else if (app->open_copy[0]) {
+        jfSyncSetPlayback("", false, NULL);  // Read from the card: the reports say it's played as it is.
     }
     if (open_at > 0) {
         playerSeekTo(app->player, open_at, now);
@@ -416,7 +426,7 @@ static void beginPlaying(App *app, uint64_t now)
 // a channel's stream holding a tuner) is ended.
 static void releaseServerStream(App *app)
 {
-    if (!jfIsRemoteLocation(app->playing_path))
+    if (!playingStream(app))
         return;
     if (!app->open_plan.direct && app->open_plan.play_session[0]) {
         jfSyncSetPlayback(app->open_plan.play_session, true, NULL);  // This opening's, not the last video's.
@@ -471,6 +481,8 @@ static void stopVideo(App *app, const char *error, bool ended)
         appSaveWatched(app);
     }
     appJellyfinPlaybackStopped(app, position, finished);
+    if (!live)
+        appDownloadsPlayed(app, position, finished);
     char path[APPROOT_PATH_MAX + 32];
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeSave(&app->resume, path);
@@ -614,7 +626,7 @@ static void reopenIfAsked(App *app, uint64_t now)
 {
     int audio, picture;
     int64_t at;
-    if (!jfIsRemoteLocation(app->playing_path))
+    if (!playingStream(app))
         return;
     if (playerTakeAudioRestart(app->player, &audio)) {
         reopenVideo(app, audio, currentPicture(app), playerPosition(app->player), now);
@@ -638,7 +650,7 @@ static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 // The options under the Playback list: the quality only for videos from a server.
 static int playbackOptionRows(const App *app)
 {
-    return jfIsRemoteLocation(app->playing_path) ? PLAYBACK_OPT_COUNT : PLAYBACK_OPT_QUALITY;
+    return playingStream(app) ? PLAYBACK_OPT_COUNT : PLAYBACK_OPT_QUALITY;
 }
 
 // Opens the list of sound tracks or subtitles (or says there's nothing to choose).
@@ -1050,7 +1062,7 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         uiDrawWaiting(spinnerAngle(now), "Tuning in...");  // Live TV waits once at the start, a moment behind the edge.
     else if (waiting)
         uiDrawSpinner(GFX_WIDTH / 2.0f, GFX_HEIGHT / 2.0f, spinnerAngle(now));
-    else if (stalled && jfIsRemoteLocation(app->playing_path))
+    else if (stalled && playingStream(app))
         uiDrawWaiting(spinnerAngle(now), "Waiting for the server...");
     char error[160];
     if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.
@@ -1148,6 +1160,7 @@ int main(int argc, char **argv)
     thumbsInit(path);
     sysinfoInit();
     appSettingsStart(&app);
+    appDownloadsStart(&app);  // Before the library: the card's downloads take their servers' names.
     appLibraryStart(&app);
     InputRepeat repeat;
     inputRepeatInit(&repeat, BUTTONS_REPEATING);
@@ -1161,6 +1174,7 @@ int main(int argc, char **argv)
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
         appJellyfinUpdate(&app, now);
+        appDownloadsUpdate(&app, now);
         appLiveUpdate(&app, now);
         updateScreenKeeping(&app);
         thumbsUpdate();
@@ -1257,6 +1271,7 @@ int main(int argc, char **argv)
     watchedFree(&app.watched);
     trackPrefsFree(&app.tracks);
     thumbsExit();
+    appDownloadsExit(&app);  // Before the servers' thread: it may be telling one what was watched.
     jfSyncStop();
     sysinfoExit();
     browserFree(&app.browser);
