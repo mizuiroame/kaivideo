@@ -9,6 +9,7 @@
 
 #include <jansson.h>
 
+#include "jfsync_internal.h"
 #include "livetv.h"
 #include "net.h"
 #include "plexsync.h"
@@ -22,20 +23,11 @@
 #define CREDENTIAL_MAX 256
 #define HTTP_UNAUTHORIZED 401
 #define MAX_ITEMS 100000         // Against a server that never says it's done.
-#define PLAN_MAX_BYTES (4u * 1024 * 1024)
-#define PLAN_BODY_MAX 4096
-#define SUBTITLE_MAX_BYTES (16u * 1024 * 1024)
-#define SUBTITLE_TIMEOUT_S 120L  // The server may have to read them out of the file first.
 #define PAGE_MAX_BYTES (32u * 1024 * 1024)
 #define SMALL_MAX_BYTES (256u * 1024)
-#define LIVE_GUIDE_AHEAD_S (4 * 3600)  // Programs read for the guide: now and the next hours.
-#define LIVE_PROGRAMS_MAX 3000
-#define SEGMENTS_TIMEOUT_S 5L    // Parts to skip are a nicety: opening doesn't wait long for them.
 #define POLL_SECONDS 2
 #define SIGN_IN_POLLS 300       // About ten minutes.
 #define REPORTS_MAX 16
-#define IMAGE_QUALITY 85
-#define IMAGE_FORMAT "Jpg"  // What stb_image reads, whatever the server would prefer.
 
 typedef struct {
     enum { JOB_REPORT, JOB_PLAYED, JOB_END_CONVERSION, JOB_FAVORITE, JOB_CLOSE_LIVE } type;
@@ -60,7 +52,7 @@ static struct {
     char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX], plex_favorites_file[FILE_PATH_MAX];
     char emby_file[FILE_PATH_MAX], emby_catalog_file[FILE_PATH_MAX];
     // Under the lock:
-    JfSession session;
+    JfSession sessions[2];     // Jellyfin's, then Emby's (FAMILY).
     JfStatus status;
     bool stop, want_sign_in, want_sign_out, want_refresh, load_library;
     time_t stop_time;
@@ -75,11 +67,13 @@ static struct {
     bool converted;
     bool use_password;
     char sign_in_user[CREDENTIAL_MAX], sign_in_password[CREDENTIAL_MAX];
-    ServerKind kind;           // Plex: plex_session is the one used; Jellyfin and Emby: session.
+    ServerKind kind;           // The one Settings shows: signing in and out are for it.
     PlexSession plex_session;
     char plex_item[PLEX_ID_MAX];  // The video last asked about, and its length: Plex's reports want it.
     int64_t plex_duration_ns;
 } g;
+
+static void wakeWith(bool *flag);
 
 static void setError(const char *message)
 {
@@ -96,32 +90,47 @@ static void setState(JfSignState state, const char *code)
     pthread_mutex_unlock(&g.lock);
 }
 
+#define FAMILY(kind) ((kind) == SERVER_EMBY ? 1 : 0)  // Its index in sessions.
+#define CURRENT (g.sessions[FAMILY(g.kind)])            // The Jellyfin or Emby session Settings shows.
+
 static JfSession sessionCopy(void)
 {
     pthread_mutex_lock(&g.lock);
-    JfSession s = g.session;
+    JfSession s = CURRENT;
     pthread_mutex_unlock(&g.lock);
     return s;
 }
 
-// The library kept for the server in use.
-static const char *catalogFile(void)
+// The library kept for a kind of server.
+static const char *catalogFileFor(ServerKind kind)
 {
-    return g.kind == SERVER_PLEX ? g.plex_catalog_file : g.kind == SERVER_EMBY ? g.emby_catalog_file : g.catalog_file;
+    return kind == SERVER_PLEX ? g.plex_catalog_file : kind == SERVER_EMBY ? g.emby_catalog_file : g.catalog_file;
 }
 
-// Where the Jellyfin or Emby session in use is kept.
+static const char *catalogFile(void)
+{
+    return catalogFileFor(g.kind);
+}
+
+// Where the Jellyfin or Emby session Settings shows is kept.
 static const char *sessionFile(void)
 {
     return g.kind == SERVER_EMBY ? g.emby_file : g.session_file;
 }
 
-static bool usingEmby(void)
+static bool signedInLocked(ServerKind kind)
+{
+    if (kind == SERVER_PLEX)
+        return g.plex_session.token[0] && g.plex_session.server_uri[0];
+    return g.sessions[FAMILY(kind)].token[0] != '\0';
+}
+
+static bool signedIn(ServerKind kind)
 {
     pthread_mutex_lock(&g.lock);
-    bool emby = g.kind == SERVER_EMBY;
+    bool in = signedInLocked(kind);
     pthread_mutex_unlock(&g.lock);
-    return emby;
+    return in;
 }
 
 static PlexSession plexCopy(void)
@@ -148,24 +157,30 @@ static void showSession(void)
         snprintf(g.status.user, sizeof(g.status.user), "%s", g.plex_session.user_name);
         g.status.state = g.plex_session.token[0] && g.plex_session.server_uri[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
     } else {
-        snprintf(g.status.server, sizeof(g.status.server), "%s", g.session.server);
-        snprintf(g.status.user, sizeof(g.status.user), "%s", g.session.user_name);
-        g.status.state = g.session.token[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
+        snprintf(g.status.server, sizeof(g.status.server), "%s", CURRENT.server);
+        snprintf(g.status.user, sizeof(g.status.user), "%s", CURRENT.user_name);
+        g.status.state = CURRENT.token[0] ? JF_SIGNED_IN : JF_SIGNED_OUT;
     }
 }
 
 // --- Requests ---
 
-// Calls the API. The answer's text, to free with netResponseFree; false if it failed.
-static bool callText(const char *path, const char *post, size_t max, long timeout_s, NetResponse *r)
+// Calls a session's server. The answer's text, to free with netResponseFree; false if it failed.
+static bool callAs(const JfSession *s, const char *path, const char *post, size_t max, long timeout_s, NetResponse *r)
 {
-    JfSession s = sessionCopy();
     char url[JF_URL_MAX], auth[JF_AUTH_MAX];
-    snprintf(url, sizeof(url), "%s%s", s.server, path);
-    jfAuthHeader(&s, g.version, auth, sizeof(auth));
+    snprintf(url, sizeof(url), "%s%s", s->server, path);
+    jfAuthHeader(s, g.version, auth, sizeof(auth));
     NetRequest request = {.url = url, .authorization = auth, .post_json = post, .cancel = &g.abort_call,
                           .timeout_s = timeout_s};
     return netFetchText(g.net, &request, max, r);
+}
+
+// The same with the session Settings shows.
+static bool callText(const char *path, const char *post, size_t max, long timeout_s, NetResponse *r)
+{
+    JfSession s = sessionCopy();
+    return callAs(&s, path, post, max, timeout_s, r);
 }
 
 static json_t *callJson(const char *path, const char *post)
@@ -228,12 +243,12 @@ static bool acceptSession(json_t *answer)
     bool ok = token[0] && id[0] && strlen(token) < JF_TOKEN_MAX && strlen(id) < JF_ID_MAX;
     if (ok) {
         pthread_mutex_lock(&g.lock);
-        snprintf(g.session.token, sizeof(g.session.token), "%s", token);
-        snprintf(g.session.user_id, sizeof(g.session.user_id), "%s", id);
-        snprintf(g.session.user_name, sizeof(g.session.user_name), "%s", textOf(user, "Name"));
-        snprintf(g.status.user, sizeof(g.status.user), "%s", g.session.user_name);
+        snprintf(CURRENT.token, sizeof(CURRENT.token), "%s", token);
+        snprintf(CURRENT.user_id, sizeof(CURRENT.user_id), "%s", id);
+        snprintf(CURRENT.user_name, sizeof(CURRENT.user_name), "%s", textOf(user, "Name"));
+        snprintf(g.status.user, sizeof(g.status.user), "%s", CURRENT.user_name);
         g.status.error[0] = '\0';
-        JfSession saved = g.session;
+        JfSession saved = CURRENT;
         pthread_mutex_unlock(&g.lock);
         jfSessionSave(&saved, sessionFile());
     }
@@ -338,8 +353,8 @@ static void signIn(void)
     g.use_password = false;
     g.abort_call = false;
     if (g.kind != SERVER_PLEX) {
-        makeDeviceId(&g.session);
-        g.session.token[0] = '\0';
+        makeDeviceId(&CURRENT);
+        CURRENT.token[0] = '\0';
     }
     pthread_mutex_unlock(&g.lock);
     bool ok;
@@ -385,20 +400,22 @@ static void signOut(void)
         pthread_mutex_unlock(&g.lock);
         plexSessionSave(&saved, g.plex_file);
         remove(catalogFile());
+        wakeWith(&g.want_refresh);  // The library, without it.
         return;
     }
     NetResponse r;
     if (callText("/Sessions/Logout", "{}", SMALL_MAX_BYTES, REPORT_TIMEOUT_S, &r))
         netResponseFree(&r);
     pthread_mutex_lock(&g.lock);
-    g.session.token[0] = g.session.user_id[0] = g.session.user_name[0] = '\0';
+    CURRENT.token[0] = CURRENT.user_id[0] = CURRENT.user_name[0] = '\0';
     g.status.user[0] = '\0';
     g.status.state = JF_SIGNED_OUT;
-    JfSession saved = g.session;
+    JfSession saved = CURRENT;
     g.job_count = 0;
     pthread_mutex_unlock(&g.lock);
     jfSessionSave(&saved, sessionFile());
     remove(catalogFile());
+    wakeWith(&g.want_refresh);  // The library, without it.
 }
 
 // --- The library ---
@@ -424,8 +441,9 @@ static void setProgress(bool refreshing, int loaded, int total)
 
 // Reads the pages of one of the user's libraries (parent NULL: all of them at
 // once) into c; loaded counts the videos read so far. False if one can't be had.
-static bool readCollection(JfCatalog *c, const char *user, const char *parent, int *loaded)
+static bool readCollection(JfCatalog *c, const JfSession *s, const char *parent, int *loaded)
 {
+    const char *user = s->user_id;
     int start = 0, total = 0;
     for (;;) {
         char path[640];
@@ -434,8 +452,8 @@ static bool readCollection(JfCatalog *c, const char *user, const char *parent, i
                  "&Fields=MediaSources,Overview,DateCreated&SortBy=SortName&EnableImages=false&StartIndex=%d&Limit=%d",
                  user, parent ? "&ParentId=" : "", parent ? parent : "", start, JF_PAGE_ITEMS);
         NetResponse r;
-        if (!callText(path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r)) {
-            setError(r.status == 401 ? "Jellyfin signed this console out." : "The library couldn't be read.");
+        if (!callAs(s, path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r)) {
+            setError(r.status == 401 ? "The server signed this console out." : "The library couldn't be read.");
             return false;
         }
         int count = jfCatalogAddPage(c, r.data, &total);
@@ -451,15 +469,15 @@ static bool readCollection(JfCatalog *c, const char *user, const char *parent, i
 }
 
 // The user's libraries, as tabs. How many; 0 or less: read everything at once.
-static int readViews(JfCatalog *c, const char *user)
+static int readViews(JfCatalog *c, const JfSession *s, bool emby)
 {
     char path[256];
-    if (usingEmby())  // Emby keeps the older address.
-        snprintf(path, sizeof(path), "/Users/%s/Views", user);
+    if (emby)  // Emby keeps the older address.
+        snprintf(path, sizeof(path), "/Users/%s/Views", s->user_id);
     else
-        snprintf(path, sizeof(path), "/UserViews?userId=%s", user);
+        snprintf(path, sizeof(path), "/UserViews?userId=%s", s->user_id);
     NetResponse r;
-    if (!callText(path, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, &r))
+    if (!callAs(s, path, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, &r))
         return -1;
     int views = jfCatalogAddViews(c, r.data);
     netResponseFree(&r);
@@ -467,29 +485,29 @@ static int readViews(JfCatalog *c, const char *user)
 }
 
 // The series marked as favorites: their episodes are read as favorites. Without them, none are.
-static void readFavoriteSeries(JfCatalog *c, const char *user)
+static void readFavoriteSeries(JfCatalog *c, const JfSession *s)
 {
     char path[320];
     snprintf(path, sizeof(path),
              "/Items?userId=%s&Recursive=true&IncludeItemTypes=Series&Filters=IsFavorite&EnableImages=false&Limit=%d",
-             user, JF_FAVORITE_SERIES_MAX);
+             s->user_id, JF_FAVORITE_SERIES_MAX);
     NetResponse r;
-    if (!callText(path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r))
+    if (!callAs(s, path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r))
         return;
     jfCatalogSetFavoriteSeries(c, r.data);
     netResponseFree(&r);
 }
 
 // Reads every video into c, library by library. False if a page can't be had.
-static bool readPages(JfCatalog *c, const char *user)
+static bool readPages(JfCatalog *c, const JfSession *s, bool emby)
 {
-    readFavoriteSeries(c, user);
+    readFavoriteSeries(c, s);
     int loaded = 0;
-    if (readViews(c, user) <= 0)
-        return readCollection(c, user, NULL, &loaded);
+    if (readViews(c, s, emby) <= 0)
+        return readCollection(c, s, NULL, &loaded);
     for (int i = 0; i < c->library.collection_count; i++) {
         c->adding_collection = i;
-        if (!readCollection(c, user, c->view_ids[i], &loaded))
+        if (!readCollection(c, s, c->view_ids[i], &loaded))
             return false;
     }
     c->adding_collection = -1;
@@ -501,39 +519,79 @@ static void plexProgress(int loaded, int total)
     setProgress(true, loaded, total);
 }
 
+// One server's library, read again, or (if it can't be read) as kept from
+// before. False if there's neither.
+static bool readServer(ServerKind kind, JfCatalog *c)
+{
+    jfCatalogInit(c);
+    bool ok;
+    if (kind == SERVER_PLEX) {
+        PlexSession ps = plexCopy();
+        ok = plexNetReadLibrary(g.net, &ps, g.version, c, plexProgress, &g.abort_call);
+        if (ok)
+            plexFavoritesApply(c, g.plex_favorites_file);
+    } else {
+        JfSession s = jfSyncSessionFor(kind);
+        snprintf(c->prefix, sizeof(c->prefix), "%s", kind == SERVER_EMBY ? EMBY_PREFIX : JF_PREFIX);
+        ok = readPages(c, &s, kind == SERVER_EMBY);
+    }
+    if (ok) {
+        libraryBuild(&c->library);
+        jfCatalogSave(c, catalogFileFor(kind));
+        return true;
+    }
+    char message[96];
+    snprintf(message, sizeof(message), "%s's library couldn't be read: it shows as before.", serverKindName(kind));
+    setError(message);
+    jfCatalogFree(c);
+    jfCatalogInit(c);
+    return jfCatalogLoad(c, catalogFileFor(kind));
+}
+
+// The libraries of the servers signed in, as one: their own tabs (named after
+// their server when there are several), and all their videos.
+static void publishAll(JfCatalog parts[SERVER_KIND_COUNT], const bool have[SERVER_KIND_COUNT])
+{
+    int count = 0;
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        count += have[k];
+    static const char *const SUFFIXES[SERVER_KIND_COUNT] = {" (Jellyfin)", " (Emby)", " (Plex)"};
+    if (count > 1)
+        jfCatalogTagShared(parts, have, SERVER_KIND_COUNT, SUFFIXES);
+    JfCatalog all;
+    jfCatalogInit(&all);
+    for (int k = 0; k < SERVER_KIND_COUNT; k++) {
+        if (have[k])
+            jfCatalogAppend(&all, &parts[k], count > 1 ? SUFFIXES[k] : NULL);
+        if (have[k])
+            jfCatalogFree(&parts[k]);
+    }
+    libraryBuild(&all.library);
+    publish(&all);
+}
+
 static void refresh(void)
 {
-    JfSession s = sessionCopy();
-    PlexSession ps = plexCopy();
-    bool plex = usingPlex();
-    if (plex ? !ps.server_uri[0] : !s.token[0])
-        return;
+    JfCatalog parts[SERVER_KIND_COUNT];
+    bool have[SERVER_KIND_COUNT] = {false}, any = false;
+    setError("");
     setProgress(true, 0, 0);
-    JfCatalog c;
-    jfCatalogInit(&c);
-    bool ok = plex ? plexNetReadLibrary(g.net, &ps, g.version, &c, plexProgress, &g.abort_call)
-                   : readPages(&c, s.user_id);
-    if (plex && !ok)
-        setError("The Plex library couldn't be read.");
-    if (plex && ok)
-        plexFavoritesApply(&c, g.plex_favorites_file);
-    if (ok) {
-        setError("");
-        libraryBuild(&c.library);
-        jfCatalogSave(&c, catalogFile());
-        publish(&c);
-    } else {
-        jfCatalogFree(&c);
-    }
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        if (signedIn((ServerKind)k)) {
+            any = true;
+            have[k] = readServer((ServerKind)k, &parts[k]);
+        }
+    if (any)
+        publishAll(parts, have);
     setProgress(false, 0, 0);
 }
 
 // --- Telling the server ---
 
-// False if the server couldn't be told.
-static bool post(const char *path, const char *body, bool remove_it)
+// False if the server (of kind) couldn't be told.
+static bool post(ServerKind kind, const char *path, const char *body, bool remove_it)
 {
-    JfSession s = sessionCopy();
+    JfSession s = jfSyncSessionFor(kind);
     char url[JF_URL_MAX], auth[JF_AUTH_MAX];
     snprintf(url, sizeof(url), "%s%s", s.server, path);
     jfAuthHeader(&s, g.version, auth, sizeof(auth));
@@ -580,26 +638,27 @@ static bool runJob(const Job *job)
     if (plexIsLocation(job->location))
         return runPlexJob(job);
     char item[JF_ID_MAX], source[JF_ID_MAX], path[256], body[320];
+    ServerKind kind = serverKindOf(job->location);
     if (!jfLocationIds(job->location, item, source))
         return true;
     if (job->type == JOB_PLAYED || job->type == JOB_FAVORITE) {
-        JfSession s = sessionCopy();
+        JfSession s = jfSyncSessionFor(kind);
         const char *what = job->type == JOB_PLAYED ? "PlayedItems" : "FavoriteItems";
-        if (usingEmby())  // Emby keeps the older addresses.
+        if (kind == SERVER_EMBY)  // Emby keeps the older addresses.
             snprintf(path, sizeof(path), "/Users/%s/%s/%s", s.user_id, what, item);
         else
             snprintf(path, sizeof(path), "/User%s/%s?userId=%s", what, item, s.user_id);
-        return post(path, "{}", !job->flag);
+        return post(kind, path, "{}", !job->flag);
     }
     if (job->type == JOB_CLOSE_LIVE) {
         snprintf(path, sizeof(path), "/LiveStreams/Close?liveStreamId=%s", job->live_stream);
-        return post(path, "{}", false);
+        return post(kind, path, "{}", false);
     }
     if (job->type == JOB_END_CONVERSION) {
-        JfSession s = sessionCopy();
+        JfSession s = jfSyncSessionFor(kind);
         snprintf(path, sizeof(path), "/Videos/ActiveEncodings?deviceId=%s&playSessionId=%s", s.device_id,
                  job->play_session);
-        return post(path, NULL, true);
+        return post(kind, path, NULL, true);
     }
     static const char *const ENDPOINTS[] = {"/Sessions/Playing", "/Sessions/Playing/Progress",
                                             "/Sessions/Playing/Stopped"};
@@ -607,7 +666,7 @@ static bool runJob(const Job *job)
                        .converted = job->converted, .play_session = job->play_session,
                        .live_stream = job->live_stream};
     jfReportBody(body, sizeof(body), &report);
-    return post(ENDPOINTS[job->kind], body, false);
+    return post(kind, ENDPOINTS[job->kind], body, false);
 }
 
 // A report that didn't get through goes to the back of the line, a few times.
@@ -633,16 +692,22 @@ static bool takeJob(Job *out)
 
 // --- The thread ---
 
+// The libraries kept from before, at once, while they're read again.
 static void loadKept(void)
 {
-    if (!g.load_library || !(usingPlex() ? plexCopy().server_uri[0] : sessionCopy().token[0]))
-        return;
-    JfCatalog c;
-    jfCatalogInit(&c);
-    if (jfCatalogLoad(&c, catalogFile()))
-        publish(&c);
-    else
-        jfCatalogFree(&c);
+    JfCatalog parts[SERVER_KIND_COUNT];
+    bool have[SERVER_KIND_COUNT] = {false}, any = false;
+    for (int k = 0; g.load_library && k < SERVER_KIND_COUNT; k++) {
+        if (!signedIn((ServerKind)k))
+            continue;
+        jfCatalogInit(&parts[k]);
+        have[k] = jfCatalogLoad(&parts[k], catalogFileFor((ServerKind)k));
+        if (!have[k])
+            jfCatalogFree(&parts[k]);
+        any = any || have[k];
+    }
+    if (any)
+        publishAll(parts, have);
 }
 
 // One thing to do, in the order that keeps the server right. False to stop.
@@ -716,11 +781,13 @@ bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_librar
     size_t stem = strlen(files->plex_library) > 4 ? strlen(files->plex_library) - 4 : 0;
     snprintf(g.plex_favorites_file, sizeof(g.plex_favorites_file), "%.*s_favorites.txt", (int)stem, files->plex_library);
     g.kind = kind >= 0 && kind < SERVER_KIND_COUNT ? kind : SERVER_JELLYFIN;
-    jfSessionLoad(&g.session, sessionFile());
+    jfSessionLoad(&g.sessions[0], g.session_file);
+    jfSessionLoad(&g.sessions[1], g.emby_file);
     plexSessionLoad(&g.plex_session, g.plex_file);
     showSession();
     g.load_library = load_library;
-    g.want_refresh = load_library && g.status.state == JF_SIGNED_IN;
+    g.want_refresh = load_library && (signedInLocked(SERVER_JELLYFIN) || signedInLocked(SERVER_EMBY) ||
+                                      signedInLocked(SERVER_PLEX));
     g.net = netClientOpen();
     g.running = g.net && pthread_create(&g.thread, NULL, syncThread, NULL) == 0;
     if (!g.running) {
@@ -775,23 +842,26 @@ void jfSyncUseKind(ServerKind kind)
     if (!g.running || kind < 0 || kind >= SERVER_KIND_COUNT)
         return;
     pthread_mutex_lock(&g.lock);
-    if (g.kind != kind) {
+    if (g.kind != kind) {  // Only what Settings shows: every server signed in stays in the library.
         g.kind = kind;
-        if (kind != SERVER_PLEX)  // Jellyfin's and Emby's sessions are kept apart.
-            jfSessionLoad(&g.session, sessionFile());
         g.sign_in_generation++;  // A sign-in under way was for the other one.
-        g.abort_call = true;
+        g.abort_call = g.status.state == JF_SIGN_IN_STARTING || g.status.state == JF_SIGN_IN_WAITING;
         g.want_sign_in = false;
-        g.job_count = 0;
         g.status.error[0] = g.status.code[0] = '\0';
-        if (g.has_ready) {
-            jfCatalogFree(&g.ready);
-            g.has_ready = false;
-        }
         showSession();
         pthread_cond_broadcast(&g.wake);
     }
     pthread_mutex_unlock(&g.lock);
+}
+
+bool jfSyncSignedIn(ServerKind kind)
+{
+    return g.running && kind >= 0 && kind < SERVER_KIND_COUNT && signedIn(kind);
+}
+
+bool jfSyncAnySignedIn(void)
+{
+    return jfSyncSignedIn(SERVER_JELLYFIN) || jfSyncSignedIn(SERVER_EMBY) || jfSyncSignedIn(SERVER_PLEX);
 }
 
 ServerKind jfSyncKind(void)
@@ -810,9 +880,9 @@ bool jfSyncSetServer(const char *text)
     if (!g.running || !jfServerNormalize(text, server, sizeof(server)))
         return false;
     pthread_mutex_lock(&g.lock);
-    snprintf(g.session.server, sizeof(g.session.server), "%s", server);
+    snprintf(CURRENT.server, sizeof(CURRENT.server), "%s", server);
     snprintf(g.status.server, sizeof(g.status.server), "%s", server);
-    JfSession saved = g.session;
+    JfSession saved = CURRENT;
     pthread_mutex_unlock(&g.lock);
     jfSessionSave(&saved, sessionFile());
     return true;
@@ -961,184 +1031,6 @@ void jfSyncSetFavorite(const char *location, bool favorite)
     addJob(&job);
 }
 
-static bool plexResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index,
-                        JfPlan *out, char *error, size_t error_size, const volatile bool *cancel)
-{
-    NetClient *net = netClientOpen();
-    PlexSession s = plexCopy();
-    int64_t duration = 0;
-    bool ok = net && plexNetResolve(net, &s, g.version, location, max_bitrate, audio_index, subtitle_index, out,
-                                    &duration, error, error_size, cancel);
-    netClientClose(net);
-    char item[PLEX_ID_MAX], part[PLEX_ID_MAX];
-    if (ok && plexLocationIds(location, item, part)) {
-        pthread_mutex_lock(&g.lock);
-        snprintf(g.plex_item, sizeof(g.plex_item), "%s", item);
-        g.plex_duration_ns = duration;
-        pthread_mutex_unlock(&g.lock);
-    }
-    return ok;
-}
-
-bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index, int subtitle_index, JfPlan *out,
-                   char *error, size_t error_size, const volatile bool *cancel)
-{
-    if (g.running && plexIsLocation(location))
-        return plexResolve(location, max_bitrate, audio_index, subtitle_index, out, error, error_size, cancel);
-    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
-    char *body = malloc(PLAN_BODY_MAX);
-    NetClient *net = netClientOpen();
-    bool ok = false;
-    snprintf(error, error_size, "The server can't be reached.");
-    if (g.running && body && net && jfLocationIds(location, item, source)) {
-        JfSession s = sessionCopy();
-        bool live = !strcmp(source, LIVE_SOURCE);  // A channel: the server opens its stream.
-        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s%s%s", s.server, item, s.user_id,
-                 live ? "" : "&mediaSourceId=", live ? "" : source);
-        jfAuthHeader(&s, g.version, auth, sizeof(auth));
-        jfPlaybackBody(body, PLAN_BODY_MAX, s.user_id, max_bitrate, audio_index, subtitle_index);
-        NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S,
-                              .cancel = cancel};
-        NetResponse r;
-        if (netFetchText(net, &request, PLAN_MAX_BYTES, &r)) {
-            ok = jfPlanParse(r.data, out);
-            netResponseFree(&r);
-            if (!ok)
-                snprintf(error, error_size, "The server can't play this video here.");
-        }
-    }
-    netClientClose(net);
-    free(body);
-    return ok;
-}
-
-bool jfSyncLiveSource(const char *location, JfPlan *out, const volatile bool *cancel)
-{
-    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX], body[256];
-    NetClient *net = netClientOpen();
-    bool ok = false;
-    if (g.running && net && jfLocationIds(location, item, source) && !strcmp(source, LIVE_SOURCE)) {
-        JfSession s = sessionCopy();
-        snprintf(url, sizeof(url), "%s/Items/%s/PlaybackInfo?userId=%s", s.server, item, s.user_id);
-        jfAuthHeader(&s, g.version, auth, sizeof(auth));
-        jfLiveInfoBody(body, sizeof(body), s.user_id);
-        NetRequest request = {.url = url, .authorization = auth, .post_json = body, .timeout_s = API_TIMEOUT_S,
-                              .cancel = cancel};
-        NetResponse r;
-        if (netFetchText(net, &request, PLAN_MAX_BYTES, &r)) {
-            ok = jfLivePlanParse(r.data, out);
-            netResponseFree(&r);
-        }
-    }
-    netClientClose(net);
-    return ok;
-}
-
-// The answer to an API path, with a client of the caller's own (any thread).
-static bool fetchWith(NetClient *net, const char *path, size_t max, NetResponse *out)
-{
-    char url[JF_URL_MAX + 256], auth[JF_AUTH_MAX];
-    JfSession s = sessionCopy();
-    snprintf(url, sizeof(url), "%s%s", s.server, path);
-    jfAuthHeader(&s, g.version, auth, sizeof(auth));
-    NetRequest request = {.url = url, .authorization = auth, .timeout_s = API_TIMEOUT_S};
-    return netFetchText(net, &request, max, out);
-}
-
-static void isoTime(int64_t s, char *out, size_t size)
-{
-    time_t t = (time_t)s;
-    struct tm tm;
-    gmtime_r(&t, &tm);
-    strftime(out, size, "%Y-%m-%dT%H:%M:%SZ", &tm);
-}
-
-int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
-{
-    if (!g.running || usingPlex())
-        return -1;  // Live TV comes from Jellyfin only.
-    NetClient *net = netClientOpen();
-    JfSession s = sessionCopy();
-    char path[512], from[32], to[32];
-    NetResponse r;
-    int count = -1;
-    snprintf(path, sizeof(path), "/LiveTv/Channels?userId=%s&EnableImages=false&Limit=%d", s.user_id, LIVE_CHANNELS_MAX);
-    if (g.running && net && fetchWith(net, path, PAGE_MAX_BYTES, &r)) {
-        count = liveGuideSetChannels(out, r.data);
-        netResponseFree(&r);
-    }
-    isoTime(now_s, from, sizeof(from));
-    isoTime(now_s + LIVE_GUIDE_AHEAD_S, to, sizeof(to));
-    snprintf(path, sizeof(path), "/LiveTv/Programs?UserId=%s&MinEndDate=%s&MaxStartDate=%s&EnableImages=false&Limit=%d",
-             s.user_id, from, to, LIVE_PROGRAMS_MAX);
-    if (count > 0 && fetchWith(net, path, PAGE_MAX_BYTES, &r)) {
-        liveGuideSetPrograms(out, r.data, now_s);
-        netResponseFree(&r);
-    }
-    netClientClose(net);
-    return count;
-}
-
-int jfSyncFetchSegments(const char *location, JfSegment *out, int max)
-{
-    if (plexIsLocation(location)) {
-        NetClient *net = g.running ? netClientOpen() : NULL;
-        PlexSession s = plexCopy();
-        int count = net ? plexNetFetchMarkers(net, &s, g.version, location, out, max) : 0;
-        netClientClose(net);
-        return count;
-    }
-    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
-    NetClient *net = netClientOpen();
-    int count = 0;
-    if (g.running && net && jfLocationIds(location, item, source)) {
-        JfSession s = sessionCopy();
-        snprintf(url, sizeof(url), "%s/MediaSegments/%s", s.server, item);
-        jfAuthHeader(&s, g.version, auth, sizeof(auth));
-        NetRequest request = {.url = url, .authorization = auth, .timeout_s = SEGMENTS_TIMEOUT_S};
-        NetResponse r;
-        if (netFetchText(net, &request, SMALL_MAX_BYTES, &r)) {
-            count = jfSegmentsParse(r.data, out, max);
-            netResponseFree(&r);
-        }
-    }
-    netClientClose(net);
-    return count;
-}
-
-bool jfSyncAudioConversion(const char *location, int audio_index, char *url, size_t url_size, char *authorization,
-                           size_t auth_size, char *play_session, size_t session_size)
-{
-    if (plexIsLocation(location)) {
-        NetClient *net = g.running ? netClientOpen() : NULL;
-        PlexSession s = plexCopy();
-        bool ok = net && plexNetAudioConversion(net, &s, g.version, location, audio_index, url, url_size, play_session,
-                                                session_size);
-        netClientClose(net);
-        if (auth_size)
-            authorization[0] = '\0';
-        return ok;
-    }
-    char item[JF_ID_MAX], source[JF_ID_MAX];
-    if (!jfLocationIds(location, item, source) || !strcmp(source, LIVE_SOURCE))
-        return false;
-    JfSession s = sessionCopy();
-    // Its own play session, so it can be ended without ending the video's.
-    snprintf(play_session, session_size, "%08x%08x%08x%08x", (unsigned)rand(), (unsigned)rand(), (unsigned)time(NULL),
-             (unsigned)audio_index);
-    // The server's /Audio conversion always takes the default track: a video
-    // conversion takes the one asked for. Its picture is made tiny (the
-    // smallest its hardware encoder takes well): what comes is nearly all sound.
-    int n = snprintf(url, url_size,
-                     "%s/Videos/%s/main.m3u8?MediaSourceId=%s&DeviceId=%s&PlaySessionId=%s&AudioStreamIndex=%d"
-                     "&AudioCodec=aac&MaxAudioChannels=2&AudioBitrate=192000&AudioSampleRate=48000"
-                     "&VideoCodec=h264&MaxWidth=320&MaxHeight=180&VideoBitrate=150000&SubtitleStreamIndex=-1"
-                     "&SegmentContainer=ts&BreakOnNonKeyFrames=True",
-                     s.server, item, source, s.device_id, play_session, audio_index);
-    jfAuthHeader(&s, g.version, authorization, auth_size);
-    return n > 0 && (size_t)n < url_size;
-}
-
 void jfSyncEndConversionOf(const char *location, const char *play_session)
 {
     Job job = {.type = JOB_END_CONVERSION, .own_session = true};
@@ -1147,91 +1039,39 @@ void jfSyncEndConversionOf(const char *location, const char *play_session)
     addJob(&job);
 }
 
-void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size)
+// --- For jfrequest.c ---
+
+bool jfSyncIsUp(void)
 {
-    if (usingPlex()) {  // The token goes in the address; the conversion's own lists and pieces need none.
-        PlexSession ps = plexCopy();
-        plexServerUrl(&ps, g.version, url, full, full_size);
-        if (auth_size)
-            authorization[0] = '\0';
-        return;
-    }
-    JfSession s = sessionCopy();
-    snprintf(full, full_size, "%s%s", s.server, url);
-    jfAuthHeader(&s, g.version, authorization, auth_size);
+    return g.running;
 }
 
-bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out)
+const char *jfSyncVersionText(void)
 {
-    if (plexIsLocation(location)) {
-        memset(out, 0, sizeof(*out));
-        NetClient *net = g.running ? netClientOpen() : NULL;
-        PlexSession s = plexCopy();
-        bool ok = net && plexNetFetchSubtitle(net, &s, g.version, stream_index, cancel, out);
-        netClientClose(net);
-        return ok;
-    }
-    char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
-    memset(out, 0, sizeof(*out));
-    NetClient *net = g.running && jfLocationIds(location, item, source) ? netClientOpen() : NULL;
-    if (!net)
-        return false;
-    JfSession s = sessionCopy();
-    snprintf(url, sizeof(url), "%s/Videos/%s/%s/Subtitles/%d/0/Stream.srt", s.server, item, source, stream_index);
-    jfAuthHeader(&s, g.version, auth, sizeof(auth));
-    NetRequest request = {.url = url, .authorization = auth, .cancel = cancel, .timeout_s = SUBTITLE_TIMEOUT_S};
-    bool ok = netFetchText(net, &request, SUBTITLE_MAX_BYTES, out);
-    netClientClose(net);
-    return ok;
+    return g.version;
 }
 
-bool jfSyncStreamRequest(const char *location, char *url, size_t url_size, char *authorization, size_t auth_size)
+JfSession jfSyncSessionFor(ServerKind kind)
 {
-    if (plexIsLocation(location)) {
-        PlexSession s = plexCopy();
-        if (auth_size)
-            authorization[0] = '\0';
-        return g.running && plexStreamUrl(&s, g.version, location, url, url_size);
-    }
-    char item[JF_ID_MAX], source[JF_ID_MAX];
-    if (!g.running || !jfLocationIds(location, item, source))
-        return false;
-    JfSession s = sessionCopy();
-    snprintf(url, url_size, "%s/Videos/%s/stream?static=true&mediaSourceId=%s", s.server, item, source);
-    jfAuthHeader(&s, g.version, authorization, auth_size);
-    return s.token[0] != '\0';
+    JfSession s;
+    memset(&s, 0, sizeof(s));
+    if (!g.running || kind == SERVER_PLEX)
+        return s;
+    pthread_mutex_lock(&g.lock);
+    s = g.sessions[FAMILY(kind)];
+    pthread_mutex_unlock(&g.lock);
+    return s;
 }
 
-bool jfSyncTrickplayRequest(const char *location, int width, int sheet, char *url, size_t url_size,
-                            char *authorization, size_t auth_size)
+PlexSession jfSyncPlexSession(void)
 {
-    char item[JF_ID_MAX], source[JF_ID_MAX];
-    if (!g.running || !jfLocationIds(location, item, source))
-        return false;
-    JfSession s = sessionCopy();
-    if (width > 0)
-        snprintf(url, url_size, "%s/Videos/%s/Trickplay/%d/%d.jpg?mediaSourceId=%s", s.server, item, width, sheet, source);
-    else
-        snprintf(url, url_size, "%s/Items?userId=%s&ids=%s&Fields=Trickplay&EnableImages=false", s.server, s.user_id, item);
-    jfAuthHeader(&s, g.version, authorization, auth_size);
-    return s.token[0] != '\0';
+    return plexCopy();
 }
 
-bool jfSyncImageRequest(const char *location, const char *kind, int max_width, char *url, size_t url_size,
-                        char *authorization, size_t auth_size)
+void jfSyncNotePlexDuration(const char *item, int64_t duration_ns)
 {
-    if (plexIsLocation(location)) {
-        PlexSession s = plexCopy();
-        if (auth_size)
-            authorization[0] = '\0';
-        return g.running && plexImageUrl(&s, g.version, location, kind, max_width, url, url_size);
-    }
-    char item[JF_ID_MAX], source[JF_ID_MAX];
-    if (!g.running || !jfLocationIds(location, item, source))
-        return false;
-    JfSession s = sessionCopy();
-    snprintf(url, url_size, "%s/Items/%s/Images/%s?maxWidth=%d&quality=%d&format=" IMAGE_FORMAT, s.server, item, kind,
-             max_width, IMAGE_QUALITY);
-    jfAuthHeader(&s, g.version, authorization, auth_size);
-    return s.token[0] != '\0';
+    pthread_mutex_lock(&g.lock);
+    snprintf(g.plex_item, sizeof(g.plex_item), "%s", item);
+    g.plex_duration_ns = duration_ns;
+    pthread_mutex_unlock(&g.lock);
 }

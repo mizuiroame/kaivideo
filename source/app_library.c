@@ -102,7 +102,7 @@ void appLibraryToggleSource(App *app, uint64_t now)
     }
     if (appJellyfinEnsure(app))
         jfSyncGetStatus(&app->jf);
-    if (app->jf.state == JF_SIGNED_IN)
+    if (jfSyncAnySignedIn())
         appLibrarySetSource(app, true);
     else
         appOpenJellyfinSettings(app, now);
@@ -685,7 +685,12 @@ void appLibraryDraw(App *app, uint64_t now)
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
-    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName((ServerKind)app->config.server_kind) : "SD card");
+    char servers[64] = "";
+    for (int k = 0; app->config.use_jellyfin && k < SERVER_KIND_COUNT; k++)  // "Jellyfin + Plex".
+        if (jfSyncSignedIn((ServerKind)k))
+            snprintf(servers + strlen(servers), sizeof(servers) - strlen(servers), "%s%s", servers[0] ? " + " : "",
+                     serverKindName((ServerKind)k));
+    uiLibrarySetSource(!app->config.use_jellyfin ? "SD card" : servers[0] ? servers : "Server");
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));

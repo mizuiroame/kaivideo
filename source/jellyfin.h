@@ -17,11 +17,15 @@
 #define JF_PREFIX "jellyfin:"
 #define JF_ROOT "jellyfin:"     // The root of a library that comes from the server.
 #define PLEX_PREFIX "plex:"
+#define EMBY_PREFIX "emby:"     // Emby's videos: Jellyfin's kind of location, kept apart from its.
+#define JF_PREFIX_MAX 16
 
 // The media servers KaiVideo talks to. Emby speaks Jellyfin's language (Jellyfin
 // began as a fork of it) with a few addresses of its own; Plex has its own.
 typedef enum { SERVER_JELLYFIN, SERVER_EMBY, SERVER_PLEX, SERVER_KIND_COUNT } ServerKind;
 const char *serverKindName(ServerKind kind);
+// The kind of server a location is on (Jellyfin's if it isn't Emby's or Plex's).
+ServerKind serverKindOf(const char *location);
 #define JF_SERVER_MAX 256
 #define JF_ID_MAX 40
 #define JF_NAME_MAX 64
@@ -53,12 +57,16 @@ typedef struct {
     int64_t bitrate;
 } JfVideoFacts;
 
+// A Jellyfin or Emby location (they're read and played the same way).
 bool jfIsLocation(const char *path);
+bool jfIsEmbyLocation(const char *path);
 // A Jellyfin or Plex location: a video from a server.
 bool jfIsRemoteLocation(const char *path);
 // The item and media source ids in a location. False if it isn't a good one.
 bool jfLocationIds(const char *location, char *item, char *source);
 void jfLocationMake(char *out, size_t size, const char *item, const char *source);
+// The same with another prefix (EMBY_PREFIX).
+void jfLocationMakeWith(char *out, size_t size, const char *prefix, const char *item, const char *source);
 
 // "192.168.0.2" -> "http://192.168.0.2:8096". False if it can't be an address.
 bool jfServerNormalize(const char *text, char *out, size_t size);
@@ -178,6 +186,7 @@ typedef struct {
     int adding_collection;  // The collection pages being added go in; -1 for none.
     char (*favorite_series)[JF_ID_MAX];  // Series the user marked: their episodes count as favorites.
     int favorite_series_count;
+    char prefix[JF_PREFIX_MAX];          // Of the locations its pages make: JF_PREFIX, or EMBY_PREFIX.
 } JfCatalog;
 
 void jfCatalogInit(JfCatalog *c);
@@ -195,6 +204,18 @@ int jfCatalogAddPage(JfCatalog *c, const char *json, int *total);
 // Adds one video with what the server says of it and where the user left it.
 bool jfCatalogAddVideo(JfCatalog *c, const char *location, const VideoName *name, int64_t size, int64_t added,
                        const LibraryRemote *remote, const JfUserData *user);
+
+// Adds what src holds (not yet built) to dst: its videos with where the user
+// left them, and its libraries, their names followed by suffix (" (Plex)") if
+// it isn't NULL. Libraries past LIBRARY_COLLECTIONS are left out (their videos
+// stay, in no library). False if out of memory.
+bool jfCatalogAppend(JfCatalog *dst, const JfCatalog *src, const char *suffix);
+
+// Films and series that more than one of the catalogs holds (by name, and a
+// film's year) take their catalog's suffix (" (Plex)") after their name, so
+// the library tells them apart instead of putting one series' episodes twice
+// in one. parts[k] counts only where have[k].
+void jfCatalogTagShared(JfCatalog *parts, const bool *have, int count, const char *const *suffixes);
 
 // Keeps a catalog between runs, and reads it back (built). False if there's none.
 bool jfCatalogSave(const JfCatalog *c, const char *file);

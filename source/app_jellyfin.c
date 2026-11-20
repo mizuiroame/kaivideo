@@ -78,7 +78,7 @@ void appJellyfinUpdate(App *app, uint64_t now)
     if (app->jf_signing)
         finishSignIn(app, now);
     sayNewError(app, now);
-    if (app->config.use_jellyfin && app->jf.state == JF_SIGNED_OUT) {  // No session: back to the card.
+    if (app->config.use_jellyfin && !jfSyncAnySignedIn() && !app->jf_signing) {  // No server left: back to the card.
         appLibrarySetSource(app, false);
         return;
     }
@@ -89,7 +89,7 @@ void appJellyfinUpdate(App *app, uint64_t now)
         jfCatalogFree(&catalog);
         app->jf_last_refresh = now;
     }
-    bool idle = !app->player && !app->opening && !app->jf.refreshing && app->jf.state == JF_SIGNED_IN;
+    bool idle = !app->player && !app->opening && !app->jf.refreshing && jfSyncAnySignedIn();
     if (idle && app->config.use_jellyfin && now - app->jf_last_refresh > REFRESH_NS) {
         app->jf_last_refresh = now;
         jfSyncRefresh();

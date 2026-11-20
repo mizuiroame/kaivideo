@@ -217,9 +217,13 @@ static void typeServer(App *app, uint64_t now)
         appShowMessage(app, "That isn't a server's address.", now);
 }
 
+// The library keeps the other servers signed in; with none left, it's the card's.
 static void signOut(App *app)
 {
-    if (app->config.use_jellyfin)
+    bool others = false;
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        others = others || (k != app->config.server_kind && jfSyncSignedIn((ServerKind)k));
+    if (app->config.use_jellyfin && !others)
         appLibrarySetSource(app, false);
     jfSyncSignOut();
 }
@@ -257,15 +261,12 @@ static void passwordSignIn(App *app, uint64_t now)
     memset(password, 0, sizeof(password));
 }
 
-// Jellyfin or Plex: the other one's session stays for when it's chosen again.
-// A library from the server comes from the new one, or the card if it isn't signed in.
+// Which server the page is for: every one signed in stays in the library.
 static void serverKindChanged(App *app)
 {
     jfSyncUseKind((ServerKind)app->config.server_kind);
     jfProbeSetKind((ServerKind)app->config.server_kind);
     jfSyncGetStatus(&app->jf);
-    if (app->config.use_jellyfin)
-        appLibrarySetSource(app, app->jf.state == JF_SIGNED_IN);
 }
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)

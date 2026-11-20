@@ -212,6 +212,60 @@ static void testFavorites(void)
     remove(file);
 }
 
+// Several servers' libraries in one: each keeps its videos, users and libraries.
+static void testAppend(void)
+{
+    JfCatalog plex, all;
+    jfCatalogInit(&plex);
+    jfCatalogInit(&all);
+    plexCatalogAddSections(&plex, SECTIONS);
+    plex.adding_collection = 0;
+    plexCatalogAddPage(&plex, MOVIES, NULL);
+    plex.adding_collection = 1;
+    plexCatalogAddPage(&plex, EPISODES, NULL);
+    libraryAddCollection(&all.library, "Movies", COLLECTION_FILMS);
+    CHECK(jfCatalogAppend(&all, &plex, " (Plex)"));
+    CHECK(all.library.collection_count == 3 && !strcmp(all.library.collections[1].name, "Movies (Plex)") &&
+          !strcmp(all.library.collections[2].name, "TV Shows (Plex)"));
+    CHECK(all.library.count == 3 && all.library.items[0].collection == 1 && all.library.items[2].collection == 2);
+    CHECK(!strcmp(all.library.items[0].path, "plex:4/7") && all.users[0].position_ns == 30000 * MS_TO_NS);
+    CHECK(!strcmp(all.library.items[2].series_art, "plex:16/series") && all.library.items[2].name.is_episode);
+    libraryBuild(&all.library);
+    CHECK(all.library.film_count == 2 && all.library.show_count == 1);
+    jfCatalogFree(&plex);
+    jfCatalogFree(&all);
+
+    // The same film and series on two servers are told apart; the rest keep their names.
+    JfCatalog parts[SERVER_KIND_COUNT];
+    bool have[SERVER_KIND_COUNT] = {true, false, true};
+    static const char *const SUFFIXES[SERVER_KIND_COUNT] = {" (Jellyfin)", " (Emby)", " (Plex)"};
+    jfCatalogInit(&parts[0]);
+    jfCatalogInit(&parts[2]);
+    plexCatalogAddPage(&parts[2], MOVIES, NULL);
+    plexCatalogAddPage(&parts[2], EPISODES, NULL);
+    VideoName film = {.year = 1998}, episode = {.is_episode = true, .season = 1, .episode = 1};
+    snprintf(film.title, sizeof(film.title), "Paper Lanterns");
+    snprintf(episode.show, sizeof(episode.show), "rook");  // Compared as names are: case and marks aside.
+    LibraryRemote remote = {0};
+    JfUserData user = {0};
+    jfCatalogAddVideo(&parts[0], "jellyfin:a/a", &film, 1, 1, &remote, &user);
+    jfCatalogAddVideo(&parts[0], "jellyfin:b/b", &episode, 1, 1, &remote, &user);
+    jfCatalogTagShared(parts, have, SERVER_KIND_COUNT, SUFFIXES);
+    CHECK(!strcmp(parts[0].library.items[0].name.title, "Paper Lanterns (Jellyfin)"));
+    CHECK(!strcmp(parts[0].library.items[1].name.show, "rook (Jellyfin)"));
+    CHECK(!strcmp(parts[2].library.items[0].name.title, "Paper Lanterns (Plex)"));
+    CHECK(!strcmp(parts[2].library.items[1].name.title, "Morning Lanterns"));  // Only on Plex.
+    CHECK(!strcmp(parts[2].library.items[2].name.show, "Rook (Plex)"));
+    jfCatalogFree(&parts[0]);
+    jfCatalogFree(&parts[2]);
+
+    char item[JF_ID_MAX], source[JF_ID_MAX], location[64];
+    jfLocationMakeWith(location, sizeof(location), EMBY_PREFIX, "17", "mediasource_17");
+    CHECK(!strcmp(location, "emby:17/mediasource_17") && jfIsLocation(location) && jfIsEmbyLocation(location));
+    CHECK(jfLocationIds(location, item, source) && !strcmp(item, "17") && !strcmp(source, "mediasource_17"));
+    CHECK(jfIsRemoteLocation(location) && !jfIsEmbyLocation("jellyfin:a/b") && !plexIsLocation(location));
+}
+
 static void testSession(void)
 {
     PlexSession s = {0}, back;
@@ -237,5 +291,6 @@ void testPlex(void)
     testPlans();
     testMarkers();
     testFavorites();
+    testAppend();
     testSession();
 }

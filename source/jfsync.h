@@ -40,9 +40,12 @@ typedef struct {
 
 // kind: the server used (each kind keeps its own session and library).
 bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_library, ServerKind kind);
-// Changes which server is used; the others' sessions stay for later.
+// Changes which server Settings shows (signing in and out are for it). Every
+// server signed in gives the library its videos.
 void jfSyncUseKind(ServerKind kind);
 ServerKind jfSyncKind(void);
+bool jfSyncSignedIn(ServerKind kind);
+bool jfSyncAnySignedIn(void);
 // Sends what's waiting to be told and stops.
 void jfSyncStop(void);
 bool jfSyncRunning(void);
@@ -95,8 +98,9 @@ bool jfSyncAudioConversion(const char *location, int audio_index, char *url, siz
                            size_t auth_size, char *play_session, size_t session_size);
 // Ends such a conversion on the server.
 void jfSyncEndConversionOf(const char *location, const char *play_session);
-// The address and header for a conversion the server gave (url as in the plan).
-void jfSyncConvertedRequest(const char *url, char *full, size_t full_size, char *authorization, size_t auth_size);
+// The address and header for a conversion the server of location gave (url as in the plan).
+void jfSyncConvertedRequest(const char *location, const char *url, char *full, size_t full_size, char *authorization,
+                            size_t auth_size);
 // A text subtitle track of a location, as SubRip (free with netResponseFree).
 bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out);
 // What the reports about the video playing say about how it plays, and the

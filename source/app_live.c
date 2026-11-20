@@ -54,7 +54,7 @@ void appLiveUpdate(App *app, uint64_t now)
     static bool joined = true;
     if (!joined)
         joined = takeGuide(app);
-    bool signed_in = app->config.use_jellyfin && app->jf.state == JF_SIGNED_IN;
+    bool signed_in = app->config.use_jellyfin && jfSyncSignedIn(SERVER_JELLYFIN);  // Live TV is Jellyfin's.
     uint64_t every = liveShown(app) ? SHOWN_REFRESH_NS : IDLE_REFRESH_NS;
     bool due = !app->live_read_at || now - app->live_read_at >= every || app->live_read_soon;
     if (!signed_in || !joined || app->player || !due)

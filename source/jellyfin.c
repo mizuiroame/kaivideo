@@ -21,9 +21,23 @@
 #define CACHE_COLLECTION "#collection\t"  // A library: its kind, then its name.
 #define FIRST_CAPACITY 512
 
+ServerKind serverKindOf(const char *location)
+{
+    return !strncmp(location, PLEX_PREFIX, sizeof(PLEX_PREFIX) - 1) ? SERVER_PLEX
+           : jfIsEmbyLocation(location)                             ? SERVER_EMBY
+                                                                    : SERVER_JELLYFIN;
+}
+
+bool jfIsEmbyLocation(const char *path);
+
+bool jfIsEmbyLocation(const char *path)
+{
+    return strncmp(path, EMBY_PREFIX, sizeof(EMBY_PREFIX) - 1) == 0;
+}
+
 bool jfIsLocation(const char *path)
 {
-    return strncmp(path, JF_PREFIX, sizeof(JF_PREFIX) - 1) == 0;
+    return strncmp(path, JF_PREFIX, sizeof(JF_PREFIX) - 1) == 0 || jfIsEmbyLocation(path);
 }
 
 const char *serverKindName(ServerKind kind)
@@ -51,7 +65,7 @@ bool jfLocationIds(const char *location, char *item, char *source)
 {
     if (!jfIsLocation(location))
         return false;
-    const char *start = location + sizeof(JF_PREFIX) - 1, *slash = strchr(start, '/');
+    const char *start = strchr(location, ':') + 1, *slash = strchr(start, '/');
     if (!slash || !isId(start, (size_t)(slash - start)) || !isId(slash + 1, strlen(slash + 1)))
         return false;
     snprintf(item, JF_ID_MAX, "%.*s", (int)(slash - start), start);
@@ -61,7 +75,12 @@ bool jfLocationIds(const char *location, char *item, char *source)
 
 void jfLocationMake(char *out, size_t size, const char *item, const char *source)
 {
-    snprintf(out, size, JF_PREFIX "%s/%s", item, source);
+    jfLocationMakeWith(out, size, JF_PREFIX, item, source);
+}
+
+void jfLocationMakeWith(char *out, size_t size, const char *prefix, const char *item, const char *source)
+{
+    snprintf(out, size, "%s%s/%s", prefix, item, source);
 }
 
 bool jfServerNormalize(const char *text, char *out, size_t size)
@@ -375,6 +394,28 @@ void jfCatalogInit(JfCatalog *c)
     memset(c, 0, sizeof(*c));
     libraryInit(&c->library, JF_ROOT);
     c->adding_collection = -1;
+    snprintf(c->prefix, sizeof(c->prefix), "%s", JF_PREFIX);
+}
+
+bool jfCatalogAppend(JfCatalog *dst, const JfCatalog *src, const char *suffix)
+{
+    int map[LIBRARY_COLLECTIONS];  // src's library -> dst's, -1 if it didn't fit.
+    for (int i = 0; i < src->library.collection_count; i++) {
+        char name[LIBRARY_COLLECTION_NAME];
+        snprintf(name, sizeof(name), "%s%s", src->library.collections[i].name, suffix ? suffix : "");
+        map[i] = libraryAddCollection(&dst->library, name, src->library.collections[i].kind);
+    }
+    for (size_t i = 0; i < src->library.count; i++) {
+        const LibraryItem *item = &src->library.items[i];
+        int collection = item->collection >= 0 && item->collection < src->library.collection_count
+                             ? map[item->collection] : -1;
+        LibraryRemote remote = {.overview = item->overview, .series_art = item->series_art,
+                                .runtime_ns = item->runtime_ns, .blocked = item->blocked,
+                                .favorite = item->favorite, .in_collection = collection + 1};
+        if (!jfCatalogAddVideo(dst, item->path, &item->name, item->size, item->added, &remote, &src->users[i]))
+            return false;
+    }
+    return true;
 }
 
 void jfCatalogFree(JfCatalog *c)
@@ -533,9 +574,9 @@ static bool addItem(JfCatalog *c, const json_t *item)
                           json_integer_value(json_object_get(source, "Bitrate"))};
     char location[LIBRARY_PATH_MAX], art[LIBRARY_PATH_MAX] = "";
     const char *series = textOf(item, "SeriesId");
-    jfLocationMake(location, sizeof(location), id, source_id);
+    jfLocationMakeWith(location, sizeof(location), c->prefix, id, source_id);
     if (isId(series, strlen(series)))
-        jfLocationMake(art, sizeof(art), series, JF_SERIES_SOURCE);
+        jfLocationMakeWith(art, sizeof(art), c->prefix, series, JF_SERIES_SOURCE);
     LibraryRemote remote = {
         .overview = textOf(item, "Overview"),
         .series_art = art,
@@ -587,6 +628,61 @@ static void writeField(FILE *f, const char *text)
     for (; *text; text++)
         fputc(*text == '\t' || *text == '\n' || *text == '\r' ? ' ' : *text, f);
     fputc('\t', f);
+}
+
+// What makes a film or series the same on two servers: "s:<series>" or "f:<title>:<year>".
+static void sharedKey(const LibraryItem *item, char *out, size_t size)
+{
+    char key[NAMING_MAX];
+    namingKey(item->name.is_episode ? item->name.show : item->name.title, key, sizeof(key));
+    if (item->name.is_episode)
+        snprintf(out, size, "s:%s", key);
+    else
+        snprintf(out, size, "f:%s:%d", key, item->name.year);
+}
+
+#define SHARED_KEY_MAX (NAMING_MAX + 16)
+
+static int compareKeys(const void *a, const void *b)
+{
+    return strcmp(a, b);
+}
+
+// A catalog's keys, sorted, to free. NULL if it has none or there's no memory.
+static char (*sortedKeys(const JfCatalog *c))[SHARED_KEY_MAX]
+{
+    if (!c->library.count)
+        return NULL;
+    char(*keys)[SHARED_KEY_MAX] = malloc(c->library.count * SHARED_KEY_MAX);
+    for (size_t i = 0; keys && i < c->library.count; i++)
+        sharedKey(&c->library.items[i], keys[i], SHARED_KEY_MAX);
+    if (keys)
+        qsort(keys, c->library.count, SHARED_KEY_MAX, compareKeys);
+    return keys;
+}
+
+void jfCatalogTagShared(JfCatalog *parts, const bool *have, int count, const char *const *suffixes)
+{
+    char(*keys[SERVER_KIND_COUNT])[SHARED_KEY_MAX] = {NULL};
+    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++)
+        keys[k] = have[k] ? sortedKeys(&parts[k]) : NULL;
+    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++) {
+        for (size_t i = 0; keys[k] && i < parts[k].library.count; i++) {
+            LibraryItem *item = &parts[k].library.items[i];
+            char key[SHARED_KEY_MAX];
+            sharedKey(item, key, sizeof(key));
+            bool shared = false;
+            for (int o = 0; o < count && o < SERVER_KIND_COUNT && !shared; o++)
+                shared = o != k && keys[o] && bsearch(key, keys[o], parts[o].library.count, SHARED_KEY_MAX, compareKeys);
+            if (!shared)
+                continue;
+            char *name = item->name.is_episode ? item->name.show : item->name.title;
+            size_t used = strlen(name);
+            snprintf(name + used, NAMING_MAX - used, "%s", suffixes[k]);
+        }
+    }
+    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++)
+        free(keys[k]);
 }
 
 bool jfCatalogSave(const JfCatalog *c, const char *file)

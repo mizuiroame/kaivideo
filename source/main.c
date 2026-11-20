@@ -271,7 +271,7 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
         return true;
     }
     char url[JF_URL_MAX + JF_TRANSCODE_URL_MAX], auth[JF_AUTH_MAX];
-    jfSyncConvertedRequest(plan->transcode_url, url, sizeof(url), auth, sizeof(auth));
+    jfSyncConvertedRequest(app->playing_path, plan->transcode_url, url, sizeof(url), auth, sizeof(auth));
     snprintf(path, size, HLS_LOCATION);
     asked = nowNs();
     bool started = hlsStart(url, auth, app->open_start_ns, cancel, error, sizeof(app->open_error));
