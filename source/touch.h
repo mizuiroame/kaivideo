@@ -13,6 +13,7 @@ typedef enum {
     TOUCH_TAP,   // Released where it started: x, y.
     TOUCH_DRAG,  // Moving: dx, dy since the last frame; start_x/start_y where it began.
     TOUCH_DRAG_END,  // Released after a drag, at x, y.
+    TOUCH_PRESS,     // A finger came down at x, y (a tap or a drag may follow): it stops a list gliding.
 } TouchEventType;
 
 typedef struct {

@@ -443,6 +443,15 @@ static void libraryScenes(void)
     g_view.tab = TAB_FILMS;
     libviewGridMove(&g_view, GRID_FILMS, (int)g_lib.film_count, 1, 0);
     libraryScene("lib_films", true, NULL, NULL);
+    // Left by a finger between rows: cut under the tabs, and only what shows answers a tap.
+    libviewScrollPx(&g_view.grid[GRID_FILMS], 90, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
+                    (int)g_lib.film_count);
+    libraryScene("lib_films_between", true, NULL, NULL);
+    if (uiLibraryTap(GFX_WIDTH / 2, UI_TAB_BAR_H + 4).kind == LIBHIT_GRID_CARD) {
+        printf("TOUCH: lib_films_between: a card answers a tap above its list\n");
+        g_problems++;
+    }
+    libviewGridMove(&g_view, GRID_FILMS, (int)g_lib.film_count, 0, 0);  // A button: back on a row.
     g_view.tab = TAB_SERIES;
     libraryScene("lib_series", true, NULL, NULL);
 

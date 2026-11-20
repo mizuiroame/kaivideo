@@ -19,9 +19,6 @@
 
 #define BUTTONS_TAB_LEFT (HidNpadButton_L | HidNpadButton_ZL)
 #define BUTTONS_TAB_RIGHT (HidNpadButton_R | HidNpadButton_ZR)
-#define HOME_DRAG_W 232  // A card and its gap: dragging this far moves a Home row by one.
-#define GRID_DRAG_H 186  // A row of the grid.
-#define LIST_DRAG_H 58   // A row of a list.
 
 static void cachePath(char *out, size_t size)
 {
@@ -520,28 +517,6 @@ static void folderInput(App *app, Browser *b, bool picking, uint64_t pressed, To
 
 // --- Buttons ---
 
-static void homeMoveRows(App *app, int delta)
-{
-    libviewHomeMove(&app->view, &app->home, 0, delta);
-}
-
-static void gridMoveRows(App *app, int delta)
-{
-    int grid = libviewGrid(&app->view);
-    if (grid >= 0)
-        libviewGridMove(&app->view, (LibGrid)grid, libviewGridCount(&app->view, &app->library, grid), 0, delta);
-}
-
-static void showMoveRows(App *app, int delta)
-{
-    libviewShowMove(&app->view, &app->library, 0, delta);
-}
-
-static void resultsMoveRows(App *app, int delta)
-{
-    libviewResultsMove(&app->view, delta);
-}
-
 // Up, down, left and right on the current screen (dx, dy: -1, 0 or 1).
 static void move(App *app, int dx, int dy)
 {
@@ -617,37 +592,106 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     }
 }
 
-static void dragInput(App *app, TouchEvent touch)
+// --- Following a finger ---
+
+typedef enum { SCROLL_NONE, SCROLL_HOME, SCROLL_HOME_ROW, SCROLL_GRID, SCROLL_EPISODES, SCROLL_RESULTS } ScrollTarget;
+
+// What's on screen: a list being scrolled stops if this changes.
+static int viewKey(const LibView *v)
+{
+    return ((v->tab * 64 + v->collection + 1) * 65536 + v->show + 1) * 64 + v->season;
+}
+
+// Moves the list being scrolled by px (positive: up, or left across a Home row).
+// False if it reached an end.
+static bool scrollTarget(App *app, int px)
 {
     LibView *v = &app->view;
+    if (viewKey(v) != app->scroll_view)
+        return false;
+    int grid = libviewGrid(v), first, count;
+    switch ((ScrollTarget)app->scroll_target) {
+    case SCROLL_HOME: return libviewHomeScrollPx(v, &app->home, px);
+    case SCROLL_HOME_ROW:
+        v->home_row = app->scroll_row;  // The row a finger moves along is the one chosen.
+        return libviewHomeRowScrollPx(v, &app->home, app->scroll_row, px);
+    case SCROLL_GRID:
+        return grid >= 0 && libviewScrollPx(&v->grid[grid], px, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
+                                            libviewGridCount(v, &app->library, grid));
+    case SCROLL_EPISODES:
+        libviewSeasonRange(&app->library, v->show, v->season, &first, &count);
+        return libviewScrollPx(&v->episodes, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, count);
+    case SCROLL_RESULTS:
+        return libviewScrollPx(&v->results_scroll, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, v->result_count);
+    default: return false;
+    }
+}
+
+// A drag begins: which list it moves (across a Home row if it went more
+// across than down, as a phone decides).
+static void startScroll(App *app, TouchEvent touch)
+{
+    LibView *v = &app->view;
+    app->scroll_target = SCROLL_NONE;
+    app->scroll_view = viewKey(v);
     if (touch.start_y < UI_TAB_BAR_H)
         return;
     if (v->show >= 0) {
-        dragRows(app, touch.dy, LIST_DRAG_H, showMoveRows);
+        app->scroll_target = SCROLL_EPISODES;
     } else if (v->tab == TAB_HOME) {
-        // Across a row moves along it; up and down, between rows.
         LibHit hit = uiLibraryTap(touch.start_x, touch.start_y);
-        if (hit.kind == LIBHIT_HOME_CARD) {
-            app->drag_cols -= touch.dx;
-            if (abs(app->drag_cols) >= HOME_DRAG_W / 4)  // Across, not a wobble of a drag down.
-                v->home_row = hit.a;
-            for (; app->drag_cols >= HOME_DRAG_W; app->drag_cols -= HOME_DRAG_W)
-                libviewHomeMove(v, &app->home, 1, 0);
-            for (; app->drag_cols <= -HOME_DRAG_W; app->drag_cols += HOME_DRAG_W)
-                libviewHomeMove(v, &app->home, -1, 0);
-        }
-        dragRows(app, touch.dy, HOME_DRAG_W - 30, homeMoveRows);
+        bool across = abs(touch.x - touch.start_x) > abs(touch.y - touch.start_y);
+        app->scroll_target = hit.kind == LIBHIT_HOME_CARD && across ? SCROLL_HOME_ROW : SCROLL_HOME;
+        app->scroll_row = hit.a;
     } else if (libviewGrid(v) >= 0) {
-        dragRows(app, touch.dy, GRID_DRAG_H, gridMoveRows);
+        app->scroll_target = SCROLL_GRID;
     } else if (v->tab == TAB_SEARCH) {
-        dragRows(app, touch.dy, LIST_DRAG_H, resultsMoveRows);
+        app->scroll_target = SCROLL_RESULTS;
     }
+}
+
+static void dragInput(App *app, TouchEvent touch, uint64_t now)
+{
+    bool starting = !app->kinetic.dragging;
+    if (starting) {
+        startScroll(app, touch);
+        kineticDrag(&app->kinetic, 0, now);
+    }
+    // The content goes with the finger: dragging up shows what's below.
+    int px = app->scroll_target == SCROLL_HOME_ROW ? -touch.dx : -touch.dy;
+    scrollTarget(app, px);
+    if (!starting)
+        kineticDrag(&app->kinetic, px, now);
+}
+
+// A finger came down, let go, or nothing: a list glides on, or stops.
+static void glideInput(App *app, uint64_t pressed, TouchEvent *touch, uint64_t now)
+{
+    if (touch->type == TOUCH_PRESS) {  // A press stops a glide, and isn't a tap on what it stopped over.
+        app->swallow_tap = kineticGliding(&app->kinetic);
+        kineticStop(&app->kinetic);
+    } else if (touch->type == TOUCH_TAP && app->swallow_tap) {
+        touch->type = TOUCH_NONE;
+    }
+    if (touch->type != TOUCH_PRESS && touch->type != TOUCH_DRAG)
+        app->swallow_tap = false;
+    if (touch->type == TOUCH_DRAG_END && app->kinetic.dragging)
+        kineticRelease(&app->kinetic, now);
+    if (pressed)
+        kineticStop(&app->kinetic);  // A button takes over from the finger.
+    int px = kineticStep(&app->kinetic, now);
+    if (px && !scrollTarget(app, px))
+        kineticStop(&app->kinetic);  // An end, or another view.
 }
 
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     if (touch.type == TOUCH_DRAG_END || touch.type == TOUCH_NONE)
         app->drag_rows = app->drag_cols = 0;
+    if (app->app_menu != APP_MENU_NONE || app->settings_open)
+        kineticStop(&app->kinetic);
+    else
+        glideInput(app, pressed, &touch, now);
     if (app->app_menu != APP_MENU_NONE) {
         appMenuInput(app, pressed, touch, now);
         return;
@@ -717,7 +761,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     else if (hit.kind != LIBHIT_NONE)
         tapInput(app, hit, now);
     else if (touch.type == TOUCH_DRAG)
-        dragInput(app, touch);
+        dragInput(app, touch, now);
 }
 
 // --- Drawing ---

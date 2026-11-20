@@ -10,6 +10,7 @@
 #include "browser.h"
 #include "home.h"
 #include "jfsync.h"
+#include "kinetic.h"
 #include "library.h"
 #include "libview.h"
 #include "menu.h"
@@ -83,6 +84,10 @@ struct App {
     char message[200];
     uint64_t message_until;
     int drag_rows, drag_cols;
+    Kinetic kinetic;            // A list following a finger, or gliding on after it.
+    int scroll_target, scroll_row;  // Which list (app_library.c's ScrollTarget), and Home's row across.
+    int scroll_view;            // The view it was in: another one stops it.
+    bool swallow_tap;           // A press stopped a glide: its tap doesn't open anything.
     bool quit;
     AppMenu app_menu;           // The + menu, or its exit question (app_menu.c).
     int app_menu_cursor;

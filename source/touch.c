@@ -13,7 +13,7 @@ TouchEvent touchUpdate(TouchTracker *t, bool touching, int x, int y, uint64_t no
     TouchEvent e = {.type = TOUCH_NONE};
     if (touching && !t->down) {
         *t = (TouchTracker){.down = true, .start_x = x, .start_y = y, .last_x = x, .last_y = y, .start_ns = now_ns};
-        return e;
+        return (TouchEvent){TOUCH_PRESS, x, y, x, y, 0, 0};
     }
     if (touching) {
         if (!t->dragging && (abs(x - t->start_x) > TOUCH_TAP_SLOP || abs(y - t->start_y) > TOUCH_TAP_SLOP))

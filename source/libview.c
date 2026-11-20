@@ -8,9 +8,11 @@ static int clamp(int value, int low, int high)
     return value < low ? low : value > high ? high : value;
 }
 
-// Keeps cursor in [0, count) and in view of visible items from first.
+// Keeps cursor in [0, count) and in view of visible items from first. A
+// button moved it: the view rests on a row again.
 static void keepInView(Scroll *s, int count, int visible)
 {
+    s->offset = 0;
     s->cursor = count > 0 ? clamp(s->cursor, 0, count - 1) : 0;
     if (s->cursor < s->first)
         s->first = s->cursor;
@@ -122,6 +124,8 @@ void libviewHomeMove(LibView *v, const Home *home, int dx, int dy)
 {
     if (home->count == 0)
         return;
+    if (dy)
+        v->home_offset = 0;
     v->home_row = clamp(v->home_row + dy, 0, home->count - 1);
     if (v->home_row < v->home_first_row)
         v->home_first_row = v->home_row;
@@ -132,11 +136,50 @@ void libviewHomeMove(LibView *v, const Home *home, int dx, int dy)
     keepInView(cols, home->rows[v->home_row].count, LIBVIEW_HOME_COLS);
 }
 
+// --- Following a finger ---
+
+bool libviewScrollPx(Scroll *s, int px, int row_h, int visible, int cols, int count)
+{
+    int rows = cols > 0 ? (count + cols - 1) / cols : 0;
+    int end = rows > visible ? (rows - visible) * row_h : 0;
+    int at = s->first * row_h + s->offset, to = clamp(at + px, 0, end);
+    s->first = to / row_h;
+    s->offset = to % row_h;
+    if (count > 0) {  // The cursor stays on a row mostly in view, in its column.
+        int top = s->first + (s->offset * 2 > row_h ? 1 : 0);
+        int bottom = clamp(top + visible - 1, 0, rows - 1);
+        int row = s->cursor / cols, col = s->cursor % cols;
+        if (row < top)
+            s->cursor = clamp(top * cols + col, 0, count - 1);
+        else if (row > bottom)
+            s->cursor = clamp(bottom * cols + col, 0, count - 1);
+    }
+    return to != at && to == at + px;
+}
+
+bool libviewHomeScrollPx(LibView *v, const Home *home, int px)
+{
+    Scroll s = {v->home_row, v->home_first_row, v->home_offset};
+    bool moved = libviewScrollPx(&s, px, LIBVIEW_HOME_ROW_PX, LIBVIEW_HOME_ROWS, 1, home->count);
+    v->home_row = s.cursor;
+    v->home_first_row = s.first;
+    v->home_offset = s.offset;
+    return moved;
+}
+
+bool libviewHomeRowScrollPx(LibView *v, const Home *home, int row, int px)
+{
+    if (row < 0 || row >= home->count)
+        return false;
+    return libviewScrollPx(&v->home_cols[row], px, LIBVIEW_HOME_COL_PX, LIBVIEW_HOME_COLS, 1, home->rows[row].count);
+}
+
 // --- Grids ---
 
 void libviewGridMove(LibView *v, LibGrid grid, int count, int dx, int dy)
 {
     Scroll *s = &v->grid[grid];
+    s->offset = 0;
     if (count == 0) {
         s->cursor = s->first = 0;
         return;
@@ -193,7 +236,7 @@ void libviewOpenShow(LibView *v, const Library *lib, int show, int item)
     v->show = show;
     snprintf(v->show_name, sizeof(v->show_name), "%s", lib->shows[show].name);
     v->season = 0;
-    v->episodes = (Scroll){0, 0};
+    v->episodes = (Scroll){0, 0, 0};
     int seasons[LIBVIEW_SEASONS];
     int n = libviewSeasons(lib, show, seasons, LIBVIEW_SEASONS);
     for (int season = 0; item >= 0 && season < n; season++) {
@@ -214,7 +257,7 @@ void libviewShowMove(LibView *v, const Library *lib, int dx, int dy)
     int n = libviewSeasons(lib, v->show, seasons, LIBVIEW_SEASONS);
     int next = n > 0 ? clamp(v->season + dx, 0, n - 1) : 0;
     if (next != v->season)
-        v->episodes = (Scroll){0, 0};
+        v->episodes = (Scroll){0, 0, 0};
     v->season = next;
     int first, count;
     libviewSeasonRange(lib, v->show, v->season, &first, &count);
@@ -245,7 +288,7 @@ void libviewSearch(LibView *v, const Library *lib, const char *query)
 {
     snprintf(v->query, sizeof(v->query), "%s", query);
     v->result_count = (int)librarySearch(lib, query, v->results, LIBVIEW_RESULTS);
-    v->results_scroll = (Scroll){0, 0};
+    v->results_scroll = (Scroll){0, 0, 0};
 }
 
 void libviewResultsMove(LibView *v, int dy)

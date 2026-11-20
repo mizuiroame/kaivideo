@@ -91,6 +91,7 @@ int main(void)
     testAssCompose();
     testJellyfin();
     testPlex();
+    testKinetic();
     testStats();
     testTrickplay();
     testLiveTv();

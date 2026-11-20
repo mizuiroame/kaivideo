@@ -39,12 +39,13 @@
 #define HOME_TITLE_H 34
 #define HOME_CARD_W 206
 #define HOME_CARD_H 116
-#define HOME_ROW_H 196
+#define HOME_ROW_H LIBVIEW_HOME_ROW_PX
 #define GRID_Y 84
 #define GRID_CARD_W ((GFX_WIDTH - 2 * MARGIN - (LIBVIEW_COLS - 1) * GAP) / LIBVIEW_COLS)
 #define GRID_CARD_H 128
-#define GRID_ROW_H 186
-#define LIST_ROW_H 58
+#define GRID_ROW_H LIBVIEW_GRID_ROW_PX
+#define LIST_ROW_H LIBVIEW_LIST_ROW_PX
+#define CLIP_ABOVE 8          // A list drawn between rows: room above its first for a focused card's ring.
 #define SHOW_LIST_Y 196        // A series' episodes.
 #define SEARCH_BOX_Y 84
 #define SEARCH_BOX_H 56
@@ -623,36 +624,55 @@ static void drawCentered(const char *title, const char *line)
         fontDrawCentered(FONT_REGULAR, 19, GFX_WIDTH / 2.0f, 364, line, COLOR_DIM);
 }
 
-static void drawScrollbar(int y, int h, int first, int visible, int count)
+// first and offset: where the view is (offset pixels into row first, rows row_h tall).
+static void drawScrollbar(int y, int h, int first, int offset, int row_h, int visible, int count)
 {
     if (count <= visible)
         return;
     int thumb_h = h * visible / count;
     if (thumb_h < 24)
         thumb_h = 24;
-    int thumb_y = y + (h - thumb_h) * first / (count - visible);
+    long long at = (long long)first * row_h + offset, end = (long long)(count - visible) * row_h;
+    int thumb_y = y + (int)((h - thumb_h) * (at < end ? at : end) / end);
     gfxFillRoundRect(GFX_WIDTH - 12, y, 4, h, 2, COLOR_TRACK);
     gfxFillRoundRect(GFX_WIDTH - 12, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
 }
 
 // --- Home ---
 
+// A tap target, only where its list shows (between top and bottom).
+static void addListHit(int x, int y, int w, int h, int top, int bottom, LibHitKind kind, int a, int b)
+{
+    int y0 = y < top ? top : y, y1 = y + h > bottom ? bottom : y + h;
+    if (y1 > y0)
+        uiLibraryAddHit(x, y0, w, y1 - y0, kind, a, b);
+}
+
 static void drawHome(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume)
 {
-    for (int r = v->home_first_row; r < home->count && r < v->home_first_row + LIBVIEW_HOME_ROWS; r++) {
+    int top = HOME_Y - CLIP_ABOVE, bottom = HOME_Y + LIBVIEW_HOME_ROWS * HOME_ROW_H;
+    gfxSetClip(0, top, GFX_WIDTH, bottom - top);
+    // One row more than fit when a finger left them between rows.
+    for (int r = v->home_first_row; r < home->count && r <= v->home_first_row + LIBVIEW_HOME_ROWS; r++) {
         const HomeRow *row = &home->rows[r];
-        int y = HOME_Y + (r - v->home_first_row) * HOME_ROW_H;
+        int y = HOME_Y + (r - v->home_first_row) * HOME_ROW_H - v->home_offset;
+        if (y >= bottom)
+            break;
         fontDraw(FONT_BOLD, 22, MARGIN, y, homeRowTitle(row->kind), r == v->home_row ? COLOR_TEXT : COLOR_DIM);
         const Scroll *cols = &v->home_cols[r];
         // One card more than fit, cut by the screen's edge: there's more.
-        for (int c = cols->first; c < row->count && c <= cols->first + LIBVIEW_HOME_COLS; c++) {
-            int x = MARGIN + (c - cols->first) * (HOME_CARD_W + GAP);
+        for (int c = cols->first; c < row->count && c <= cols->first + LIBVIEW_HOME_COLS + 1; c++) {
+            int x = MARGIN + (c - cols->first) * LIBVIEW_HOME_COL_PX - cols->offset;
+            if (x >= GFX_WIDTH)
+                break;
             drawRefCard(lib, resume, row->items[c], x, y + HOME_TITLE_H, HOME_CARD_W, HOME_CARD_H,
                         r == v->home_row && c == cols->cursor, row->up_next[c] ? "UP NEXT" : NULL);
-            int w = x + HOME_CARD_W > GFX_WIDTH ? GFX_WIDTH - x : HOME_CARD_W;
-            uiLibraryAddHit(x, y + HOME_TITLE_H, w, HOME_CARD_H + 40, LIBHIT_HOME_CARD, r, c);
+            int left = x < 0 ? 0 : x, right = x + HOME_CARD_W > GFX_WIDTH ? GFX_WIDTH : x + HOME_CARD_W;
+            if (right > left)
+                addListHit(left, y + HOME_TITLE_H, right - left, HOME_CARD_H + 40, top, bottom, LIBHIT_HOME_CARD, r, c);
         }
     }
+    gfxResetClip();
 }
 
 // --- Films and Series ---
@@ -661,18 +681,22 @@ static void drawGrid(const LibView *v, int grid, const Library *lib, const Resum
 {
     int count = libviewGridCount(v, lib, grid);
     const Scroll *s = &v->grid[grid];
-    int first = s->first * LIBVIEW_COLS;
-    // A row more than fit, cut by the screen's bottom: there's more.
-    for (int i = first; i < count && i < first + (LIBVIEW_GRID_ROWS + 1) * LIBVIEW_COLS; i++) {
+    int first = s->first * LIBVIEW_COLS, top = GRID_Y - CLIP_ABOVE;
+    gfxSetClip(0, top, GFX_WIDTH, GFX_HEIGHT - top);
+    // A row more than fit, cut by the screen's bottom: there's more (two between rows).
+    for (int i = first; i < count && i < first + (LIBVIEW_GRID_ROWS + 2) * LIBVIEW_COLS; i++) {
         int col = i % LIBVIEW_COLS, row = (i - first) / LIBVIEW_COLS;
-        int x = MARGIN + col * (GRID_CARD_W + GAP), y = GRID_Y + row * GRID_ROW_H;
+        int x = MARGIN + col * (GRID_CARD_W + GAP), y = GRID_Y + row * GRID_ROW_H - s->offset;
+        if (y >= GFX_HEIGHT)
+            break;
         LibraryRef ref = libviewGridRef(v, lib, grid, i);
         drawRefCard(lib, resume, ref, x, y, GRID_CARD_W, GRID_CARD_H, i == s->cursor, NULL);
-        if (y < GFX_HEIGHT)
-            uiLibraryAddHit(x, y, GRID_CARD_W, GRID_CARD_H + 40, LIBHIT_GRID_CARD, i, 0);
+        addListHit(x, y, GRID_CARD_W, GRID_CARD_H + 40, top, GFX_HEIGHT, LIBHIT_GRID_CARD, i, 0);
     }
+    gfxResetClip();
     int rows = (count + LIBVIEW_COLS - 1) / LIBVIEW_COLS;
-    drawScrollbar(GRID_Y, LIBVIEW_GRID_ROWS * GRID_ROW_H - 20, s->first, LIBVIEW_GRID_ROWS, rows);
+    drawScrollbar(GRID_Y, LIBVIEW_GRID_ROWS * GRID_ROW_H - 20, s->first, s->offset, GRID_ROW_H, LIBVIEW_GRID_ROWS,
+                  rows);
 }
 
 // --- A series' page ---
@@ -771,10 +795,12 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
 
     int first, count;
     libviewSeasonRange(lib, v->show, v->season, &first, &count);
-    for (int e = v->episodes.first; e < count && e < v->episodes.first + LIBVIEW_LIST_ROWS; e++) {
+    int list_bottom = SHOW_LIST_Y + LIBVIEW_LIST_ROWS * LIST_ROW_H;
+    gfxSetClip(0, SHOW_LIST_Y, GFX_WIDTH, list_bottom - SHOW_LIST_Y);
+    for (int e = v->episodes.first; e < count && e <= v->episodes.first + LIBVIEW_LIST_ROWS; e++) {
         int item = show->episodes[first + e];
         const LibraryItem *it = &lib->items[item];
-        int y = SHOW_LIST_Y + (e - v->episodes.first) * LIST_ROW_H;
+        int y = SHOW_LIST_Y + (e - v->episodes.first) * LIST_ROW_H - v->episodes.offset;
         char number[16], title[160], size[24];
         snprintf(number, sizeof(number), "%d", it->name.episode);
         if (it->name.title[0])
@@ -784,12 +810,14 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
         formatSize(it->size, size, sizeof(size));
         drawListRow(y, e == v->episodes.cursor, number, title, size, uiLibWatched(lib, resume, item),
                     uiLibPicture(lib, (LibraryRef){false, item}), uiLibSeen(lib, item) ? 1 : 0);
-        uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_EPISODE, e, 0);
+        addListHit(0, y, GFX_WIDTH, LIST_ROW_H, SHOW_LIST_Y, list_bottom, LIBHIT_EPISODE, e, 0);
         // The circle on the right marks it watched or not (X).
-        uiLibraryAddHit(GFX_WIDTH - MARGIN - 2 * CHECK_R - 16, y, 2 * CHECK_R + 16 + MARGIN, LIST_ROW_H, LIBHIT_WATCHED,
-                        e, 0);
+        addListHit(GFX_WIDTH - MARGIN - 2 * CHECK_R - 16, y, 2 * CHECK_R + 16 + MARGIN, LIST_ROW_H, SHOW_LIST_Y,
+                   list_bottom, LIBHIT_WATCHED, e, 0);
     }
-    drawScrollbar(SHOW_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, v->episodes.first, LIBVIEW_LIST_ROWS, count);
+    gfxResetClip();
+    drawScrollbar(SHOW_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, v->episodes.first, v->episodes.offset, LIST_ROW_H,
+                  LIBVIEW_LIST_ROWS, count);
 }
 
 // --- Search ---
@@ -818,7 +846,9 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
         return;
     }
     const Scroll *s = &v->results_scroll;
-    for (int i = s->first; i < v->result_count && i < s->first + LIBVIEW_LIST_ROWS; i++) {
+    int list_bottom = SEARCH_LIST_Y + LIBVIEW_LIST_ROWS * LIST_ROW_H;
+    gfxSetClip(0, SEARCH_LIST_Y, GFX_WIDTH, list_bottom - SEARCH_LIST_Y);
+    for (int i = s->first; i < v->result_count && i <= s->first + LIBVIEW_LIST_ROWS; i++) {
         LibraryRef ref = v->results[i];
         const char *name, *tag;
         char below[200], title[300];
@@ -829,12 +859,14 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
         else
             snprintf(title, sizeof(title), "%s", name);
         const char *detail = episode ? name : below;
-        int y = SEARCH_LIST_Y + (i - s->first) * LIST_ROW_H;
+        int y = SEARCH_LIST_Y + (i - s->first) * LIST_ROW_H - s->offset;
         drawListRow(y, i == s->cursor, NULL, title, detail, ref.is_show ? -1 : uiLibWatched(lib, resume, ref.index),
                     uiLibPicture(lib, ref), !ref.is_show && uiLibSeen(lib, ref.index) ? 1 : -1);
-        uiLibraryAddHit(0, y, GFX_WIDTH, LIST_ROW_H, LIBHIT_RESULT, i, 0);
+        addListHit(0, y, GFX_WIDTH, LIST_ROW_H, SEARCH_LIST_Y, list_bottom, LIBHIT_RESULT, i, 0);
     }
-    drawScrollbar(SEARCH_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, s->first, LIBVIEW_LIST_ROWS, v->result_count);
+    gfxResetClip();
+    drawScrollbar(SEARCH_LIST_Y, LIBVIEW_LIST_ROWS * LIST_ROW_H, s->first, s->offset, LIST_ROW_H, LIBVIEW_LIST_ROWS,
+                  v->result_count);
 }
 
 void uiDrawToast(const char *message)
