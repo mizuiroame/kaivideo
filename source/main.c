@@ -1006,6 +1006,7 @@ static bool drawStyledSubtitles(App *app, float bw, float bh, bool bar)
 
 static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
 {
+    appApplyViewAccent(app);
     bool stalled = watchForStall(app, now);
     uiLibraryResetHits();
     int w, h;

@@ -100,11 +100,20 @@ bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size)
     return true;
 }
 
+static Color g_theme_accent;  // The accent chosen in Display.
+
 static void applyLooks(const App *app)
 {
     themeApply(app->config.theme, app->config.accent);
+    g_theme_accent = g_colors.accent;
     uiLibrarySetThumbnails(app->config.thumbnails);
     appApplySubtitleStyle(app);
+}
+
+void appApplyViewAccent(const App *app)
+{
+    bool server = app->config.use_jellyfin && !app->settings_open;  // Settings shows the accent chosen.
+    g_colors.accent = server ? uiServerColor((ServerKind)app->config.server_view) : g_theme_accent;
 }
 
 void appSettingsStart(App *app)

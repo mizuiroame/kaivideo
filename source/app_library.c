@@ -737,6 +737,7 @@ void appLibraryRescan(App *app, uint64_t now)
 
 void appLibraryDraw(App *app, uint64_t now)
 {
+    appApplyViewAccent(app);
     const char *message = now < app->message_until ? app->message : NULL;
     bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.

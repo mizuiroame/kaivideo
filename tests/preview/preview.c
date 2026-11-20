@@ -518,6 +518,17 @@ static void libraryScenes(void)
     g_view.show = -1;
     g_view.tab = TAB_HOME;
 
+    // A server's library wears its color: Plex's here.
+    Color chosen_accent = g_colors.accent;
+    g_colors.accent = uiServerColor(SERVER_PLEX);
+    uiLibrarySetSource("Plex", uiServerColor(SERVER_PLEX));
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawFooterHelp("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
+    save("library_plex");
+    g_colors.accent = chosen_accent;
+    uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
+
     // Settings and About over Home, in another theme.
     Config config;
     configDefaults(&config);

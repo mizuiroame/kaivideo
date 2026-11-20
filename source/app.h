@@ -168,6 +168,9 @@ void appLibraryToggleSource(App *app, uint64_t now);
 void appLibrarySetSource(App *app, bool jellyfin);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
 void appLibraryInstallCatalog(App *app, JfCatalog *c);
+// The accent is the server's color while its library (or a video of it) shows,
+// else the one chosen in Display.
+void appApplyViewAccent(const App *app);
 // Shows a server's library (the one kept, at once, or empty until it comes).
 void appLibraryShowServer(App *app, ServerKind kind);
 // A server's library came, or its server signed out (c NULL): kept, and shown if it's the one viewed.

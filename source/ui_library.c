@@ -17,6 +17,9 @@
 #define TAB_TEXT_MIDDLE 28.0f
 #define HINT_GAP 9
 #define SOURCE_DOT 12         // The source's color, before its name.
+#define GLOW_BANDS 12         // The header's glow: this many bands,
+#define GLOW_BAND_H 10        // each this tall,
+#define GLOW_ALPHA 34         // from this strong at the top to nothing.
 #define TAB_SIZE 20
 #define TAB_SIZE_MIN 17       // Smaller, before the tabs slide.
 #define TAB_SIDE_GAP 16       // Between the tabs' ZL and ZR and what the header shows at its sides.
@@ -363,8 +366,17 @@ static void drawMenuButton(void)
         gfxFillRoundRect(MARGIN, 22 + i * 7, 22, 3, 1, COLOR_ACCENT);
 }
 
+// A soft glow of the accent from the top: the source's color sets the mood.
+static void drawHeaderGlow(void)
+{
+    for (int i = 0; i < GLOW_BANDS; i++)
+        gfxBlendRect(0, i * GLOW_BAND_H, GFX_WIDTH, GLOW_BAND_H, COLOR_ACCENT,
+                     (unsigned)(GLOW_ALPHA - i * GLOW_ALPHA / GLOW_BANDS));
+}
+
 void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
 {
+    drawHeaderGlow();
     drawMenuButton();
     int title_w = fontDraw(FONT_BOLD, 26, MARGIN + 36, 16, "KaiVideo", COLOR_ACCENT);
     uiLibraryAddHit(0, 0, MARGIN + 36 + title_w + 12, UI_TAB_BAR_H, LIBHIT_MENU, 0, 0);
