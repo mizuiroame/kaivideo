@@ -854,6 +854,18 @@ bool jfSyncSignedIn(ServerKind kind)
     return g.running && kind >= 0 && kind < SERVER_KIND_COUNT && signedIn(kind);
 }
 
+void jfSyncUserName(ServerKind kind, char *out, size_t size)
+{
+    out[0] = '\0';
+    if (!g.running || kind < 0 || kind >= SERVER_KIND_COUNT)
+        return;
+    pthread_mutex_lock(&g.lock);
+    if (signedInLocked(kind))
+        snprintf(out, size, "%s",
+                 kind == SERVER_PLEX ? g.plex_session.user_name : g.sessions[FAMILY(kind)].user_name);
+    pthread_mutex_unlock(&g.lock);
+}
+
 bool jfSyncAnySignedIn(void)
 {
     return jfSyncSignedIn(SERVER_JELLYFIN) || jfSyncSignedIn(SERVER_EMBY) || jfSyncSignedIn(SERVER_PLEX);

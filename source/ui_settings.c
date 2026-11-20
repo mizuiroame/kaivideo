@@ -19,6 +19,9 @@
 #define FOOT_H 60
 #define ABOUT_W 700
 #define ABOUT_H 470
+#define NOTE_H 30         // A server's page: a line under its title.
+#define SERVER_DOT 12
+#define SERVER_BAND_H 5   // A server's page: its color along the top.
 
 // Darkens what's behind, and makes a tap there close the panel.
 static void dimScreen(void)
@@ -46,13 +49,26 @@ static int backButton(int x, int y)
     return w;
 }
 
-static void rowHighlight(int x, int y, int w, int h)
+static void rowHighlight(int x, int y, int w, int h, Color mark)
 {
     gfxFillRoundRect(x, y, w, h, 10, COLOR_SURFACE_HI);
-    gfxFillRect(x, y + 10, 3, h - 20, COLOR_ACCENT);
+    gfxFillRect(x, y + 10, 3, h - 20, mark);
 }
 
 static const char *g_jf_server = "", *g_jf_user = "";
+static const char *g_users[SERVER_KIND_COUNT] = {"", "", ""};
+
+void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT])
+{
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        g_users[k] = users[k];
+}
+
+// A server's color, as a dot before its name.
+static void serverDot(int x, int middle, ServerKind kind)
+{
+    gfxFillRoundRect(x, middle - SERVER_DOT / 2, SERVER_DOT, SERVER_DOT, SERVER_DOT / 2, uiServerColor(kind));
+}
 
 void uiSettingsSetJellyfin(const char *server, const char *user)
 {
@@ -71,8 +87,13 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "KaiVideo %s", version);
     } else if (row == SETTING_JF_SERVER || row == SETTING_PLEX_SERVER) {
         snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : "Not set");
-    } else if (row == SETTING_JF_SIGN_OUT || row == SETTING_OPEN_JELLYFIN) {
+    } else if (row == SETTING_JF_SIGN_OUT) {
         snprintf(out, size, "%s", g_jf_user);
+    } else if (row == SETTING_OPEN_JELLYFIN || row == SETTING_OPEN_EMBY || row == SETTING_OPEN_PLEX) {
+        SettingsPage page;
+        ServerKind kind;
+        settingOpensPage(row, &page, &kind);
+        snprintf(out, size, "%s", g_users[kind][0] ? g_users[kind] : "Not signed in");
     } else {
         settingValue(c, row, out, size);
     }
@@ -81,25 +102,46 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
 void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *library_root, const char *version)
 {
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    int count = settingsPageRows(page, g_jf_user[0] != '\0', (ServerKind)c->server_kind, rows);
-    int h = HEAD_H + count * ROW_H + FOOT_H;
+    ServerKind kind = (ServerKind)c->server_kind;
+    int count = settingsPageRows(page, g_jf_user[0] != '\0', kind, rows);
+    const char *note = settingsPageNote(page, kind);
+    bool server = page == SETTINGS_PAGE_JELLYFIN;  // A server's page wears its color.
+    int head = HEAD_H + (note ? NOTE_H : 0);
+    int h = head + count * ROW_H + FOOT_H;
     int x = (GFX_WIDTH - SETTINGS_W) / 2, y = (GFX_HEIGHT - h) / 2;
+    Color mark = server ? uiServerColor(kind) : COLOR_ACCENT;
     dimScreen();
     panel(x, y, SETTINGS_W, h);
+    if (server)  // Its color along the top.
+        gfxFillRoundRect(x + 16, y, SETTINGS_W - 32, SERVER_BAND_H, SERVER_BAND_H / 2, mark);
     int title_x = x + PANEL_PAD;
     if (page != SETTINGS_PAGE_MAIN)  // A page: back to the main one.
         title_x += backButton(x + PANEL_PAD - 4, y + 18) + 12;
-    fontDraw(FONT_BOLD, 24, title_x, y + 22, settingsPageTitle(page), COLOR_TEXT);
+    if (server) {
+        serverDot(title_x, y + 34, kind);
+        title_x += SERVER_DOT + 10;
+    }
+    fontDraw(FONT_BOLD, 24, title_x, y + 22, settingsPageTitle(page, kind), COLOR_TEXT);
+    if (note)
+        fontDrawClipped(FONT_REGULAR, 17, x + PANEL_PAD, y + HEAD_H - 4, SETTINGS_W - 2 * PANEL_PAD, note, COLOR_DIM);
 
     char value[200];
     for (int n = 0; n < count; n++) {
         SettingRow row = rows[n];
-        int row_y = y + HEAD_H + n * ROW_H;
+        int row_y = y + head + n * ROW_H;
         bool selected = (int)row == cursor, choice = settingIsChoice(row);
-        bool opens = row == SETTING_OPEN_DISPLAY || row == SETTING_OPEN_JELLYFIN;
+        SettingsPage opened;
+        ServerKind row_kind;
+        bool opens = settingOpensPage(row, &opened, &row_kind);
+        bool server_row = opens && opened == SETTINGS_PAGE_JELLYFIN;  // A server: its dot, and its color when chosen.
         if (selected)
-            rowHighlight(x + 16, row_y, SETTINGS_W - 32, ROW_H - 6);
-        fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, x + PANEL_PAD, row_y + 8, settingLabel(row), COLOR_TEXT);
+            rowHighlight(x + 16, row_y, SETTINGS_W - 32, ROW_H - 6, server_row ? uiServerColor(row_kind) : mark);
+        int label_x = x + PANEL_PAD;
+        if (server_row) {
+            serverDot(label_x, row_y + 21, row_kind);
+            label_x += SERVER_DOT + 10;
+        }
+        fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, label_x, row_y + 8, settingLabel(row), COLOR_TEXT);
         rowValue(row, c, library_root, version, value, sizeof(value));
         int value_w = fontTextWidth(FONT_BOLD, 20, value);
         if (value_w > 300)
@@ -107,7 +149,7 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
         int right = x + SETTINGS_W - PANEL_PAD;
         int value_x = right - value_w - (choice || opens ? 24 : 0);
         if (value[0])
-            fontDrawClipped(FONT_BOLD, 20, value_x, row_y + 9, value_w, value, choice ? COLOR_ACCENT : COLOR_DIM);
+            fontDrawClipped(FONT_BOLD, 20, value_x, row_y + 9, value_w, value, choice ? mark : COLOR_DIM);
         if (opens) {  // A page: an arrow into it.
             gfxFillTriangleRight(right - 12, row_y + 13, 10, 16, selected ? COLOR_TEXT : COLOR_DIM);
         } else if (choice) {

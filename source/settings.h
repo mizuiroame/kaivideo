@@ -22,7 +22,7 @@ typedef enum {
     SETTING_BACKGROUND,
     SETTING_BLUR,
     SETTING_CLOCK,
-    SETTING_OPEN_JELLYFIN,  // Opens the Media server page (Jellyfin or Plex).
+    SETTING_OPEN_JELLYFIN,  // Opens Jellyfin's page.
     SETTING_JF_SERVER,      // Types the server's address.
     SETTING_JF_CODE,        // Signs in with Quick Connect.
     SETTING_JF_PASSWORD,    // Signs in with a user name and password.
@@ -31,14 +31,25 @@ typedef enum {
     SETTING_JF_FIND,        // Looks for servers on the network.
     SETTING_JF_TEST,        // Tries the server, step by step.
     SETTING_JF_CERTIFICATE, // Whether an https server's certificate must be trusted.
-    SETTING_SERVER_KIND,    // Jellyfin or Plex.
     SETTING_PLEX_CODE,      // Signs in with a code typed at plex.tv/link.
     SETTING_PLEX_SERVER,    // The Plex server in use (shown, not chosen).
+    SETTING_OPEN_EMBY,      // Opens Emby's page.
+    SETTING_OPEN_PLEX,      // Opens Plex's page.
+    SETTING_OPEN_LIBRARY,   // Opens the Library page: the card's folder and its scan.
+    SETTING_OPEN_PLAYBACK,  // Opens the Playback page.
     SETTING_COUNT,
 } SettingRow;
 
-// Settings opens on the main page; Display holds the looks.
-typedef enum { SETTINGS_PAGE_MAIN, SETTINGS_PAGE_DISPLAY, SETTINGS_PAGE_JELLYFIN, SETTINGS_PAGE_COUNT } SettingsPage;
+// Settings opens on the main page, whose rows open the others. SETTINGS_PAGE_JELLYFIN
+// is a server's page: Jellyfin's, Emby's or Plex's (Config.server_kind).
+typedef enum {
+    SETTINGS_PAGE_MAIN,
+    SETTINGS_PAGE_DISPLAY,
+    SETTINGS_PAGE_JELLYFIN,
+    SETTINGS_PAGE_LIBRARY,
+    SETTINGS_PAGE_PLAYBACK,
+    SETTINGS_PAGE_COUNT
+} SettingsPage;
 
 typedef enum { SUBTITLES_SMALL, SUBTITLES_MEDIUM, SUBTITLES_LARGE, SUBTITLES_SIZE_COUNT } SubtitleSize;
 typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleStyle;
@@ -74,7 +85,14 @@ void configWrite(const Config *c, FILE *f);
 // The rows of a page, in order. Returns how many. signed_in: to the media
 // server, and kind: which one it is, decide what its page offers.
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
-const char *settingsPageTitle(SettingsPage page);
+// A page's title (a server's page: its name).
+const char *settingsPageTitle(SettingsPage page, ServerKind kind);
+// What a server's page says under its title, or NULL.
+const char *settingsPageNote(SettingsPage page, ServerKind kind);
+// True for a row that opens a page: which, and for a server's, which server.
+bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind);
+// The main page's row that opens a page (back on it when the page closes).
+SettingRow settingPageOpener(SettingsPage page, ServerKind kind);
 const char *settingLabel(SettingRow row);
 // Rows changed with left and right (the others open something with A).
 bool settingIsChoice(SettingRow row);

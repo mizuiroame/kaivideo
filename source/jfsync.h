@@ -46,6 +46,8 @@ void jfSyncUseKind(ServerKind kind);
 ServerKind jfSyncKind(void);
 bool jfSyncSignedIn(ServerKind kind);
 bool jfSyncAnySignedIn(void);
+// The user signed in to a server ("" if none), from any thread.
+void jfSyncUserName(ServerKind kind, char *out, size_t size);
 // Sends what's waiting to be told and stops.
 void jfSyncStop(void);
 bool jfSyncRunning(void);

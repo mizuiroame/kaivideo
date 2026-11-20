@@ -526,17 +526,30 @@ static void libraryScenes(void)
     themeApply(config.theme, config.accent);
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_DISPLAY, "sdmc:/Media/Videos", "1.0.0");
+    static const char *const USERS[SERVER_KIND_COUNT] = {"mizu", "", "mizu"};
+    uiSettingsSetServers(USERS);
+    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
     save("settings");
     // The main page's rows: 48 high from 76 below the panel's top (7 rows, a 60 footer).
     int top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
     LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 6 * 48 + 20), outside = uiLibraryTap(20, 400);
-    LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 3 * 48 + 20);
+    LibHit plex_row = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
-        thumbs.kind != LIBHIT_SETTING_NEXT || thumbs.a != SETTING_THUMBNAILS) {
-        printf("TOUCH: settings: a row, its arrow or the outside doesn't answer as drawn (%d %d %d)\n", about.kind,
-               thumbs.kind, outside.kind);
+        plex_row.kind != LIBHIT_SETTING || plex_row.a != SETTING_OPEN_PLEX) {
+        printf("TOUCH: settings: a row or the outside doesn't answer as drawn (%d %d %d)\n", about.kind, plex_row.kind,
+               outside.kind);
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSettings(&config, SETTINGS_PAGE_LIBRARY, SETTING_THUMBNAILS, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    save("settings_library");
+    top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
+    LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 2 * 48 + 20);
+    if (thumbs.kind != LIBHIT_SETTING_NEXT || thumbs.a != SETTING_THUMBNAILS) {
+        printf("TOUCH: settings_library: Thumbnails' arrow doesn't answer a tap\n");
         g_problems++;
     }
     begin();
@@ -555,8 +568,8 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
-    top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
-    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20);
+    top = (GFX_HEIGHT - (76 + 30 + 6 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
     if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
         g_problems++;
@@ -569,11 +582,10 @@ static void libraryScenes(void)
     uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.0.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_plex");
-    top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
-    LibHit plex_code = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 1 * 48 + 20);
-    LibHit plex_kind = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 20);
-    if (plex_code.kind != LIBHIT_SETTING || plex_code.a != SETTING_PLEX_CODE || plex_kind.a != SETTING_SERVER_KIND) {
-        printf("TOUCH: settings_plex: the sign-in or server type row doesn't answer a tap\n");
+    top = (GFX_HEIGHT - (76 + 30 + 1 * 48 + 60)) / 2 + 76 + 30;
+    LibHit plex_code = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 20);
+    if (plex_code.kind != LIBHIT_SETTING || plex_code.a != SETTING_PLEX_CODE) {
+        printf("TOUCH: settings_plex: the sign-in row doesn't answer a tap\n");
         g_problems++;
     }
     begin();

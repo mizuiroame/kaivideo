@@ -134,6 +134,8 @@ static void openPage(App *app, SettingsPage page)
     app->settings_cursor = rows[0];
 }
 
+static void openServer(App *app, ServerKind kind, uint64_t now);
+
 void appOpenSettings(App *app)
 {
     app->settings_open = true;
@@ -147,7 +149,7 @@ static void back(App *app)
     if (app->settings_page == SETTINGS_PAGE_MAIN) {
         app->settings_open = false;
     } else {
-        app->settings_cursor = app->settings_page == SETTINGS_PAGE_JELLYFIN ? SETTING_OPEN_JELLYFIN : SETTING_OPEN_DISPLAY;
+        app->settings_cursor = settingPageOpener((SettingsPage)app->settings_page, (ServerKind)app->config.server_kind);
         app->settings_page = SETTINGS_PAGE_MAIN;
     }
 }
@@ -194,8 +196,7 @@ void appOpenJellyfinSettings(App *app, uint64_t now)
     app->settings_open = true;
     app->about_open = false;
     openPage(app, SETTINGS_PAGE_MAIN);
-    app->settings_cursor = SETTING_OPEN_JELLYFIN;
-    openJellyfin(app, now);
+    openServer(app, (ServerKind)app->config.server_kind, now);
 }
 
 static void typeServer(App *app, uint64_t now)
@@ -261,22 +262,21 @@ static void passwordSignIn(App *app, uint64_t now)
     memset(password, 0, sizeof(password));
 }
 
-// Which server the page is for: every one signed in stays in the library.
-static void serverKindChanged(App *app)
+// A server's page: signing in and out, testing and finding are for it.
+static void openServer(App *app, ServerKind kind, uint64_t now)
 {
-    jfSyncUseKind((ServerKind)app->config.server_kind);
-    jfProbeSetKind((ServerKind)app->config.server_kind);
-    jfSyncGetStatus(&app->jf);
+    app->config.server_kind = kind;
+    appSaveSettings(app);
+    if (appJellyfinEnsure(app)) {
+        jfSyncUseKind(kind);
+        jfProbeSetKind(kind);
+    }
+    openJellyfin(app, now);  // On its first row; Back lands on the server's row.
 }
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_SERVER_KIND && app->jf_signing)
-        return;
-    if (row == SETTING_SERVER_KIND) {
-        settingStep(&app->config, row, delta);
-        serverKindChanged(app);
-    } else if (row == SETTING_BACKGROUND) {
+    if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
     } else {
         settingStep(&app->config, row, delta);
@@ -318,7 +318,11 @@ static void activate(App *app, SettingRow row, uint64_t now)
         appLibraryRescan(app, now);
         break;
     case SETTING_OPEN_DISPLAY: openPage(app, SETTINGS_PAGE_DISPLAY); break;
-    case SETTING_OPEN_JELLYFIN: openJellyfin(app, now); break;
+    case SETTING_OPEN_LIBRARY: openPage(app, SETTINGS_PAGE_LIBRARY); break;
+    case SETTING_OPEN_PLAYBACK: openPage(app, SETTINGS_PAGE_PLAYBACK); break;
+    case SETTING_OPEN_JELLYFIN: openServer(app, SERVER_JELLYFIN, now); break;
+    case SETTING_OPEN_EMBY: openServer(app, SERVER_EMBY, now); break;
+    case SETTING_OPEN_PLEX: openServer(app, SERVER_PLEX, now); break;
     case SETTING_JF_SERVER: typeServer(app, now); break;
     case SETTING_JF_CODE: codeSignIn(app, now); break;
     case SETTING_PLEX_CODE:
@@ -415,7 +419,9 @@ void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
         change(app, row, -1, now);
     if ((pressed & BUTTONS_RIGHT) && settingIsChoice(row))
         change(app, row, 1, now);
-    if ((pressed & BUTTONS_RIGHT) && (row == SETTING_OPEN_DISPLAY || row == SETTING_OPEN_JELLYFIN))
+    SettingsPage opens;
+    ServerKind opens_kind;
+    if ((pressed & BUTTONS_RIGHT) && settingOpensPage(row, &opens, &opens_kind))
         activate(app, row, now);
     if (pressed & HidNpadButton_A)
         activate(app, row, now);
@@ -435,6 +441,13 @@ void appSettingsDraw(const App *app)
     if (!strncmp(server, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
         server += sizeof(HTTP_PREFIX) - 1;
     uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "");
+    static char users[SERVER_KIND_COUNT][JF_NAME_MAX];  // Who's signed in where, for the main page.
+    const char *names[SERVER_KIND_COUNT];
+    for (int k = 0; k < SERVER_KIND_COUNT; k++) {
+        jfSyncUserName((ServerKind)k, users[k], sizeof(users[k]));
+        names[k] = users[k];
+    }
+    uiSettingsSetServers(names);
     if (app->jf_signing)
         uiDrawSignInCode(app->config.server_kind == SERVER_PLEX, app->jf.code, server, app->jf.linked);
     else if (app->about_open)

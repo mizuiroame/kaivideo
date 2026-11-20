@@ -15,42 +15,45 @@ void testSettings(void)
     CHECK(c.autoplay);  // The next episode plays on its own.
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 7 && rows[1] == SETTING_OPEN_JELLYFIN &&
-          rows[4] == SETTING_AUTOPLAY && rows[5] == SETTING_OPEN_DISPLAY);
-    CHECK(!strcmp(settingLabel(SETTING_OPEN_JELLYFIN), "Media server"));
-    // Signing in is offered until it's done, and signing out only then; the
-    // kind of server comes first.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_SERVER_KIND &&
-          rows[1] == SETTING_JF_SERVER && rows[2] == SETTING_JF_FIND && rows[3] == SETTING_JF_TEST &&
-          rows[4] == SETTING_JF_CODE && rows[5] == SETTING_JF_PASSWORD && rows[6] == SETTING_JF_CERTIFICATE);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 6 && rows[2] == SETTING_JF_QUALITY &&
-          rows[3] == SETTING_JF_TEST && rows[4] == SETTING_JF_CERTIFICATE && rows[5] == SETTING_JF_SIGN_OUT);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 3 && rows[0] == SETTING_SERVER_KIND &&
-          rows[1] == SETTING_PLEX_CODE && rows[2] == SETTING_JF_QUALITY);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 4 && rows[1] == SETTING_PLEX_SERVER &&
-          rows[3] == SETTING_JF_SIGN_OUT);
+    // The main page opens the others: the library, each server, playback, display.
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_OPEN_LIBRARY &&
+          rows[1] == SETTING_OPEN_JELLYFIN && rows[2] == SETTING_OPEN_EMBY && rows[3] == SETTING_OPEN_PLEX &&
+          rows[4] == SETTING_OPEN_PLAYBACK && rows[5] == SETTING_OPEN_DISPLAY && rows[6] == SETTING_ABOUT);
+    CHECK(!strcmp(settingLabel(SETTING_OPEN_JELLYFIN), "Jellyfin") && !strcmp(settingLabel(SETTING_OPEN_PLEX), "Plex"));
+    CHECK(settingsPageRows(SETTINGS_PAGE_LIBRARY, false, SERVER_JELLYFIN, rows) == 3 && rows[0] == SETTING_LIBRARY &&
+          rows[1] == SETTING_RESCAN && rows[2] == SETTING_THUMBNAILS);
+    CHECK(settingsPageRows(SETTINGS_PAGE_PLAYBACK, false, SERVER_JELLYFIN, rows) == 2 && rows[0] == SETTING_AUTOPLAY &&
+          rows[1] == SETTING_JF_QUALITY);
+    SettingsPage page;
+    ServerKind opens;
+    CHECK(settingOpensPage(SETTING_OPEN_EMBY, &page, &opens) && page == SETTINGS_PAGE_JELLYFIN && opens == SERVER_EMBY);
+    CHECK(settingOpensPage(SETTING_OPEN_LIBRARY, &page, &opens) && page == SETTINGS_PAGE_LIBRARY);
+    CHECK(!settingOpensPage(SETTING_THUMBNAILS, &page, &opens));
+    CHECK(settingPageOpener(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) == SETTING_OPEN_PLEX &&
+          settingPageOpener(SETTINGS_PAGE_PLAYBACK, SERVER_JELLYFIN) == SETTING_OPEN_PLAYBACK);
+    // A server's page is its own: its name, a line about it, and only its rows.
+    CHECK(!strcmp(settingsPageTitle(SETTINGS_PAGE_JELLYFIN, SERVER_EMBY), "Emby"));
+    CHECK(settingsPageNote(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) && !settingsPageNote(SETTINGS_PAGE_MAIN, SERVER_PLEX));
+    // Signing in is offered until it's done, and signing out only then.
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_JF_SERVER &&
+          rows[1] == SETTING_JF_FIND && rows[2] == SETTING_JF_TEST && rows[3] == SETTING_JF_CODE &&
+          rows[4] == SETTING_JF_PASSWORD && rows[5] == SETTING_JF_CERTIFICATE);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 4 && rows[1] == SETTING_JF_TEST &&
+          rows[2] == SETTING_JF_CERTIFICATE && rows[3] == SETTING_JF_SIGN_OUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 1 && rows[0] == SETTING_PLEX_CODE);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 2 && rows[0] == SETTING_PLEX_SERVER &&
+          rows[1] == SETTING_JF_SIGN_OUT);
+    // Emby has no Quick Connect: a password only.
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 5 && rows[3] == SETTING_JF_PASSWORD &&
+          rows[2] == SETTING_JF_TEST);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 4 && rows[3] == SETTING_JF_SIGN_OUT);
     Config kind;
     configDefaults(&kind);
-    char kind_shown[32];
-    settingValue(&kind, SETTING_SERVER_KIND, kind_shown, sizeof(kind_shown));
-    CHECK(kind.server_kind == SERVER_JELLYFIN && !strcmp(kind_shown, "Jellyfin") && settingIsChoice(SETTING_SERVER_KIND));
-    settingStep(&kind, SETTING_SERVER_KIND, 1);
-    settingValue(&kind, SETTING_SERVER_KIND, kind_shown, sizeof(kind_shown));
-    CHECK(kind.server_kind == SERVER_EMBY && !strcmp(kind_shown, "Emby"));
-    settingStep(&kind, SETTING_SERVER_KIND, 1);
-    settingValue(&kind, SETTING_SERVER_KIND, kind_shown, sizeof(kind_shown));
-    CHECK(kind.server_kind == SERVER_PLEX && !strcmp(kind_shown, "Plex"));
-    settingStep(&kind, SETTING_SERVER_KIND, 1);  // Wraps.
-    CHECK(kind.server_kind == SERVER_JELLYFIN);
     CHECK(configReadLine(&kind, "server=plex") && kind.server_kind == SERVER_PLEX);
     CHECK(configReadLine(&kind, "server=emby") && kind.server_kind == SERVER_EMBY);
     CHECK(configReadLine(&kind, "server=jellyfin") && kind.server_kind == SERVER_JELLYFIN);
     CHECK(kind.server_view == SERVER_JELLYFIN && configReadLine(&kind, "view=2") && kind.server_view == SERVER_PLEX);
     CHECK(configReadLine(&kind, "view=9") && kind.server_view == SERVER_JELLYFIN);  // Unknown: the first.
-    // Emby has no Quick Connect: a password only.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[4] == SETTING_JF_PASSWORD &&
-          rows[3] == SETTING_JF_TEST);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 6 && rows[5] == SETTING_JF_SIGN_OUT);
     // Certificates are checked unless turned off, for a server with its own.
     Config cert;
     configDefaults(&cert);
@@ -69,7 +72,7 @@ void testSettings(void)
     CHECK(settingQualityBitrate(&quality) == 420000 && settingIsChoice(SETTING_JF_QUALITY));
     CHECK(configReadLine(&quality, "jellyfin_quality=3") && settingQualityBitrate(&quality) == 20000000);
     CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, false, SERVER_JELLYFIN, rows) == 5 && rows[0] == SETTING_THEME && rows[4] == SETTING_CLOCK);
-    CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY), "Display") == 0);
+    CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY, SERVER_JELLYFIN), "Display") == 0);
 
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.
     CHECK(c.theme == THEME_COUNT - 1);

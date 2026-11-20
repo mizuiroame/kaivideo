@@ -14,3 +14,5 @@ void uiSettingsSetJellyfin(const char *server, const char *user);
 // The code to approve: in Jellyfin's Quick Connect, or at plex.tv/link.
 // linked: Plex took the code, and the server is being found.
 void uiDrawSignInCode(bool plex, const char *code, const char *server, bool linked);
+// Who's signed in to each server ("" for none), shown on the main page's rows.
+void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT]);
