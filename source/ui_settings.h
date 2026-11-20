@@ -12,4 +12,5 @@ void uiDrawAbout(const char *version);
 void uiSettingsSetJellyfin(const char *server, const char *user);
 // Signing in: the code to approve on another device ("" while it's asked for).
 // The code to approve: in Jellyfin's Quick Connect, or at plex.tv/link.
-void uiDrawSignInCode(bool plex, const char *code, const char *server);
+// linked: Plex took the code, and the server is being found.
+void uiDrawSignInCode(bool plex, const char *code, const char *server, bool linked);

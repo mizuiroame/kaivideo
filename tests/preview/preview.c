@@ -578,12 +578,12 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSignInCode(true, "K7QX", "");
+    uiDrawSignInCode(true, "K7QX", "", false);
     uiDrawFooterHelp("[B] cancel");
     save("plex_code");
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSignInCode(false, "482913", "192.168.0.10:8096");
+    uiDrawSignInCode(false, "482913", "192.168.0.10:8096", false);
     uiDrawFooterHelp("[B] cancel");
     save("jellyfin_code");
     begin();

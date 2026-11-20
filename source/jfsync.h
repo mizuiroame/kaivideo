@@ -23,6 +23,7 @@ typedef struct {
     char server[JF_SERVER_MAX], user[JF_NAME_MAX];
     char code[16];
     char error[128];   // Why the last thing asked failed; "" if it didn't.
+    bool linked;       // Plex: the code was approved, the server is being found.
     bool refreshing;
     int loaded, total; // Videos read so far while refreshing.
 } JfStatus;

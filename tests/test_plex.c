@@ -178,6 +178,40 @@ static void testReports(void)
     CHECK(strstr(path, "/:/unscrobble?"));
 }
 
+static void testMarkers(void)
+{
+    JfSegment s[4];
+    const char *json = "{\"MediaContainer\":{\"Metadata\":[{\"Marker\":["
+                       "{\"type\":\"credits\",\"startTimeOffset\":1300000,\"endTimeOffset\":1400000},"
+                       "{\"type\":\"intro\",\"startTimeOffset\":5000,\"endTimeOffset\":65000},"
+                       "{\"type\":\"commercial\",\"startTimeOffset\":1,\"endTimeOffset\":2},"
+                       "{\"type\":\"intro\",\"startTimeOffset\":9000,\"endTimeOffset\":9000}]}]}}";
+    CHECK(plexMarkersParse(json, s, 4) == 2);
+    CHECK(s[0].kind == JF_SEGMENT_INTRO && s[0].start_ns == 5000 * MS_TO_NS && s[0].end_ns == 65000 * MS_TO_NS);
+    CHECK(s[1].kind == JF_SEGMENT_OUTRO && s[1].start_ns == 1300000 * MS_TO_NS);
+    CHECK(plexMarkersParse(json, s, 1) == 1 && plexMarkersParse("{}", s, 4) == 0);
+}
+
+static void testFavorites(void)
+{
+    const char *file = TMP_ROOT "_plex_favorites.txt";
+    remove(file);
+    CHECK(plexFavoritesSet(file, "plex:4/7", true));
+    CHECK(plexFavoritesSet(file, "plex:16/series", true));
+    CHECK(plexFavoritesSet(file, "plex:99/1", true) && plexFavoritesSet(file, "plex:99/1", false));
+    CHECK(!plexFavoritesSet(file, "/movies/a.mkv", true));
+    JfCatalog c;
+    jfCatalogInit(&c);
+    plexCatalogAddPage(&c, MOVIES, NULL);
+    plexCatalogAddPage(&c, EPISODES, NULL);
+    plexFavoritesApply(&c, file);
+    CHECK(c.library.items[0].favorite && !c.library.items[1].favorite && c.library.items[2].favorite);
+    libraryBuild(&c.library);
+    CHECK(c.library.show_count == 1 && c.library.shows[0].favorite);
+    jfCatalogFree(&c);
+    remove(file);
+}
+
 static void testSession(void)
 {
     PlexSession s = {0}, back;
@@ -201,5 +235,7 @@ void testPlex(void)
     testCatalog();
     testReports();
     testPlans();
+    testMarkers();
+    testFavorites();
     testSession();
 }

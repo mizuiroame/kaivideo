@@ -85,5 +85,16 @@ bool plexPlanParse(const char *json, long long max_bitrate, int burn_id, JfPlan 
 void plexTranscodePath(char *out, size_t size, const char *item, const char *session, long long max_bitrate,
                        bool burn, bool small, const char *client_query);
 
+// The parts Plex marked in an item (its /library/metadata/<item>?includeMarkers=1
+// answer): intros and credits, by start. Returns how many (at most max).
+int plexMarkersParse(const char *json, JfSegment *out, int max);
+
+// Plex has no favorites of its own: this console keeps them in a file, one
+// location a line (a film's, or "plex:<series>/series").
+// Marks the catalog's videos the file names (before libraryBuild).
+void plexFavoritesApply(JfCatalog *c, const char *file);
+// Adds a location to the file, or takes it out. False if it can't be written.
+bool plexFavoritesSet(const char *file, const char *location, bool favorite);
+
 bool plexSessionLoad(PlexSession *s, const char *file);
 bool plexSessionSave(const PlexSession *s, const char *file);

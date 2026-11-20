@@ -418,6 +418,95 @@ void plexPlayedPath(char *out, size_t size, const char *item, bool played)
              item);
 }
 
+// --- Parts to skip ---
+
+int plexMarkersParse(const char *json, JfSegment *out, int max)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *item = json_array_get(container(root, "Metadata"), 0);
+    int n = 0;
+    size_t i;
+    const json_t *m;
+    json_array_foreach(json_object_get(item, "Marker"), i, m) {
+        const char *type = textOf(m, "type");
+        JfSegment s = {.start_ns = numberOf(m, "startTimeOffset") * MS_TO_NS,
+                       .end_ns = numberOf(m, "endTimeOffset") * MS_TO_NS};
+        if (!strcmp(type, "intro"))
+            s.kind = JF_SEGMENT_INTRO;
+        else if (!strcmp(type, "credits"))
+            s.kind = JF_SEGMENT_OUTRO;
+        else
+            continue;
+        if (n >= max || s.end_ns <= s.start_ns)
+            continue;
+        int at = n++;
+        while (at > 0 && out[at - 1].start_ns > s.start_ns) {  // Kept in order of start.
+            out[at] = out[at - 1];
+            at--;
+        }
+        out[at] = s;
+    }
+    json_decref(root);
+    return n;
+}
+
+// --- Favorites, kept on the console ---
+
+#define FAVORITES_MAX 4096
+
+// The file's lines (at most FAVORITES_MAX), to free. How many in *count.
+static char (*readFavorites(const char *file, int *count))[LIBRARY_PATH_MAX]
+{
+    *count = 0;
+    char(*lines)[LIBRARY_PATH_MAX] = calloc(FAVORITES_MAX, LIBRARY_PATH_MAX);
+    FILE *f = lines ? fopen(file, "r") : NULL;
+    while (f && *count < FAVORITES_MAX && fgets(lines[*count], LIBRARY_PATH_MAX, f)) {
+        lines[*count][strcspn(lines[*count], "\r\n")] = '\0';
+        if (plexIsLocation(lines[*count]))
+            (*count)++;
+    }
+    if (f)
+        fclose(f);
+    return lines;
+}
+
+static bool listed(char (*lines)[LIBRARY_PATH_MAX], int count, const char *location)
+{
+    for (int i = 0; location && i < count; i++)
+        if (!strcmp(lines[i], location))
+            return true;
+    return false;
+}
+
+void plexFavoritesApply(JfCatalog *c, const char *file)
+{
+    int count;
+    char(*lines)[LIBRARY_PATH_MAX] = readFavorites(file, &count);
+    for (size_t i = 0; lines && i < c->library.count; i++) {
+        LibraryItem *item = &c->library.items[i];
+        item->favorite = listed(lines, count, item->name.is_episode ? item->series_art : item->path);
+    }
+    free(lines);
+}
+
+bool plexFavoritesSet(const char *file, const char *location, bool favorite)
+{
+    int count;
+    char(*lines)[LIBRARY_PATH_MAX] = readFavorites(file, &count);
+    FILE *f = lines && plexIsLocation(location) ? fopen(file, "w") : NULL;
+    if (!f) {
+        free(lines);
+        return false;
+    }
+    for (int i = 0; i < count; i++)
+        if (strcmp(lines[i], location))
+            fprintf(f, "%s\n", lines[i]);
+    if (favorite)
+        fprintf(f, "%s\n", location);
+    free(lines);
+    return fclose(f) == 0;
+}
+
 // --- The session on the card ---
 
 static void readSessionLine(PlexSession *s, const char *line)

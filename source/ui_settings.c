@@ -138,16 +138,17 @@ static void drawMark(int x, int y, int size)
     gfxTriangle(cx - 9, cy - 11, cx - 9, cy + 11, cx + 11, cy, COLOR_SURFACE);
 }
 
-void uiDrawSignInCode(bool plex, const char *code, const char *server)
+void uiDrawSignInCode(bool plex, const char *code, const char *server, bool linked)
 {
     int w = 680, h = 340, x = (GFX_WIDTH - w) / 2, y = (GFX_HEIGHT - h) / 2;
     dimScreen();
     panel(x, y, w, h);
     fontDraw(FONT_BOLD, 26, x + PANEL_PAD, y + 26, plex ? "Sign in to Plex" : "Sign in to Jellyfin", COLOR_TEXT);
     fontDrawClipped(FONT_REGULAR, 18, x + PANEL_PAD, y + 62, w - 2 * PANEL_PAD, plex ? "plex.tv" : server, COLOR_DIM);
-    if (!code[0]) {
-        fontDraw(FONT_REGULAR, 21, x + PANEL_PAD, y + 150, plex ? "Contacting plex.tv..." : "Contacting the server...",
-                 COLOR_TEXT);
+    if (!code[0] || linked) {
+        const char *doing = linked ? "Linked. Finding your Plex server..."
+                            : plex ? "Contacting plex.tv..." : "Contacting the server...";
+        fontDraw(FONT_REGULAR, 21, x + PANEL_PAD, y + 150, doing, COLOR_TEXT);
         return;
     }
     int code_w = fontTextWidth(FONT_BOLD, 64, code);

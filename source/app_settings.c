@@ -428,7 +428,7 @@ void appSettingsDraw(const App *app)
         server += sizeof(HTTP_PREFIX) - 1;
     uiSettingsSetJellyfin(server, signedIn(app) ? app->jf.user : "");
     if (app->jf_signing)
-        uiDrawSignInCode(app->config.use_plex, app->jf.code, server);
+        uiDrawSignInCode(app->config.use_plex, app->jf.code, server, app->jf.linked);
     else if (app->about_open)
         uiDrawAbout(KAIVIDEO_VERSION);
     else

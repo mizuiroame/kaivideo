@@ -56,6 +56,9 @@ bool plexStreamUrl(const PlexSession *s, const char *version, const char *locati
 // the poster, anything else the wide one.
 bool plexImageUrl(const PlexSession *s, const char *version, const char *location, const char *kind, int max_width,
                   char *url, size_t size);
+// The intros and credits Plex marked in a location. How many, 0 if none or no answer.
+int plexNetFetchMarkers(NetClient *net, const PlexSession *s, const char *version, const char *location,
+                        JfSegment *out, int max);
 // An external subtitle file (a stream id) of a location.
 bool plexNetFetchSubtitle(NetClient *net, const PlexSession *s, const char *version, int stream_id,
                           const volatile bool *cancel, NetResponse *out);

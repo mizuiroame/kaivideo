@@ -306,6 +306,24 @@ bool plexImageUrl(const PlexSession *s, const char *version, const char *locatio
     return true;
 }
 
+#define MARKERS_TIMEOUT_S 5L  // Parts to skip are a nicety: opening doesn't wait long for them.
+
+int plexNetFetchMarkers(NetClient *net, const PlexSession *s, const char *version, const char *location,
+                        JfSegment *out, int max)
+{
+    char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[96], url[PLEX_URL_MAX];
+    if (!plexLocationIds(location, item, part))
+        return 0;
+    snprintf(path, sizeof(path), "/library/metadata/%s?includeMarkers=1", item);
+    plexServerUrl(s, version, path, url, sizeof(url));
+    NetResponse r;
+    if (!fetchJson(net, url, NULL, PAGE_MAX_BYTES, MARKERS_TIMEOUT_S, NULL, &r))
+        return 0;
+    int count = plexMarkersParse(r.data, out, max);
+    netResponseFree(&r);
+    return count;
+}
+
 bool plexNetFetchSubtitle(NetClient *net, const PlexSession *s, const char *version, int stream_id,
                           const volatile bool *cancel, NetResponse *out)
 {

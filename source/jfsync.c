@@ -57,7 +57,7 @@ static struct {
     pthread_cond_t wake;
     NetClient *net;
     char session_file[FILE_PATH_MAX], catalog_file[FILE_PATH_MAX], version[32];
-    char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX];
+    char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX], plex_favorites_file[FILE_PATH_MAX];
     // Under the lock:
     JfSession session;
     JfStatus status;
@@ -287,14 +287,20 @@ static bool plexSignIn(unsigned generation)
         return false;
     setState(JF_SIGN_IN_WAITING, code);
     bool approved = false;
-    for (int polls = 0; polls < SIGN_IN_POLLS && !approved && g.sign_in_generation == generation && !g.stop; polls++) {
+    for (int polls = 0; polls < SIGN_IN_POLLS * POLL_SECONDS && !approved && g.sign_in_generation == generation && !g.stop;
+         polls++) {
         struct timespec until;
         clock_gettime(CLOCK_REALTIME, &until);
-        until.tv_sec += POLL_SECONDS;
+        until.tv_sec += 1;  // Each second: plex.tv answers quickly, and the code is then done with.
         pthread_mutex_lock(&g.lock);
         pthread_cond_timedwait(&g.wake, &g.lock, &until);
         pthread_mutex_unlock(&g.lock);
         approved = g.sign_in_generation == generation && plexNetPollPin(g.net, &s, g.version, id, &g.abort_call);
+    }
+    if (approved) {
+        pthread_mutex_lock(&g.lock);
+        g.status.linked = true;
+        pthread_mutex_unlock(&g.lock);
     }
     if (!approved || !plexNetPickServer(g.net, &s, g.version, error, sizeof(error), &g.abort_call)) {
         setError(error);
@@ -491,6 +497,8 @@ static void refresh(void)
                    : readPages(&c, s.user_id);
     if (plex && !ok)
         setError("The Plex library couldn't be read.");
+    if (plex && ok)
+        plexFavoritesApply(&c, g.plex_favorites_file);
     if (ok) {
         setError("");
         libraryBuild(&c.library);
@@ -524,10 +532,12 @@ static bool post(const char *path, const char *body, bool remove_it)
 static bool runPlexJob(const Job *job)
 {
     char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[320];
-    if (!plexLocationIds(job->location, item, part))
+    if (job->type == JOB_FAVORITE) {  // Kept on the console: Plex has none.
+        plexFavoritesSet(g.plex_favorites_file, job->location, job->flag);
         return true;
-    if (job->type == JOB_FAVORITE || job->type == JOB_CLOSE_LIVE)
-        return true;  // Plex has neither.
+    }
+    if (!plexLocationIds(job->location, item, part) || job->type == JOB_CLOSE_LIVE)
+        return true;
     if (job->type == JOB_PLAYED)
         plexPlayedPath(path, sizeof(path), item, job->flag);
     else if (job->type == JOB_END_CONVERSION)
@@ -680,6 +690,9 @@ bool jfSyncStart(const char *session_file, const char *plex_file, const char *ca
     snprintf(g.version, sizeof(g.version), "%s", version);
     snprintf(g.plex_file, sizeof(g.plex_file), "%s", plex_file);
     snprintf(g.plex_catalog_file, sizeof(g.plex_catalog_file), "%s", plex_catalog_file);
+    // Plex has no favorites: they're kept beside its library, as "<library>_favorites.txt".
+    size_t stem = strlen(plex_catalog_file) > 4 ? strlen(plex_catalog_file) - 4 : 0;
+    snprintf(g.plex_favorites_file, sizeof(g.plex_favorites_file), "%.*s_favorites.txt", (int)stem, plex_catalog_file);
     jfSessionLoad(&g.session, session_file);
     plexSessionLoad(&g.plex_session, plex_file);
     g.plex = plex;
@@ -787,6 +800,7 @@ void jfSyncSignIn(void)
     g.status.state = JF_SIGN_IN_STARTING;  // From now: the caller is told at once.
     g.status.code[0] = '\0';
     g.status.error[0] = '\0';
+    g.status.linked = false;
     pthread_cond_broadcast(&g.wake);
     pthread_mutex_unlock(&g.lock);
 }
@@ -1038,6 +1052,13 @@ int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
 
 int jfSyncFetchSegments(const char *location, JfSegment *out, int max)
 {
+    if (plexIsLocation(location)) {
+        NetClient *net = g.running ? netClientOpen() : NULL;
+        PlexSession s = plexCopy();
+        int count = net ? plexNetFetchMarkers(net, &s, g.version, location, out, max) : 0;
+        netClientClose(net);
+        return count;
+    }
     char item[JF_ID_MAX], source[JF_ID_MAX], url[JF_URL_MAX], auth[JF_AUTH_MAX];
     NetClient *net = netClientOpen();
     int count = 0;
