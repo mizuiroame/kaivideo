@@ -74,6 +74,7 @@ static struct {
 } g;
 
 static void wakeWith(bool *flag);
+static void publishKept(void);
 
 static void setError(const char *message)
 {
@@ -400,7 +401,7 @@ static void signOut(void)
         pthread_mutex_unlock(&g.lock);
         plexSessionSave(&saved, g.plex_file);
         remove(catalogFile());
-        wakeWith(&g.want_refresh);  // The library, without it.
+        publishKept();  // The library without it, at once.
         return;
     }
     NetResponse r;
@@ -415,7 +416,7 @@ static void signOut(void)
     pthread_mutex_unlock(&g.lock);
     jfSessionSave(&saved, sessionFile());
     remove(catalogFile());
-    wakeWith(&g.want_refresh);  // The library, without it.
+    publishKept();  // The library without it, at once.
 }
 
 // --- The library ---
@@ -692,12 +693,13 @@ static bool takeJob(Job *out)
 
 // --- The thread ---
 
-// The libraries kept from before, at once, while they're read again.
-static void loadKept(void)
+// The libraries of the servers signed in, as kept: at start while they're
+// read again, and at once when one signs out.
+static void publishKept(void)
 {
     JfCatalog parts[SERVER_KIND_COUNT];
     bool have[SERVER_KIND_COUNT] = {false}, any = false;
-    for (int k = 0; g.load_library && k < SERVER_KIND_COUNT; k++) {
+    for (int k = 0; k < SERVER_KIND_COUNT; k++) {
         if (!signedIn((ServerKind)k))
             continue;
         jfCatalogInit(&parts[k]);
@@ -708,6 +710,12 @@ static void loadKept(void)
     }
     if (any)
         publishAll(parts, have);
+}
+
+static void loadKept(void)
+{
+    if (g.load_library)
+        publishKept();
 }
 
 // One thing to do, in the order that keeps the server right. False to stop.

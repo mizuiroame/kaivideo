@@ -16,6 +16,9 @@
 #define TAB_GAP 28             // The header, as KaiPlayer's and KaiRadio's.
 #define TAB_TEXT_MIDDLE 28.0f
 #define HINT_GAP 9
+#define TAB_SIZE 20
+#define TAB_SIZE_MIN 17       // Smaller, before the tabs slide.
+#define TAB_SIDE_GAP 16       // Between the tabs' ZL and ZR and what the header shows at its sides.
 #define BATTERY_LOW 15
 #define COLOR_CHARGING GFX_RGB(0x5B, 0xD6, 0x7A)
 #define MENU_PANEL_W 640       // The + menu.
@@ -192,24 +195,72 @@ static const char *tabName(const LibView *v, const Library *lib, int index)
     return t.kind >= 0 && t.kind < TAB_COUNT ? TAB_NAMES[t.kind] : "";
 }
 
-static void drawTabs(const LibView *v, const Library *lib)
+// The tabs' widths at a size; their total, gaps included.
+static int tabWidths(const LibView *v, const Library *lib, int size, int widths[LIBVIEW_TABS])
 {
-    int widths[LIBVIEW_TABS], total = 0, active = libviewTabIndex(v);
+    int total = 0, active = libviewTabIndex(v);
     for (int i = 0; i < v->tab_count; i++) {
-        widths[i] = fontTextWidth(active == i ? FONT_BOLD : FONT_REGULAR, 20, tabName(v, lib, i));
+        widths[i] = fontTextWidth(active == i ? FONT_BOLD : FONT_REGULAR, size, tabName(v, lib, i));
         total += widths[i] + (i > 0 ? TAB_GAP : 0);
     }
+    return total;
+}
+
+// Where the first tab starts: centered on the screen if they fit there, else
+// in the room they have; too many (several servers' libraries) slide so the
+// one chosen shows.
+static int tabsStart(const int widths[LIBVIEW_TABS], int count, int active, int total, int left, int right)
+{
     int x = (GFX_WIDTH - total) / 2;
-    uiDrawButton(x - HINT_GAP - uiButtonWidth("ZL"), TAB_TEXT_MIDDLE, "ZL", COLOR_SURFACE_HI, COLOR_DIM);
+    if (total <= right - left)
+        return x < left ? left : x + total > right ? right - total : x;
+    int active_x = 0;
+    for (int i = 0; i < active && i < count; i++)
+        active_x += widths[i] + TAB_GAP;
+    int active_w = active >= 0 && active < count ? widths[active] : 0;
+    x = (left + right) / 2 - active_x - active_w / 2;
+    if (x > left)
+        x = left;
+    if (x + total < right)
+        x = right - total;
+    return x;
+}
+
+// The tabs, between left and right (what the header shows at its sides).
+static void drawTabs(const LibView *v, const Library *lib, int left, int right)
+{
+    int widths[LIBVIEW_TABS], active = libviewTabIndex(v), size = TAB_SIZE;
+    left += uiButtonWidth("ZL") + 2 * HINT_GAP;
+    right -= uiButtonWidth("ZR") + 2 * HINT_GAP;
+    int total = tabWidths(v, lib, size, widths);
+    while (total > right - left && size > TAB_SIZE_MIN)
+        total = tabWidths(v, lib, --size, widths);
+    int x = tabsStart(widths, v->tab_count, active, total, left, right);
+    bool slides = total > right - left;
+    int first_x = x;
+    if (slides)
+        gfxSetClip(left - TAB_GAP / 2, 0, right - left + TAB_GAP, UI_TAB_BAR_H);
     for (int i = 0; i < v->tab_count; i++) {
         bool on = active == i;
-        fontDraw(on ? FONT_BOLD : FONT_REGULAR, 20, x, 18, tabName(v, lib, i), on ? COLOR_TEXT : COLOR_DIM);
-        uiLibraryAddHit(x - TAB_GAP / 2, 4, widths[i] + TAB_GAP, UI_TAB_BAR_H - 8, LIBHIT_TAB, i, 0);
+        fontDraw(on ? FONT_BOLD : FONT_REGULAR, size, x, 18 + (TAB_SIZE - size) / 2, tabName(v, lib, i),
+                 on ? COLOR_TEXT : COLOR_DIM);
+        int hit_l = x - TAB_GAP / 2, hit_r = x + widths[i] + TAB_GAP / 2;  // Only what shows answers a tap.
+        if (hit_l < left - TAB_GAP / 2)
+            hit_l = left - TAB_GAP / 2;
+        if (hit_r > right + TAB_GAP / 2)
+            hit_r = right + TAB_GAP / 2;
+        if (hit_r > hit_l)
+            uiLibraryAddHit(hit_l, 4, hit_r - hit_l, UI_TAB_BAR_H - 8, LIBHIT_TAB, i, 0);
         if (on)
             gfxFillRoundRect(x, 48, widths[i], 3, 1, COLOR_ACCENT);
         x += widths[i] + TAB_GAP;
     }
-    uiDrawButton(x - TAB_GAP + HINT_GAP, TAB_TEXT_MIDDLE, "ZR", COLOR_SURFACE_HI, COLOR_DIM);
+    if (slides)
+        gfxResetClip();
+    int zl_x = slides ? left - HINT_GAP - uiButtonWidth("ZL") : first_x - HINT_GAP - uiButtonWidth("ZL");
+    int zr_x = slides ? right + HINT_GAP : x - TAB_GAP + HINT_GAP;
+    uiDrawButton(zl_x, TAB_TEXT_MIDDLE, "ZL", COLOR_SURFACE_HI, COLOR_DIM);
+    uiDrawButton(zr_x, TAB_TEXT_MIDDLE, "ZR", COLOR_SURFACE_HI, COLOR_DIM);
 }
 
 static void drawBattery(int x, int y, int percent, bool charging)
@@ -231,8 +282,9 @@ static void drawBattery(int x, int y, int percent, bool charging)
     }
 }
 
-// The top right: a scan's progress, the time and the battery.
-static void drawStatus(const char *status)
+// The top right: a scan's progress, the time and the battery. Returns where
+// it begins on the left.
+static int drawStatus(const char *status)
 {
     int x = GFX_WIDTH - MARGIN;
     if (g_sys.has_battery) {
@@ -255,6 +307,7 @@ static void drawStatus(const char *status)
         x -= fontTextWidth(FONT_BOLD, 16, status);
         fontDraw(FONT_BOLD, 16, x, 20, status, COLOR_ACCENT);
     }
+    return x;
 }
 
 void uiDrawPlayerStatus(void)
@@ -277,6 +330,7 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
     drawMenuButton();
     int title_w = fontDraw(FONT_BOLD, 26, MARGIN + 36, 16, "KaiVideo", COLOR_ACCENT);
     uiLibraryAddHit(0, 0, MARGIN + 36 + title_w + 12, UI_TAB_BAR_H, LIBHIT_MENU, 0, 0);
+    int left = MARGIN + 36 + title_w;
     if (g_source_label[0]) {  // Where the library comes from: X changes it.
         int x = MARGIN + 36 + title_w + 18, key_w = uiButtonWidth("X");
         int w = key_w + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
@@ -284,9 +338,10 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
         uiDrawButton(x + 8, 31.0f, "X", COLOR_SURFACE, COLOR_TEXT);
         fontDrawMiddle(FONT_BOLD, 17, x + 16 + key_w, 31.0f, g_source_label, COLOR_TEXT);
         uiLibraryAddHit(x - 4, 4, w + 8, UI_TAB_BAR_H - 8, LIBHIT_SOURCE, 0, 0);
+        left = x + w;
     }
-    drawTabs(v, lib);
-    drawStatus(status);
+    int right = drawStatus(status);
+    drawTabs(v, lib, left + TAB_SIDE_GAP, right - TAB_SIDE_GAP);
 }
 
 void uiDrawFooterStrip(void)

@@ -42,7 +42,8 @@ static void finishSignIn(App *app, uint64_t now)
         snprintf(message, sizeof(message), "Connected to %s as %s.",
                  serverKindName((ServerKind)app->config.server_kind), app->jf.user);
     app->settings_open = false;
-    appLibrarySetSource(app, true);
+    if (!app->config.use_jellyfin)  // Already the servers': it stays as it is until the new one's videos come.
+        appLibrarySetSource(app, true);
     appShowMessage(app, message, now);
 }
 

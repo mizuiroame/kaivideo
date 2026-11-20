@@ -688,6 +688,42 @@ static void libraryScenes(void)
     watchedFree(&g_watched);
 }
 
+#define MARGIN_PREVIEW_SOURCE_X 250  // Inside the source pill after the title.
+
+// Two servers' libraries as tabs: they fit between the source and the clock,
+// or slide so the one chosen shows, without covering either.
+static void serversScene(void)
+{
+    static const char *const NAMES[] = {"Movies (Emby)", "TV Shows (Emby)", "Movies (Plex)", "TV Shows (Plex)",
+                                        "Home Videos (Plex)"};
+    static LibView view;
+    static Library lib;
+    static Home home;
+    static ResumeList resume;
+    libraryInit(&lib, "jellyfin:");
+    for (int i = 0; i < 5; i++)
+        libraryAddCollection(&lib, NAMES[i], i % 2 ? COLLECTION_SERIES : COLLECTION_FILMS);
+    libraryBuild(&lib);
+    libviewInit(&view);
+    libviewSetTabs(&view, &lib, true, true);
+    SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
+    uiLibrarySetStatus(&sys, false);
+    uiLibrarySetSource("Emby + Plex");
+    for (int pass = 0; pass < 2; pass++) {
+        view.tab = pass ? TAB_COLLECTION : TAB_HOME;
+        view.collection = pass ? 4 : -1;
+        uiLibraryResetHits();
+        begin();
+        uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+        uiDrawFooterHelp("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
+        save(pass ? "tabs_servers_last" : "tabs_servers");
+        if (uiLibraryTap(MARGIN_PREVIEW_SOURCE_X, 30).kind != LIBHIT_SOURCE) {
+            printf("TOUCH: tabs_servers: the source doesn't answer a tap\n");
+            g_problems++;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     g_dir = argc > 1 ? argv[1] : ".";
@@ -706,6 +742,7 @@ int main(int argc, char **argv)
     statsScene();
     skipScene(&p);
     liveScene(&p);
+    serversScene();
 
     Menu audio;
     menuOpen(&audio, p.audio_count, 0, p.audio);
