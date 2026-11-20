@@ -29,7 +29,7 @@ static void addTab(LibView *v, LibTab kind, int collection)
         v->tabs[v->tab_count++] = (LibTabRef){kind, collection};
 }
 
-void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live)
+void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads)
 {
     v->tab_count = 0;
     if (server && (lib->collection_count > 0 || live)) {
@@ -39,11 +39,13 @@ void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live)
         if (live)
             addTab(v, TAB_LIVE, -1);
         addTab(v, TAB_SEARCH, -1);
-        addTab(v, TAB_FILES, -1);
     } else {
-        for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]); i++)
+        for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]) - 1; i++)  // Files comes last.
             addTab(v, CARD_TABS[i], -1);
     }
+    if (downloads)
+        addTab(v, TAB_DOWNLOADS, -1);
+    addTab(v, TAB_FILES, -1);
     if (libviewTabIndex(v) < 0) {
         v->tab = TAB_HOME;
         v->collection = -1;
@@ -76,6 +78,16 @@ void libviewGoToTab(LibView *v, int index)
     v->tab = v->tabs[index].kind;
     v->collection = v->tabs[index].collection;
     v->show = -1;
+}
+
+bool libviewShowTab(LibView *v, LibTab kind)
+{
+    for (int i = 0; i < v->tab_count; i++)
+        if (v->tabs[i].kind == kind) {
+            libviewGoToTab(v, i);
+            return true;
+        }
+    return false;
 }
 
 void libviewNextTab(LibView *v, int delta)

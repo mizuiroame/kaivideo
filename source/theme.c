@@ -28,6 +28,11 @@ const char *themeAccentName(int accent)
     return accent >= 0 && accent < THEME_ACCENT_COUNT ? ACCENT_NAMES[accent] : ACCENT_NAMES[0];
 }
 
+Color themeAccentColor(int accent)
+{
+    return RGB(ACCENTS[accent >= 0 && accent < THEME_ACCENT_COUNT ? accent : 0]);
+}
+
 void themeApply(int theme, int accent)
 {
     const unsigned *t = THEMES[theme >= 0 && theme < THEME_COUNT ? theme : 0];

@@ -35,18 +35,51 @@ void testSettings(void)
     CHECK(!strcmp(settingsPageTitle(SETTINGS_PAGE_JELLYFIN, SERVER_EMBY), "Emby"));
     CHECK(settingsPageNote(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) && !settingsPageNote(SETTINGS_PAGE_MAIN, SERVER_PLEX));
     // Signing in is offered until it's done, and signing out only then.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_JF_SERVER &&
+    // Every server's page ends with its color.
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_JF_SERVER &&
           rows[1] == SETTING_JF_FIND && rows[2] == SETTING_JF_TEST && rows[3] == SETTING_JF_CODE &&
-          rows[4] == SETTING_JF_PASSWORD && rows[5] == SETTING_JF_CERTIFICATE);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 4 && rows[1] == SETTING_JF_TEST &&
-          rows[2] == SETTING_JF_CERTIFICATE && rows[3] == SETTING_JF_SIGN_OUT);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 1 && rows[0] == SETTING_PLEX_CODE);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 2 && rows[0] == SETTING_PLEX_SERVER &&
+          rows[4] == SETTING_JF_PASSWORD && rows[5] == SETTING_JF_CERTIFICATE && rows[6] == SETTING_SERVER_COLOR);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 5 && rows[1] == SETTING_JF_TEST &&
+          rows[2] == SETTING_JF_CERTIFICATE && rows[3] == SETTING_JF_SIGN_OUT && rows[4] == SETTING_SERVER_COLOR);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 2 && rows[0] == SETTING_PLEX_CODE);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 3 && rows[0] == SETTING_PLEX_SERVER &&
           rows[1] == SETTING_JF_SIGN_OUT);
     // Emby has no Quick Connect: a password only.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 5 && rows[3] == SETTING_JF_PASSWORD &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[3] == SETTING_JF_PASSWORD &&
           rows[2] == SETTING_JF_TEST);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 4 && rows[3] == SETTING_JF_SIGN_OUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 5 && rows[3] == SETTING_JF_SIGN_OUT);
+
+    // A server's color: its own at first, then each accent, for the server the page is for; kept.
+    Config colors;
+    configDefaults(&colors);
+    char color_name[64];
+    colors.server_kind = SERVER_PLEX;
+    settingValue(&colors, SETTING_SERVER_COLOR, color_name, sizeof(color_name));
+    CHECK(!strcmp(color_name, "Plex's own") && settingServerColor(&colors, SERVER_PLEX) == -1);
+    settingStep(&colors, SETTING_SERVER_COLOR, 2);
+    settingValue(&colors, SETTING_SERVER_COLOR, color_name, sizeof(color_name));
+    CHECK(!strcmp(color_name, themeAccentName(1)) && settingServerColor(&colors, SERVER_PLEX) == 1 &&
+          settingServerColor(&colors, SERVER_JELLYFIN) == -1);
+    settingStep(&colors, SETTING_SERVER_COLOR, -3);  // Wraps to the last accent.
+    CHECK(settingServerColor(&colors, SERVER_PLEX) == THEME_ACCENT_COUNT - 1);
+    FILE *cf = fopen(TMP_ROOT "/colors.txt", "w");
+    if (cf) {
+        configWrite(&colors, cf);
+        fclose(cf);
+    }
+    Config colors_back;
+    configDefaults(&colors_back);
+    cf = fopen(TMP_ROOT "/colors.txt", "r");
+    char color_line[256];
+    while (cf && fgets(color_line, sizeof(color_line), cf)) {
+        color_line[strcspn(color_line, "\r\n")] = '\0';
+        configReadLine(&colors_back, color_line);
+    }
+    if (cf)
+        fclose(cf);
+    CHECK(settingServerColor(&colors_back, SERVER_PLEX) == THEME_ACCENT_COUNT - 1 &&
+          settingServerColor(&colors_back, SERVER_EMBY) == -1);
+    CHECK(configReadLine(&colors_back, "emby_color=99") && settingServerColor(&colors_back, SERVER_EMBY) == -1);
     Config kind;
     configDefaults(&kind);
     CHECK(configReadLine(&kind, "server=plex") && kind.server_kind == SERVER_PLEX);

@@ -11,24 +11,27 @@ static const char *const LABELS[SETTING_COUNT] = {
     "Theme", "Accent color", "Background", "Background blur", "Clock",
     "Jellyfin", "Server", "Sign in with a code", "Sign in with a password", "Sign out", "Server video quality",
     "Find servers on this network", "Test the connection", "Certificate check",
-    "Sign in at plex.tv/link", "Server", "Emby", "Plex", "Library", "Playback",
+    "Sign in at plex.tv/link", "Server", "Emby", "Plex", "Library", "Playback", "Color",
 };
+#define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
+static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX, SETTING_OPEN_PLAYBACK,
      SETTING_OPEN_DISPLAY, SETTING_ABOUT},
     {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
-     SETTING_COUNT},
+     SETTING_SERVER_COLOR},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
-                                            SETTING_JF_SIGN_OUT, SETTING_COUNT};
-static const SettingRow PLEX_ROWS[] = {SETTING_PLEX_CODE, SETTING_COUNT};
-static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF_SIGN_OUT, SETTING_COUNT};
+                                            SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
+static const SettingRow PLEX_ROWS[] = {SETTING_PLEX_CODE, SETTING_SERVER_COLOR, SETTING_COUNT};
+static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR,
+                                                 SETTING_COUNT};
 // Emby has no Quick Connect: a user name and password.
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
-                                       SETTING_JF_CERTIFICATE, SETTING_COUNT};
+                                       SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "", "Library", "Playback"};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
     "Your Jellyfin server: sign in with Quick Connect or a password.",
@@ -83,6 +86,16 @@ static bool isKey(const char *line, size_t length, const char *key)
     return strlen(key) == length && strncmp(line, key, length) == 0;
 }
 
+static bool readServerColor(Config *c, const char *line, size_t length, const char *value)
+{
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        if (isKey(line, length, SERVER_COLOR_KEYS[k])) {
+            c->server_color[k] = readChoice(value, SERVER_COLOR_COUNT, 0);
+            return true;
+        }
+    return false;
+}
+
 bool configReadLine(Config *c, const char *line)
 {
     const char *eq = strchr(line, '=');
@@ -123,7 +136,7 @@ bool configReadLine(Config *c, const char *line)
     else if (isKey(line, length, "subtitle_font"))  // A name in the fonts folder, never a path.
         snprintf(c->subtitle_font, sizeof(c->subtitle_font), "%s", strpbrk(value, "/\\") ? "" : value);
     else
-        return false;
+        return readServerColor(c, line, length, value);
     return true;
 }
 
@@ -141,6 +154,8 @@ void configWrite(const Config *c, FILE *f)
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        fprintf(f, "%s=%d\n", SERVER_COLOR_KEYS[k], c->server_color[k]);
 }
 
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
@@ -209,7 +224,7 @@ bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
-           row == SETTING_JF_CERTIFICATE;
+           row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR;
 }
 
 static int wrap(int value, int delta, int count)
@@ -228,6 +243,11 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
+    case SETTING_SERVER_COLOR: {  // For the server Settings shows.
+        int k = inRange(c->server_kind, SERVER_KIND_COUNT);
+        c->server_color[k] = wrap(c->server_color[k], delta, SERVER_COLOR_COUNT);
+        break;
+    }
     default: break;
     }
 }
@@ -244,8 +264,21 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
     case SETTING_JF_QUALITY: snprintf(out, size, "%s", QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name); break;
     case SETTING_JF_CERTIFICATE: snprintf(out, size, "%s", c->jf_check_certificate ? "On" : "Off: any certificate"); break;
+    case SETTING_SERVER_COLOR: {
+        int k = inRange(c->server_kind, SERVER_KIND_COUNT), choice = c->server_color[k];
+        if (choice <= 0)
+            snprintf(out, size, "%s's own", serverKindName((ServerKind)k));
+        else
+            snprintf(out, size, "%s", themeAccentName(choice - 1));
+        break;
+    }
     default: out[0] = '\0'; break;
     }
+}
+
+int settingServerColor(const Config *c, ServerKind kind)
+{
+    return kind >= 0 && kind < SERVER_KIND_COUNT ? c->server_color[kind] - 1 : -1;
 }
 
 int subtitleOptionCount(bool color_applies)

@@ -15,7 +15,7 @@ bool browserIsVideo(const char *name)
 {
     const char *dot = strrchr(name, '.');
     return dot && (!strcasecmp(dot, ".mp4") || !strcasecmp(dot, ".m4v") || !strcasecmp(dot, ".mkv") ||
-                   !strcasecmp(dot, ".webm"));
+                   !strcasecmp(dot, ".webm") || !strcasecmp(dot, ".ts"));
 }
 
 // Folders the console and the PC keep for themselves.

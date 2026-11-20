@@ -456,6 +456,12 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
             in->start_us = start - in->skipped_us;
         if (start != AV_NOPTS_VALUE && (*fmt)->start_time != AV_NOPTS_VALUE && start > (*fmt)->start_time)
             in->sound_lead_us = start - (*fmt)->start_time;
+    } else if (!strcmp((*fmt)->iformat->name, "mpegts")) {
+        // A server's conversion kept on the card (its parts joined) keeps the
+        // conversion's times, which don't begin at 0: its picture's start is 0.
+        int64_t start = streamsStart(*fmt);
+        if (start != AV_NOPTS_VALUE && start > 0)
+            in->start_us = start;
     }
     return true;
 }

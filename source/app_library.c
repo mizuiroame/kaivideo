@@ -32,7 +32,7 @@ void appLibraryRefreshHome(App *app)
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
     bool jellyfin = app->config.use_jellyfin && app->config.server_view == SERVER_JELLYFIN;  // Live TV is its.
     libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
-                   jellyfin && app->live.count > 0);
+                   jellyfin && app->live.count > 0, appDownloadsTabShown(app));
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -558,7 +558,7 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     switch (hit.kind) {
     case LIBHIT_TAB: libviewGoToTab(v, hit.a); break;
     case LIBHIT_MENU: appOpenMenu(app); break;
-    case LIBHIT_DOWNLOADS: appDownloadsOpen(app); break;
+    case LIBHIT_DOWNLOADS: appDownloadsOpen(app, now); break;
     case LIBHIT_SOURCE: appLibraryToggleSource(app, now); break;
     case LIBHIT_HOME_CARD:
         v->home_row = hit.a;
@@ -605,10 +605,6 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         appSettingsInput(app, pressed, touch, now);
         return;
     }
-    if (app->downloads_open) {
-        appDownloadsInput(app, pressed, touch, now);
-        return;
-    }
     if (pressed & HidNpadButton_Plus) {
         appOpenMenu(app);
         return;
@@ -647,11 +643,12 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         appOpenSettings(app);
         return;
     }
-    if (pressed & HidNpadButton_Y) {
+    bool downloads = v->tab == TAB_DOWNLOADS && v->show < 0;  // X and Y are its rows' there.
+    if ((pressed & HidNpadButton_Y) && !downloads) {
         search(app, now);
         return;
     }
-    if ((pressed & HidNpadButton_X) && v->show < 0) {
+    if ((pressed & HidNpadButton_X) && v->show < 0 && !downloads) {
         appLibraryToggleSource(app, now);
         return;
     }
@@ -663,6 +660,13 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             tapInput(app, hit, now);
         else if (!(pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)))
             folderInput(app, &app->browser, false, pressed, touch, now);
+        return;
+    }
+    if (v->tab == TAB_DOWNLOADS && v->show < 0) {
+        if (header)
+            tapInput(app, hit, now);
+        else
+            appDownloadsInput(app, pressed, touch, now);
         return;
     }
     if (v->tab == TAB_LIVE && v->show < 0) {
@@ -717,7 +721,7 @@ void appLibraryDraw(App *app, uint64_t now)
 {
     appApplyViewAccent(app);
     const char *message = now < app->message_until ? app->message : NULL;
-    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE || app->downloads_open;
+    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
@@ -753,17 +757,17 @@ void appLibraryDraw(App *app, uint64_t now)
                       app->library_root[0] != '\0' || app->config.use_jellyfin, status, under);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
             appLiveDraw(app);
+        if (app->view.tab == TAB_DOWNLOADS && app->view.show < 0)
+            appDownloadsDraw(app);
         drawShowButtons(app);
     }
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count) {
         int item = app->view.details;
-        char download[64];
-        uiDrawDetails(&app->library, item, &app->resume,
-                      jfPlayabilityMessage((JfPlayability)app->library.items[item].blocked),
+        char download[64], note[200];
+        uiDrawDetails(&app->library, item, &app->resume, appDetailsNote(app, item, note, sizeof(note)),
                       canBeFavorite(app, (LibraryRef){false, item}),
                       appDownloadLabel(app, item, download, sizeof(download)));
     }
-    appDownloadsDraw(app);
     appSettingsDraw(app);
     appMenuDraw(app);
     if (overlay)

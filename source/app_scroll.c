@@ -50,7 +50,7 @@ static bool scrollTarget(App *app, int px)
         return scrollPx(&v->results_scroll, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, v->result_count);
     case SCROLL_FILES: return app->scroll_browser && browserScrollPx(app->scroll_browser, px, UI_ROW_H, UI_ROWS);
     case SCROLL_LIVE: return scrollPx(&v->live, px, LIBVIEW_LIVE_ROW_PX, LIBVIEW_LIVE_ROWS, 1, app->live.count);
-    case SCROLL_DOWNLOADS: return app->downloads_open && appDownloadsScrollPx(app, px);
+    case SCROLL_DOWNLOADS: return v->tab == TAB_DOWNLOADS && appDownloadsScrollPx(app, px);
     default: return false;
     }
 }
@@ -62,8 +62,8 @@ static void startScroll(App *app, TouchEvent touch)
     LibView *v = &app->view;
     app->scroll_target = SCROLL_NONE;
     app->scroll_view = viewKey(app);
-    if (app->downloads_open) {
-        app->scroll_target = SCROLL_DOWNLOADS;
+    if (v->tab == TAB_DOWNLOADS && v->show < 0) {
+        app->scroll_target = touch.start_y >= UI_TAB_BAR_H ? SCROLL_DOWNLOADS : SCROLL_NONE;
         return;
     }
     if (app->picking || (v->tab == TAB_FILES && v->show < 0)) {  // The file list, under its folder's line.

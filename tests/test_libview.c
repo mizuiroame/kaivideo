@@ -46,7 +46,7 @@ static void testCollectionTabs(void)
 
     static LibView v;
     libviewInit(&v);
-    libviewSetTabs(&v, &lib, true, false);
+    libviewSetTabs(&v, &lib, true, false, false);
     CHECK(v.tab_count == 5 && v.tabs[1].kind == TAB_COLLECTION && v.tabs[1].collection == films &&
           v.tabs[2].collection == shows && v.tabs[3].kind == TAB_SEARCH && v.tabs[4].kind == TAB_FILES);
     libviewNextTab(&v, 1);
@@ -71,7 +71,7 @@ static void testCollectionTabs(void)
     CHECK(v.tab == TAB_COLLECTION && v.collection == shows);
 
     // With Live TV, its tab comes after the libraries.
-    libviewSetTabs(&v, &lib, true, true);
+    libviewSetTabs(&v, &lib, true, true, false);
     CHECK(v.tab_count == 6 && v.tabs[3].kind == TAB_LIVE && v.tabs[4].kind == TAB_SEARCH);
     libviewGoToTab(&v, 3);
     libviewLiveMove(&v, 20, 9);
@@ -80,8 +80,17 @@ static void testCollectionTabs(void)
     CHECK(v.live.cursor == 2 && v.live.first == 0);
 
     // The card's tabs, and back: a tab that's gone falls back to Home.
-    libviewSetTabs(&v, &lib, false, false);
+    libviewSetTabs(&v, &lib, false, false, false);
     CHECK(v.tab_count == 5 && v.tabs[1].kind == TAB_FILMS && v.tab == TAB_HOME);
+
+    // Downloads, before Files on the card's tabs and a server's; shown by kind.
+    libviewSetTabs(&v, &lib, false, false, true);
+    CHECK(v.tab_count == 6 && v.tabs[4].kind == TAB_DOWNLOADS && v.tabs[5].kind == TAB_FILES);
+    CHECK(libviewShowTab(&v, TAB_DOWNLOADS) && v.tab == TAB_DOWNLOADS && !libviewShowTab(&v, TAB_LIVE));
+    libviewSetTabs(&v, &lib, true, true, true);
+    CHECK(v.tab_count == 7 && v.tabs[5].kind == TAB_DOWNLOADS && v.tabs[6].kind == TAB_FILES && v.tab == TAB_DOWNLOADS);
+    libviewSetTabs(&v, &lib, true, true, false);  // Its tab gone: Home.
+    CHECK(v.tab == TAB_HOME);
     libraryFree(&lib);
 }
 

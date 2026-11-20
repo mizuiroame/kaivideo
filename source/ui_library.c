@@ -131,10 +131,17 @@ void uiLibrarySetDownloads(UiDownloadOf download_of, const void *user)
     g_download_user = user;
 }
 
+static UiDownloadMark downloadMark(const char *path, double *fraction);
+
 void uiLibrarySetDownloadsPill(const char *label, double fraction)
 {
     snprintf(g_pill_label, sizeof(g_pill_label), "%s", label);
     g_pill_fraction = fraction;
+}
+
+int uiLibDownloadMark(const char *path, double *fraction)
+{
+    return downloadMark(path, fraction);
 }
 
 static UiDownloadMark downloadMark(const char *path, double *fraction)
@@ -214,7 +221,8 @@ void uiLibDrawPicture(const uint32_t *pixels, int x, int y, int w, int h, int ra
     uiLibDrawImage(pixels, THUMB_W, THUMB_H, x, y, w, h, radius);
 }
 
-static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files", "", "Live TV"};
+static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files", "", "Live TV",
+                                                 "Downloads"};
 
 static SysInfo g_sys;
 static bool g_clock_24h;
@@ -233,7 +241,7 @@ void uiLibrarySetSource(const char *label, Color color)
     g_source_color = color;
 }
 
-Color uiServerColor(ServerKind kind)
+Color uiServerOwnColor(ServerKind kind)
 {
     switch (kind) {
     case SERVER_EMBY: return GFX_RGB(0x52, 0xB5, 0x4B);
@@ -242,9 +250,31 @@ Color uiServerColor(ServerKind kind)
     }
 }
 
+static Color g_server_colors[SERVER_KIND_COUNT];
+static bool g_server_color_set[SERVER_KIND_COUNT];
+
+void uiSetServerColor(ServerKind kind, Color color)
+{
+    if (kind < 0 || kind >= SERVER_KIND_COUNT)
+        return;
+    g_server_colors[kind] = color;
+    g_server_color_set[kind] = true;
+}
+
+Color uiServerColor(ServerKind kind)
+{
+    bool set = kind >= 0 && kind < SERVER_KIND_COUNT && g_server_color_set[kind];
+    return set ? g_server_colors[kind] : uiServerOwnColor(kind);
+}
+
+// What's under way ("Updating the servers' libraries... 120"), said at the
+// bottom right of the help line; "" for nothing. Set by the tab bar each frame.
+static char g_footer_status[96];
+
 void uiLibraryResetHits(void)
 {
     g_hit_count = 0;
+    g_footer_status[0] = '\0';
 }
 
 // The tabs in the middle, between the ZL and ZR that change them.
@@ -432,7 +462,8 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
         uiLibraryAddHit(x - 4, 4, w + 8, UI_TAB_BAR_H - 8, LIBHIT_SOURCE, 0, 0);
         left = x + w;
     }
-    int right = drawStatus(status);
+    int right = drawStatus(NULL);
+    snprintf(g_footer_status, sizeof(g_footer_status), "%s", status ? status : "");
     if (g_pill_label[0])
         right = uiDrawDownloadsPill(right - 4, g_pill_label, g_pill_fraction) - 8;
     drawTabs(v, lib, left + TAB_SIDE_GAP, right - TAB_SIDE_GAP);
@@ -446,7 +477,17 @@ void uiDrawFooterStrip(void)
 
 void uiDrawFooterHelp(const char *help)
 {
-    uiDrawHelp(MARGIN, UI_FOOTER_Y + 28.0f, GFX_WIDTH - 2 * MARGIN, help);
+    static unsigned frame;  // Drawn once a frame: it turns the spinner.
+    frame++;
+    int status_w = g_footer_status[0] ? fontTextWidth(FONT_BOLD, 16, g_footer_status) : 0;
+    if (status_w) {
+        float cy = UI_FOOTER_Y + 28.0f, cx = GFX_WIDTH - MARGIN - status_w - 18.0f, start = frame * 0.12f;
+        gfxArc(cx, cy, 8, 2.5f, 0, 6.2832f, COLOR_TRACK);
+        gfxArc(cx, cy, 8, 2.5f, start, start + 1.9f, COLOR_ACCENT);
+        fontDrawMiddle(FONT_BOLD, 16, GFX_WIDTH - MARGIN - status_w, cy, g_footer_status, COLOR_ACCENT);
+        status_w += 30;  // The spinner's room.
+    }
+    uiDrawHelp(MARGIN, UI_FOOTER_Y + 28.0f, GFX_WIDTH - 2 * MARGIN - (status_w ? status_w + 24 : 0), help);
 }
 
 // --- The + menu ---
@@ -660,9 +701,11 @@ static void drawRefCard(const Library *lib, const ResumeList *resume, LibraryRef
              !ref.is_show && progress < 0 && uiLibSeen(lib, ref.index));
     double fraction;
     UiDownloadMark mark = ref.is_show ? UI_DL_NONE : downloadMark(lib->items[ref.index].path, &fraction);
-    if (mark != UI_DL_NONE) {  // Top left, on a dark disc so it reads over the picture.
+    if (mark == UI_DL_DONE) {  // On the card: top left, on a dark disc so it reads over the picture.
         gfxFillCircle(x + 22, y + 22, 15, GFX_RGB(0, 0, 0));
         uiDrawDownloadMark(x + 22.0f, y + 22.0f, 12, mark, fraction);
+    } else if (mark != UI_DL_NONE) {  // On its way: over the whole picture, with how far it came.
+        uiDrawDownloadVeil(x, y, w, h, 10, mark, fraction);
     }
     fontDrawClipped(FONT_REGULAR, 17, x + 2, y + h + 10, w - 4, below, focused ? COLOR_TEXT : COLOR_DIM);
 }
@@ -953,8 +996,8 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
         drawShow(v, lib, resume);
     } else if (v->tab == TAB_SEARCH) {
         drawSearch(v, lib, resume);
-    } else if (v->tab == TAB_LIVE) {
-        // Drawn by the app over this (app_live.c): it holds the guide.
+    } else if (v->tab == TAB_LIVE || v->tab == TAB_DOWNLOADS) {
+        // Drawn by the app over this (app_live.c, app_dltab.c): it holds what they show.
     } else if (lib->count == 0) {
         drawCentered(status && status[0] ? "Looking for videos..." : "No videos here yet",
                      "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).");

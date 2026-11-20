@@ -120,6 +120,10 @@ static void applyLooks(const App *app)
 {
     themeApply(app->config.theme, app->config.accent);
     g_theme_accent = g_colors.accent;
+    for (int k = 0; k < SERVER_KIND_COUNT; k++) {  // Each server's own color, or the one chosen for it.
+        int accent = settingServerColor(&app->config, (ServerKind)k);
+        uiSetServerColor((ServerKind)k, accent < 0 ? uiServerOwnColor((ServerKind)k) : themeAccentColor(accent));
+    }
     uiLibrarySetThumbnails(app->config.thumbnails);
     appApplySubtitleStyle(app);
 }

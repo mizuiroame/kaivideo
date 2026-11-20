@@ -105,7 +105,7 @@ static void downloadWhole(const JfCatalog *c, int item, const char *account)
     char path[LIBRARY_PATH_MAX];
     expect(dlPathFor(&it->name, "mkv", "Video", ROOT, path, sizeof(path)), "a place on the card");
     printf("        %s (%lld bytes) -> %s\n", it->path, (long long)it->size, path);
-    expect(dlWorkerAdd(it->path, account, &it->name, it->runtime_ns, path) >= 0, "asked for");
+    expect(dlWorkerAdd(it->path, account, &it->name, it->runtime_ns, path, 0) >= 0, "asked for");
     Download d;
     bool done = waitState(path, DL_DONE, &d);
     if (!done)
@@ -117,6 +117,47 @@ static void downloadWhole(const JfCatalog *c, int item, const char *account)
     expect(fileSize(part) < 0, "no part left behind");
 }
 
+// Converted by the server at a low bitrate (so it must convert), paused after
+// a few parts and let go on: the parts join into one MPEG-TS file.
+static void convertWhole(const JfCatalog *c, int item, const char *account)
+{
+    const LibraryItem *it = &c->library.items[item];
+    char path[LIBRARY_PATH_MAX], part[LIBRARY_PATH_MAX + 8];
+    VideoName name = it->name;
+    snprintf(name.title, sizeof(name.title), "%.100s converted", it->name.title);
+    dlPathFor(&name, "mkv", "Video", ROOT, path, sizeof(path));
+    snprintf(part, sizeof(part), "%s" DL_PART_SUFFIX, path);
+    printf("        %s -> %s\n", it->path, path);
+    expect(dlWorkerAdd(it->path, account, &name, it->runtime_ns, path, 400000) >= 0, "a conversion asked for");
+    Download d;
+    for (int i = 0; i < WAIT_SECONDS * 10 && !(stateOf(path, &d) && (d.parts_done >= 2 || d.state != DL_ACTIVE &&
+                                                                      d.state != DL_QUEUED));
+         i++)
+        usleep(STEP_US);
+    if (d.state == DL_ACTIVE && d.part_count > d.parts_done) {
+        dlWorkerPause(path, true);
+        usleep(5 * STEP_US);
+        expect(stateOf(path, &d) && d.state == DL_PAUSED && fileSize(part) == d.done && d.done > 0,
+               "paused after whole parts, the file cut back to them");
+        printf("        paused at part %d of %d (%lld bytes)\n", d.parts_done, d.part_count, (long long)d.done);
+        dlWorkerPause(path, false);
+    } else {
+        printf("        (state %d, %d of %d parts: not paused) %s\n", d.state, d.parts_done, d.part_count, d.error);
+    }
+    bool done = waitState(path, DL_DONE, &d);
+    if (!done)
+        printf("        state %d: %s\n", d.state, d.error);
+    expect(done && d.part_count > 0 && d.parts_done == d.part_count, "every part came");
+    unsigned char magic[4] = {0};  // EBML: an MKV.
+    FILE *f = fopen(path, "rb");
+    bool mkv = f && fread(magic, 1, 4, f) == 4 && magic[0] == 0x1A && magic[1] == 0x45 && magic[2] == 0xDF &&
+               magic[3] == 0xA3;
+    if (f)
+        fclose(f);
+    printf("        %lld bytes in %d parts\n", fileSize(path), d.part_count);
+    expect(mkv && d.size == fileSize(path) && fileSize(part) < 0, "rewrapped into one MKV, as long as the list says");
+}
+
 // Pauses a download on its way, lets it go on from there, then deletes it.
 static void pauseAndGoOn(const JfCatalog *c, int item, const char *account)
 {
@@ -126,7 +167,7 @@ static void pauseAndGoOn(const JfCatalog *c, int item, const char *account)
     snprintf(name.title, sizeof(name.title), "%.100s paused", it->name.title);
     dlPathFor(&name, "mkv", "Video", ROOT, path, sizeof(path));
     snprintf(part, sizeof(part), "%s" DL_PART_SUFFIX, path);
-    dlWorkerAdd(it->path, account, &name, 0, path);
+    dlWorkerAdd(it->path, account, &name, 0, path, 0);
     Download d;
     for (int i = 0; i < WAIT_SECONDS * 100 && fileSize(part) <= 0 && !(stateOf(path, &d) && d.state == DL_DONE); i++)
         usleep(STEP_US / 10);
@@ -239,6 +280,7 @@ static void tryServer(ServerKind kind, const char *prefix)
                "who it's downloaded as");
         downloadWhole(&c, small, account);
         pauseAndGoOn(&c, large, account);
+        convertWhole(&c, large, account);
         tellServer(c.library.items[small].path, account);
     }
     jfCatalogFree(&c);
@@ -260,7 +302,7 @@ static int jellyfinOnly(const char *url, const char *user_id, const char *token)
     jfSessionSave(&session, files.jellyfin);
     expect(jfSyncStart(&files, "host", true, SERVER_JELLYFIN), "start");
     jfSyncRefresh();
-    expect(dlWorkerStart("/tmp/kv_dl.txt", "/tmp/kv_sync.txt"), "the download thread starts");
+    expect(dlWorkerStart("/tmp/kv_dl.txt", "/tmp/kv_sync.txt", NULL), "the download thread starts");
     JfCatalog c;
     bool got = waitCatalog(SERVER_JELLYFIN, &c);
     expect(got, "Jellyfin's library came");
@@ -277,7 +319,7 @@ static int jellyfinOnly(const char *url, const char *user_id, const char *token)
                "who it's downloaded as");
         expect(serverState(location, &before), "what the server says of it now");
         printf("        before: %lld s, %s\n", (long long)(before.position_ns / S), before.played ? "watched" : "not watched");
-        downloadWhole(&c, film, account);
+        convertWhole(&c, film, account);
         tellServer(location, account);
         dlWorkerRecord(account, location, before.position_ns, before.played, time(NULL) + 10);  // As it was found.
         JfUserData after;
@@ -321,14 +363,14 @@ int main(int argc, char **argv)
     jfSyncSignInWithPassword(user, password);
     expect(waitSignedIn(), "signed in with a password");
     jfSyncRefresh();
-    expect(dlWorkerStart("/tmp/kv_dl.txt", "/tmp/kv_sync.txt"), "the download thread starts");
+    expect(dlWorkerStart("/tmp/kv_dl.txt", "/tmp/kv_sync.txt", NULL), "the download thread starts");
     tryServer(SERVER_EMBY, EMBY_PREFIX);
     if (with_plex)
         tryServer(SERVER_PLEX, PLEX_PREFIX);
     dlWorkerStop();
     DownloadList kept;
     dlListInit(&kept);
-    expect(dlListLoad(&kept, "/tmp/kv_dl.txt") && kept.count == (with_plex ? 2u : 1u), "the list is kept on the card");
+    expect(dlListLoad(&kept, "/tmp/kv_dl.txt") && kept.count == (with_plex ? 4u : 2u), "the list is kept on the card");
     dlListFree(&kept);
     jfSyncStop();
     printf("%d failures\n", g_failures);

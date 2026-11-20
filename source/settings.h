@@ -37,6 +37,7 @@ typedef enum {
     SETTING_OPEN_PLEX,      // Opens Plex's page.
     SETTING_OPEN_LIBRARY,   // Opens the Library page: the card's folder and its scan.
     SETTING_OPEN_PLAYBACK,  // Opens the Playback page.
+    SETTING_SERVER_COLOR,   // The color a server's library wears (its own, or an accent).
     SETTING_COUNT,
 } SettingRow;
 
@@ -75,6 +76,7 @@ typedef struct {
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.
     char subtitle_font[SETTINGS_NAME_MAX];  // A file in config/fonts, or "" for the built-in font.
+    int server_color[SERVER_KIND_COUNT];  // 0: the server's own color; else the accent number + 1.
 } Config;
 
 void configDefaults(Config *c);
@@ -103,6 +105,8 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size);
 
 // The most bits per second to ask the server for, with this quality.
 long long settingQualityBitrate(const Config *c);
+// The accent a server's library wears, -1 for the server's own color.
+int settingServerColor(const Config *c, ServerKind kind);
 // How many of the options (from the first) a list offers: subtitles with their
 // own look take only the size.
 int subtitleOptionCount(bool color_applies);

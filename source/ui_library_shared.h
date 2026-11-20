@@ -15,6 +15,8 @@
 bool uiLibThumbnailsOn(void);
 // Watched to the end, or marked so.
 bool uiLibSeen(const Library *lib, int item);
+// How a video's download goes (a UiDownloadMark of ui_downloads.h), and how far.
+int uiLibDownloadMark(const char *path, double *fraction);
 // How far it was watched (0-1), or -1 if it wasn't started.
 double uiLibWatched(const Library *lib, const ResumeList *resume, int item);
 // The card's picture of a film, episode or series, or NULL if there's none yet.

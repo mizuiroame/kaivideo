@@ -16,5 +16,7 @@ extern UiColors g_colors;
 
 const char *themeName(int theme);
 const char *themeAccentName(int accent);
+// An accent's color (out of range: the first).
+Color themeAccentColor(int accent);
 // Sets g_colors to the theme's colors with the accent (out of range: the first).
 void themeApply(int theme, int accent);

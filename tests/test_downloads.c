@@ -120,6 +120,11 @@ static void testList(void)
     list.items[b].state = DL_ACTIVE;
     list.items[b].size = 1000;
     list.items[b].done = 400;
+    list.items[b].max_bitrate = 8000000;  // A conversion, 3 parts of 10 here.
+    list.items[b].parts_done = 3;
+    list.items[b].part_count = 10;
+    CHECK(dlProgress(&list.items[b]) > 0.29 && dlProgress(&list.items[b]) < 0.31);
+    CHECK(dlProgress(&list.items[a]) == 1);
     snprintf(list.items[b].error, sizeof(list.items[b].error), "The server stopped answering.");
     CHECK(dlListSave(&list, file));
     static DownloadList back;
@@ -132,7 +137,8 @@ static void testList(void)
     CHECK(rb->name.episode == 2 && strcmp(rb->name.show, "Rook") == 0 && strcmp(rb->name.title, "Pawns") == 0);
     CHECK(strcmp(rb->origin, "plex:7/8") == 0 && strcmp(rb->account, "plex|s|Kid") == 0);
     CHECK(strcmp(rb->path, "sdmc:/D/b.mkv") == 0 && strcmp(rb->error, "The server stopped answering.") == 0);
-    CHECK(rb->added == 101);
+    CHECK(rb->added == 101 && rb->max_bitrate == 8000000 && rb->parts_done == 3 && rb->part_count == 10);
+    CHECK(ra->max_bitrate == 0 && ra->part_count == 0);
 
     dlListRemove(&back, 0);
     CHECK(back.count == 1 && strcmp(back.items[0].origin, "plex:7/8") == 0);
@@ -145,6 +151,14 @@ static void testList(void)
         fclose(bad);
     }
     CHECK(!dlListLoad(&back, file) && back.count == 0);
+    bad = fopen(file, "w");  // A list from before conversions: its lines have 15 fields.
+    if (bad) {
+        fprintf(bad, "%s\n3\t10\t10\t5\t0\t0\t0\t0\t2001\tjellyfin:x/y\tacc\tsdmc:/D/x.mkv\t\tOld\t\n", DL_LIST_HEADER);
+        fclose(bad);
+    }
+    CHECK(dlListLoad(&back, file) && back.count == 1 && back.items[0].state == DL_DONE &&
+          back.items[0].max_bitrate == 0 && !strcmp(back.items[0].name.title, "Old"));
+    dlListFree(&back);
     bad = fopen(file, "w");
     if (bad) {
         fprintf(bad, "%s\nbroken line\n9\t1\t1\t1\t1\t0\t0\t0\t0\tx\ty\tz\t\tt\t\n", DL_LIST_HEADER);

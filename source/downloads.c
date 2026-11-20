@@ -9,7 +9,8 @@
 #include "util.h"
 
 #define LINE_MAX_BYTES 4096
-#define LIST_FIELDS 15
+#define LIST_FIELDS_V1 15  // Lists written before conversions.
+#define LIST_FIELDS 18
 #define SYNC_FIELDS 5
 #define NS_PER_MS INT64_C(1000000)
 #define DEFAULT_EXT "mkv"
@@ -256,6 +257,15 @@ int dlListNext(const DownloadList *list)
     return waiting;
 }
 
+double dlProgress(const Download *d)
+{
+    if (d->state == DL_DONE)
+        return 1;
+    if (d->max_bitrate > 0)
+        return d->part_count > 0 ? (double)d->parts_done / d->part_count : 0;
+    return d->size > 0 ? (double)d->done / (double)d->size : 0;
+}
+
 // Splits line at its tabs (empty fields kept). How many fields, at most max.
 static int splitTabs(char *line, char **fields, int max)
 {
@@ -345,9 +355,13 @@ static bool takeDownload(char *line, void *user)
 {
     DownloadList *list = user;
     char *f[LIST_FIELDS];
-    int64_t v[9];
-    if (splitTabs(line, f, LIST_FIELDS) != LIST_FIELDS)
+    int64_t v[9], extra[3] = {0, 0, 0};
+    int fields = splitTabs(line, f, LIST_FIELDS);
+    if (fields != LIST_FIELDS && fields != LIST_FIELDS_V1)
         return true;
+    for (int i = 0; fields == LIST_FIELDS && i < 3; i++)
+        if (!readNumber(f[LIST_FIELDS_V1 + i], &extra[i]))
+            return true;
     for (int i = 0; i < 9; i++)
         if (!readNumber(f[i], &v[i]))
             return true;
@@ -364,6 +378,9 @@ static bool takeDownload(char *line, void *user)
     d->size = v[1];
     d->done = v[2];
     snprintf(d->error, sizeof(d->error), "%s", f[14]);
+    d->max_bitrate = extra[0] > 0 ? extra[0] : 0;
+    d->parts_done = extra[1] > 0 ? (int)extra[1] : 0;
+    d->part_count = extra[2] > 0 ? (int)extra[2] : 0;
     return true;
 }
 
@@ -387,10 +404,11 @@ bool dlListSave(const DownloadList *list, const char *file)
         char error[DL_ERROR_MAX];
         snprintf(error, sizeof(error), "%s", d->error);
         flatten(error);
-        fprintf(f, "%d\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n",
+        fprintf(f,
+                "%d\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%" PRId64 "\t%d\t%d\t%d\t%d\t%s\t%s\t%s\t%s\t%s\t%s\t%lld\t%d\t%d\n",
                 (int)d->state, d->size, d->done, d->added, d->runtime_ns / NS_PER_MS, d->name.is_episode ? 1 : 0,
                 d->name.season, d->name.episode, d->name.year, d->origin, d->account, d->path, d->name.show,
-                d->name.title, error);
+                d->name.title, error, d->max_bitrate, d->parts_done, d->part_count);
     }
     return endSave(f, file);
 }

@@ -146,9 +146,8 @@ struct App {
     // Downloads (app_downloads.c).
     DownloadList downloads;     // A copy of the download thread's list.
     unsigned dl_changes, dl_finished;  // What the thread's counts were when it was taken.
-    bool downloads_open;        // The Downloads panel (+ menu).
-    Scroll downloads_scroll;
-    int downloads_confirm;      // The row whose delete was pressed once, -1 for none.
+    Scroll downloads_scroll;    // The Downloads tab's rows (app_dltab.c).
+    int downloads_confirm;      // The row whose X was pressed once, -1 for none.
     // The server's video being opened or played comes from its download on the card: its file, else "".
     char open_copy[LIBRARY_PATH_MAX];
 };
@@ -251,6 +250,9 @@ void appDownloadsUpdate(App *app, uint64_t now);
 const char *appDownloadedCopy(const App *app, const char *location);
 // The same, if its file is still on the card: what a server's video plays from.
 const char *appPlayableCopy(const App *app, const char *location);
+// What the details panel says above the summary: that playing it makes the
+// downloads wait (before A is pressed), then how the server plays it; "" for nothing.
+const char *appDetailsNote(const App *app, int item, char *out, size_t size);
 // What the details panel's download button says for item, NULL for no button.
 const char *appDownloadLabel(const App *app, int item, char *out, size_t size);
 // L on a film or episode's details: downloads it, or pauses, goes on, tries again.
@@ -270,12 +272,22 @@ void appDownloadsMarked(App *app, const char *path, bool watched);
 void appDownloadsCatalogCame(App *app, ServerKind kind);
 // Downloads on the card take their server's names (the card's library, built again).
 void appDownloadsNameLibrary(const App *app, Library *lib);
-// The Downloads panel.
-void appDownloadsOpen(App *app);
+// Takes the download thread's list again (after asking it something).
+void appDownloadsRefresh(App *app);
+// The library has a Downloads tab: something was downloaded, or a server is signed in.
+bool appDownloadsTabShown(const App *app);
+
+// app_dltab.c: the Downloads tab, in sections: downloading, on the card, deleted from it.
+// Goes to it (+ menu, the header's pill), or says there's nothing to show.
+void appDownloadsOpen(App *app, uint64_t now);
 void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appDownloadsDraw(const App *app);
+// The help line for the row under the cursor.
+const char *appDownloadsHelp(const App *app);
 // A finger moves its list by px. False at an end.
 bool appDownloadsScrollPx(App *app, int px);
+// The list changed: the cursor stays on a download, the second X is asked again.
+void appDownloadsTabChanged(App *app);
 
 // app_menu.c
 void appOpenMenu(App *app);

@@ -24,7 +24,9 @@
 #define DL_ERROR_MAX 96
 #define DL_EXT_MAX 6  // An extension of up to five letters or digits.
 
-typedef enum { DL_QUEUED, DL_ACTIVE, DL_PAUSED, DL_DONE, DL_FAILED, DL_STATE_COUNT } DlState;
+// DL_DELETED: it was on the card and its file was deleted; it stays in the
+// list as a record (to download again, or take out).
+typedef enum { DL_QUEUED, DL_ACTIVE, DL_PAUSED, DL_DONE, DL_FAILED, DL_DELETED, DL_STATE_COUNT } DlState;
 
 typedef struct {
     DlState state;
@@ -37,6 +39,13 @@ typedef struct {
     int64_t runtime_ns;           // 0 if unknown.
     int64_t added;                // When it was asked for, in seconds since 1970.
     char error[DL_ERROR_MAX];     // Why it stopped, "" if it didn't.
+    // Converted by its server (what the console can't play as it is), at most
+    // this many bits a second; 0 for the original file. A conversion comes in
+    // parts joined into one file (done counts only whole parts).
+    long long max_bitrate;
+    int parts_done, part_count;   // part_count 0 until known.
+    bool finishing;               // A conversion's parts are being rewrapped into its file (not kept).
+    bool rewrap_tried;            // A whole one still in MPEG-TS was rewrapped, or tried (not kept).
 } Download;
 
 typedef struct {
@@ -63,6 +72,8 @@ int dlListFindPath(const DownloadList *list, const char *path);
 void dlListRemove(DownloadList *list, int index);
 // What to fetch next: the one being fetched, else the first waiting; -1 if none.
 int dlListNext(const DownloadList *list);
+// How far a download has come, 0 to 1 (by parts for a conversion, else by bytes).
+double dlProgress(const Download *d);
 
 // A name the card keeps and lists: plain ASCII (the Switch 2 leaves names with
 // other bytes out of its folder lists), accents dropped from Latin letters,

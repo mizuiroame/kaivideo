@@ -260,6 +260,15 @@ bool plexNetResolve(NetClient *net, const PlexSession *s, const char *version, c
     newSession(plan->play_session, sizeof(plan->play_session), audio_id);
     plexTranscodePath(plan->transcode_url, sizeof(plan->transcode_url), item, plan->play_session, max_bitrate, burn,
                       false, "");
+    // The server decides first: once a conversion of this video has been stopped,
+    // it refuses a new start without its decision ("session lacking decision").
+    char decision[JF_TRANSCODE_URL_MAX];
+    const char *start = strstr(plan->transcode_url, "start.m3u8");
+    if (start) {
+        snprintf(decision, sizeof(decision), "%.*sdecision%s", (int)(start - plan->transcode_url), plan->transcode_url,
+                 start + strlen("start.m3u8"));
+        plexNetCall(net, s, version, decision, false, API_TIMEOUT_S, NULL);
+    }
     return true;
 }
 

@@ -1,0 +1,27 @@
+# FFmpeg 7.1 for x86 with the console's configure options (ffmpeg/Dockerfile),
+# to run remux.c on a PC as the console runs it:
+#   docker build -t kaivideo-remux-host -f tests/host_live/Dockerfile.remux tests/host_live
+FROM debian:bookworm
+
+ARG FFMPEG_VERSION=7.1
+ARG FFMPEG_SHA256=40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6
+
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends gcc libc6-dev make curl ca-certificates xz-utils \
+    nasm pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /tmp/ffmpeg
+RUN curl -fsSL -o ffmpeg.tar.xz "https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz" \
+ && echo "${FFMPEG_SHA256}  ffmpeg.tar.xz" | sha256sum -c - \
+ && tar xf ffmpeg.tar.xz --strip-components=1 \
+ && ./configure --prefix=/usr/local --disable-shared --enable-static --enable-pic \
+      --disable-runtime-cpudetect --disable-programs --disable-doc --disable-debug \
+      --disable-autodetect --disable-network --disable-everything \
+      --disable-avdevice --disable-swscale --disable-asm \
+      --enable-avcodec --enable-avformat --enable-swresample --enable-avfilter \
+      --enable-filter=abuffer,abuffersink,atempo \
+      --enable-decoder=hevc,h264,vp9,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
+      --enable-parser=hevc,h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
+      --enable-demuxer=mov,matroska,hls,mpegts,webvtt,aac --enable-protocol=file \
+      --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata,aac_adtstoasc \
+      --enable-muxer=matroska \
+ && make -j"$(nproc)" && make install && rm -rf /tmp/ffmpeg
+WORKDIR /w

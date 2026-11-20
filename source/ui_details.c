@@ -7,6 +7,7 @@
 #include "thumbs.h"
 #include "ui.h"
 #include "ui_buttons.h"
+#include "ui_downloads.h"
 #include "ui_library_shared.h"
 #include "ui_style.h"
 
@@ -191,6 +192,10 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
         uiLibDrawPicture(picture, px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10);
     else
         gfxFillRoundRect(px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10, COLOR_SURFACE_HI);
+    double fraction;
+    int mark = uiLibDownloadMark(it->path, &fraction);
+    if (mark != UI_DL_NONE && mark != UI_DL_DONE)  // On its way to the card: how far.
+        uiDrawDownloadVeil(px, py, DETAILS_PIC_W, DETAILS_PIC_H, 10, (UiDownloadMark)mark, fraction);
     double progress = uiLibWatched(lib, resume, item);
     if (progress >= 0) {
         int done = (int)((DETAILS_PIC_W - 28) * (progress > 1 ? 1 : progress));
@@ -209,9 +214,10 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
     detailsLine(it, line, sizeof(line));
     fontDrawClipped(FONT_REGULAR, 18, tx, ty, tw, line, COLOR_DIM);
     int text_top = ty + 36, bottom = y + DETAILS_H - DETAILS_PAD;
-    if (note[0]) {
-        fontDrawClipped(FONT_BOLD, 18, tx, text_top, tw, note, COLOR_ACCENT);
-        text_top += 32;
+    if (note[0]) {  // Up to three lines: a warning before A is pressed can be long.
+        int note_lines = fontTextWidth(FONT_BOLD, 18, note) > 2 * tw ? 3 : fontTextWidth(FONT_BOLD, 18, note) > tw ? 2 : 1;
+        uiLibDrawWrapped(FONT_BOLD, 18, tx, text_top, tw, 24, note_lines, note, COLOR_ACCENT);
+        text_top += 24 * note_lines + 8;
     }
     int lines = (bottom - text_top) / OVERVIEW_LINE_H;
     uiLibDrawWrapped(FONT_REGULAR, 19, tx, text_top, tw, OVERVIEW_LINE_H, lines < OVERVIEW_LINES ? lines : OVERVIEW_LINES,

@@ -7,7 +7,8 @@
 # protocol is only there because the HLS reader insists on one). Most video is decoded by
 # libounce's VideoDecoder; FFmpeg's HEVC, H.264 and VP9 decoders take what the
 # hardware can't (HEVC, 10-bit H.264 and VP9, H.264 and VP9 over 1080p). No GPL or non-free
-# parts, no network code.
+# parts, no network code. The MKV muxer rewraps a server's conversion, downloaded
+# as MPEG-TS parts, into an MKV with an index (cues), so jumps land on keyframes.
 #   docker build -t kaivideo-devkit ffmpeg
 # gives the devkit image with FFmpeg in portlibs/switch2.
 ARG DEVKIT_IMAGE=ounce-devkit:latest
@@ -41,7 +42,8 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --enable-decoder=hevc,h264,vp9,mp3float,mp3,aac,vorbis,opus,flac,ac3,eac3,dca,truehd,mlp,subrip,ass,ssa,movtext,webvtt \
       --enable-parser=hevc,h264,vp9,vp8,av1,mpegaudio,aac,vorbis,opus,flac,ac3,dca,mlp \
       --enable-demuxer=mov,matroska,hls,mpegts,webvtt,aac --enable-protocol=file \
-      --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata \
+      --enable-bsf=h264_mp4toannexb,vp9_superframe_split,extract_extradata,aac_adtstoasc \
+      --enable-muxer=matroska \
       $EXTRA_FFMPEG_OPTIONS \
  && grep -q 'define HAVE_PTHREADS 1' config.h \
  && make -j"$(nproc)" \

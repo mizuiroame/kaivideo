@@ -165,7 +165,7 @@ static void liveScene(Player *p)
     static ResumeList resume;
     libraryInit(&lib, "jellyfin:");
     libviewInit(&view);
-    libviewSetTabs(&view, &lib, true, true);
+    libviewSetTabs(&view, &lib, true, true, false);
     view.tab = TAB_LIVE;
     libviewLiveMove(&view, 4, 1);
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
@@ -417,7 +417,7 @@ static void collectionScene(void)
     static Home home;
     libviewInit(&view);
     homeCompute(&home, &lib, &g_resume, &g_watched);
-    libviewSetTabs(&view, &lib, true, false);
+    libviewSetTabs(&view, &lib, true, false, false);
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
@@ -464,42 +464,58 @@ static int fakeDownload(const char *path, const void *user, double *fraction)
 static void downloadsScene(void)
 {
     static const UiDownloadRow ROWS[] = {
-        {"Paper Lanterns (1998)", "Film", "On the card \xC2\xB7 4.2 GB", 1, true, false},
-        {"Dry Creek", "Prairie Road \xC2\xB7 S09E06", "1.1 GB of 2.3 GB", 0.48, false, false},
-        {"Lamentia", "Rook \xC2\xB7 S01E03", "Waiting", 0, false, false},
-        {"Pawns", "Rook \xC2\xB7 S01E02", "Paused \xC2\xB7 12%", 0.12, false, false},
-        {"Quiet Harbor (2017)", "Film", "The card needs 2.1 GB more free for it.", 0.3, false, true},
-        {"Ashfall (2010)", "Film", "Waiting", 0, false, false},
-        {"Kite Hill (2004)", "Film", "Waiting", 0, false, false},
+        {.title = "DOWNLOADING \xC2\xB7 4", .detail = "", .state = "", .progress = -1, .header = true},
+        {"Dry Creek", "Prairie Road \xC2\xB7 S09E06", "1.1 GB of 2.3 GB", 0.48, false, false, false, false},
+        {"Lamentia", "Rook \xC2\xB7 S01E03", "Waiting", -1, false, false, false, false},
+        {"Pawns", "Rook \xC2\xB7 S01E02", "Paused \xC2\xB7 12%", 0.12, false, false, false, false},
+        {"Quiet Harbor (2017)", "Film \xC2\xB7 converted, 8 Mb/s", "The card needs 2.1 GB more free for it.", 0.3, false,
+         true, false, false},
+        {.title = "ON THE CARD \xC2\xB7 2", .detail = "", .state = "", .progress = -1, .header = true},
+        {"Paper Lanterns (1998)", "Film", "4.2 GB", -1, true, false, false, false},
+        {"Ashfall (2010)", "Film \xC2\xB7 converted, 2 Mb/s", "1.3 GB", -1, true, false, false, false},
+        {.title = "DELETED FROM THE CARD \xC2\xB7 1", .detail = "", .state = "", .progress = -1, .header = true},
+        {"Kite Hill (2004)", "Film", "Deleted from the card", -1, false, false, false, true},
     };
     int count = (int)(sizeof(ROWS) / sizeof(ROWS[0]));
-    Scroll s = {.cursor = 1};
-    begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawDownloads(ROWS, count, &s, 3,
-                    "1 on the card, 4 to come \xC2\xB7 2 watched offline, told to the server when it's back", "");
-    uiDrawFooterHelp("[A] play / pause / go on  [X] delete  [B] close");
-    save("downloads");
-    bool rows = false, deletes = false;
+    static LibView view;
+    libviewInit(&view);
+    libviewSetTabs(&view, &g_lib, false, false, true);
+    libviewShowTab(&view, TAB_DOWNLOADS);
+    for (int pass = 0; pass < 2; pass++) {
+        Scroll s = pass ? (Scroll){.cursor = 9, .first = count - UI_DOWNLOAD_ROWS} : (Scroll){.cursor = 1};
+        begin();
+        uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+        uiDrawDownloadsTab(ROWS, count, &s, pass ? -1 : 4,
+                           "4 downloading \xC2\xB7 2 on the card (5.5 GB) \xC2\xB7 1 deleted \xC2\xB7 2 watched offline, "
+                           "told to the server when it's back",
+                           "");
+        uiDrawFooterHelp(pass ? "[A] download again  [X] take off the list  [Y] clear all deleted  [ZL][ZR] tabs"
+                              : "[A] pause / go on  [X] cancel  [ZL][ZR] tabs  [+] menu");
+        save(pass ? "downloads_end" : "downloads");
+    }
+    bool rows = false, deletes = false, heading = false, tab = false;
     for (int y = 0; y < GFX_HEIGHT; y += 4)
         for (int x = 0; x < GFX_WIDTH; x += 8) {
             LibHit hit = uiLibraryTap(x, y);
-            rows = rows || (hit.kind == LIBHIT_DOWNLOAD_ROW && hit.a == UI_DOWNLOAD_ROWS - 1);
-            deletes = deletes || (hit.kind == LIBHIT_DOWNLOAD_DELETE && hit.a == 0);
+            rows = rows || (hit.kind == LIBHIT_DOWNLOAD_ROW && hit.a == count - 1);
+            deletes = deletes || (hit.kind == LIBHIT_DOWNLOAD_DELETE && hit.a == count - 1);
+            heading = heading || ((hit.kind == LIBHIT_DOWNLOAD_ROW || hit.kind == LIBHIT_DOWNLOAD_DELETE) &&
+                                  ROWS[hit.a].header);
+            tab = tab || (hit.kind == LIBHIT_TAB && view.tabs[hit.a].kind == TAB_DOWNLOADS);
         }
-    if (!rows || !deletes || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE) {
-        printf("TOUCH: downloads: a row, a delete button or the outside doesn't answer a tap\n");
+    if (!rows || !deletes || heading || !tab) {
+        printf("TOUCH: downloads: a row, its delete or its tab doesn't answer a tap, or a heading does\n");
         g_problems++;
     }
-    if (uiLibraryTap(GFX_WIDTH / 2, 655).kind == LIBHIT_DOWNLOAD_ROW) {
+    if (uiLibraryTap(GFX_WIDTH / 2, 668).kind == LIBHIT_DOWNLOAD_ROW) {
         printf("TOUCH: downloads: a row below the list answers a tap\n");
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawDownloads(ROWS, 0, &s, -1, "0 on the card, 0 to come",
-                    "Nothing yet: open a film or episode from a server and press L to download it.");
-    uiDrawFooterHelp("[A] play / pause / go on  [X] delete  [B] close");
+    uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawDownloadsTab(ROWS, 0, &(Scroll){0}, -1, "0 downloading \xC2\xB7 0 on the card (0 MB) \xC2\xB7 0 deleted",
+                       "Nothing yet: open a film or episode from a server and press L to download it.");
+    uiDrawFooterHelp("[ZL][ZR] tabs  [-] settings  [+] menu");
     save("downloads_empty");
 }
 
@@ -695,7 +711,7 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
-    top = (GFX_HEIGHT - (76 + 30 + 6 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
+    top = (GFX_HEIGHT - (76 + 30 + 7 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
     LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
     if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
@@ -709,7 +725,7 @@ static void libraryScenes(void)
     uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_plex");
-    top = (GFX_HEIGHT - (76 + 30 + 1 * 48 + 60)) / 2 + 76 + 30;
+    top = (GFX_HEIGHT - (76 + 30 + 2 * 48 + 60)) / 2 + 76 + 30;
     LibHit plex_code = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 20);
     if (plex_code.kind != LIBHIT_SETTING || plex_code.a != SETTING_PLEX_CODE) {
         printf("TOUCH: settings_plex: the sign-in row doesn't answer a tap\n");
@@ -745,7 +761,9 @@ static void libraryScenes(void)
     film->runtime_ns = 6720ll * 1000000000;
     film->favorite = true;
     // The longest labels side by side: Resume, From start, Unwatched, In Favorites, Downloading.
-    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume, "", true, "Downloading 42%");
+    uiDrawDetails(&g_lib, g_lib.films[0], &g_resume,
+                  "Still downloading: playing it streams it from the server, and its download and the others pause until you stop.",
+                  true, "Downloading 42%");
     uiDrawFooterHelp("[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back");
     save("details");
     film->favorite = false;
@@ -847,7 +865,7 @@ static void serversScene(void)
         libraryAddCollection(&lib, NAMES[i], i % 2 ? COLLECTION_SERIES : COLLECTION_FILMS);
     libraryBuild(&lib);
     libviewInit(&view);
-    libviewSetTabs(&view, &lib, true, true);
+    libviewSetTabs(&view, &lib, true, true, false);
     SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
     uiLibrarySetStatus(&sys, false);
     uiLibrarySetSource("Plex", uiServerColor(SERVER_PLEX));

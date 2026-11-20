@@ -18,11 +18,10 @@
 #include "util.h"
 
 #define FILE_NAME_MAX 600
-#define GIB (1024.0 * 1024 * 1024)
-#define MIB (1024.0 * 1024)
 #define SAME_POSITION_NS 1000000000ll  // Closer than this, a resume point hasn't changed.
 #define NAME_TRIES 9                   // "Title (2)" to "Title (9)" when two videos share a name.
 #define ROW_TEXT_MAX 200
+#define CONVERTED_AUTO_BITRATE 8000000ll  // A conversion's bitrate with the quality on Auto.
 
 // --- The list and the card ---
 
@@ -30,15 +29,24 @@ static void updatePill(const App *app);
 
 static void takeList(App *app)
 {
+    bool had = app->downloads.count > 0;
     dlListFree(&app->downloads);
     dlWorkerList(&app->downloads);
     app->dl_changes = dlWorkerChanges();
     updatePill(app);
-    int last = (int)app->downloads.count - 1;
-    if (app->downloads_scroll.cursor > last)
-        app->downloads_scroll.cursor = last < 0 ? 0 : last;
-    if (app->downloads_confirm > last)
-        app->downloads_confirm = -1;
+    appDownloadsTabChanged(app);
+    if (had != (app->downloads.count > 0))
+        appLibraryRefreshHome(app);  // The Downloads tab comes, or goes.
+}
+
+void appDownloadsRefresh(App *app)
+{
+    takeList(app);
+}
+
+bool appDownloadsTabShown(const App *app)
+{
+    return app->downloads.count > 0 || jfSyncAnySignedIn();
 }
 
 // The mark a video's cards and rows show for its download (a server's video,
@@ -52,12 +60,13 @@ static int markOf(const char *location, const void *user, double *fraction)
     if (i < 0)
         return UI_DL_NONE;
     const Download *d = &app->downloads.items[i];
-    *fraction = d->size > 0 ? (double)d->done / (double)d->size : 0;
+    *fraction = dlProgress(d);
     switch (d->state) {
     case DL_QUEUED: return UI_DL_QUEUED;
     case DL_ACTIVE: return UI_DL_ACTIVE;
     case DL_PAUSED: return UI_DL_PAUSED;
     case DL_FAILED: return UI_DL_FAILED;
+    case DL_DELETED: return UI_DL_NONE;
     default: return UI_DL_DONE;
     }
 }
@@ -67,19 +76,18 @@ static int markOf(const char *location, const void *user, double *fraction)
 static void updatePill(const App *app)
 {
     int coming = 0, paused = 0, failed = 0;
-    int64_t done = 0, size = 0;
+    double progress = 0;  // Each one coming counts the same: conversions have no size until done.
     for (size_t i = 0; i < app->downloads.count; i++) {
         const Download *d = &app->downloads.items[i];
-        coming += d->state == DL_QUEUED || d->state == DL_ACTIVE;
+        bool on_way = d->state == DL_QUEUED || d->state == DL_ACTIVE;
+        coming += on_way;
         paused += d->state == DL_PAUSED;
         failed += d->state == DL_FAILED;
-        if ((d->state == DL_QUEUED || d->state == DL_ACTIVE) && d->size > 0) {
-            done += d->done;
-            size += d->size;
-        }
+        if (on_way)
+            progress += dlProgress(d);
     }
     char label[48] = "";
-    double fraction = size > 0 ? (double)done / (double)size : 0;
+    double fraction = coming ? progress / coming : 0;
     if (coming)
         snprintf(label, sizeof(label), "%d \xC2\xB7 %d%%", coming, (int)(fraction * 100));
     else if (failed)
@@ -97,7 +105,7 @@ void appDownloadsStart(App *app)
     appConfigPath(sync, sizeof(sync), "offline_sync.txt");
     dlListInit(&app->downloads);
     app->downloads_confirm = -1;
-    if (!dlWorkerStart(list, sync))
+    if (!dlWorkerStart(list, sync, appLog))
         appLog("The downloads couldn't start.");
     takeList(app);
     app->dl_finished = dlWorkerFinished();
@@ -131,9 +139,43 @@ static bool streamingNow(const App *app)
     return (app->player || app->opening) && jfIsRemoteLocation(app->playing_path) && !app->open_copy[0];
 }
 
+#define WAIT_NOTE_NS (6ull * 1000000000ull)
+
+// A video from the server began while downloads were on their way: the
+// player's bar says they wait for it (once a video).
+static void sayDownloadsWait(App *app, uint64_t now)
+{
+    static bool said;
+    if (!app->player || !streamingNow(app)) {
+        said = false;
+        return;
+    }
+    if (said)
+        return;
+    said = true;
+    bool coming = false, this_one = false;
+    for (size_t i = 0; i < app->downloads.count; i++) {
+        const Download *d = &app->downloads.items[i];
+        if (d->state != DL_QUEUED && d->state != DL_ACTIVE)
+            continue;
+        coming = true;
+        this_one = this_one || !strcmp(d->origin, app->playing_path);
+    }
+    if (!coming)
+        return;
+    const char *note = this_one ? "Its download waits while it plays from the server, and the others too"
+                                : "Downloads wait while this plays from the server";
+    size_t n = strlen(app->bar_note);  // After what's said already ("Resumed at...").
+    snprintf(app->bar_note + n, sizeof(app->bar_note) - n, "%s%s; they go on after", n ? "  \xC2\xB7  " : "", note);
+    app->bar_note_until = now + WAIT_NOTE_NS;
+    app->overlay_until = app->overlay_until > now + WAIT_NOTE_NS ? app->overlay_until : now + WAIT_NOTE_NS;
+}
+
 void appDownloadsUpdate(App *app, uint64_t now)
 {
     dlWorkerHold(streamingNow(app));
+    sayDownloadsWait(app, now);
+    dlWorkerBusy(app->player || app->opening);
     if (dlWorkerChanges() != app->dl_changes)
         takeList(app);
     unsigned finished = dlWorkerFinished();
@@ -175,17 +217,16 @@ static const Download *downloadOf(const App *app, const char *location)
     return i >= 0 ? &app->downloads.items[i] : NULL;
 }
 
-static void sizeText(int64_t bytes, char *out, size_t size)
-{
-    if (bytes >= GIB)
-        snprintf(out, size, "%.1f GB", bytes / GIB);
-    else
-        snprintf(out, size, "%.0f MB", bytes / MIB);
-}
-
 static int percentOf(const Download *d)
 {
-    return d->size > 0 ? (int)(d->done * 100 / d->size) : 0;
+    return (int)(dlProgress(d) * 100);
+}
+
+// The bitrate a video the console can't play is converted at: the server
+// quality chosen, 8 Mb/s on Auto (a film of two hours is then about 7 GB).
+static long long convertedBitrate(const App *app)
+{
+    return app->config.jf_quality == 0 ? CONVERTED_AUTO_BITRATE : settingQualityBitrate(&app->config);
 }
 
 // --- Asking for downloads ---
@@ -196,15 +237,40 @@ const char *appDownloadLabel(const App *app, int item, char *out, size_t size)
     if (!jfIsRemoteLocation(it->path) || liveIsLocation(it->path))
         return NULL;
     const Download *d = downloadOf(app, it->path);
-    if (!d)
-        return it->blocked ? NULL : "Download";
+    if (!d || d->state == DL_DELETED)
+        return it->blocked ? "Download converted" : "Download";
     switch (d->state) {
     case DL_QUEUED: return "Waiting to download";
-    case DL_ACTIVE: snprintf(out, size, "Downloading %d%%", percentOf(d)); return out;
+    case DL_ACTIVE:
+        snprintf(out, size, "%s %d%%", d->max_bitrate ? "Converting" : "Downloading", percentOf(d));
+        return out;
     case DL_PAUSED: snprintf(out, size, "Paused at %d%%", percentOf(d)); return out;
     case DL_FAILED: return "Download again";
     default: return "On the card";
     }
+}
+
+const char *appDetailsNote(const App *app, int item, char *out, size_t size)
+{
+    const LibraryItem *it = &app->library.items[item];
+    const char *plays = jfPlayabilityMessage((JfPlayability)it->blocked);
+    bool streams = jfIsRemoteLocation(it->path) && !appPlayableCopy(app, it->path);
+    bool coming = false, this_one = false;
+    for (size_t i = 0; streams && i < app->downloads.count; i++) {
+        const Download *d = &app->downloads.items[i];
+        if (d->state != DL_QUEUED && d->state != DL_ACTIVE)
+            continue;
+        coming = true;
+        this_one = this_one || !strcmp(d->origin, it->path);
+    }
+    if (!coming)
+        return plays;
+    snprintf(out, size, "%s%s%s",
+             this_one ? "Still downloading: playing it streams it from the server, and its download and the others "
+                        "pause until you stop."
+                      : "Playing it streams it from the server: the downloads pause until you stop.",
+             plays[0] ? " " : "", plays);
+    return out;
 }
 
 // The name its server gives a video (an episode's series from the library's).
@@ -222,10 +288,6 @@ static bool enqueue(App *app, int item, char *why, size_t why_size)
 {
     const LibraryItem *it = &app->library.items[item];
     char account[DL_ACCOUNT_MAX], root[LIBRARY_PATH_MAX], path[LIBRARY_PATH_MAX], fallback[NAMING_MAX];
-    if (it->blocked) {
-        snprintf(why, why_size, "Only videos the console plays as they are can be downloaded for now.");
-        return false;
-    }
     if (!jfSyncAccountOf(it->path, account, sizeof(account))) {
         snprintf(why, why_size, "Sign in to its server to download it.");
         return false;
@@ -236,6 +298,8 @@ static bool enqueue(App *app, int item, char *why, size_t why_size)
     }
     dlSafeName(it->path, fallback, sizeof(fallback));  // For names with nothing a card can keep.
     VideoName name = nameOf(&app->library, item), file_name = name;
+    // What the console can't play comes converted by the server: its parts are rewrapped into an MKV.
+    long long bitrate = it->blocked ? convertedBitrate(app) : 0;
     for (int n = 1; n <= NAME_TRIES; n++) {
         if (n > 1)
             snprintf(file_name.title, sizeof(file_name.title), "%.*s (%d)", NAMING_MAX - 8, name.title, n);
@@ -244,7 +308,7 @@ static bool enqueue(App *app, int item, char *why, size_t why_size)
             break;
         if (dlListFindPath(&app->downloads, path) >= 0)
             continue;  // Another video's name.
-        if (dlWorkerAdd(it->path, account, &name, it->runtime_ns, path) >= 0) {
+        if (dlWorkerAdd(it->path, account, &name, it->runtime_ns, path, bitrate) >= 0) {
             takeList(app);
             return true;
         }
@@ -261,17 +325,23 @@ void appDownloadItem(App *app, int item, uint64_t now)
     const Download *d = downloadOf(app, it->path);
     char why[128];
     if (!d) {
-        if (enqueue(app, item, why, sizeof(why)))
-            appShowMessage(app, "Added to Downloads (+ menu).", now);
-        else
+        if (!enqueue(app, item, why, sizeof(why)))
             appShowMessage(app, why, now);
+        else if (it->blocked) {
+            snprintf(why, sizeof(why), "Added to Downloads: the server converts it first, at %.0f Mb/s.",
+                     convertedBitrate(app) / 1e6);
+            appShowMessage(app, why, now);
+        } else {
+            appShowMessage(app, "Added to Downloads (+ menu).", now);
+        }
         return;
     }
     switch (d->state) {
     case DL_QUEUED:
     case DL_ACTIVE: dlWorkerPause(d->path, true); appShowMessage(app, "Download paused.", now); break;
     case DL_PAUSED: dlWorkerPause(d->path, false); appShowMessage(app, "The download goes on.", now); break;
-    case DL_FAILED: dlWorkerRetry(d->path); appShowMessage(app, "Downloading it again.", now); break;
+    case DL_FAILED:
+    case DL_DELETED: dlWorkerRetry(d->path); appShowMessage(app, "Downloading it again.", now); break;
     default: appShowMessage(app, "It's on the card: it plays from there. Downloads (+ menu) deletes it.", now); break;
     }
     takeList(app);
@@ -299,6 +369,8 @@ const char *appSeasonDownloadLabel(const App *app, int show, int season, bool *d
     int whole = 0, asked = 0;
     for (int i = 0; i < n; i++) {
         const Download *d = downloadOf(app, app->library.items[items[i]].path);
+        if (d && d->state == DL_DELETED)
+            d = NULL;  // Deleted from the card: as if never asked for.
         asked += d != NULL;
         whole += d && d->state == DL_DONE;
     }
@@ -320,7 +392,13 @@ void appDownloadSeason(App *app, int show, int season, uint64_t now)
     int n = seasonItems(&app->library, show, season, items, SEASON_MAX), added = 0, skipped = 0;
     char why[128] = "";
     for (int i = 0; i < n; i++) {
-        if (downloadOf(app, app->library.items[items[i]].path))
+        const Download *d = downloadOf(app, app->library.items[items[i]].path);
+        if (d && d->state == DL_DELETED) {
+            dlWorkerRetry(d->path);
+            added++;
+            continue;
+        }
+        if (d)
             continue;
         if (enqueue(app, items[i], why, sizeof(why)))
             added++;
@@ -445,181 +523,4 @@ void appDownloadsNameLibrary(const App *app, Library *lib)
 {
     dlApplyNames(lib, &app->downloads);
     libraryBuild(lib);
-}
-
-// --- The Downloads panel ---
-
-void appDownloadsOpen(App *app)
-{
-    takeList(app);
-    app->downloads_open = true;
-    app->downloads_confirm = -1;
-    app->downloads_scroll = (Scroll){0, 0, 0};
-}
-
-#define ROWS_SHOWN_MAX 256  // The panel lists this many at most.
-
-// How many rows the panel lists.
-static int rowsShown(const App *app)
-{
-    int count = (int)app->downloads.count;
-    return count < ROWS_SHOWN_MAX ? count : ROWS_SHOWN_MAX;
-}
-
-static void keepInView(Scroll *s, int count)
-{
-    if (s->cursor >= count)
-        s->cursor = count > 0 ? count - 1 : 0;
-    if (s->cursor < s->first)
-        s->first = s->cursor;
-    if (s->cursor >= s->first + UI_DOWNLOAD_ROWS)
-        s->first = s->cursor - UI_DOWNLOAD_ROWS + 1;
-    int last_first = count > UI_DOWNLOAD_ROWS ? count - UI_DOWNLOAD_ROWS : 0;
-    if (s->first > last_first)
-        s->first = last_first;  // No empty rows at the bottom while earlier ones hide.
-    s->offset = 0;
-}
-
-bool appDownloadsScrollPx(App *app, int px)
-{
-    return scrollPx(&app->downloads_scroll, px, UI_DOWNLOAD_ROW_H, UI_DOWNLOAD_ROWS, 1, rowsShown(app));
-}
-
-// A: a whole one plays; one going on pauses; a paused one goes on; a failed one tries again.
-static void activate(App *app, int row, uint64_t now)
-{
-    if (row < 0 || (size_t)row >= app->downloads.count)
-        return;
-    Download d = app->downloads.items[row];
-    switch (d.state) {
-    case DL_DONE: {
-        char name[APP_NAME_MAX];
-        if (d.name.is_episode)
-            snprintf(name, sizeof(name), "%s \xC2\xB7 S%02dE%02d", d.name.show, d.name.season, d.name.episode);
-        else
-            snprintf(name, sizeof(name), "%s", d.name.title);
-        app->downloads_open = false;
-        appStartVideo(app, d.path, name, now);
-        return;
-    }
-    case DL_QUEUED:
-    case DL_ACTIVE: dlWorkerPause(d.path, true); break;
-    case DL_PAUSED: dlWorkerPause(d.path, false); break;
-    default: dlWorkerRetry(d.path); break;
-    }
-    takeList(app);
-}
-
-// X once asks, X again on the same one deletes it (from the card too).
-static void deleteRow(App *app, int row, uint64_t now)
-{
-    if (row < 0 || (size_t)row >= app->downloads.count)
-        return;
-    if (app->downloads_confirm != row) {
-        app->downloads_confirm = row;
-        appShowMessage(app, "Press X again to delete it from the card.", now);
-        return;
-    }
-    bool whole = app->downloads.items[row].state == DL_DONE;
-    dlWorkerRemove(app->downloads.items[row].path);
-    app->downloads_confirm = -1;
-    takeList(app);
-    keepInView(&app->downloads_scroll, rowsShown(app));
-    appShowMessage(app, "Deleted.", now);
-    if (whole && !app->config.use_jellyfin)
-        appLibraryRescan(app, now);  // The card's library lets it go.
-}
-
-void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
-{
-    Scroll *s = &app->downloads_scroll;
-    int count = rowsShown(app);
-    if (pressed & (BUTTONS_UP | BUTTONS_DOWN)) {
-        s->cursor += (pressed & BUTTONS_UP) ? -1 : 1;
-        s->cursor = s->cursor < 0 ? 0 : s->cursor;
-        keepInView(s, count);
-        app->downloads_confirm = -1;
-    }
-    if (pressed & HidNpadButton_A)
-        activate(app, s->cursor, now);
-    if (pressed & HidNpadButton_X)
-        deleteRow(app, s->cursor, now);
-    if (pressed & (HidNpadButton_B | HidNpadButton_Plus)) {
-        app->downloads_open = false;
-        return;
-    }
-    if (touch.type == TOUCH_DRAG) {
-        appLibraryDrag(app, touch, now);
-        return;
-    }
-    if (touch.type != TOUCH_TAP)
-        return;
-    LibHit hit = uiLibraryTap(touch.x, touch.y);
-    if (hit.kind == LIBHIT_DOWNLOAD_ROW) {
-        s->cursor = hit.a;
-        app->downloads_confirm = -1;
-        activate(app, hit.a, now);
-    } else if (hit.kind == LIBHIT_DOWNLOAD_DELETE) {
-        s->cursor = hit.a;
-        deleteRow(app, hit.a, now);
-    } else if (hit.kind == LIBHIT_CLOSE) {
-        app->downloads_open = false;
-    }
-}
-
-typedef struct {
-    char title[ROW_TEXT_MAX], detail[ROW_TEXT_MAX], state[ROW_TEXT_MAX];
-} RowText;
-
-static void describe(const Download *d, RowText *t, UiDownloadRow *row)
-{
-    if (d->name.is_episode) {
-        snprintf(t->title, sizeof(t->title), "%s", d->name.title[0] ? d->name.title : d->name.show);
-        snprintf(t->detail, sizeof(t->detail), "%s \xC2\xB7 S%02dE%02d", d->name.show, d->name.season, d->name.episode);
-    } else {
-        snprintf(t->title, sizeof(t->title), d->name.year ? "%s (%d)" : "%s", d->name.title, d->name.year);
-        snprintf(t->detail, sizeof(t->detail), "Film");
-    }
-    char done[32], size[32];
-    sizeText(d->done, done, sizeof(done));
-    sizeText(d->size, size, sizeof(size));
-    switch (d->state) {
-    case DL_QUEUED: snprintf(t->state, sizeof(t->state), "Waiting"); break;
-    case DL_ACTIVE:
-        if (d->size > 0)
-            snprintf(t->state, sizeof(t->state), "%s of %s", done, size);
-        else
-            snprintf(t->state, sizeof(t->state), "Starting...");
-        break;
-    case DL_PAUSED: snprintf(t->state, sizeof(t->state), "Paused \xC2\xB7 %d%%", percentOf(d)); break;
-    case DL_FAILED: snprintf(t->state, sizeof(t->state), "%s", d->error[0] ? d->error : "It stopped."); break;
-    default: snprintf(t->state, sizeof(t->state), "On the card \xC2\xB7 %s", size); break;
-    }
-    *row = (UiDownloadRow){t->title, t->detail, t->state, d->size > 0 && d->done > 0 ? (double)d->done / d->size : -1,
-                           d->state == DL_DONE, d->state == DL_FAILED};
-}
-
-void appDownloadsDraw(const App *app)
-{
-    if (!app->downloads_open)
-        return;
-    int count = (int)app->downloads.count;
-    static RowText texts[ROWS_SHOWN_MAX];
-    static UiDownloadRow rows[ROWS_SHOWN_MAX];
-    int shown = rowsShown(app);
-    int waiting = 0, whole = 0;
-    for (int i = 0; i < count; i++) {
-        waiting += app->downloads.items[i].state == DL_QUEUED || app->downloads.items[i].state == DL_ACTIVE;
-        whole += app->downloads.items[i].state == DL_DONE;
-    }
-    for (int i = 0; i < shown; i++)
-        describe(&app->downloads.items[i], &texts[i], &rows[i]);
-    char summary[200];
-    int untold = dlWorkerSyncWaiting();
-    int n = snprintf(summary, sizeof(summary), "%d on the card, %d to come", whole, waiting);
-    if (untold > 0 && n > 0 && (size_t)n < sizeof(summary))
-        snprintf(summary + n, sizeof(summary) - (size_t)n, " \xC2\xB7 %d watched offline, told to the server when it's back",
-                 untold);
-    uiDrawDownloads(rows, shown, &app->downloads_scroll, app->downloads_confirm, summary,
-                    "Nothing yet: open a film or episode from a server and press L to download it.");
 }

@@ -79,8 +79,12 @@ void uiLibraryClipHits(int top, int bottom);
 // The header's pill says this ("SD card", "Jellyfin"); "" leaves it out.
 // Where the library comes from, with its color.
 void uiLibrarySetSource(const char *label, Color color);
-// Each server's own color (its name is shown beside it, not its logo).
+// Each server's color: its own (its name is shown beside it, not its logo),
+// or the one chosen for it.
 Color uiServerColor(ServerKind kind);
+void uiSetServerColor(ServerKind kind, Color color);
+// A server's own color, whatever was chosen.
+Color uiServerOwnColor(ServerKind kind);
 // The header: the menu button and name, the tabs between ZL and ZR, and
 // status (a scan's progress, or NULL) left of the clock and battery. The
 // Files tab draws the folder list under it.

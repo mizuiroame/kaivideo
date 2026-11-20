@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "jfsync.h"
+#include "remux.h"
 
 #define FILE_PATH_MAX 600
 #define SAVE_EVERY_S 10          // The list is kept on the card this often while fetching.
@@ -21,6 +22,9 @@
 #define SYNC_EVERY_S 60          // What waits to be told is tried again this often.
 #define ROOM_MARGIN (64ll * 1024 * 1024)  // Left free on the card.
 #define GIB (1024.0 * 1024 * 1024)
+// Rewrapping conversions into MKV (it closed KaiVideo on the console once,
+// 2026-11-20, on a 512 KB stack: it runs on a 2 MB one now, logging each step).
+#define REWRAP_ON 1
 
 extern const DlSource DL_SERVER_SOURCE;
 static const DlSource *const SOURCES[] = {&DL_SERVER_SOURCE};
@@ -34,7 +38,8 @@ static struct {
     // Under the lock:
     DownloadList list;
     DlSyncQueue sync;
-    bool stop, hold, sync_soon;
+    bool stop, hold, busy, sync_soon;
+    DlLog log;
     char current[LIBRARY_PATH_MAX];  // The path being fetched, "" if none.
     volatile bool abort;             // The fetch under way stops (paused, removed, held, stopping).
     volatile bool stopping;          // The thread is asked to stop: requests to the servers give up.
@@ -134,6 +139,10 @@ typedef struct {
     long long total;  // -1 until known.
     bool checked_room, no_room, write_failed;
     long long room_needed;
+    // A conversion: only whole parts count.
+    bool converted;
+    int64_t committed;        // Bytes of the whole parts.
+    int parts_done, part_count;
 } Fetch;
 
 static void reportProgress(Fetch *f, bool force)
@@ -143,10 +152,16 @@ static void reportProgress(Fetch *f, bool force)
     f->reported = f->done;
     pthread_mutex_lock(&g.lock);
     Download *d = findPath(f->path);
-    if (d) {
+    if (d && f->converted) {
+        d->done = f->committed;  // What's kept if it stops now.
+        d->parts_done = f->parts_done;
+        d->part_count = f->part_count;
+    } else if (d) {
         d->done = f->done;
         if (f->total >= 0)
             d->size = f->total;
+    }
+    if (d) {
         g.changes++;
         if (time(NULL) - g.saved_at >= SAVE_EVERY_S)
             saveList();
@@ -159,7 +174,7 @@ static bool takeBytes(const void *data, size_t size, void *user)
     Fetch *f = user;
     if (g.abort)
         return false;
-    if (f->offset > 0 && f->total < 0 && f->done == f->offset) {  // No Content-Range: not the part asked for.
+    if (!f->converted && f->offset > 0 && f->total < 0 && f->done == f->offset) {  // No Content-Range: not the part asked for.
         f->restart = true;
         return false;
     }
@@ -272,7 +287,139 @@ static bool fetchAll(const DlSource *src, const Download *d, Fetch *f, char *err
     return false;
 }
 
-// Fetches d (a copy; the list may change meanwhile).
+static void partDone(void *user, int index, int count)
+{
+    Fetch *f = user;
+    f->committed = f->done;
+    f->parts_done = index + 1;
+    f->part_count = count;
+    reportProgress(f, true);
+}
+
+// The card's room for what's left of a conversion, guessed from its length
+// and bitrate. False (with why) if it won't fit.
+static bool convertedFits(const Download *d, const Fetch *f, char *error, size_t error_size)
+{
+    double left = 1.0 - (f->part_count > 0 ? (double)f->parts_done / f->part_count : 0);
+    long long needed = (long long)(d->runtime_ns / 1e9 * d->max_bitrate / 8 * left) + ROOM_MARGIN;
+    long long room = roomOn(f->path);
+    if (d->runtime_ns <= 0 || room < 0 || room >= needed)
+        return true;
+    snprintf(error, error_size, "The card needs %.1f GB more free for it.", (needed - room) / GIB);
+    return false;
+}
+
+// Cuts the file back to its whole parts: what came of one cut off goes.
+static bool backToWholeParts(Fetch *f)
+{
+    f->done = f->committed;
+    f->reported = f->done;
+    return ftruncate(fileno(f->file), (off_t)f->committed) == 0 && fseeko(f->file, (off_t)f->committed, SEEK_SET) == 0;
+}
+
+// Puts the whole conversion on the card, part after part. As fetchAll.
+static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, char *error, size_t error_size)
+{
+    error[0] = '\0';
+    if (!src->fetch_converted) {
+        snprintf(error, error_size, "That place can't convert videos.");
+        return false;
+    }
+    if (f->part_count > 0 && f->parts_done >= f->part_count)
+        return true;
+    if (!convertedFits(d, f, error, error_size))
+        return false;
+    int tries = 0;
+    while (!g.abort) {
+        int first = f->parts_done;
+        if (!backToWholeParts(f)) {
+            snprintf(error, error_size, "It couldn't be written to the card.");
+            return false;
+        }
+        error[0] = '\0';
+        bool ok = src->fetch_converted(d->origin, d->max_bitrate, first, takeBytes, partDone, f, &g.abort, error,
+                                       error_size);
+        fflush(f->file);
+        if (f->write_failed) {
+            snprintf(error, error_size, "It couldn't be written to the card.");
+            return false;
+        }
+        if (ok && f->part_count > 0 && f->parts_done >= f->part_count)
+            return true;
+        if (g.abort)
+            break;
+        tries = f->parts_done > first ? 0 : tries + 1;
+        if (tries >= TRIES) {
+            if (!error[0])
+                snprintf(error, error_size, "The server stopped converting it.");
+            return false;
+        }
+        waitSeconds(RETRY_WAIT_S << tries);
+    }
+    error[0] = '\0';
+    return false;
+}
+
+static void say(const char *what, const char *path, const char *why);
+
+static void setFinishing(const char *path, bool finishing)
+{
+    pthread_mutex_lock(&g.lock);
+    Download *d = findPath(path);
+    if (d) {
+        d->finishing = finishing;
+        g.changes++;
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+// A conversion's parts (MPEG-TS, in part) become its file: rewrapped into MKV,
+// whose index makes jumps land on keyframes. If that can't be done, the parts
+// are the file as they are. False if neither could be written.
+static bool finishConverted(const char *path, const char *part, char *error, size_t error_size)
+{
+    char wrapped[FILE_PATH_MAX], why[DL_ERROR_MAX];
+    snprintf(wrapped, sizeof(wrapped), "%s.mkv-new", path);
+    setFinishing(path, true);
+    bool ok = REWRAP_ON && remuxToMkvOnOwnThread(part, wrapped, &g.abort, why, sizeof(why));
+    setFinishing(path, false);
+    if (REWRAP_ON && !ok && !g.abort)
+        say("kept as MPEG-TS", path, why);
+    if (g.abort) {
+        remove(wrapped);
+        error[0] = '\0';
+        return false;  // Stopped: it's done again next time, from the parts kept.
+    }
+    remove(path);
+    if (ok && rename(wrapped, path) == 0) {
+        remove(part);
+        return true;
+    }
+    remove(wrapped);
+    if (rename(part, path) != 0) {
+        snprintf(error, error_size, "It couldn't be written to the card.");
+        return false;
+    }
+    return true;
+}
+
+static void say(const char *what, const char *path, const char *why)
+{
+    if (g.log)
+        g.log("Download %s: %s (%s)", what, path, why);
+}
+
+// True if path holds MPEG-TS (its first byte is the sync byte), not MKV.
+static bool stillTs(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    int first = f ? fgetc(f) : EOF;
+    if (f)
+        fclose(f);
+    return first == 0x47;
+}
+
+
 static void runDownload(const Download *d)
 {
     char error[DL_ERROR_MAX];
@@ -283,11 +430,20 @@ static void runDownload(const Download *d)
         pthread_mutex_unlock(&g.lock);
         return;
     }
-    Fetch f = {.done = d->done, .total = -1};
+    Fetch f = {.done = d->done, .total = -1, .converted = d->max_bitrate > 0, .parts_done = d->parts_done,
+               .part_count = d->part_count};
     snprintf(f.path, sizeof(f.path), "%s", d->path);
     f.file = openPart(d->path, &f.done);
+    if (f.converted && f.done != d->done) {  // Its file isn't what the list says: from the first part.
+        f.done = 0;
+        f.parts_done = 0;
+    }
+    f.committed = f.done;
     f.reported = f.done;
-    bool whole = f.file && fetchAll(src, d, &f, error, sizeof(error));
+    bool whole = f.file && (f.converted ? fetchConvertedAll(src, d, &f, error, sizeof(error))
+                                        : fetchAll(src, d, &f, error, sizeof(error)));
+    if (f.converted && !whole && f.file)
+        backToWholeParts(&f);
     if (!f.file)
         snprintf(error, sizeof(error), "It couldn't be written to the card.");
     if (f.file)
@@ -295,13 +451,22 @@ static void runDownload(const Download *d)
     if (whole) {
         char part[FILE_PATH_MAX];
         partPath(d->path, part, sizeof(part));
-        remove(d->path);
-        if (rename(part, d->path) != 0) {
-            whole = false;
-            snprintf(error, sizeof(error), "It couldn't be written to the card.");
-        } else if (src->extras) {
-            src->extras(d->origin, d->path, &g.abort);
+        if (f.converted) {
+            whole = finishConverted(d->path, part, error, sizeof(error));
+        } else {
+            remove(d->path);
+            if (rename(part, d->path) != 0) {
+                whole = false;
+                snprintf(error, sizeof(error), "It couldn't be written to the card.");
+            }
         }
+        if (whole && src->extras) {
+            src->extras(d->origin, d->path, f.converted, &g.abort);
+        }
+    }
+    if (whole && f.converted) {
+        struct stat st;  // Its size is the rewrapped file's.
+        f.committed = f.done = stat(d->path, &st) == 0 ? (int64_t)st.st_size : f.done;
     }
     reportProgress(&f, true);
     pthread_mutex_lock(&g.lock);
@@ -311,7 +476,7 @@ static void runDownload(const Download *d)
     } else if (whole) {
         now->state = DL_DONE;
         now->error[0] = '\0';
-        if (now->size < 0)
+        if (now->size < 0 || f.converted)
             now->size = f.done;
         g.finished++;
         changed();
@@ -325,6 +490,57 @@ static void runDownload(const Download *d)
     }
     g.current[0] = '\0';  // Under the same lock: a removal from now on deletes the files itself.
     pthread_mutex_unlock(&g.lock);
+}
+
+// A whole conversion still in MPEG-TS (downloaded before rewrapping, or when
+// it failed) is rewrapped now. One a call. Under the lock on entry and exit;
+// false if there was none.
+static bool rewrapOne(void)
+{
+    if (!REWRAP_ON || g.busy || g.hold)
+        return false;
+    for (size_t i = 0; i < g.list.count; i++) {
+        Download *d = &g.list.items[i];
+        if (d->state != DL_DONE || d->max_bitrate <= 0 || d->rewrap_tried)
+            continue;
+        d->rewrap_tried = true;
+        char path[LIBRARY_PATH_MAX], wrapped[FILE_PATH_MAX], why[DL_ERROR_MAX];
+        snprintf(path, sizeof(path), "%s", d->path);
+        if (!stillTs(path))
+            continue;
+        snprintf(wrapped, sizeof(wrapped), "%s.mkv-new", path);
+        snprintf(g.current, sizeof(g.current), "%s", path);
+        g.abort = false;
+        d->finishing = true;
+        g.changes++;
+        pthread_mutex_unlock(&g.lock);
+        if (g.log)
+            g.log("Download rewrap begins: %s", path);
+        bool ok = remuxToMkvOnOwnThread(path, wrapped, &g.abort, why, sizeof(why));
+        pthread_mutex_lock(&g.lock);
+        g.current[0] = '\0';
+        Download *now = findPath(path);
+        if (now)
+            now->finishing = false;
+        else
+            removeWithExtras(path);  // Taken out of the list meanwhile.
+        if (ok && now && !g.busy && remove(path) == 0 && rename(wrapped, path) == 0) {
+            struct stat st;
+            if (stat(path, &st) == 0)
+                now->size = now->done = (int64_t)st.st_size;
+            if (g.log)
+                g.log("Download rewrapped into MKV: %s", path);
+        } else {
+            remove(wrapped);
+            if (now && (g.busy || g.abort))
+                now->rewrap_tried = false;  // Stopped: again when it's quiet.
+            else
+                say("not rewrapped", path, ok ? "it couldn't be replaced" : why);
+        }
+        changed();
+        return true;
+    }
+    return false;
 }
 
 // --- Telling the servers ---
@@ -365,6 +581,8 @@ static void *workerThread(void *arg)
             continue;
         }
         int next = g.hold ? -1 : dlListNext(&g.list);
+        if (next < 0 && rewrapOne())
+            continue;
         if (next < 0) {
             struct timespec until;
             clock_gettime(CLOCK_REALTIME, &until);
@@ -388,10 +606,12 @@ static void *workerThread(void *arg)
 
 // --- From other threads ---
 
-bool dlWorkerStart(const char *list_file, const char *sync_file)
+bool dlWorkerStart(const char *list_file, const char *sync_file, DlLog log)
 {
     if (g.running)
         return true;
+    g.log = log;
+    remuxSetLog(log);
     snprintf(g.list_file, sizeof(g.list_file), "%s", list_file);
     snprintf(g.sync_file, sizeof(g.sync_file), "%s", sync_file);
     dlListInit(&g.list);
@@ -456,12 +676,15 @@ unsigned dlWorkerFinished(void)
 }
 
 int dlWorkerAdd(const char *origin, const char *account, const VideoName *name, int64_t runtime_ns,
-                const char *path)
+                const char *path, long long max_bitrate)
 {
     if (!g.running)
         return -1;
     pthread_mutex_lock(&g.lock);
+    size_t before = g.list.count;
     int at = dlListAdd(&g.list, origin, account, name, runtime_ns, path, (int64_t)time(NULL));
+    if (at >= 0 && g.list.count > before)
+        g.list.items[at].max_bitrate = max_bitrate > 0 ? max_bitrate : 0;
     if (at >= 0) {
         changed();
         pthread_cond_broadcast(&g.wake);
@@ -497,11 +720,36 @@ void dlWorkerRetry(const char *path)
 {
     pthread_mutex_lock(&g.lock);
     Download *d = findPath(path);
-    if (d && d->state == DL_FAILED) {
+    if (d && (d->state == DL_FAILED || d->state == DL_DELETED)) {
         d->state = DL_QUEUED;
         d->error[0] = '\0';
         changed();
         pthread_cond_broadcast(&g.wake);
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+void dlWorkerDeleteFile(const char *path)
+{
+    pthread_mutex_lock(&g.lock);
+    Download *d = findPath(path);
+    if (d && d->state == DL_DONE) {
+        removeWithExtras(path);
+        d->state = DL_DELETED;
+        d->done = d->size = 0;
+        d->parts_done = d->part_count = 0;
+        changed();
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+void dlWorkerForget(const char *path)
+{
+    pthread_mutex_lock(&g.lock);
+    int i = dlListFindPath(&g.list, path);
+    if (i >= 0 && (g.list.items[i].state == DL_DONE || g.list.items[i].state == DL_DELETED)) {
+        dlListRemove(&g.list, i);
+        changed();
     }
     pthread_mutex_unlock(&g.lock);
 }
@@ -520,6 +768,33 @@ void dlWorkerRemove(const char *path)
         changed();
     }
     pthread_mutex_unlock(&g.lock);
+}
+
+void dlWorkerBusy(bool busy)
+{
+    pthread_mutex_lock(&g.lock);
+    if (g.busy != busy) {
+        g.busy = busy;
+        if (busy && g.current[0] && findPath(g.current) && findPath(g.current)->state == DL_DONE)
+            g.abort = true;  // A rewrap: a video plays now, maybe that one.
+        pthread_cond_broadcast(&g.wake);
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+int dlWorkerForgetDeleted(void)
+{
+    pthread_mutex_lock(&g.lock);
+    int n = 0;
+    for (size_t i = g.list.count; i-- > 0;)
+        if (g.list.items[i].state == DL_DELETED) {
+            dlListRemove(&g.list, (int)i);
+            n++;
+        }
+    if (n)
+        changed();
+    pthread_mutex_unlock(&g.lock);
+    return n;
 }
 
 void dlWorkerHold(bool hold)

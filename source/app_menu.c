@@ -80,7 +80,7 @@ static void run(App *app, MenuItemId id, uint64_t now)
 {
     app->app_menu = APP_MENU_NONE;
     switch (id) {
-    case ITEM_DOWNLOADS: appDownloadsOpen(app); break;
+    case ITEM_DOWNLOADS: appDownloadsOpen(app, now); break;
     case ITEM_RESCAN: appLibraryRescan(app, now); break;
     case ITEM_SETTINGS: appOpenSettings(app); break;
     case ITEM_BACK_TO_LIBRARY: app->stop_requested = true; break;
@@ -143,8 +143,6 @@ const char *appFooterHelp(const App *app)
         return "[A] choose  [B] cancel  [+] exit";
     if (app->app_menu == APP_MENU_MAIN)
         return "[A] choose  [B] close  [+] exit";
-    if (app->downloads_open)
-        return "[A] play / pause / go on  [X] delete  [B] close";
     if (app->settings_open && app->jf_signing)
         return "[B] cancel";
     if (app->settings_open && app->about_open)
@@ -163,6 +161,7 @@ const char *appFooterHelp(const App *app)
         return server ? "[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs"
                       : "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
     switch (app->view.tab) {
+    case TAB_DOWNLOADS: return appDownloadsHelp(app);
     case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";
     case TAB_LIVE: return "[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu";
     case TAB_FILES: return "[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu";

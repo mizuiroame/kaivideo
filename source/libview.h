@@ -33,10 +33,11 @@ typedef enum {
     TAB_FILES,
     TAB_COLLECTION,  // One of a server's libraries (LibView.collection).
     TAB_LIVE,        // A server's Live TV channels.
+    TAB_DOWNLOADS,   // The downloads: on their way, on the card, deleted from it.
     TAB_COUNT,
 } LibTab;
 
-#define LIBVIEW_TABS (LIBRARY_COLLECTIONS + 5)
+#define LIBVIEW_TABS (LIBRARY_COLLECTIONS + 6)
 #define LIBVIEW_LIVE_ROWS 6  // Channels in view.
 
 typedef struct {
@@ -77,8 +78,11 @@ typedef struct {
 void libviewInit(LibView *v);
 // The tabs for this library: with a server's libraries, Home, each of them,
 // Live TV (live: the server has channels), Search and Files; else Home, Films,
-// Series, Search and Files. A tab that's gone leaves Home showing.
-void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live);
+// Series, Search and Files. Downloads goes before Files when asked for. A tab
+// that's gone leaves Home showing.
+void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads);
+// Shows a tab of that kind (not a server's library). False if there's none.
+bool libviewShowTab(LibView *v, LibTab kind);
 // Live TV: moves the cursor through count channels.
 void libviewLiveMove(LibView *v, int count, int dy);
 // Changes tab by delta (wrapping), closing a series' page.

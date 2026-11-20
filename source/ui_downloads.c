@@ -2,16 +2,15 @@
 // was watched offline waiting for its server.
 #include "ui_downloads.h"
 
+#include <stdio.h>
+
 #include "font.h"
 #include "gfx.h"
 #include "ui_buttons.h"
 #include "ui_library.h"
 #include "ui_style.h"
 
-#define PANEL_W 1040
-#define PANEL_H 530
-#define PANEL_PAD 28
-#define HEADER_H 70
+#define LIST_Y (UI_TAB_BAR_H + 52)  // The summary above it.
 #define ROW_GAP 6
 #define BAR_H 6
 #define DELETE_W 56
@@ -64,6 +63,33 @@ void uiDrawDownloadMark(float cx, float cy, float r, UiDownloadMark mark, double
     }
 }
 
+#define VEIL_ALPHA 150
+
+void uiDrawDownloadVeil(int x, int y, int w, int h, int radius, UiDownloadMark mark, double fraction)
+{
+    gfxSetClipRound(x, y, w, h, radius);
+    gfxBlendRect(x, y, w, h, GFX_RGB(0, 0, 0), VEIL_ALPHA);
+    gfxResetClip();
+    float r = (w < h ? w : h) * 0.22f, cx = x + w / 2.0f, cy = y + h / 2.0f - 8;
+    float done = (float)(fraction < 0 ? 0 : fraction > 1 ? 1 : fraction);
+    gfxArc(cx, cy, r, 4, 0, TURN, GFX_RGB(0x60, 0x60, 0x68));
+    if (mark != UI_DL_FAILED && done > 0)
+        gfxArc(cx, cy, r, 4, TOP, TOP + TURN * done, mark == UI_DL_ACTIVE ? COLOR_ACCENT : COLOR_DIM);
+    char text[16];
+    switch (mark) {
+    case UI_DL_QUEUED: snprintf(text, sizeof(text), "Waiting"); break;
+    case UI_DL_PAUSED: snprintf(text, sizeof(text), "Paused"); break;
+    case UI_DL_FAILED: snprintf(text, sizeof(text), "Failed"); break;
+    default: snprintf(text, sizeof(text), "%d%%", (int)(done * 100)); break;
+    }
+    if (mark == UI_DL_ACTIVE)
+        fontDrawCentered(FONT_BOLD, 17, cx, cy, text, COLOR_TEXT);
+    else
+        drawArrow(cx, cy, r * 0.8f, mark == UI_DL_FAILED ? COLOR_ERROR : COLOR_DIM);
+    if (mark != UI_DL_ACTIVE)
+        fontDrawCentered(FONT_BOLD, 14, cx, cy + r + 14, text, mark == UI_DL_FAILED ? COLOR_ERROR : COLOR_TEXT);
+}
+
 #define PILL_H 32
 #define PILL_ICON_R 10
 
@@ -81,6 +107,11 @@ int uiDrawDownloadsPill(int right, const char *label, double fraction)
 static void drawRow(const UiDownloadRow *r, int x, int y, int w, bool selected, bool confirm, int index)
 {
     int h = UI_DOWNLOAD_ROW_H - ROW_GAP;
+    if (r->header) {  // A section's heading, at the bottom of its row.
+        fontDraw(FONT_BOLD, 15, x + 4, y + h - 26, r->title, COLOR_ACCENT);
+        gfxFillRect(x, y + h - 4, w, 1, COLOR_SURFACE_HI);
+        return;
+    }
     gfxFillRoundRect(x, y, w, h, 12, selected ? COLOR_SURFACE_HI : COLOR_SURFACE);
     if (selected)
         gfxFillRoundRect(x, y + 12, 4, h - 24, 2, COLOR_ACCENT);
@@ -89,7 +120,7 @@ static void drawRow(const UiDownloadRow *r, int x, int y, int w, bool selected, 
     int state_w = fontTextWidth(FONT_REGULAR, 17, r->state);
     if (state_w > tw / 2)
         state_w = tw / 2;
-    fontDrawClipped(FONT_BOLD, 20, tx, y + 12, tw - state_w - 16, r->title, COLOR_TEXT);
+    fontDrawClipped(FONT_BOLD, 20, tx, y + 12, tw - state_w - 16, r->title, r->record ? COLOR_DIM : COLOR_TEXT);
     fontDrawClipped(FONT_REGULAR, 16, tx, y + 40, tw - state_w - 16, r->detail, COLOR_DIM);
     Color state_color = r->failed ? COLOR_ERROR : r->done ? COLOR_ACCENT : COLOR_DIM;
     fontDrawClipped(FONT_REGULAR, 17, tx + tw - state_w, y + 14, state_w, r->state, state_color);
@@ -107,21 +138,14 @@ static void drawRow(const UiDownloadRow *r, int x, int y, int w, bool selected, 
     uiLibraryAddHit(x + w - DELETE_W, y, DELETE_W, h, LIBHIT_DOWNLOAD_DELETE, index, 0);
 }
 
-void uiDrawDownloads(const UiDownloadRow *rows, int count, const Scroll *s, int confirm, const char *summary,
-                     const char *empty)
+void uiDrawDownloadsTab(const UiDownloadRow *rows, int count, const Scroll *s, int confirm, const char *summary,
+                        const char *empty)
 {
-    int x = (GFX_WIDTH - PANEL_W) / 2, y = (UI_FOOTER_Y + UI_TAB_BAR_H - PANEL_H) / 2;
-    gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), UI_DIM_ALPHA);
-    uiLibraryAddHit(0, 0, GFX_WIDTH, GFX_HEIGHT, LIBHIT_CLOSE, 0, 0);
-    gfxFillRoundRect(x, y, PANEL_W, PANEL_H, 16, COLOR_BG);
-    uiLibraryAddHit(x, y, PANEL_W, PANEL_H, LIBHIT_PANEL, 0, 0);
-    fontDraw(FONT_BOLD, 28, x + PANEL_PAD, y + PANEL_PAD - 4, "Downloads", COLOR_TEXT);
-    fontDrawClipped(FONT_REGULAR, 17, x + PANEL_PAD + 180, y + PANEL_PAD + 4, PANEL_W - 2 * PANEL_PAD - 180, summary,
-                    COLOR_DIM);
-    int lx = x + PANEL_PAD, ly = y + HEADER_H, lw = PANEL_W - 2 * PANEL_PAD;
+    int lx = MARGIN, ly = LIST_Y, lw = GFX_WIDTH - 2 * MARGIN;
     int list_h = UI_DOWNLOAD_ROWS * UI_DOWNLOAD_ROW_H;
+    fontDrawClipped(FONT_REGULAR, 17, lx, UI_TAB_BAR_H + 18, lw, summary, COLOR_DIM);
     if (count == 0) {
-        fontDrawCentered(FONT_REGULAR, 19, x + PANEL_W / 2.0f, ly + list_h / 2.0f, empty, COLOR_DIM);
+        fontDrawCentered(FONT_REGULAR, 19, GFX_WIDTH / 2.0f, ly + list_h / 2.0f, empty, COLOR_DIM);
         return;
     }
     gfxSetClip(lx, ly, lw, list_h);

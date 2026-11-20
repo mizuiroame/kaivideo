@@ -57,7 +57,7 @@ The screenshots show made-up films, series and channels.
   **picture of that moment**.
 - **Touch**: lists follow your finger and glide on when you let go, as on a
   phone; a tap stops them.
-- Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
+- Plays **MP4**, **M4V**, **MKV**, **WebM** and **MPEG-TS** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second, and **AV1 in
   4K**.
@@ -183,7 +183,8 @@ each has its own page:
 
 Once you're signed in, your library appears. **X** on the library's screens,
 or the button next to KaiVideo's name, goes through the SD card and each
-server you're signed in to; the server shown wears its color. Sign in to
+server you're signed in to; the server shown wears its color (its own, or
+another chosen under **Color** on its page in Settings). Sign in to
 another server and it's added; sign out and its videos go.
 
 A server's libraries are the tabs, by their own names (like Movies and
@@ -269,9 +270,18 @@ their server's names. With no library folder chosen yet, `sdmc:/KaiVideo
 Downloads` becomes it. The server's subtitle file comes with the video;
 subtitles inside the video are in it already.
 
-**+** > **Downloads** shows them all, with how far each has come: **A** plays
-one that's whole, or pauses one and lets it go on; **X** twice deletes it from
-the card. A download cut off (the network, the console asleep, KaiVideo
+The **Downloads** tab (with **ZL** / **ZR**, once something was downloaded or
+a server is signed in; **+** > **Downloads**, or a tap on the pill at the top,
+goes there too) shows them in three parts:
+
+- **Downloading**: how far each has come. **A** pauses one or lets it go on
+  (or tries a failed one again); **X** twice cancels it.
+- **On the card**: **A** plays it; **X** twice deletes its file and keeps it
+  in the list as a record.
+- **Deleted from the card**: **A** downloads it again; **X** takes it off the
+  list; **Y** clears all of them.
+
+A download cut off (the network, the console asleep, KaiVideo
 closed) goes on from where it stopped. Downloads wait while a video from a
 server plays, so it keeps the network to itself, and one that won't fit on the
 card says how much room it needs.
@@ -286,8 +296,15 @@ and what you finish are kept on the console and told to its server, for the
 user who downloaded it, as soon as the server can be reached again. If you
 watched it somewhere else since, what the server says stays.
 
-Only videos the console plays as they are can be downloaded for now; a
-download the server converts first is planned.
+What the console can't play as it is (4K HEVC, HDR and the like) is
+downloaded **converted by your server**, at the **Server video quality** you
+chose (8 Mb/s on Auto: a two-hour film is then about 7 GB). Its parts come in
+MPEG-TS and are rewrapped at the end into an MKV, without converting them again,
+so jumps in it land where they should.
+Its panel says **Download converted**, and Downloads shows how far the
+conversion has come; a conversion cut off goes on from its last whole part.
+A converted download keeps the server's sound track, and its subtitles come as
+an `.srt` file next to it (text ones; picture subtitles aren't converted).
 
 ### Where KaiVideo keeps its files
 
@@ -383,8 +400,7 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 
 ## Plans
 
-- **Downloads** of videos the server converts first (4K, HDR), and network
-  folders (SMB, WebDAV, FTP, SFTP, HTTP) as libraries.
+- **Network folders** (SMB, WebDAV, FTP, SFTP, HTTP) as libraries.
 - **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
 
