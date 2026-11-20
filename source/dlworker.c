@@ -39,6 +39,8 @@ static struct {
     DownloadList list;
     DlSyncQueue sync;
     bool stop, hold, busy, sync_soon;
+    time_t retry_at;    // Downloads waiting for the network try again then (0: now).
+    int retry_round;    // How many times in a row they found no network.
     DlLog log;
     char current[LIBRARY_PATH_MAX];  // The path being fetched, "" if none.
     volatile bool abort;             // The fetch under way stops (paused, removed, held, stopping).
@@ -139,6 +141,7 @@ typedef struct {
     long long total;  // -1 until known.
     bool checked_room, no_room, write_failed;
     long long room_needed;
+    bool offline;             // It stopped because the place couldn't be reached: it waits, then goes on.
     // A conversion: only whole parts count.
     bool converted;
     int64_t committed;        // Bytes of the whole parts.
@@ -276,9 +279,12 @@ static bool fetchAll(const DlSource *src, const Download *d, Fetch *f, char *err
             continue;
         }
         tries = f->done > offset ? 0 : tries + 1;  // Progress gives it its tries back.
+        if (!ok && src->refused && src->refused())
+            return false;  // Asking again won't change it.
         if (tries >= TRIES) {
             if (!error[0])
                 snprintf(error, error_size, "The server stopped sending it.");
+            f->offline = true;
             return false;
         }
         waitSeconds(RETRY_WAIT_S << tries);
@@ -349,9 +355,12 @@ static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, 
         if (g.abort)
             break;
         tries = f->parts_done > first ? 0 : tries + 1;
+        if (!ok && src->refused && src->refused())
+            return false;
         if (tries >= TRIES) {
             if (!error[0])
                 snprintf(error, error_size, "The server stopped converting it.");
+            f->offline = true;
             return false;
         }
         waitSeconds(RETRY_WAIT_S << tries);
@@ -419,7 +428,22 @@ static bool stillTs(const char *path)
     return first == 0x47;
 }
 
+#define RETRY_FIRST_S 15   // Waiting for the network: tries again after this, doubling,
+#define RETRY_MOST_S 120   // up to this.
 
+// d couldn't reach its place: it waits its turn again, saying why, and the
+// downloads try again in a while. Under the lock.
+static void waitForNetwork(Download *d, const char *why)
+{
+    d->state = DL_QUEUED;
+    snprintf(d->error, sizeof(d->error), "Waiting for the network (%s)", why);
+    int wait = RETRY_FIRST_S << (g.retry_round < 3 ? g.retry_round : 3);
+    g.retry_at = time(NULL) + (wait < RETRY_MOST_S ? wait : RETRY_MOST_S);
+    g.retry_round++;
+    changed();
+}
+
+// Fetches d (a copy; the list may change meanwhile).
 static void runDownload(const Download *d)
 {
     char error[DL_ERROR_MAX];
@@ -474,12 +498,16 @@ static void runDownload(const Download *d)
     if (!now) {
         removeWithExtras(d->path);  // Taken out of the list meanwhile.
     } else if (whole) {
+        g.retry_round = 0;
+        g.retry_at = 0;
         now->state = DL_DONE;
         now->error[0] = '\0';
         if (now->size < 0 || f.converted)
             now->size = f.done;
         g.finished++;
         changed();
+    } else if (error[0] && f.offline && now->state == DL_ACTIVE) {
+        waitForNetwork(now, error);
     } else if (error[0]) {
         setFailed(d->path, error);
     } else if (now->state == DL_ACTIVE) {  // Held, or stopping: it goes on later.
@@ -580,13 +608,15 @@ static void *workerThread(void *arg)
             sendWaiting();
             continue;
         }
-        int next = g.hold ? -1 : dlListNext(&g.list);
+        time_t waiting = g.retry_at - time(NULL);  // For the network: > 0 while it waits.
+        int next = g.hold || waiting > 0 ? -1 : dlListNext(&g.list);
         if (next < 0 && rewrapOne())
             continue;
         if (next < 0) {
             struct timespec until;
             clock_gettime(CLOCK_REALTIME, &until);
-            until.tv_sec += g.sync.count ? SYNC_EVERY_S : IDLE_WAIT_S;
+            int wait_s = g.sync.count ? SYNC_EVERY_S : IDLE_WAIT_S;
+            until.tv_sec += waiting > 0 && waiting < wait_s ? waiting : wait_s;
             pthread_cond_timedwait(&g.wake, &g.lock, &until);
             continue;
         }
@@ -617,6 +647,11 @@ bool dlWorkerStart(const char *list_file, const char *sync_file, DlLog log)
     dlListInit(&g.list);
     dlSyncInit(&g.sync);
     dlListLoad(&g.list, g.list_file);
+    for (size_t i = 0; i < g.list.count; i++)  // Failed ones get another try: the network may be back.
+        if (g.list.items[i].state == DL_FAILED)
+            g.list.items[i].state = DL_QUEUED;
+    g.retry_at = 0;
+    g.retry_round = 0;
     dlSyncLoad(&g.sync, g.sync_file);
     g.stop = false;
     g.stopping = false;
@@ -816,6 +851,17 @@ void dlWorkerRecord(const char *account, const char *origin, int64_t position_ns
         dlSyncRecord(&g.sync, account, origin, position_ns, played, when);
         dlSyncSave(&g.sync, g.sync_file);
         g.sync_soon = true;
+        pthread_cond_broadcast(&g.wake);
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+void dlWorkerNetworkBack(void)
+{
+    pthread_mutex_lock(&g.lock);
+    if (g.retry_at) {
+        g.retry_at = 0;
+        g.retry_round = 0;
         pthread_cond_broadcast(&g.wake);
     }
     pthread_mutex_unlock(&g.lock);

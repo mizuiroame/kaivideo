@@ -22,8 +22,22 @@ static bool handles(const char *origin)
     return jfIsRemoteLocation(origin);
 }
 
+static bool g_refused;  // The last fetch was refused (download thread only).
+
+static bool refused(void)
+{
+    return g_refused;
+}
+
+// A refusal that asking again won't change: 4xx, except a timeout or "too many".
+static bool isRefusal(long status)
+{
+    return status >= 400 && status < 500 && status != 408 && status != 429;
+}
+
 static void sayStatus(long status, const char *error, char *out, size_t size)
 {
+    g_refused = g_refused || isRefusal(status);
     if (status == HTTP_UNAUTHORIZED || status == HTTP_FORBIDDEN)
         snprintf(out, size, "The server didn't let it be downloaded.");
     else if (status == HTTP_NOT_FOUND)
@@ -38,6 +52,7 @@ static bool fetch(const char *origin, int64_t offset, NetSink sink, void *user, 
                   const volatile bool *cancel, char *error, size_t error_size)
 {
     char url[JF_URL_MAX], auth[JF_AUTH_MAX], range[48], why[NET_ERROR_MAX] = "";
+    g_refused = false;
     if (!jfSyncStreamRequest(origin, url, sizeof(url), auth, sizeof(auth))) {
         snprintf(error, error_size, "Sign in to its server to download it.");
         return false;
@@ -130,6 +145,7 @@ static bool fetchConverted(const char *origin, long long max_bitrate, int first,
     char *url = malloc(JF_URL_MAX + JF_TRANSCODE_URL_MAX), auth[JF_AUTH_MAX];
     NetClient *net = plan && url ? netClientOpen() : NULL;
     bool ok = false;
+    g_refused = false;
     if (!net) {
         snprintf(error, error_size, "The network can't be used.");
     } else if (!jfSyncResolve(origin, max_bitrate, -1, -1, plan, error, error_size, cancel)) {
@@ -189,4 +205,4 @@ static void extras(const char *origin, const char *video_path, bool converted, c
 }
 
 const DlSource DL_SERVER_SOURCE = {.handles = handles, .fetch = fetch, .fetch_converted = fetchConverted,
-                                   .extras = extras};
+                                   .refused = refused, .extras = extras};

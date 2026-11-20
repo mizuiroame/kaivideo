@@ -50,6 +50,7 @@ typedef enum {
     LIBHIT_DOWNLOAD_ROW,     // a: a row of the Downloads panel.
     LIBHIT_DOWNLOAD_DELETE,  // a: its delete button.
     LIBHIT_DOWNLOADS,        // The header's downloads pill: the Downloads panel.
+    LIBHIT_DOWNLOADS_CLEAR,  // The Clear button of the Downloads tab's deleted ones.
 } LibHitKind;
 
 typedef struct {

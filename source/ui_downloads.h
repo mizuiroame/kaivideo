@@ -34,6 +34,7 @@ typedef struct {
     bool done, failed;
     bool header;         // A section's heading ("ON THE CARD · 4"), not a download.
     bool record;         // Deleted from the card, kept as a record: dimmed.
+    const char *action;  // A heading's button at its right ("Clear", Y), or NULL.
 } UiDownloadRow;
 
 // The Downloads tab under the tab bar: the rows (count of them, scrolled as s

@@ -279,7 +279,12 @@ goes there too) shows them in three parts:
 - **On the card**: **A** plays it; **X** twice deletes its file and keeps it
   in the list as a record.
 - **Deleted from the card**: **A** downloads it again; **X** takes it off the
-  list; **Y** clears all of them.
+  list; **Y** (anywhere in the tab) or its **Clear** button clears all of them.
+
+A download that can't reach its server (the console offline, the server off)
+waits and tries again by itself, more and more spaced out up to every two
+minutes, and at once when the server answers again; only one the server
+refuses (gone from it, say) stops as failed.
 
 A download cut off (the network, the console asleep, KaiVideo
 closed) goes on from where it stopped. Downloads wait while a video from a

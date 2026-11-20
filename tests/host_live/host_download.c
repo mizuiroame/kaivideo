@@ -119,6 +119,43 @@ static void downloadWhole(const JfCatalog *c, int item, const char *account)
 
 // Converted by the server at a low bitrate (so it must convert), paused after
 // a few parts and let go on: the parts join into one MPEG-TS file.
+// With NETWORK_TEST set: the server goes away mid-download (whoever runs this
+// stops it when told, and starts it again when told). The download waits for
+// the network instead of failing, and goes on by itself once it's back.
+static void waitsForNetwork(const JfCatalog *c, int item, const char *account)
+{
+    const LibraryItem *it = &c->library.items[item];
+    char path[LIBRARY_PATH_MAX];
+    VideoName name = it->name;
+    snprintf(name.title, sizeof(name.title), "%.100s offline", it->name.title);
+    dlPathFor(&name, "mkv", "Video", ROOT, path, sizeof(path));
+    expect(dlWorkerAdd(it->path, account, &name, it->runtime_ns, path, 400000) >= 0, "a conversion to cut off");
+    Download d;
+    for (int i = 0; i < WAIT_SECONDS * 10 && !(stateOf(path, &d) && d.parts_done >= 2); i++)
+        usleep(STEP_US);
+    printf("STOP THE SERVER NOW (at part %d of %d)\n", d.parts_done, d.part_count);
+    fflush(stdout);
+    bool waiting = false;
+    for (int i = 0; i < 300 * 10 && !waiting; i++) {
+        waiting = stateOf(path, &d) && d.state == DL_QUEUED && !strncmp(d.error, "Waiting for the network", 23);
+        usleep(STEP_US);
+    }
+    printf("        %s\n", d.error);
+    expect(waiting, "without the server, it waits for the network (not failed)");
+    printf("START THE SERVER NOW\n");
+    fflush(stdout);
+    bool done = false;
+    for (int i = 0; i < 600 * 10 && !done; i++) {
+        done = stateOf(path, &d) && d.state == DL_DONE;
+        if (stateOf(path, &d) && d.state == DL_FAILED)
+            break;
+        usleep(STEP_US);
+    }
+    if (!done)
+        printf("        state %d: %s\n", d.state, d.error);
+    expect(done && d.parts_done == d.part_count, "once it's back, it went on by itself and came whole");
+}
+
 static void convertWhole(const JfCatalog *c, int item, const char *account)
 {
     const LibraryItem *it = &c->library.items[item];
@@ -279,6 +316,11 @@ static void tryServer(ServerKind kind, const char *prefix)
                    dlAccountIsKind(account, kind == SERVER_PLEX ? "plex" : "emby"),
                "who it's downloaded as");
         downloadWhole(&c, small, account);
+        if (getenv("NETWORK_TEST")) {
+            waitsForNetwork(&c, large, account);
+            jfCatalogFree(&c);
+            return;
+        }
         pauseAndGoOn(&c, large, account);
         convertWhole(&c, large, account);
         tellServer(c.library.items[small].path, account);

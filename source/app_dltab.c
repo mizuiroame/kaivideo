@@ -1,7 +1,7 @@
 // The Downloads tab: what's on its way (A pauses or lets it go on, X twice
 // cancels it), what's on the card (A plays, X twice deletes the file and keeps
 // it as a record), and what was deleted from the card (A downloads it again,
-// X takes it off the list, Y clears all of them).
+// X takes it off the list; Y, anywhere, or Clear clears all of them).
 #include <stdio.h>
 #include <string.h>
 
@@ -171,12 +171,13 @@ static void pressX(App *app, int row, const Download *found, uint64_t now)
     appDownloadsRefresh(app);
 }
 
-// Y under Deleted: the whole record goes (nothing is on the card for them).
-static void pressY(App *app, const Download *found, uint64_t now)
+// Y (or Clear), anywhere in the tab: the record of deleted ones goes
+// (nothing is on the card for them).
+static void clearDeleted(App *app, uint64_t now)
 {
-    if (found->state != DL_DELETED)
-        return;
     int n = dlWorkerForgetDeleted();
+    if (n == 0)
+        return;
     char message[96];
     snprintf(message, sizeof(message), "Cleared %d deleted download%s from the list.", n, n == 1 ? "" : "s");
     appShowMessage(app, message, now);
@@ -203,8 +204,8 @@ void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t no
         activate(app, d, now);
     else if (d && (pressed & HidNpadButton_X))
         pressX(app, s->cursor, d, now);
-    else if (d && (pressed & HidNpadButton_Y))
-        pressY(app, d, now);
+    if (pressed & HidNpadButton_Y)
+        clearDeleted(app, now);
     if (touch.type == TOUCH_DRAG) {
         appLibraryDrag(app, touch, now);
         return;
@@ -220,22 +221,28 @@ void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t no
     } else if (hit.kind == LIBHIT_DOWNLOAD_DELETE && tapped) {
         s->cursor = hit.a;
         pressX(app, hit.a, tapped, now);
+    } else if (hit.kind == LIBHIT_DOWNLOADS_CLEAR) {
+        clearDeleted(app, now);
     }
 }
 
 const char *appDownloadsHelp(const App *app)
 {
     static Rows r;
+    static char help[160];
     buildRows(app, &r);
     const Download *d = downloadAt(app, &r, app->downloads_scroll.cursor);
-    if (!d)
-        return "[ZL][ZR] tabs  [-] settings  [+] menu";
-    switch (sectionOf(d)) {
-    case SECTION_CARD: return "[A] play  [X] delete from the card  [ZL][ZR] tabs  [+] menu";
-    case SECTION_DELETED: return "[A] download again  [X] take off the list  [Y] clear all deleted  [ZL][ZR] tabs";
-    default: return d->state == DL_FAILED ? "[A] try again  [X] cancel  [ZL][ZR] tabs  [+] menu"
-                                          : "[A] pause / go on  [X] cancel  [ZL][ZR] tabs  [+] menu";
+    const char *row = "";
+    if (d) {
+        switch (sectionOf(d)) {
+        case SECTION_CARD: row = "[A] play  [X] delete from the card  "; break;
+        case SECTION_DELETED: row = "[A] download again  [X] take off the list  "; break;
+        default: row = d->state == DL_FAILED ? "[A] try again  [X] cancel  " : "[A] pause / go on  [X] cancel  "; break;
+        }
     }
+    snprintf(help, sizeof(help), "%s%s[ZL][ZR] tabs  [+] menu", row,
+             r.in_section[SECTION_DELETED] ? "[Y] clear deleted  " : "");
+    return help;
 }
 
 // --- Drawing ---
@@ -259,7 +266,7 @@ static void stateText(const Download *d, char *out, size_t size)
     sizeText(d->done, done, sizeof(done));
     sizeText(d->size, total, sizeof(total));
     switch (d->state) {
-    case DL_QUEUED: snprintf(out, size, "Waiting"); break;
+    case DL_QUEUED: snprintf(out, size, "%s", d->error[0] ? d->error : "Waiting"); break;
     case DL_ACTIVE:
         if (d->finishing)
             snprintf(out, size, "Finishing...");
@@ -326,7 +333,8 @@ void appDownloadsDraw(const App *app)
         }
         Section s = r.section[i];
         snprintf(headings[s], sizeof(headings[s]), "%s \xC2\xB7 %d", SECTION_NAMES[s], r.in_section[s]);
-        rows[i] = (UiDownloadRow){.title = headings[s], .detail = "", .state = "", .progress = -1, .header = true};
+        rows[i] = (UiDownloadRow){.title = headings[s], .detail = "", .state = "", .progress = -1, .header = true,
+                                  .action = s == SECTION_DELETED ? "Clear" : NULL};
     }
     char summary[TEXT_MAX];
     summaryText(app, &r, summary, sizeof(summary));

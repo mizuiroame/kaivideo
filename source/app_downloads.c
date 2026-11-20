@@ -491,7 +491,8 @@ void appDownloadsMarked(App *app, const char *path, bool watched)
 
 void appDownloadsCatalogCame(App *app, ServerKind kind)
 {
-    dlWorkerSyncSoon();  // Its server answers: what waits for it can go.
+    dlWorkerSyncSoon();  // Its server answers: what waits for it can go,
+    dlWorkerNetworkBack();  // and downloads waiting for the network go on.
     if (!app->server_has[kind])
         return;
     const JfCatalog *c = &app->server_catalogs[kind];

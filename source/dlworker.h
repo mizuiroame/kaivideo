@@ -28,6 +28,10 @@ typedef struct {
     // from first on, telling part_done after each whole one. NULL if it makes none.
     bool (*fetch_converted)(const char *origin, long long max_bitrate, int first, NetSink sink, DlPartDone part_done,
                             void *user, const volatile bool *cancel, char *error, size_t error_size);
+    // True if the last fetch failed because the place refused it (the video
+    // is gone, or it may not be downloaded), not because it couldn't be
+    // reached: then trying again later won't help. May be NULL.
+    bool (*refused)(void);
     // What to keep next to the video once it's whole (its subtitles; for a
     // conversion, which leaves them out, a text track inside it too). May be NULL.
     void (*extras)(const char *origin, const char *video_path, bool converted, const volatile bool *cancel);
@@ -76,6 +80,8 @@ void dlWorkerBusy(bool busy);
 void dlWorkerRecord(const char *account, const char *origin, int64_t position_ns, bool played, int64_t when);
 // A server can be reached again: what waits for it is sent now, not at the next try.
 void dlWorkerSyncSoon(void);
+// The network is back (a server answered): downloads waiting for it go on now.
+void dlWorkerNetworkBack(void);
 // How many videos' news wait to be told.
 int dlWorkerSyncWaiting(void);
 // What waits to be told of origin for account, if anything.

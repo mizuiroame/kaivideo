@@ -110,6 +110,14 @@ static void drawRow(const UiDownloadRow *r, int x, int y, int w, bool selected, 
     if (r->header) {  // A section's heading, at the bottom of its row.
         fontDraw(FONT_BOLD, 15, x + 4, y + h - 26, r->title, COLOR_ACCENT);
         gfxFillRect(x, y + h - 4, w, 1, COLOR_SURFACE_HI);
+        if (r->action) {  // Its button: the key and what it does.
+            int bw = uiButtonWidth("Y") + fontTextWidth(FONT_BOLD, 16, r->action) + 30, bh = 32;
+            int bx = x + w - bw, by = y + h - 42;
+            gfxFillRoundRect(bx, by, bw, bh, bh / 2, COLOR_SURFACE_HI);
+            uiDrawButton(bx + 10, by + bh / 2.0f, "Y", COLOR_SURFACE, COLOR_TEXT);
+            fontDrawMiddle(FONT_BOLD, 16, bx + 18 + uiButtonWidth("Y"), by + bh / 2.0f, r->action, COLOR_TEXT);
+            uiLibraryAddHit(bx - 4, by - 6, bw + 8, bh + 12, LIBHIT_DOWNLOADS_CLEAR, index, 0);
+        }
         return;
     }
     gfxFillRoundRect(x, y, w, h, 12, selected ? COLOR_SURFACE_HI : COLOR_SURFACE);

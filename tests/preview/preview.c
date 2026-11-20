@@ -465,16 +465,17 @@ static void downloadsScene(void)
 {
     static const UiDownloadRow ROWS[] = {
         {.title = "DOWNLOADING \xC2\xB7 4", .detail = "", .state = "", .progress = -1, .header = true},
-        {"Dry Creek", "Prairie Road \xC2\xB7 S09E06", "1.1 GB of 2.3 GB", 0.48, false, false, false, false},
-        {"Lamentia", "Rook \xC2\xB7 S01E03", "Waiting", -1, false, false, false, false},
-        {"Pawns", "Rook \xC2\xB7 S01E02", "Paused \xC2\xB7 12%", 0.12, false, false, false, false},
+        {"Dry Creek", "Prairie Road \xC2\xB7 S09E06", "1.1 GB of 2.3 GB", 0.48, false, false, false, false, NULL},
+        {"Lamentia", "Rook \xC2\xB7 S01E03", "Waiting", -1, false, false, false, false, NULL},
+        {"Pawns", "Rook \xC2\xB7 S01E02", "Paused \xC2\xB7 12%", 0.12, false, false, false, false, NULL},
         {"Quiet Harbor (2017)", "Film \xC2\xB7 converted, 8 Mb/s", "The card needs 2.1 GB more free for it.", 0.3, false,
-         true, false, false},
+         true, false, false, NULL},
         {.title = "ON THE CARD \xC2\xB7 2", .detail = "", .state = "", .progress = -1, .header = true},
-        {"Paper Lanterns (1998)", "Film", "4.2 GB", -1, true, false, false, false},
-        {"Ashfall (2010)", "Film \xC2\xB7 converted, 2 Mb/s", "1.3 GB", -1, true, false, false, false},
-        {.title = "DELETED FROM THE CARD \xC2\xB7 1", .detail = "", .state = "", .progress = -1, .header = true},
-        {"Kite Hill (2004)", "Film", "Deleted from the card", -1, false, false, false, true},
+        {"Paper Lanterns (1998)", "Film", "4.2 GB", -1, true, false, false, false, NULL},
+        {"Ashfall (2010)", "Film \xC2\xB7 converted, 2 Mb/s", "1.3 GB", -1, true, false, false, false, NULL},
+        {.title = "DELETED FROM THE CARD \xC2\xB7 1", .detail = "", .state = "", .progress = -1, .header = true,
+         .action = "Clear"},
+        {"Kite Hill (2004)", "Film", "Deleted from the card", -1, false, false, false, true, NULL},
     };
     int count = (int)(sizeof(ROWS) / sizeof(ROWS[0]));
     static LibView view;
@@ -489,11 +490,11 @@ static void downloadsScene(void)
                            "4 downloading \xC2\xB7 2 on the card (5.5 GB) \xC2\xB7 1 deleted \xC2\xB7 2 watched offline, "
                            "told to the server when it's back",
                            "");
-        uiDrawFooterHelp(pass ? "[A] download again  [X] take off the list  [Y] clear all deleted  [ZL][ZR] tabs"
+        uiDrawFooterHelp(pass ? "[A] download again  [X] take off the list  [Y] clear deleted  [ZL][ZR] tabs  [+] menu"
                               : "[A] pause / go on  [X] cancel  [ZL][ZR] tabs  [+] menu");
         save(pass ? "downloads_end" : "downloads");
     }
-    bool rows = false, deletes = false, heading = false, tab = false;
+    bool rows = false, deletes = false, heading = false, tab = false, clear = false;
     for (int y = 0; y < GFX_HEIGHT; y += 4)
         for (int x = 0; x < GFX_WIDTH; x += 8) {
             LibHit hit = uiLibraryTap(x, y);
@@ -502,9 +503,10 @@ static void downloadsScene(void)
             heading = heading || ((hit.kind == LIBHIT_DOWNLOAD_ROW || hit.kind == LIBHIT_DOWNLOAD_DELETE) &&
                                   ROWS[hit.a].header);
             tab = tab || (hit.kind == LIBHIT_TAB && view.tabs[hit.a].kind == TAB_DOWNLOADS);
+            clear = clear || hit.kind == LIBHIT_DOWNLOADS_CLEAR;
         }
-    if (!rows || !deletes || heading || !tab) {
-        printf("TOUCH: downloads: a row, its delete or its tab doesn't answer a tap, or a heading does\n");
+    if (!rows || !deletes || heading || !tab || !clear) {
+        printf("TOUCH: downloads: a row, its delete, Clear or its tab doesn't answer a tap, or a heading does\n");
         g_problems++;
     }
     if (uiLibraryTap(GFX_WIDTH / 2, 668).kind == LIBHIT_DOWNLOAD_ROW) {
