@@ -300,6 +300,11 @@ static void *openThread(void *arg)
         if (prepareRemote(app, audio_index, subtitle_index, false, path, sizeof(path)))
             app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
     }
+    if (!app->open_result && remote && !app->open_cancelled && app->open_plan.transcode_url[0] && !app->open_plan.direct) {
+        // Its pieces didn't come or can't be read: the server's conversion failed, not the format.
+        appLog("  %s", app->open_error);
+        snprintf(app->open_error, sizeof(app->open_error), "The server couldn't convert this video (its log may say why).");
+    }
     if (app->open_result && remote && !liveIsLocation(app->playing_path))
         app->segment_count = jfSyncFetchSegments(app->playing_path, app->segments, JF_SEGMENTS_MAX);
     if (app->open_result && remote)
