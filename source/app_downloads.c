@@ -26,6 +26,7 @@
 // --- The list and the card ---
 
 static void updatePill(const App *app);
+static void refreshAfterTold(void);
 
 static void takeList(App *app)
 {
@@ -175,6 +176,7 @@ void appDownloadsUpdate(App *app, uint64_t now)
 {
     dlWorkerHold(streamingNow(app));
     sayDownloadsWait(app, now);
+    refreshAfterTold();
     dlWorkerBusy(app->player || app->opening);
     if (dlWorkerChanges() != app->dl_changes)
         takeList(app);
@@ -487,6 +489,34 @@ void appDownloadsMarked(App *app, const char *path, bool watched)
         dlWorkerRecord(d->account, d->origin, 0, watched, (int64_t)time(NULL));
         return;
     }
+}
+
+void appDownloadsOverlayOffline(App *app)
+{
+    bool changed = false;
+    for (size_t i = 0; i < app->downloads.count; i++) {
+        const Download *d = &app->downloads.items[i];
+        DlSyncEvent e;
+        if (d->state != DL_DONE || !dlWorkerSyncFind(d->account, d->origin, &e))
+            continue;
+        changed |= applyState(app, d->origin, e.position_ns, e.played, d->runtime_ns);
+        changed |= applyState(app, d->path, e.position_ns, e.played, d->runtime_ns);
+    }
+    if (changed) {
+        saveResume(app);
+        appSaveWatched(app);
+    }
+}
+
+// 3. Once what waited has been told, the servers' libraries are read again: the
+// copy kept was read before, and would show the old place until the next refresh.
+static void refreshAfterTold(void)
+{
+    static int last = -1;
+    int waiting = dlWorkerSyncWaiting();
+    if (last >= 0 && waiting < last && jfSyncAnySignedIn())
+        jfSyncRefresh();
+    last = waiting;
 }
 
 void appDownloadsCatalogCame(App *app, ServerKind kind)

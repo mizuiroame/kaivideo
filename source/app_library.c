@@ -172,6 +172,7 @@ void appLibraryInstallCatalog(App *app, JfCatalog *c)
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
         snprintf(details, sizeof(details), "%s", app->library.items[app->view.details].path);
     jfMergeUserData(c, &app->resume, &app->watched);
+    appDownloadsOverlayOffline(app);  // What was watched offline and isn't on the server yet.
     libraryFree(&app->library);
     app->library = c->library;
     libraryInit(&c->library, JF_ROOT);  // The library is the app's now.

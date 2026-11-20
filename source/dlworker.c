@@ -107,6 +107,11 @@ static void removeWithExtras(const char *path)
     partPath(path, part, sizeof(part));
     remove(part);
     remove(path);
+    char extra[FILE_PATH_MAX];  // What a rewrap stopped midway leaves.
+    snprintf(extra, sizeof(extra), "%s.mkv-new", path);
+    remove(extra);
+    snprintf(extra, sizeof(extra), "%s.old", path);
+    remove(extra);
     snprintf(srt, sizeof(srt), "%s", path);
     char *dot = strrchr(srt, '.');
     if (dot && !strchr(dot, '/')) {
@@ -147,6 +152,9 @@ typedef struct {
     int64_t committed;        // Bytes of the whole parts.
     int parts_done, part_count;
 } Fetch;
+
+static bool syncDue(void);
+static void sendWaiting(void);
 
 static void reportProgress(Fetch *f, bool force)
 {
@@ -300,6 +308,12 @@ static void partDone(void *user, int index, int count)
     f->parts_done = index + 1;
     f->part_count = count;
     reportProgress(f, true);
+    // Between two parts (no request under way): what was watched offline
+    // doesn't wait for a long conversion to end.
+    pthread_mutex_lock(&g.lock);
+    if (syncDue())
+        sendWaiting();
+    pthread_mutex_unlock(&g.lock);
 }
 
 // The card's room for what's left of a conversion, guessed from its length
@@ -443,6 +457,16 @@ static void waitForNetwork(Download *d, const char *why)
     changed();
 }
 
+// Every part of a conversion came, its parts' file is gone and the video's is
+// there: it was made, and KaiVideo stopped before the list said so.
+static bool convertedFinished(const Download *d)
+{
+    char part[FILE_PATH_MAX];
+    struct stat st;
+    partPath(d->path, part, sizeof(part));
+    return d->part_count > 0 && d->parts_done >= d->part_count && stat(part, &st) != 0 && stat(d->path, &st) == 0;
+}
+
 // Fetches d (a copy; the list may change meanwhile).
 static void runDownload(const Download *d)
 {
@@ -457,6 +481,21 @@ static void runDownload(const Download *d)
     Fetch f = {.done = d->done, .total = -1, .converted = d->max_bitrate > 0, .parts_done = d->parts_done,
                .part_count = d->part_count};
     snprintf(f.path, sizeof(f.path), "%s", d->path);
+    if (f.converted && convertedFinished(d)) {  // Stopped (KaiVideo closed) right after its file was made.
+        struct stat st;
+        f.done = f.committed = stat(d->path, &st) == 0 ? (int64_t)st.st_size : d->done;
+        pthread_mutex_lock(&g.lock);
+        Download *now = findPath(d->path);
+        if (now) {
+            now->state = DL_DONE;
+            now->size = now->done = f.done;
+            g.finished++;
+            changed();
+        }
+        g.current[0] = '\0';
+        pthread_mutex_unlock(&g.lock);
+        return;
+    }
     f.file = openPart(d->path, &f.done);
     if (f.converted && f.done != d->done) {  // Its file isn't what the list says: from the first part.
         f.done = 0;
@@ -520,6 +559,23 @@ static void runDownload(const Download *d)
     pthread_mutex_unlock(&g.lock);
 }
 
+// Puts wrapped in path's place; path's old file stays until it's there, and
+// comes back if it can't be. False (wrapped is still there) if it couldn't.
+static bool replaceKeeping(const char *path, const char *wrapped)
+{
+    char old[FILE_PATH_MAX];
+    snprintf(old, sizeof(old), "%s.old", path);
+    remove(old);
+    if (rename(path, old) != 0)
+        return false;
+    if (rename(wrapped, path) != 0) {
+        rename(old, path);
+        return false;
+    }
+    remove(old);
+    return true;
+}
+
 // A whole conversion still in MPEG-TS (downloaded before rewrapping, or when
 // it failed) is rewrapped now. One a call. Under the lock on entry and exit;
 // false if there was none.
@@ -552,7 +608,7 @@ static bool rewrapOne(void)
             now->finishing = false;
         else
             removeWithExtras(path);  // Taken out of the list meanwhile.
-        if (ok && now && !g.busy && remove(path) == 0 && rename(wrapped, path) == 0) {
+        if (ok && now && !g.busy && replaceKeeping(path, wrapped)) {
             struct stat st;
             if (stat(path, &st) == 0)
                 now->size = now->done = (int64_t)st.st_size;

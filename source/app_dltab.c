@@ -42,7 +42,7 @@ static void buildRows(const App *app, Rows *r)
         r->in_section[sectionOf(&app->downloads.items[i])]++;
     r->count = 0;
     for (int s = 0; s < SECTION_COUNT; s++) {
-        if (!r->in_section[s] || r->count >= ROWS_MAX)
+        if (!r->in_section[s] || r->count + 2 > ROWS_MAX)
             continue;
         r->download[r->count] = -1;
         r->section[r->count++] = (Section)s;
@@ -88,13 +88,26 @@ static void settle(Scroll *s, const Rows *r, int dir)
     s->offset = 0;
 }
 
+// The row of the download whose X was pressed once, if it's still there as it
+// was then; -1 (and the question dropped) if it moved to another part or went.
+static int confirmedRow(App *app, const Rows *r)
+{
+    if (app->downloads_confirm < 0)
+        return -1;
+    for (int i = 0; i < r->count; i++) {
+        const Download *d = downloadAt(app, r, i);
+        if (d && !strcmp(d->path, app->downloads_confirm_path) && (int)sectionOf(d) == app->downloads_confirm_state)
+            return app->downloads_confirm = i;
+    }
+    return app->downloads_confirm = -1;
+}
+
 void appDownloadsTabChanged(App *app)
 {
     static Rows r;
     buildRows(app, &r);
     settle(&app->downloads_scroll, &r, 1);
-    if (!downloadAt(app, &r, app->downloads_confirm))
-        app->downloads_confirm = -1;
+    confirmedRow(app, &r);
 }
 
 void appDownloadsOpen(App *app, uint64_t now)
@@ -148,8 +161,12 @@ static void pressX(App *app, int row, const Download *found, uint64_t now)
 {
     Download d = *found;
     Section section = sectionOf(&d);
-    if (section != SECTION_DELETED && app->downloads_confirm != row) {
+    bool same = app->downloads_confirm >= 0 && !strcmp(app->downloads_confirm_path, d.path) &&
+                app->downloads_confirm_state == (int)section;
+    if (section != SECTION_DELETED && !same) {
         app->downloads_confirm = row;
+        snprintf(app->downloads_confirm_path, sizeof(app->downloads_confirm_path), "%s", d.path);
+        app->downloads_confirm_state = (int)section;
         appShowMessage(app, section == SECTION_CARD ? "Press X again to delete it from the card."
                                                     : "Press X again to cancel it.",
                        now);
@@ -206,6 +223,8 @@ void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t no
         pressX(app, s->cursor, d, now);
     if (pressed & HidNpadButton_Y)
         clearDeleted(app, now);
+    if (pressed & (HidNpadButton_A | HidNpadButton_X | HidNpadButton_Y))
+        buildRows(app, &r);  // A press may have changed the list: a tap goes by the rows now.
     if (touch.type == TOUCH_DRAG) {
         appLibraryDrag(app, touch, now);
         return;

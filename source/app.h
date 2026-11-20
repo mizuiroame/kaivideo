@@ -147,7 +147,9 @@ struct App {
     DownloadList downloads;     // A copy of the download thread's list.
     unsigned dl_changes, dl_finished;  // What the thread's counts were when it was taken.
     Scroll downloads_scroll;    // The Downloads tab's rows (app_dltab.c).
-    int downloads_confirm;      // The row whose X was pressed once, -1 for none.
+    int downloads_confirm;      // The row whose X was pressed once (drawn red), -1 for none,
+    char downloads_confirm_path[LIBRARY_PATH_MAX];  // and its download's file, so a second X is for it.
+    int downloads_confirm_state;                     // In the part of the tab it was in then.
     // The server's video being opened or played comes from its download on the card: its file, else "".
     char open_copy[LIBRARY_PATH_MAX];
 };
@@ -270,6 +272,9 @@ void appDownloadsMarked(App *app, const char *path, bool watched);
 // A server's library came (kind): downloads of it take what it says of them,
 // unless they were watched here since; what waits to be told goes now.
 void appDownloadsCatalogCame(App *app, ServerKind kind);
+// After a server's library replaced resume points and watched marks: those of
+// downloads watched offline, not yet told to their server, are put back.
+void appDownloadsOverlayOffline(App *app);
 // Downloads on the card take their server's names (the card's library, built again).
 void appDownloadsNameLibrary(const App *app, Library *lib);
 // Takes the download thread's list again (after asking it something).

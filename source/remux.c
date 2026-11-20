@@ -11,6 +11,7 @@
 #define PROGRESS_EVERY 500  // Packets between reports.
 #define STEP_EVERY 20000    // Packets between steps in the log.
 #define OWN_STACK (2 * 1024 * 1024)
+#define HELD_MAX 256        // Packets kept until the first picture's packet says where times begin.
 
 static RemuxLog g_log;
 
@@ -115,11 +116,41 @@ static void finish(Remux *r)
     free(r->last_dts);
 }
 
+static bool isPicture(const Remux *r, const AVPacket *pkt)
+{
+    return pkt->stream_index < (int)r->in->nb_streams && r->map[pkt->stream_index] >= 0 &&
+           r->in->streams[pkt->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO;
+}
+
+// Times begin at the first picture packet's decode time (before its display
+// time when the video has B-frames): it's kept, keyframe and all.
+static void shiftFrom(Remux *r, const AVPacket *pkt)
+{
+    int64_t t = pkt->dts != AV_NOPTS_VALUE ? pkt->dts : pkt->pts;
+    if (t != AV_NOPTS_VALUE)
+        r->shift = av_rescale_q(t, r->in->streams[pkt->stream_index]->time_base, AV_TIME_BASE_Q);
+}
+
+// Writes the packets held while the start wasn't known. False if writing failed.
+static bool writeHeld(Remux *r, AVPacket **held, int *count)
+{
+    bool ok = true;
+    for (int i = 0; i < *count; i++) {
+        ok = ok && writePacket(r, held[i]);
+        av_packet_free(&held[i]);
+    }
+    *count = 0;
+    return ok;
+}
+
 // Copies every packet. False if it stopped (cancel) or failed.
 static bool copyPackets(Remux *r, const volatile bool *cancel, RemuxProgress progress, void *user, char *error,
                         size_t error_size)
 {
     AVPacket *pkt = av_packet_alloc();
+    AVPacket *held[HELD_MAX];
+    int held_count = 0;
+    bool started = false;  // The first picture packet came: times are known.
     int64_t size = r->in->pb ? avio_size(r->in->pb) : -1;
     bool ok = pkt != NULL;
     for (long n = 0; ok; n++) {
@@ -137,7 +168,20 @@ static bool copyPackets(Remux *r, const volatile bool *cancel, RemuxProgress pro
             ok = false;
             break;
         }
-        ok = writePacket(r, pkt);
+        if (!started && isPicture(r, pkt)) {
+            started = true;
+            shiftFrom(r, pkt);
+            ok = writeHeld(r, held, &held_count);
+        } else if (!started && held_count < HELD_MAX) {  // Sound before the picture: kept for now.
+            held[held_count] = av_packet_clone(pkt);
+            ok = held[held_count++] != NULL;
+            av_packet_unref(pkt);
+            continue;
+        } else if (!started) {  // No picture for a long while: the stream's own start will do.
+            started = true;
+            ok = writeHeld(r, held, &held_count);
+        }
+        ok = ok && writePacket(r, pkt);
         if (n == 0)
             STEP("  remux: the first packet written (%d)", ok);
         av_packet_unref(pkt);
@@ -146,6 +190,10 @@ static bool copyPackets(Remux *r, const volatile bool *cancel, RemuxProgress pro
         if (progress && size > 0 && n % PROGRESS_EVERY == 0)
             progress(user, (double)avio_tell(r->in->pb) / (double)size);
     }
+    if (ok)
+        ok = writeHeld(r, held, &held_count);  // A file of sound alone.
+    for (int i = 0; i < held_count; i++)
+        av_packet_free(&held[i]);
     av_packet_free(&pkt);
     return ok;
 }

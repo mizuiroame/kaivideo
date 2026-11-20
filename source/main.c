@@ -24,6 +24,7 @@
 #include "font_regular_ttf.h"
 #include "gfx.h"
 #include "input.h"
+#include "dlworker.h"
 #include "hlsio.h"
 #include "mediafile.h"
 #include "menu.h"
@@ -334,6 +335,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     if (app->opening)
         return false;
     app->open_dismissed = false;
+    dlWorkerBusy(true);  // No rewrap may replace a file now (this may be it).
     thumbsPause(true);  // The decoder is the player's now.
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);

@@ -156,6 +156,35 @@ static void waitsForNetwork(const JfCatalog *c, int item, const char *account)
     expect(done && d.parts_done == d.part_count, "once it's back, it went on by itself and came whole");
 }
 
+static bool serverState(const char *location, JfUserData *out);
+static bool waitTold(const char *account, const char *location);
+
+// With SYNC_TEST set: what's watched offline reaches the server while a long
+// conversion is still on its way (between its parts), not after it.
+static void toldDuringConversion(const JfCatalog *c, int item, const char *account)
+{
+    const LibraryItem *it = &c->library.items[item];
+    char path[LIBRARY_PATH_MAX];
+    VideoName name = it->name;
+    snprintf(name.title, sizeof(name.title), "%.100s sync", it->name.title);
+    dlPathFor(&name, "mkv", "Video", ROOT, path, sizeof(path));
+    dlWorkerAdd(it->path, account, &name, it->runtime_ns, path, 400000);
+    Download d;
+    for (int i = 0; i < WAIT_SECONDS * 10 && !(stateOf(path, &d) && d.parts_done >= 2); i++)
+        usleep(STEP_US);
+    JfUserData before, after;
+    expect(serverState(it->path, &before), "what the server says before");
+    dlWorkerRecord(account, it->path, 77 * S, false, time(NULL) + 2);
+    bool told = waitTold(account, it->path);
+    bool still = stateOf(path, &d) && d.state == DL_ACTIVE;
+    printf("        told at part %d of %d\n", d.parts_done, d.part_count);
+    expect(told && still && serverState(it->path, &after) && after.position_ns / S == 77,
+           "told while the conversion was still on its way");
+    dlWorkerRecord(account, it->path, before.position_ns, before.played, time(NULL) + 4);  // As it was.
+    expect(waitTold(account, it->path), "put back as it was");
+    dlWorkerRemove(path);
+}
+
 static void convertWhole(const JfCatalog *c, int item, const char *account)
 {
     const LibraryItem *it = &c->library.items[item];
@@ -316,6 +345,11 @@ static void tryServer(ServerKind kind, const char *prefix)
                    dlAccountIsKind(account, kind == SERVER_PLEX ? "plex" : "emby"),
                "who it's downloaded as");
         downloadWhole(&c, small, account);
+        if (getenv("SYNC_TEST")) {
+            toldDuringConversion(&c, large, account);
+            jfCatalogFree(&c);
+            return;
+        }
         if (getenv("NETWORK_TEST")) {
             waitsForNetwork(&c, large, account);
             jfCatalogFree(&c);
@@ -412,7 +446,9 @@ int main(int argc, char **argv)
     dlWorkerStop();
     DownloadList kept;
     dlListInit(&kept);
-    expect(dlListLoad(&kept, "/tmp/kv_dl.txt") && kept.count == (with_plex ? 4u : 2u), "the list is kept on the card");
+    bool partial = getenv("SYNC_TEST") || getenv("NETWORK_TEST");  // They stop after their own test.
+    expect(dlListLoad(&kept, "/tmp/kv_dl.txt") && (partial || kept.count == (with_plex ? 4u : 2u)),
+           "the list is kept on the card");
     dlListFree(&kept);
     jfSyncStop();
     printf("%d failures\n", g_failures);
