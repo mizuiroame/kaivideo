@@ -206,8 +206,8 @@ void uiDrawAbout(const char *version)
 {
     static const char *const LINES[] = {
         "A video player for Switch 2 homebrew on kaiHEN.",
-        "Plays MP4, MKV and WebM from your SD card or a Jellyfin or Plex server, with",
-        "sound tracks, subtitles and a library of your films and series.",
+        "Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or",
+        "Plex server, with sound tracks, subtitles and a library of your films and series.",
         "",
         "",
         "Free and open source under the MIT license; FFmpeg under the LGPL.",

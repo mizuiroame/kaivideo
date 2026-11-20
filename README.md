@@ -4,8 +4,10 @@ An **open-source video player** for **Switch 2** running
 [kaiHEN](https://github.com/ouncebrew/kaihen), in the spirit of
 [KaiPlayer](https://github.com/mizuiroame/kaiplayer) and
 [KaiRadio](https://github.com/mizuiroame/kairadio). Play the videos on your
-microSD card or your **[Jellyfin](https://jellyfin.org/) server**, as a library
-of films and series, with the console's own hardware video decoder.
+microSD card or on your own media server, **[Jellyfin](https://jellyfin.org/)**,
+**[Emby](https://emby.media/)** or **[Plex](https://www.plex.tv/)** (one of
+them or all three), as a library of films and series, with the console's own
+hardware video decoder.
 
 ![Home](docs/screenshots/home.png)
 
@@ -13,7 +15,7 @@ of films and series, with the console's own hardware video decoder.
 |----------|--------------|-----------|
 | ![A series' page](docs/screenshots/series.png) | ![The next episode's card](docs/screenshots/up_next.png) | ![The subtitles list](docs/screenshots/subtitles.png) |
 
-| Films | Settings | A video on Jellyfin |
+| Films | Settings | A video on a server |
 |-------|----------|---------------------|
 | ![Films](docs/screenshots/films.png) | ![Settings](docs/screenshots/settings.png) | ![A video's details](docs/screenshots/details.png) |
 
@@ -34,19 +36,24 @@ The screenshots show made-up films, series and channels.
   and **Series** show them all, a series opens on its seasons and episodes,
   and **Search** finds a title by name. Cards show a **picture from the
   video**, taken by the console's decoder in the background the first time.
-- **Settings**: themes and accent colors, your own **background** image,
-  and an About page.
-- **Jellyfin**: browse your server with the same screens, sign in with Quick
-  Connect or a password, and play its videos over your network. What the
-  console plays as it is plays from the original file; 4K, HDR and the rest
-  are converted by your server, at the quality you choose. Your libraries
-  are tabs, your **favorites** have a row on Home, **Skip intro** and **Skip
-  credits** come up where the server marked them, dragging the bar shows a
-  **picture of that moment**, and **picture subtitles** (PGS, VobSub) are
-  drawn onto the video by the server. **Live TV** has its own tab with a
-  **guide** of the next hours; a channel with a stream of its own plays
-  straight from it, with its own sound tracks and subtitles. What you watch
-  stays in sync with your other devices. See [Jellyfin](#jellyfin).
+- **Settings** in pages: the **Library** (the card's folder), each server,
+  **Playback**, **Display** (themes, accent colors, your own **background**
+  image) and About.
+- **Your media server: Jellyfin, Emby and Plex**, side by side. Sign in to one
+  or all of them, and **X** goes through the SD card and each server, each
+  with its own color; every one has the same screens. What the console plays
+  as it is plays from the original file; 4K, HDR and the rest are converted
+  by your server, at the quality you choose. Your server's libraries are
+  tabs, your **favorites** have a row on Home, **Skip intro** and **Skip
+  credits** come up where the server marked them, and **picture subtitles**
+  (PGS, VobSub) are drawn onto the video by the server. What you watch stays
+  in sync with your other devices. See [Media servers](#media-servers).
+- **Live TV** from Jellyfin has its own tab with a **guide** of the next
+  hours; a channel with a stream of its own plays straight from it, with its
+  own sound tracks and subtitles. On Jellyfin, dragging the bar shows a
+  **picture of that moment**.
+- **Touch**: lists follow your finger and glide on when you let go, as on a
+  phone; a tap stops them.
 - Plays **MP4**, **M4V**, **MKV** and **WebM** files from your card.
 - **Hardware video decoding** with the console's decoder: **H.264**, **VP9**,
   **AV1** and **VP8**, tried up to 1080p at 60 frames per second, and **AV1 in
@@ -152,20 +159,31 @@ kept:
 > means restarting the console, and kaiHEN has to be started again after
 > that.
 
-### Jellyfin
+### Media servers
 
-1. In **Settings** (**−**), open **Jellyfin** and choose **Find servers on
-   this network**, or type your server's address under **Server**, like
-   `192.168.0.10:8096`. **Test the connection** says whether it answers, or
-   which step failed: the name, the port, the time it took, the certificate.
-2. Choose **Sign in with a code**: a code appears. In Jellyfin on your phone
-   or computer, open your profile, choose **Quick Connect** and enter it. Or
-   choose **Sign in with a password** and type your user name and password
-   (the password isn't kept).
-3. Your library appears. **X** on the library's screens, or the button next
-   to KaiVideo's name, changes between Jellyfin and the SD card.
+KaiVideo works with **Jellyfin**, **Emby** and **Plex**. In **Settings** (**−**)
+each has its own page:
 
-Your server's libraries are the tabs, by their own names (like Movies and
+- **Jellyfin**: choose **Find servers on this network**, or type your server's
+  address under **Server**, like `192.168.0.10:8096`. **Test the connection**
+  says whether it answers, or which step failed: the name, the port, the time
+  it took, the certificate. Then choose **Sign in with a code**: in Jellyfin on
+  your phone or computer, open your profile, choose **Quick Connect** and
+  enter the code. Or choose **Sign in with a password** (the password isn't
+  kept).
+- **Emby**: the same, but Emby has no Quick Connect: sign in with your user
+  name and password.
+- **Plex**: choose **Sign in at plex.tv/link**: a code appears. On your phone
+  or computer, go to **plex.tv/link**, signed in to your Plex account, and
+  enter it. KaiVideo finds your account's server and the address of it that
+  answers (your home network first).
+
+Once you're signed in, your library appears. **X** on the library's screens,
+or the button next to KaiVideo's name, goes through the SD card and each
+server you're signed in to; the server shown wears its color. Sign in to
+another server and it's added; sign out and its videos go.
+
+A server's libraries are the tabs, by their own names (like Movies and
 Shows), with Home, Search and Files. Films and episodes open a panel with
 their summary: **A** plays or resumes, **Y** starts from the beginning, **X**
 marks them watched and **R** adds the film, or the episode's series, to your
@@ -173,9 +191,10 @@ marks them watched and **R** adds the film, or the episode's series, to your
 Home. Where you left a video, what you've watched and your favorites go to the
 server and come back from it, so they match your phone and TV.
 
-A server outside your home works over **https**. Its certificate is checked;
-for a server with a certificate of its own making, turn **Certificate check**
-off.
+A Jellyfin or Emby server outside your home works over **https**. Its
+certificate is checked; for a server with a certificate of its own making,
+turn **Certificate check** off. Plex finds its own way in (its own https
+addresses, or Plex's relay).
 
 What the console can play is played from the original file: its picture,
 every sound track (changed almost at once) and its subtitles, styled ones
@@ -183,7 +202,7 @@ included. Everything else, like 4K, HDR or very high bitrates, is converted by
 your server to H.264 up to 1080p, with HDR turned into normal colors. Your
 server needs video transcoding allowed for your account.
 
-**Video quality**, in Settings or in the Playback list (**↑**) while a video
+**Server video quality**, in Settings' Playback page or in the Playback list (**↑**) while a video
 plays, sets the most a video may use, from **Auto** down to 420 kb/s: a
 video over it is converted to fit. On a converted video, changing the
 quality opens it again at the same place, which takes a few seconds; changing
@@ -197,8 +216,19 @@ same place, converted by the server with them drawn on it; another track or
 Off goes back to the original file. KaiVideo never asks for them unless
 chosen, so a film with a picture track marked default still plays as it is.
 
-The sign-in is kept in `config/jellyfin.txt` on the card: **Sign out** ends it on
-the server.
+Each sign-in is kept on the card (`config/jellyfin.txt`, `config/emby.txt`,
+`config/plex.txt`), with each server's library (`config/*_library.txt`), so it
+shows at once the next time. **Sign out** ends it.
+
+What differs between the servers:
+
+- **Live TV**, and pictures of a moment while dragging the bar, come from
+  Jellyfin.
+- **Plex** keeps no favorites of its own: KaiVideo keeps them on the console
+  (`config/plex_library_favorites.txt`). Its intro and credits markers come
+  with Plex Pass. On a video Plex converts, text subtitles inside the file are
+  drawn onto the picture by the server, as picture subtitles are.
+- **Emby** keeps no place to resume in a video's first seconds.
 
 What your server adds, when it's set up for it:
 
@@ -290,7 +320,7 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
 ## Limitations
 
 - **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown from the
-  SD card; text ones are. From Jellyfin, the server draws them on.
+  SD card; text ones are. From a server, the server draws them on.
 - **10-bit AV1** and **12-bit** HEVC can't be played.
 - **HEVC** is decoded on the CPU: the console's decoder service, which
   [libounce](https://github.com/ouncebrew/libounce) uses, doesn't offer it,
@@ -299,17 +329,18 @@ play symbol), or tap or drag the progress bar to go there; **Playback**,
   decoded at 21 frames per second at 16 Mb/s and at 15 at 68 Mb/s, so frames
   are skipped to keep up with the sound.
 - **HDR** on the SD card isn't converted: HDR videos play, with washed-out
-  colors. From Jellyfin, the server converts them.
+  colors. From a server, the server converts them.
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
 - After a jump (**◀** / **▶**, **L** / **R**, the progress bar) the picture
   can stutter for a moment.
-- **Jellyfin**: converted videos start, change quality or picture subtitles,
-  and jump far back, in a few seconds rather than at once, while the server
-  converts from there. Their text subtitles come without styles. It has been
-  tried on a home network, and over https through a test proxy with a
-  certificate of its own; not yet from outside a home network.
+- **Media servers**: converted videos start, change quality or picture
+  subtitles, and jump far back, in a few seconds rather than at once, while
+  the server converts from there. Their text subtitles come without styles.
+  Jellyfin has been tried on a home network, and over https through a test
+  proxy with a certificate of its own; Emby and Plex with test servers on a
+  home network. None yet from outside a home network.
 - **Live TV** has been tried with test channels a server made from video
   files and with free channels' own streams, not with a TV tuner. A channel
   the server converts keeps one sound track. Programs can't be recorded.
@@ -346,15 +377,16 @@ decodes HEVC, 10-bit H.264 and VP9, and H.264 and VP9 over 1080p.
 - **Independent project.** KaiVideo is not affiliated with, endorsed by or
   sponsored by Nintendo Co., Ltd. or its subsidiaries.
 - **Trademarks.** "Nintendo", "Nintendo Switch" and "Switch 2" are trademarks
-  of their owners. They are used here only to say which hardware this program
-  works with. Format names are used only to name the files KaiVideo plays.
+  of their owners, as are "Jellyfin", "Emby" and "Plex". They are used here
+  only to say which hardware and which servers this program works with;
+  KaiVideo is not affiliated with or endorsed by any of them. Format names are used only to name the files KaiVideo plays.
 - **No Nintendo material.** This repository and its releases contain no
   Nintendo code, SDK, firmware, cryptographic keys, games, or graphics or audio
   assets. KaiVideo is built only with open-source tools and libraries.
 - **No circumvention.** KaiVideo does not circumvent any technical protection
   measure. It doesn't play DRM-protected video, and it doesn't download from
   streaming sites. It plays the files that users put on their own card or
-  their own Jellyfin server, and the Live TV channels their own server lists;
+  their own Jellyfin, Emby or Plex server, and the Live TV channels their own server lists;
   it comes with no channels or channel lists of its own.
 - **FFmpeg and FriBidi.** KaiVideo uses FFmpeg, built under the LGPL 2.1 (no
   GPL or non-free parts), and FriBidi, under the same license. The script that
