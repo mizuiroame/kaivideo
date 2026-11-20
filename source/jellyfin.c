@@ -26,6 +26,11 @@ bool jfIsLocation(const char *path)
     return strncmp(path, JF_PREFIX, sizeof(JF_PREFIX) - 1) == 0;
 }
 
+bool jfIsRemoteLocation(const char *path)
+{
+    return jfIsLocation(path) || strncmp(path, PLEX_PREFIX, sizeof(PLEX_PREFIX) - 1) == 0;
+}
+
 static bool isId(const char *text, size_t length)
 {
     if (length == 0 || length >= JF_ID_MAX)
@@ -511,7 +516,7 @@ static bool addItem(JfCatalog *c, const json_t *item)
     const json_t *source = json_array_get(json_object_get(item, "MediaSources"), 0);
     const json_t *stream = source ? videoStream(source) : NULL;
     const char *id = textOf(item, "Id"), *source_id = textOf(source, "Id");
-    if (!stream || !isId(id, strlen(id)) || !isId(source_id, strlen(source_id)) || !growUsers(c))
+    if (!stream || !isId(id, strlen(id)) || !isId(source_id, strlen(source_id)))
         return false;
     VideoName name;
     readName(item, &name);
@@ -535,9 +540,17 @@ static bool addItem(JfCatalog *c, const json_t *item)
         .in_collection = c->adding_collection + 1,
     };
     int64_t size = json_integer_value(json_object_get(source, "Size"));
-    if (!libraryAddRemote(&c->library, location, &name, size, jfParseDate(textOf(item, "DateCreated")), &remote))
+    JfUserData user;
+    readUserData(item, &user);
+    return jfCatalogAddVideo(c, location, &name, size, jfParseDate(textOf(item, "DateCreated")), &remote, &user);
+}
+
+bool jfCatalogAddVideo(JfCatalog *c, const char *location, const VideoName *name, int64_t size, int64_t added,
+                       const LibraryRemote *remote, const JfUserData *user)
+{
+    if (!growUsers(c) || !libraryAddRemote(&c->library, location, name, size, added, remote))
         return false;
-    readUserData(item, &c->users[c->library.count - 1]);
+    c->users[c->library.count - 1] = *user;
     return true;
 }
 
@@ -632,7 +645,7 @@ static void loadLine(JfCatalog *c, char *line)
         return;
     }
     char *v[CACHE_FIELDS];
-    if (splitFields(line, v) < CACHE_FIELDS || !jfIsLocation(v[11]) || !growUsers(c))
+    if (splitFields(line, v) < CACHE_FIELDS || !jfIsRemoteLocation(v[11]) || !growUsers(c))
         return;
     VideoName name = {.is_episode = atoi(v[4]) != 0, .season = atoi(v[5]), .episode = atoi(v[6]), .year = atoi(v[7])};
     snprintf(name.title, sizeof(name.title), "%s", v[12]);
@@ -677,12 +690,12 @@ static void dropRemoteEntries(ResumeList *resume, Watched *watched)
 {
     size_t kept = 0;
     for (size_t i = 0; i < resume->count; i++)
-        if (!jfIsLocation(resume->items[i].path))
+        if (!jfIsRemoteLocation(resume->items[i].path))
             resume->items[kept++] = resume->items[i];
     resume->count = kept;
     kept = 0;
     for (size_t i = 0; i < watched->count; i++)
-        if (!jfIsLocation(watched->paths[i])) {
+        if (!jfIsRemoteLocation(watched->paths[i])) {
             if (kept != i)
                 memcpy(watched->paths[kept], watched->paths[i], WATCHED_PATH_MAX);
             kept++;

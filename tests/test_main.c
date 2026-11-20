@@ -90,6 +90,7 @@ int main(void)
     testSwFrame();
     testAssCompose();
     testJellyfin();
+    testPlex();
     testStats();
     testTrickplay();
     testLiveTv();

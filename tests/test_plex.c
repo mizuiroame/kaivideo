@@ -1,0 +1,159 @@
+// Plex without a server: locations, the sign-in code, the account's servers,
+// libraries turned into a catalog, and what tells the server how far a video went.
+#include <stdio.h>
+#include <string.h>
+
+#include "check.h"
+#include "plex.h"
+
+#define MS_TO_NS 1000000ll
+
+static const char RESOURCES[] =
+    "[{\"name\":\"Shared one\",\"provides\":\"server\",\"clientIdentifier\":\"bbb\",\"accessToken\":\"t2\",\"owned\":false,"
+    "\"connections\":[{\"protocol\":\"https\",\"address\":\"10.0.0.9\",\"port\":32400,\"uri\":\"https://10-0-0-9.x.plex.direct:32400\",\"local\":false,\"relay\":false}]},"
+    "{\"name\":\"A phone\",\"provides\":\"client,player\",\"clientIdentifier\":\"ccc\",\"owned\":true,\"connections\":[]},"
+    "{\"name\":\"Home\",\"provides\":\"server\",\"clientIdentifier\":\"aaa\",\"accessToken\":\"t1\",\"owned\":true,"
+    "\"connections\":["
+    "{\"protocol\":\"https\",\"address\":\"203.0.113.5\",\"port\":32400,\"uri\":\"https://203-0-113-5.x.plex.direct:32400\",\"local\":false,\"relay\":false},"
+    "{\"protocol\":\"https\",\"address\":\"192.168.0.168\",\"port\":32400,\"uri\":\"https://192-168-0-168.x.plex.direct:32400\",\"local\":true,\"relay\":false},"
+    "{\"protocol\":\"https\",\"address\":\"fd00::1\",\"port\":32400,\"uri\":\"https://fd00-1.x.plex.direct:32400\",\"local\":true,\"relay\":false,\"IPv6\":true},"
+    "{\"protocol\":\"https\",\"address\":\"1.2.3.4\",\"port\":8443,\"uri\":\"https://1-2-3-4.x.plex.direct:8443\",\"local\":false,\"relay\":true}]}]";
+
+static const char SECTIONS[] =
+    "{\"MediaContainer\":{\"size\":3,\"Directory\":["
+    "{\"key\":\"1\",\"type\":\"movie\",\"title\":\"Movies\"},"
+    "{\"key\":\"2\",\"type\":\"artist\",\"title\":\"Music\"},"
+    "{\"key\":\"3\",\"type\":\"show\",\"title\":\"TV Shows\"}]}}";
+
+static const char MOVIES[] =
+    "{\"MediaContainer\":{\"size\":2,\"totalSize\":7,\"Metadata\":["
+    "{\"ratingKey\":\"4\",\"type\":\"movie\",\"title\":\"Paper Lanterns\",\"year\":1998,\"summary\":\"A quiet story.\","
+    "\"duration\":120000,\"addedAt\":1763500000,\"viewOffset\":30000,\"lastViewedAt\":1763600000,"
+    "\"Media\":[{\"videoCodec\":\"h264\",\"width\":1920,\"bitrate\":6000,\"container\":\"mkv\",\"videoProfile\":\"high\","
+    "\"Part\":[{\"id\":7,\"key\":\"/library/parts/7/1/file.mkv\",\"size\":41424247}]}]},"
+    "{\"ratingKey\":\"5\",\"type\":\"movie\",\"title\":\"Morning Lanterns\",\"year\":2023,\"viewCount\":2,"
+    "\"Media\":[{\"videoCodec\":\"vp9\",\"width\":3840,\"bitrate\":20000,\"container\":\"webm\","
+    "\"Part\":[{\"id\":8,\"size\":5}]}]},"
+    "{\"ratingKey\":\"6\",\"type\":\"movie\",\"title\":\"No file\"}]}}";
+
+static const char EPISODES[] =
+    "{\"MediaContainer\":{\"size\":1,\"Metadata\":["
+    "{\"ratingKey\":\"9\",\"type\":\"episode\",\"title\":\"Episode 4\",\"grandparentTitle\":\"Rook\","
+    "\"grandparentRatingKey\":\"16\",\"parentIndex\":1,\"index\":4,"
+    "\"Media\":[{\"videoCodec\":\"hevc\",\"width\":1920,\"bitrate\":3000,\"container\":\"mkv\",\"videoProfile\":\"main 10\","
+    "\"Part\":[{\"id\":12,\"size\":100}]}]}]}}";
+
+static void testLocations(void)
+{
+    char item[PLEX_ID_MAX], part[PLEX_ID_MAX], location[64];
+    plexLocationMake(location, sizeof(location), "4", "7");
+    CHECK(!strcmp(location, "plex:4/7"));
+    CHECK(plexIsLocation(location) && jfIsRemoteLocation(location) && !jfIsLocation(location));
+    CHECK(plexLocationIds(location, item, part) && !strcmp(item, "4") && !strcmp(part, "7"));
+    CHECK(!plexLocationIds("plex:4/x", item, part));
+    CHECK(!plexLocationIds("plex:/7", item, part));
+    CHECK(!plexLocationIds("jellyfin:4/7", item, part));
+    CHECK(jfIsRemoteLocation("jellyfin:aa/bb") && !jfIsRemoteLocation("/movies/a.mkv"));
+}
+
+static void testSignIn(void)
+{
+    long long id = 0;
+    char code[8], token[PLEX_TOKEN_MAX] = "";
+    CHECK(plexPinParse("{\"id\":123,\"code\":\"AB12\",\"authToken\":null}", &id, code, sizeof(code)));
+    CHECK(id == 123 && !strcmp(code, "AB12"));
+    CHECK(!plexPinParse("{\"errors\":[]}", &id, code, sizeof(code)));
+    CHECK(!plexPinParse("not json", &id, code, sizeof(code)));
+    CHECK(!plexPinToken("{\"id\":123,\"authToken\":null}", token, sizeof(token)));
+    CHECK(plexPinToken("{\"id\":123,\"authToken\":\"secret\"}", token, sizeof(token)) && !strcmp(token, "secret"));
+
+    char query[PLEX_QUERY_MAX];
+    plexClientQuery("console1", "1.9.0", NULL, query, sizeof(query));
+    CHECK(strstr(query, "X-Plex-Product=KaiVideo") && strstr(query, "X-Plex-Client-Identifier=console1") &&
+          strstr(query, "X-Plex-Version=1.9.0") && !strstr(query, "Token"));
+    plexClientQuery("console1", "1.9.0", "tok", query, sizeof(query));
+    CHECK(strstr(query, "&X-Plex-Token=tok"));
+}
+
+static void testServers(void)
+{
+    PlexServer s[4];
+    int n = plexResourcesParse(RESOURCES, s, 4);
+    CHECK(n == 2);
+    CHECK(!strcmp(s[0].name, "Home") && s[0].owned && !strcmp(s[0].token, "t1") && !strcmp(s[0].id, "aaa"));
+    CHECK(s[0].uri_count == 4);
+    CHECK(!strcmp(s[0].uris[0], "https://192-168-0-168.x.plex.direct:32400"));
+    CHECK(!strcmp(s[0].uris[1], "http://192.168.0.168:32400"));
+    CHECK(!strcmp(s[0].uris[2], "https://203-0-113-5.x.plex.direct:32400"));
+    CHECK(!strcmp(s[0].uris[3], "https://1-2-3-4.x.plex.direct:8443"));
+    CHECK(!strcmp(s[1].name, "Shared one") && !s[1].owned && s[1].uri_count == 1);
+    CHECK(plexResourcesParse("{}", s, 4) == -1);
+    CHECK(plexResourcesParse(RESOURCES, s, 1) == 1 && !strcmp(s[0].name, "Home"));
+}
+
+static void testCatalog(void)
+{
+    JfCatalog c;
+    jfCatalogInit(&c);
+    CHECK(plexCatalogAddSections(&c, SECTIONS) == 2);
+    CHECK(c.library.collection_count == 2 && !strcmp(c.view_ids[0], "1") && !strcmp(c.view_ids[1], "3"));
+    CHECK(c.library.collections[1].kind == COLLECTION_SERIES);
+
+    int total = 0;
+    c.adding_collection = 0;
+    CHECK(plexCatalogAddPage(&c, MOVIES, &total) == 3 && total == 7);
+    c.adding_collection = 1;
+    CHECK(plexCatalogAddPage(&c, EPISODES, NULL) == 1);
+    CHECK(c.library.count == 3);
+
+    const LibraryItem *film = &c.library.items[0];
+    CHECK(!strcmp(film->path, "plex:4/7") && !strcmp(film->name.title, "Paper Lanterns") && film->name.year == 1998);
+    CHECK(film->size == 41424247 && film->added == 1763500000 && film->runtime_ns == 120000 * MS_TO_NS);
+    CHECK(film->blocked == JF_PLAYABLE && film->collection == 0 && !strcmp(film->overview, "A quiet story."));
+    CHECK(c.users[0].position_ns == 30000 * MS_TO_NS && c.users[0].last_played == 1763600000 && !c.users[0].played);
+    CHECK(c.library.items[1].blocked == JF_TOO_LARGE && c.users[1].played);
+
+    const LibraryItem *episode = &c.library.items[2];
+    CHECK(episode->name.is_episode && !strcmp(episode->name.show, "Rook") && episode->name.season == 1 &&
+          episode->name.episode == 4);
+    CHECK(episode->blocked == JF_PLAYABLE && episode->collection == 1);
+    CHECK(episode->series_art && !strcmp(episode->series_art, "plex:16/series"));
+    CHECK(plexCatalogAddPage(&c, "[]", NULL) == -1);
+    jfCatalogFree(&c);
+}
+
+static void testReports(void)
+{
+    char path[256];
+    plexTimelinePath(path, sizeof(path), "4", "playing", 30500 * MS_TO_NS, 120000 * MS_TO_NS);
+    CHECK(!strcmp(path, "/:/timeline?ratingKey=4&key=%2Flibrary%2Fmetadata%2F4&state=playing&time=30500&duration=120000"));
+    plexPlayedPath(path, sizeof(path), "4", true);
+    CHECK(!strcmp(path, "/:/scrobble?identifier=com.plexapp.plugins.library&key=4"));
+    plexPlayedPath(path, sizeof(path), "4", false);
+    CHECK(strstr(path, "/:/unscrobble?"));
+}
+
+static void testSession(void)
+{
+    PlexSession s = {0}, back;
+    snprintf(s.client_id, sizeof(s.client_id), "console1");
+    snprintf(s.token, sizeof(s.token), "tok");
+    snprintf(s.server_name, sizeof(s.server_name), "Home");
+    snprintf(s.server_uri, sizeof(s.server_uri), "http://192.168.0.168:32400");
+    CHECK(plexSessionSave(&s, TMP_ROOT "_plex_session.txt"));
+    CHECK(plexSessionLoad(&back, TMP_ROOT "_plex_session.txt"));
+    CHECK(!strcmp(back.client_id, "console1") && !strcmp(back.token, "tok") && !strcmp(back.server_name, "Home") &&
+          !strcmp(back.server_uri, "http://192.168.0.168:32400") && !back.server_token[0]);
+    remove(TMP_ROOT "_plex_session.txt");
+    CHECK(!plexSessionLoad(&back, TMP_ROOT "_no_such_session.txt") && !back.token[0]);
+}
+
+void testPlex(void)
+{
+    testLocations();
+    testSignIn();
+    testServers();
+    testCatalog();
+    testReports();
+    testSession();
+}

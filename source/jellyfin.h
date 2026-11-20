@@ -16,6 +16,7 @@
 
 #define JF_PREFIX "jellyfin:"
 #define JF_ROOT "jellyfin:"     // The root of a library that comes from the server.
+#define PLEX_PREFIX "plex:"
 #define JF_SERVER_MAX 256
 #define JF_ID_MAX 40
 #define JF_NAME_MAX 64
@@ -48,6 +49,8 @@ typedef struct {
 } JfVideoFacts;
 
 bool jfIsLocation(const char *path);
+// A Jellyfin or Plex location: a video from a server.
+bool jfIsRemoteLocation(const char *path);
 // The item and media source ids in a location. False if it isn't a good one.
 bool jfLocationIds(const char *location, char *item, char *source);
 void jfLocationMake(char *out, size_t size, const char *item, const char *source);
@@ -179,6 +182,10 @@ int jfCatalogSetFavoriteSeries(JfCatalog *c, const char *json);
 // (those that can't be used included), -1 if it can't be read. total, if not
 // NULL, gets TotalRecordCount.
 int jfCatalogAddPage(JfCatalog *c, const char *json, int *total);
+
+// Adds one video with what the server says of it and where the user left it.
+bool jfCatalogAddVideo(JfCatalog *c, const char *location, const VideoName *name, int64_t size, int64_t added,
+                       const LibraryRemote *remote, const JfUserData *user);
 
 // Keeps a catalog between runs, and reads it back (built). False if there's none.
 bool jfCatalogSave(const JfCatalog *c, const char *file);
