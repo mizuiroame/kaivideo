@@ -805,7 +805,7 @@ void appLibraryDraw(App *app, uint64_t now)
     char status[64] = "";
     size_t found;
     if (app->config.use_jellyfin && app->jf.refreshing)
-        snprintf(status, sizeof(status), "Updating from Jellyfin... %d", app->jf.loaded);
+        snprintf(status, sizeof(status), "Updating the servers' libraries... %d", app->jf.loaded);  // All signed in.
     else if (libscanBusy(&found))
         snprintf(status, sizeof(status), "Looking for videos... %zu", found);
     if (app->view.tab == TAB_FILES && app->view.show < 0) {

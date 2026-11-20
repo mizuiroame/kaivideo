@@ -17,6 +17,7 @@
 #define TAB_TEXT_MIDDLE 28.0f
 #define HINT_GAP 9
 #define SOURCE_DOT 12         // The source's color, before its name.
+#define CARD_FADE_ALPHA 225   // A card's picture: how dark its bottom gets under the name.
 #define GLOW_BANDS 12         // The header's glow: this many bands,
 #define GLOW_BAND_H 10        // each this tall,
 #define GLOW_ALPHA 34         // from this strong at the top to nothing.
@@ -540,12 +541,15 @@ static void drawCard(int x, int y, int w, int h, const char *name, const char *t
     if (focused)
         gfxFillRoundRect(x - 4, y - 4, w + 8, h + 8, 14, COLOR_TEXT);
     if (picture) {
-        // The frame, darkened toward the bottom so the name reads over it.
+        // The frame, darkened toward the bottom so the name reads over it: from
+        // nothing at a third of the way down, growing smoothly (no edge where it starts).
         uiLibDrawPicture(picture, x, y, w, h, 10);
         gfxSetClipRound(x, y, w, h, 10);
         int fade_y = y + h / 3, fade_h = h - h / 3;  // Two pixels a step: no bands show.
-        for (int i = 0; i < fade_h; i += 2)
-            gfxBlendRect(x, fade_y + i, w, 2, GFX_RGB(0, 0, 0), (unsigned)(20 + 200 * i / fade_h));
+        for (int i = 0; i < fade_h; i += 2) {
+            float t = (float)i / (float)fade_h;
+            gfxBlendRect(x, fade_y + i, w, 2, GFX_RGB(0, 0, 0), (unsigned)(CARD_FADE_ALPHA * t * t * (3 - 2 * t)));
+        }
         gfxResetClip();
     } else {
         Color top, bottom;
