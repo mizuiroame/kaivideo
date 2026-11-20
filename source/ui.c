@@ -48,14 +48,6 @@ void uiSetSubtitleStyle(int px, unsigned rgb, bool box)
     g_sub_box = box;
 }
 
-size_t uiFirstVisible(size_t cursor, size_t count)
-{
-    if (count <= UI_ROWS || cursor < UI_ROWS / 2)
-        return 0;
-    size_t first = cursor - UI_ROWS / 2;
-    return first + UI_ROWS > count ? count - UI_ROWS : first;
-}
-
 // --- The folder list ---
 
 static void drawFolderIcon(int x, int y)
@@ -116,10 +108,12 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
         fontDrawCentered(FONT_REGULAR, 19, GFX_WIDTH / 2.0f, 340,
                          "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).", COLOR_DIM);
     }
-    size_t first = uiFirstVisible(b->cursor, b->count);
-    for (size_t i = first; i < b->count && i < first + UI_ROWS; i++) {
+    size_t first = (size_t)browserFirst(b, UI_ROWS);
+    int offset = b->free ? b->offset : 0;
+    gfxSetClip(0, UI_LIST_Y, GFX_WIDTH, UI_ROWS * UI_ROW_H);  // Between rows, a finger left it: cut to its place.
+    for (size_t i = first; i < b->count && i <= first + UI_ROWS; i++) {
         const BrowserEntry *e = &b->items[i];
-        int y = UI_LIST_Y + (int)(i - first) * UI_ROW_H;
+        int y = UI_LIST_Y + (int)(i - first) * UI_ROW_H - offset;
         if (i == b->cursor) {
             gfxFillRoundRect(MARGIN - 12, y + 2, GFX_WIDTH - 2 * (MARGIN - 12), UI_ROW_H - 4, 10, COLOR_SURFACE_HI);
             gfxFillRect(MARGIN - 12, y + 14, 3, UI_ROW_H - 28, COLOR_ACCENT);
@@ -147,11 +141,13 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
         if (size[0])
             fontDrawMiddle(FONT_REGULAR, 17, GFX_WIDTH - MARGIN - size_w, y + UI_ROW_H / 2.0f, size, COLOR_DIM);
     }
+    gfxResetClip();
     if (b->count > UI_ROWS) {  // A scrollbar.
         int track_h = UI_ROWS * UI_ROW_H, thumb_h = track_h * UI_ROWS / (int)b->count;
         if (thumb_h < 24)
             thumb_h = 24;
-        int thumb_y = UI_LIST_Y + (int)((long)(track_h - thumb_h) * (long)first / (long)(b->count - UI_ROWS));
+        long at = (long)first * UI_ROW_H + offset, end = (long)(b->count - UI_ROWS) * UI_ROW_H;
+        int thumb_y = UI_LIST_Y + (int)((long)(track_h - thumb_h) * (at < end ? at : end) / end);
         gfxFillRoundRect(GFX_WIDTH - 12, UI_LIST_Y, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(GFX_WIDTH - 12, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
@@ -169,7 +165,8 @@ TapTarget uiTapBrowser(const Browser *b, int x, int y, BrowseMode mode, size_t *
         return TAP_NOTHING;
     if (y < UI_LIST_Y)
         return strcmp(b->path, BROWSER_ROOT) != 0 ? TAP_UP : TAP_NOTHING;
-    size_t first = uiFirstVisible(b->cursor, b->count), index = first + (size_t)((y - UI_LIST_Y) / UI_ROW_H);
+    int offset = b->free ? b->offset : 0;
+    size_t first = (size_t)browserFirst(b, UI_ROWS), index = first + (size_t)((y - UI_LIST_Y + offset) / UI_ROW_H);
     if (y >= UI_LIST_Y + UI_ROWS * UI_ROW_H || index >= b->count)
         return TAP_NOTHING;
     *row = index;
@@ -497,8 +494,10 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
     int current = kind == UI_MENU_PLAYBACK ? playerChapter(p)
                   : kind == UI_MENU_AUDIO  ? playerAudioTrack(p)
                                            : playerSubtitle(p) + 1;
-    for (int i = 0; i < menuVisible(m); i++) {
-        int row = m->first + i, ry = y + MENU_HEAD + i * MENU_ROW_H;
+    int list_top = y + MENU_HEAD, list_bottom = list_top + menuVisible(m) * MENU_ROW_H;
+    gfxSetClip(x, list_top, w, list_bottom - list_top);  // Between rows, a finger left it: cut to its place.
+    for (int i = 0; i <= menuVisible(m) && m->first + i < m->count - m->fixed; i++) {
+        int row = m->first + i, ry = list_top + i * MENU_ROW_H - m->offset;
         if (row == m->cursor)
             drawRowCursor(x, ry, w);
         float cy = ry + MENU_ROW_H / 2.0f;
@@ -515,10 +514,12 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
         fontDrawClipped(FONT_BOLD, 20, x + 52, ry + (MENU_ROW_H - 28) / 2, label_w, menuLabel(p, kind, row),
                         row == current ? COLOR_TEXT : COLOR_DIM);
     }
+    gfxResetClip();
     int list = m->count - m->fixed, shown = menuVisible(m);
     if (list > shown) {  // A scrollbar.
         int track_h = shown * MENU_ROW_H - 8, thumb_h = track_h * shown / list;
-        int thumb_y = y + MENU_HEAD + 4 + (track_h - thumb_h) * m->first / (list - shown);
+        long at = (long)m->first * MENU_ROW_H + m->offset, end = (long)(list - shown) * MENU_ROW_H;
+        int thumb_y = y + MENU_HEAD + 4 + (int)((track_h - thumb_h) * (at < end ? at : end) / end);
         gfxFillRoundRect(x + w - 10, y + MENU_HEAD + 4, 4, track_h, 2, COLOR_TRACK);
         gfxFillRoundRect(x + w - 10, thumb_y, 4, thumb_h, 2, COLOR_FAINT);
     }
@@ -536,7 +537,7 @@ TapTarget uiTapTrackMenu(UiMenuKind kind, const Menu *m, int x, int y, int *row)
     if (y < by + MENU_HEAD)
         return TAP_MENU_BOX;
     if (y < list_bottom) {
-        *row = m->first + (y - by - MENU_HEAD) / MENU_ROW_H;
+        *row = m->first + (y - by - MENU_HEAD + m->offset) / MENU_ROW_H;
         return TAP_MENU_ROW;
     }
     int i = (y - list_bottom - MENU_DIVIDER) / MENU_ROW_H;

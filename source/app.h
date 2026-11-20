@@ -83,10 +83,10 @@ struct App {
     uint64_t started;
     char message[200];
     uint64_t message_until;
-    int drag_rows, drag_cols;
     Kinetic kinetic;            // A list following a finger, or gliding on after it.
     int scroll_target, scroll_row;  // Which list (app_library.c's ScrollTarget), and Home's row across.
     int scroll_view;            // The view it was in: another one stops it.
+    Browser *scroll_browser;    // The file list being scrolled (Files, or choosing a folder).
     bool swallow_tap;           // A press stopped a glide: its tap doesn't open anything.
     bool quit;
     AppMenu app_menu;           // The + menu, or its exit question (app_menu.c).
@@ -173,6 +173,8 @@ void appLibraryToggleSource(App *app, uint64_t now);
 void appLibrarySetSource(App *app, bool jellyfin);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
 void appLibraryInstallCatalog(App *app, JfCatalog *c);
+// A finger drags a list of the library's screens (Live TV's guide included).
+void appLibraryDrag(App *app, TouchEvent touch, uint64_t now);
 // The accent is the server's color while its library (or a video of it) shows,
 // else the one chosen in Display.
 void appApplyViewAccent(const App *app);

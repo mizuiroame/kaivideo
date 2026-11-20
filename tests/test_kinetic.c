@@ -4,7 +4,9 @@
 
 #include "check.h"
 #include "kinetic.h"
+#include "browser.h"
 #include "libview.h"
+#include "menu.h"
 
 #define MS 1000000ull
 #define FRAME (16 * MS)
@@ -71,24 +73,51 @@ static void testScrollPx(void)
 {
     // 23 items, 5 a row: 5 rows of 100 pixels, 3 in view.
     Scroll s = {0};
-    CHECK(!libviewScrollPx(&s, -10, 100, 3, 5, 23));  // At the top already.
-    CHECK(libviewScrollPx(&s, 130, 100, 3, 5, 23) && s.first == 1 && s.offset == 30);
+    CHECK(!scrollPx(&s, -10, 100, 3, 5, 23));  // At the top already.
+    CHECK(scrollPx(&s, 130, 100, 3, 5, 23) && s.first == 1 && s.offset == 30);
     CHECK(s.cursor == 5);                              // Off the top row: onto the first in view, same column.
     s.cursor = 7;
-    CHECK(libviewScrollPx(&s, 50, 100, 3, 5, 23) && s.first == 1 && s.offset == 80);
+    CHECK(scrollPx(&s, 50, 100, 3, 5, 23) && s.first == 1 && s.offset == 80);
     CHECK(s.cursor == 12);                             // Row 1 is mostly gone: row 2.
-    CHECK(!libviewScrollPx(&s, 500, 100, 3, 5, 23) && s.first == 2 && s.offset == 0);  // Stops at the end.
+    CHECK(!scrollPx(&s, 500, 100, 3, 5, 23) && s.first == 2 && s.offset == 0);  // Stops at the end.
     s.cursor = 22;
-    CHECK(libviewScrollPx(&s, -150, 100, 3, 5, 23) && s.first == 0 && s.offset == 50);
+    CHECK(scrollPx(&s, -150, 100, 3, 5, 23) && s.first == 0 && s.offset == 50);
     CHECK(s.cursor == 12);                             // Below the rows in view: up onto the last mostly shown.
     Scroll few = {0};                                  // All in view: nothing to scroll.
-    CHECK(!libviewScrollPx(&few, 40, 100, 3, 5, 9) && few.first == 0 && few.offset == 0);
+    CHECK(!scrollPx(&few, 40, 100, 3, 5, 9) && few.first == 0 && few.offset == 0);
     Scroll none = {0};
-    CHECK(!libviewScrollPx(&none, 40, 100, 3, 5, 0) && none.cursor == 0);
+    CHECK(!scrollPx(&none, 40, 100, 3, 5, 0) && none.cursor == 0);
+}
+
+// The player's lists: only the list moves, not the fixed rows under it.
+static void testMenuScroll(void)
+{
+    Menu m = {0};
+    menuOpen(&m, 30, 4, 0);  // 26 rows to scroll, 4 fixed options.
+    CHECK(menuScrollPx(&m, 120, 48) && m.first == 2 && m.offset == 24 && m.cursor == 2);
+    menuMove(&m, 1);         // A button: the list rests on a row again.
+    CHECK(m.offset == 0 && m.cursor == 3);
+    m.cursor = 28;           // On an option: it stays there while the list moves.
+    CHECK(menuScrollPx(&m, 48, 48) && m.cursor == 28);
+    CHECK(!menuScrollPx(&m, 5000, 48) && m.offset == 0);
+}
+
+// The file list: free where a finger leaves it, the cursor in its middle again after a button.
+static void testBrowserScroll(void)
+{
+    BrowserEntry items[40];
+    memset(items, 0, sizeof(items));
+    Browser b = {.items = items, .count = 40, .cursor = 20};
+    CHECK(browserFirst(&b, 10) == 15 && !b.free);
+    CHECK(browserScrollPx(&b, 70, 58, 10) && b.free && b.first == 16 && b.offset == 12);
+    CHECK(browserFirst(&b, 10) == 16 && b.cursor == 20);
+    CHECK(browserScrollPx(&b, -16 * 58 - 12, 58, 10) && b.first == 0 && b.cursor == 9);
 }
 
 void testKinetic(void)
 {
     testGlide();
     testScrollPx();
+    testMenuScroll();
+    testBrowserScroll();
 }

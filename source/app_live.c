@@ -14,7 +14,6 @@
 
 #define SHOWN_REFRESH_NS (60ull * 1000000000ull)    // While its tab shows: what's on changes.
 #define IDLE_REFRESH_NS (600ull * 1000000000ull)    // Otherwise: just whether there are channels.
-#define LIVE_DRAG_H 84                               // A row of the list.
 
 static void *readGuide(void *arg)
 {
@@ -139,14 +138,8 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         } else if (hit.kind == LIBHIT_LIVE_PROGRAM) {
             tapProgram(app, hit, now);
         }
-    } else if (touch.type == TOUCH_DRAG && touch.start_y >= UI_TAB_BAR_H) {
-        app->drag_rows -= touch.dy;
-        for (; app->drag_rows >= LIVE_DRAG_H; app->drag_rows -= LIVE_DRAG_H)
-            libviewLiveMove(v, app->live.count, 1);
-        for (; app->drag_rows <= -LIVE_DRAG_H; app->drag_rows += LIVE_DRAG_H)
-            libviewLiveMove(v, app->live.count, -1);
-    } else if (touch.type == TOUCH_DRAG_END) {
-        app->drag_rows = 0;
+    } else if (touch.type == TOUCH_DRAG) {
+        appLibraryDrag(app, touch, now);  // The guide follows the finger, as the other lists.
     }
 }
 

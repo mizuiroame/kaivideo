@@ -669,7 +669,6 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
         menuOpen(&app->menu, playerSubtitleCount(p) + 1 + options, options, playerSubtitle(p) + 1);
     }
     app->menu_kind = kind;
-    app->drag_rows = 0;
 }
 
 // Changes one of the Playback list's options, for this video (the speed
@@ -770,10 +769,33 @@ static void tapOutsideMenu(App *app, int x, int y, uint64_t now)
 
 // The open list takes the buttons and touches: up and down move, A
 // chooses, B closes; X and Y go to their list (or close it if it's open).
+// The list follows a finger and glides on, as the library's do; a press
+// stops it (and doesn't choose the row it stopped on), a button takes over.
+static void menuGlide(App *app, uint64_t pressed, TouchEvent *touch, uint64_t now)
+{
+    Menu *m = &app->menu;
+    if (touch->type == TOUCH_PRESS) {
+        app->swallow_tap = kineticGliding(&app->kinetic);
+        kineticStop(&app->kinetic);
+    } else if (touch->type == TOUCH_TAP && app->swallow_tap) {
+        touch->type = TOUCH_NONE;
+    }
+    if (touch->type != TOUCH_PRESS && touch->type != TOUCH_DRAG)
+        app->swallow_tap = false;
+    if (touch->type == TOUCH_DRAG_END && app->kinetic.dragging)
+        kineticRelease(&app->kinetic, now);
+    if (pressed)
+        kineticStop(&app->kinetic);
+    int px = kineticStep(&app->kinetic, now);
+    if (px && !menuScrollPx(m, px, UI_MENU_ROW_H))
+        kineticStop(&app->kinetic);
+}
+
 static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     Menu *m = &app->menu;
     app->overlay_until = now + OVERLAY_NS;  // The bar stays while the list is open.
+    menuGlide(app, pressed, &touch, now);
     if (pressed & BUTTONS_UP) menuMove(m, -1);
     if (pressed & BUTTONS_DOWN) menuMove(m, 1);
     if (menuOnFixed(m) && (pressed & (BUTTONS_LEFT | BUTTONS_RIGHT)))
@@ -810,14 +832,10 @@ static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now
             tapOutsideMenu(app, touch.x, touch.y, now);
     } else if (touch.type == TOUCH_DRAG &&
                uiTapTrackMenu(app->menu_kind, m, touch.start_x, touch.start_y, &row) != TAP_OUTSIDE) {
-        // Dragging scrolls a long list, as on a phone.
-        app->drag_rows -= touch.dy;
-        for (; app->drag_rows >= UI_MENU_ROW_H; app->drag_rows -= UI_MENU_ROW_H)
-            menuMove(m, 1);
-        for (; app->drag_rows <= -UI_MENU_ROW_H; app->drag_rows += UI_MENU_ROW_H)
-            menuMove(m, -1);
-    } else if (touch.type == TOUCH_DRAG_END) {
-        app->drag_rows = 0;
+        // Dragging moves a long list with the finger, as on a phone.
+        bool starting = !app->kinetic.dragging;
+        kineticDrag(&app->kinetic, starting ? 0 : -touch.dy, now);
+        menuScrollPx(m, -touch.dy, UI_MENU_ROW_H);
     }
 }
 

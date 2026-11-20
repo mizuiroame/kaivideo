@@ -8,6 +8,7 @@
 
 #include "home.h"
 #include "library.h"
+#include "scroll.h"
 
 #define LIBVIEW_COLS 5          // Cards across, on Films and Series.
 #define LIBVIEW_GRID_ROWS 3     // Rows of cards in view.
@@ -19,6 +20,7 @@
 #define LIBVIEW_HOME_COL_PX 222  // A Home card and the gap after it.
 #define LIBVIEW_GRID_ROW_PX 186  // A row of cards on Films and Series.
 #define LIBVIEW_LIST_ROW_PX 58   // An episode or a search result.
+#define LIBVIEW_LIVE_ROW_PX 76   // A channel in Live TV's guide.
 #define LIBVIEW_RESULTS 200
 #define LIBVIEW_SEASONS 100  // Seasons are numbered below 100.
 #define LIBVIEW_QUERY_MAX 64
@@ -45,10 +47,7 @@ typedef struct {
 // The grids: Films, Series, then one per server library from GRID_COLLECTIONS.
 typedef enum { GRID_FILMS, GRID_SERIES, GRID_COLLECTIONS, GRID_COUNT = GRID_COLLECTIONS + LIBRARY_COLLECTIONS } LibGrid;
 
-typedef struct {
-    int cursor, first;  // The item under the cursor, the first in view.
-    int offset;         // Pixels into the first row in view: a finger left it between rows (0 on one).
-} Scroll;
+
 
 typedef struct {
     LibTab tab;
@@ -98,12 +97,7 @@ LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int in
 // Home: dx moves across the row, dy between rows.
 void libviewHomeMove(LibView *v, const Home *home, int dx, int dy);
 
-// A finger moves a list's content by px (positive: up, showing later rows; for
-// a row across, left), row_h pixels a row and cols items a row, visible rows
-// in view. It stops at the ends, and the cursor stays on a row in view. False
-// if it was at an end already, or got there.
-bool libviewScrollPx(Scroll *s, int px, int row_h, int visible, int cols, int count);
-// The same for Home's rows (up and down) and for one of them (across).
+// A finger moves Home's rows (up and down), or one of them (across), as scrollPx does.
 bool libviewHomeScrollPx(LibView *v, const Home *home, int px);
 bool libviewHomeRowScrollPx(LibView *v, const Home *home, int row, int px);
 // Films or Series: moves the cursor in a grid of count cards.

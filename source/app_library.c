@@ -446,6 +446,7 @@ static void moveCursor(Browser *b, long delta)
         return;
     long next = (long)b->cursor + delta;
     b->cursor = next < 0 ? 0 : next >= (long)b->count ? b->count - 1 : (size_t)next;
+    b->free = false;  // A button: the list keeps the cursor in its middle again.
 }
 
 // Opens the entry under the cursor: a folder, or (not when picking) a video.
@@ -461,23 +462,6 @@ static void openEntry(App *app, Browser *b, bool picking, uint64_t now)
         if (browserSelectedPath(b, path, sizeof(path)) && appStartVideo(app, path, b->items[b->cursor].name, now))
             appSaveSettings(app);  // The Files tab's folder.
     }
-}
-
-static void dragRows(App *app, int dy, int row_h, void (*move)(App *, int))
-{
-    app->drag_rows -= dy;  // Dragging up shows the rows below, as on a phone.
-    for (; app->drag_rows >= row_h; app->drag_rows -= row_h)
-        move(app, 1);
-    for (; app->drag_rows <= -row_h; app->drag_rows += row_h)
-        move(app, -1);
-}
-
-static Browser *g_drag_browser;
-
-static void moveDragBrowser(App *app, int delta)
-{
-    (void)app;
-    moveCursor(g_drag_browser, delta);
 }
 
 static BrowseMode pickMode(const App *app)
@@ -509,9 +493,8 @@ static void folderInput(App *app, Browser *b, bool picking, uint64_t pressed, To
             break;
         default: break;
         }
-    } else if (touch.type == TOUCH_DRAG && touch.start_y >= UI_LIST_Y) {
-        g_drag_browser = b;
-        dragRows(app, touch.dy, UI_ROW_H, moveDragBrowser);
+    } else if (touch.type == TOUCH_DRAG) {
+        appLibraryDrag(app, touch, now);
     }
 }
 
@@ -594,12 +577,22 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
 
 // --- Following a finger ---
 
-typedef enum { SCROLL_NONE, SCROLL_HOME, SCROLL_HOME_ROW, SCROLL_GRID, SCROLL_EPISODES, SCROLL_RESULTS } ScrollTarget;
+typedef enum {
+    SCROLL_NONE,
+    SCROLL_HOME,
+    SCROLL_HOME_ROW,
+    SCROLL_GRID,
+    SCROLL_EPISODES,
+    SCROLL_RESULTS,
+    SCROLL_FILES,
+    SCROLL_LIVE,
+} ScrollTarget;
 
 // What's on screen: a list being scrolled stops if this changes.
-static int viewKey(const LibView *v)
+static int viewKey(const App *app)
 {
-    return ((v->tab * 64 + v->collection + 1) * 65536 + v->show + 1) * 64 + v->season;
+    const LibView *v = &app->view;
+    return (((v->tab * 64 + v->collection + 1) * 65536 + v->show + 1) * 64 + v->season) * 2 + app->picking;
 }
 
 // Moves the list being scrolled by px (positive: up, or left across a Home row).
@@ -607,7 +600,7 @@ static int viewKey(const LibView *v)
 static bool scrollTarget(App *app, int px)
 {
     LibView *v = &app->view;
-    if (viewKey(v) != app->scroll_view)
+    if (viewKey(app) != app->scroll_view)
         return false;
     int grid = libviewGrid(v), first, count;
     switch ((ScrollTarget)app->scroll_target) {
@@ -616,13 +609,15 @@ static bool scrollTarget(App *app, int px)
         v->home_row = app->scroll_row;  // The row a finger moves along is the one chosen.
         return libviewHomeRowScrollPx(v, &app->home, app->scroll_row, px);
     case SCROLL_GRID:
-        return grid >= 0 && libviewScrollPx(&v->grid[grid], px, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
+        return grid >= 0 && scrollPx(&v->grid[grid], px, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
                                             libviewGridCount(v, &app->library, grid));
     case SCROLL_EPISODES:
         libviewSeasonRange(&app->library, v->show, v->season, &first, &count);
-        return libviewScrollPx(&v->episodes, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, count);
+        return scrollPx(&v->episodes, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, count);
     case SCROLL_RESULTS:
-        return libviewScrollPx(&v->results_scroll, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, v->result_count);
+        return scrollPx(&v->results_scroll, px, LIBVIEW_LIST_ROW_PX, LIBVIEW_LIST_ROWS, 1, v->result_count);
+    case SCROLL_FILES: return app->scroll_browser && browserScrollPx(app->scroll_browser, px, UI_ROW_H, UI_ROWS);
+    case SCROLL_LIVE: return scrollPx(&v->live, px, LIBVIEW_LIVE_ROW_PX, LIBVIEW_LIVE_ROWS, 1, app->live.count);
     default: return false;
     }
 }
@@ -633,10 +628,17 @@ static void startScroll(App *app, TouchEvent touch)
 {
     LibView *v = &app->view;
     app->scroll_target = SCROLL_NONE;
-    app->scroll_view = viewKey(v);
+    app->scroll_view = viewKey(app);
+    if (app->picking || (v->tab == TAB_FILES && v->show < 0)) {  // The file list, under its folder's line.
+        app->scroll_browser = app->picking ? &app->picker : &app->browser;
+        app->scroll_target = touch.start_y >= UI_LIST_Y ? SCROLL_FILES : SCROLL_NONE;
+        return;
+    }
     if (touch.start_y < UI_TAB_BAR_H)
         return;
-    if (v->show >= 0) {
+    if (v->tab == TAB_LIVE && v->show < 0) {
+        app->scroll_target = SCROLL_LIVE;
+    } else if (v->show >= 0) {
         app->scroll_target = SCROLL_EPISODES;
     } else if (v->tab == TAB_HOME) {
         LibHit hit = uiLibraryTap(touch.start_x, touch.start_y);
@@ -650,7 +652,7 @@ static void startScroll(App *app, TouchEvent touch)
     }
 }
 
-static void dragInput(App *app, TouchEvent touch, uint64_t now)
+void appLibraryDrag(App *app, TouchEvent touch, uint64_t now)
 {
     bool starting = !app->kinetic.dragging;
     if (starting) {
@@ -686,8 +688,6 @@ static void glideInput(App *app, uint64_t pressed, TouchEvent *touch, uint64_t n
 
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
-    if (touch.type == TOUCH_DRAG_END || touch.type == TOUCH_NONE)
-        app->drag_rows = app->drag_cols = 0;
     if (app->app_menu != APP_MENU_NONE || app->settings_open)
         kineticStop(&app->kinetic);
     else
@@ -761,7 +761,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     else if (hit.kind != LIBHIT_NONE)
         tapInput(app, hit, now);
     else if (touch.type == TOUCH_DRAG)
-        dragInput(app, touch, now);
+        appLibraryDrag(app, touch, now);
 }
 
 // --- Drawing ---

@@ -18,8 +18,6 @@
 #define UI_MENU_ROW_H 48  // A row of the player's drop-down lists.
 #define UI_PLAYER_BAR_H 120  // The player's bar along the bottom.
 
-// The first row shown so that the cursor stays in view.
-size_t uiFirstVisible(size_t cursor, size_t count);
 
 // The folder list under the tab bar, with how far each video has been
 // watched (the help line under it is the app's).

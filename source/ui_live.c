@@ -11,7 +11,7 @@
 // hours, and what the cursor is on in a strip at the bottom.
 #define TIMES_Y 84
 #define ROWS_Y 116
-#define LIVE_ROW_H 76
+#define LIVE_ROW_H LIBVIEW_LIVE_ROW_PX
 #define CHANNEL_W 224          // The channel's number and name, on the left.
 #define NUMBER_W 52
 #define GRID_X (MARGIN + CHANNEL_W + 12)
@@ -152,13 +152,19 @@ void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int6
     GuideTime t = {now_s, liveGridStart(now_s, v->live_at, utc_offset_s), utc_offset_s, clock_24h};
     int rows = guide->count - s->first < LIBVIEW_LIVE_ROWS ? guide->count - s->first : LIBVIEW_LIVE_ROWS;
     drawTimes(&t, rows);
-    for (int i = s->first; i < s->first + rows; i++) {
+    // Between rows, a finger left it: a row more, cut to the guide's place.
+    int top = ROWS_Y, bottom = ROWS_Y + LIBVIEW_LIVE_ROWS * LIVE_ROW_H;
+    gfxSetClip(0, top, GFX_WIDTH, bottom - top);
+    uiLibraryClipHits(top, bottom);
+    for (int i = s->first; i < guide->count && i <= s->first + rows; i++) {
         const LiveChannel *c = &guide->channels[i];
-        int y = ROWS_Y + (i - s->first) * LIVE_ROW_H;
+        int y = ROWS_Y + (i - s->first) * LIVE_ROW_H - s->offset;
         bool focused = i == s->cursor;
         drawChannel(c, i, y, focused);
         drawPrograms(c, i, y, focused ? liveProgramAt(c, at) : -1, &t);
     }
+    uiLibraryClipHits(0, GFX_HEIGHT);
+    gfxResetClip();
     drawNowLine(&t, rows);
     if (s->cursor >= 0 && s->cursor < guide->count) {
         const LiveChannel *c = &guide->channels[s->cursor];

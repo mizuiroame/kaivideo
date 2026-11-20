@@ -1,5 +1,7 @@
 #include "browser.h"
 
+#include "scroll.h"
+
 #include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,6 +88,8 @@ void browserFree(Browser *b)
     b->items = NULL;
     b->count = 0;
     b->cursor = 0;
+    b->free = false;
+    b->first = b->offset = 0;
 }
 
 bool browserEnter(Browser *b)
@@ -136,6 +140,29 @@ void browserSelect(Browser *b, const char *name)
     for (size_t i = 0; i < b->count; i++)
         if (strcmp(b->items[i].name, name) == 0) {
             b->cursor = i;
+            b->free = false;  // Shown in the middle of the list.
             return;
         }
+}
+
+int browserFirst(const Browser *b, int rows)
+{
+    if (b->free)
+        return b->first;
+    int count = (int)b->count, cursor = (int)b->cursor;
+    if (count <= rows || cursor < rows / 2)
+        return 0;
+    int first = cursor - rows / 2;
+    return first + rows > count ? count - rows : first;
+}
+
+bool browserScrollPx(Browser *b, int px, int row_h, int rows)
+{
+    Scroll s = {(int)b->cursor, browserFirst(b, rows), b->free ? b->offset : 0};
+    bool moved = scrollPx(&s, px, row_h, rows, 1, (int)b->count);
+    b->free = true;
+    b->first = s.first;
+    b->offset = s.offset;
+    b->cursor = (size_t)s.cursor;
+    return moved;
 }

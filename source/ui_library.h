@@ -62,6 +62,8 @@ void uiLibrarySetWatched(const Watched *watched);
 void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h);
 // Forgets the touch targets: each frame starts with none.
 void uiLibraryResetHits(void);
+// Tap targets added from now on are cut to between top and bottom (a list's place).
+void uiLibraryClipHits(int top, int bottom);
 // The header's pill says this ("SD card", "Jellyfin"); "" leaves it out.
 // Where the library comes from, with its color.
 void uiLibrarySetSource(const char *label, Color color);

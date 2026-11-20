@@ -67,8 +67,21 @@ typedef struct {
 static HitRegion g_hits[MAX_HITS];
 static int g_hit_count;
 
+static int g_hit_top = 0, g_hit_bottom = GFX_HEIGHT;
+
+void uiLibraryClipHits(int top, int bottom)
+{
+    g_hit_top = top;
+    g_hit_bottom = bottom;
+}
+
 void uiLibraryAddHit(int x, int y, int w, int h, LibHitKind kind, int a, int b)
 {
+    int y0 = y < g_hit_top ? g_hit_top : y, y1 = y + h > g_hit_bottom ? g_hit_bottom : y + h;
+    if (y1 <= y0)
+        return;
+    y = y0;
+    h = y1 - y0;
     if (g_hit_count < MAX_HITS)
         g_hits[g_hit_count++] = (HitRegion){x, y, w, h, {kind, a, b}};
 }

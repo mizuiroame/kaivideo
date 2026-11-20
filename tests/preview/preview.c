@@ -463,7 +463,7 @@ static void libraryScenes(void)
     libviewGridMove(&g_view, GRID_FILMS, (int)g_lib.film_count, 1, 0);
     libraryScene("lib_films", true, NULL, NULL);
     // Left by a finger between rows: cut under the tabs, and only what shows answers a tap.
-    libviewScrollPx(&g_view.grid[GRID_FILMS], 90, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
+    scrollPx(&g_view.grid[GRID_FILMS], 90, LIBVIEW_GRID_ROW_PX, LIBVIEW_GRID_ROWS, LIBVIEW_COLS,
                     (int)g_lib.film_count);
     libraryScene("lib_films_between", true, NULL, NULL);
     if (uiLibraryTap(GFX_WIDTH / 2, UI_TAB_BAR_H + 4).kind == LIBHIT_GRID_CARD) {

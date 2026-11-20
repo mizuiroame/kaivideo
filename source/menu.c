@@ -1,5 +1,7 @@
 #include "menu.h"
 
+#include "scroll.h"
+
 static int listCount(const Menu *m)
 {
     return m->count - m->fixed;
@@ -15,6 +17,7 @@ static int rowsInView(const Menu *m)
 
 static void keepInView(Menu *m)
 {
+    m->offset = 0;  // A button moved it: the list rests on a row.
     int list = listCount(m), rows = rowsInView(m);
     if (m->cursor < list) {  // The fixed rows at the bottom don't scroll the list.
         if (m->cursor < m->first)
@@ -74,4 +77,17 @@ int menuVisible(const Menu *m)
 bool menuOnFixed(const Menu *m)
 {
     return m->cursor >= listCount(m);
+}
+
+bool menuScrollPx(Menu *m, int px, int row_h)
+{
+    int list = listCount(m);
+    bool on_list = m->cursor < list;
+    Scroll s = {on_list ? m->cursor : m->first, m->first, m->offset};
+    bool moved = scrollPx(&s, px, row_h, rowsInView(m), 1, list);
+    m->first = s.first;
+    m->offset = s.offset;
+    if (on_list)  // On a fixed row below, the cursor stays there.
+        m->cursor = s.cursor;
+    return moved;
 }

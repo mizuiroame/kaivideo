@@ -16,6 +16,7 @@ typedef struct {
     int fixed;   // Rows after the list that don't scroll.
     int cursor;
     int first;   // The first list row in view.
+    int offset;  // Pixels into it: a finger left the list between rows (0 on one).
 } Menu;
 
 // Opens with count rows (the last fixed of them fixed) and the cursor on
@@ -31,3 +32,6 @@ void menuMove(Menu *m, int delta);
 int menuVisible(const Menu *m);
 // True when the cursor is on one of the fixed rows.
 bool menuOnFixed(const Menu *m);
+// A finger moves the list (not its fixed rows) by px, rows row_h tall, as
+// scrollPx does. False at an end.
+bool menuScrollPx(Menu *m, int px, int row_h);

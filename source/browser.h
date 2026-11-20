@@ -21,6 +21,10 @@ typedef struct {
     BrowserEntry *items;          // Folders first, then videos, each by name.
     size_t count;
     size_t cursor;
+    // Where a finger left the list (free): first in view and pixels into it.
+    // Not free, the list keeps the cursor in its middle.
+    bool free;
+    int first, offset;
 } Browser;
 
 // True for the files KaiVideo plays: .mp4, .m4v, .mkv and .webm.
@@ -40,3 +44,9 @@ bool browserSelectedPath(const Browser *b, char *out, size_t size);
 bool browserEntryPath(const Browser *b, size_t i, char *out, size_t size);
 // Puts the cursor on the entry with this name, if there is one.
 void browserSelect(Browser *b, const char *name);
+
+// The first entry in view, and pixels into it, as the list shows (rows of
+// row_h, rows of them in view).
+int browserFirst(const Browser *b, int rows);
+// A finger moves the list by px (as scrollPx does). False at an end.
+bool browserScrollPx(Browser *b, int px, int row_h, int rows);
