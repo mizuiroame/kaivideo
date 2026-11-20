@@ -630,61 +630,6 @@ static void writeField(FILE *f, const char *text)
     fputc('\t', f);
 }
 
-// What makes a film or series the same on two servers: "s:<series>" or "f:<title>:<year>".
-static void sharedKey(const LibraryItem *item, char *out, size_t size)
-{
-    char key[NAMING_MAX];
-    namingKey(item->name.is_episode ? item->name.show : item->name.title, key, sizeof(key));
-    if (item->name.is_episode)
-        snprintf(out, size, "s:%s", key);
-    else
-        snprintf(out, size, "f:%s:%d", key, item->name.year);
-}
-
-#define SHARED_KEY_MAX (NAMING_MAX + 16)
-
-static int compareKeys(const void *a, const void *b)
-{
-    return strcmp(a, b);
-}
-
-// A catalog's keys, sorted, to free. NULL if it has none or there's no memory.
-static char (*sortedKeys(const JfCatalog *c))[SHARED_KEY_MAX]
-{
-    if (!c->library.count)
-        return NULL;
-    char(*keys)[SHARED_KEY_MAX] = malloc(c->library.count * SHARED_KEY_MAX);
-    for (size_t i = 0; keys && i < c->library.count; i++)
-        sharedKey(&c->library.items[i], keys[i], SHARED_KEY_MAX);
-    if (keys)
-        qsort(keys, c->library.count, SHARED_KEY_MAX, compareKeys);
-    return keys;
-}
-
-void jfCatalogTagShared(JfCatalog *parts, const bool *have, int count, const char *const *suffixes)
-{
-    char(*keys[SERVER_KIND_COUNT])[SHARED_KEY_MAX] = {NULL};
-    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++)
-        keys[k] = have[k] ? sortedKeys(&parts[k]) : NULL;
-    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++) {
-        for (size_t i = 0; keys[k] && i < parts[k].library.count; i++) {
-            LibraryItem *item = &parts[k].library.items[i];
-            char key[SHARED_KEY_MAX];
-            sharedKey(item, key, sizeof(key));
-            bool shared = false;
-            for (int o = 0; o < count && o < SERVER_KIND_COUNT && !shared; o++)
-                shared = o != k && keys[o] && bsearch(key, keys[o], parts[o].library.count, SHARED_KEY_MAX, compareKeys);
-            if (!shared)
-                continue;
-            char *name = item->name.is_episode ? item->name.show : item->name.title;
-            size_t used = strlen(name);
-            snprintf(name + used, NAMING_MAX - used, "%s", suffixes[k]);
-        }
-    }
-    for (int k = 0; k < count && k < SERVER_KIND_COUNT; k++)
-        free(keys[k]);
-}
-
 bool jfCatalogSave(const JfCatalog *c, const char *file)
 {
     FILE *f = fopen(file, "w");

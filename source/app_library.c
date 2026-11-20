@@ -33,8 +33,9 @@ static void cachePath(char *out, size_t size)
 void appLibraryRefreshHome(App *app)
 {
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
+    bool jellyfin = app->config.use_jellyfin && app->config.server_view == SERVER_JELLYFIN;  // Live TV is its.
     libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
-                   app->config.use_jellyfin && app->live.count > 0);
+                   jellyfin && app->live.count > 0);
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -77,35 +78,79 @@ void appLibraryStart(App *app)
     loadCardLibrary(app);
 }
 
+// The server signed in after kind (or the first, from -1), or -1 for none.
+static int nextSignedIn(int kind)
+{
+    for (int k = kind + 1; k < SERVER_KIND_COUNT; k++)
+        if (jfSyncSignedIn((ServerKind)k))
+            return k;
+    return -1;
+}
+
 void appLibrarySetSource(App *app, bool jellyfin)
 {
+    int kind = jfSyncSignedIn((ServerKind)app->config.server_view) ? app->config.server_view : nextSignedIn(-1);
+    if (jellyfin && kind >= 0) {
+        appLibraryShowServer(app, (ServerKind)kind);
+        return;
+    }
     libscanStop();
-    app->config.use_jellyfin = jellyfin;
+    app->config.use_jellyfin = false;
     appSaveSettings(app);
     libraryFree(&app->library);
     libviewInit(&app->view);
-    if (jellyfin) {
+    loadCardLibrary(app);
+}
+
+static void installCopy(App *app, const JfCatalog *kept);
+
+void appLibraryShowServer(App *app, ServerKind kind)
+{
+    libscanStop();
+    bool changed = !app->config.use_jellyfin || app->config.server_view != (int)kind;
+    app->config.use_jellyfin = true;
+    app->config.server_view = kind;
+    appSaveSettings(app);
+    if (changed)
+        libviewInit(&app->view);
+    if (app->server_has[kind]) {
+        installCopy(app, &app->server_catalogs[kind]);
+    } else {
+        libraryFree(&app->library);
         libraryInit(&app->library, JF_ROOT);
         appLibraryRefreshHome(app);
         jfSyncRefresh();
-        appLiveReadSoon(app);  // The server may have channels now that it didn't have before.
-    } else {
-        loadCardLibrary(app);
     }
+    if (kind == SERVER_JELLYFIN)
+        appLiveReadSoon(app);  // The server may have channels now that it didn't have before.
 }
 
+// X goes through the card and each server signed in, in turn.
 void appLibraryToggleSource(App *app, uint64_t now)
 {
-    if (app->config.use_jellyfin) {
-        appLibrarySetSource(app, false);
-        return;
-    }
     if (appJellyfinEnsure(app))
         jfSyncGetStatus(&app->jf);
-    if (jfSyncAnySignedIn())
-        appLibrarySetSource(app, true);
+    int next = nextSignedIn(app->config.use_jellyfin ? app->config.server_view : -1);
+    if (next >= 0)
+        appLibraryShowServer(app, (ServerKind)next);
+    else if (app->config.use_jellyfin)
+        appLibrarySetSource(app, false);
     else
         appOpenJellyfinSettings(app, now);
+}
+
+void appLibraryServerCatalog(App *app, ServerKind kind, JfCatalog *c)
+{
+    if (app->server_has[kind])
+        jfCatalogFree(&app->server_catalogs[kind]);
+    app->server_has[kind] = c != NULL;
+    if (c)
+        app->server_catalogs[kind] = *c;
+    bool viewed = app->config.use_jellyfin && app->config.server_view == (int)kind;
+    if (viewed && c)
+        installCopy(app, c);
+    else if (viewed)  // Signed out: the next server, or the card.
+        appLibrarySetSource(app, nextSignedIn(-1) >= 0);
 }
 
 static void reapplyFavoriteChanges(App *app);
@@ -133,6 +178,18 @@ void appLibraryInstallCatalog(App *app, JfCatalog *c)
     reapplyFavoriteChanges(app);
     thumbsRetryMissing();
     afterNewLibrary(app, details);
+}
+
+// Shows a copy of a server's kept library (the app's library is its own).
+static void installCopy(App *app, const JfCatalog *kept)
+{
+    JfCatalog copy;
+    jfCatalogInit(&copy);
+    if (jfCatalogAppend(&copy, kept, NULL)) {
+        libraryBuild(&copy.library);
+        appLibraryInstallCatalog(app, &copy);
+    }
+    jfCatalogFree(&copy);
 }
 
 void appLibraryExit(App *app)
@@ -685,12 +742,9 @@ void appLibraryDraw(App *app, uint64_t now)
     const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
-    char servers[64] = "";
-    for (int k = 0; app->config.use_jellyfin && k < SERVER_KIND_COUNT; k++)  // "Jellyfin + Plex".
-        if (jfSyncSignedIn((ServerKind)k))
-            snprintf(servers + strlen(servers), sizeof(servers) - strlen(servers), "%s%s", servers[0] ? " + " : "",
-                     serverKindName((ServerKind)k));
-    uiLibrarySetSource(!app->config.use_jellyfin ? "SD card" : servers[0] ? servers : "Server");
+    ServerKind view = (ServerKind)app->config.server_view;
+    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName(view) : "SD card",
+                       app->config.use_jellyfin ? uiServerColor(view) : COLOR_ACCENT);
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));

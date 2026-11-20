@@ -167,7 +167,7 @@ static void liveScene(Player *p)
     libviewSetTabs(&view, &lib, true, true);
     view.tab = TAB_LIVE;
     libviewLiveMove(&view, 4, 1);
-    uiLibrarySetSource("Jellyfin");
+    uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
@@ -192,7 +192,7 @@ static void liveScene(Player *p)
     uiDrawFooterHelp("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
     save("live_guide_later");
     view.live_at = 0;
-    uiLibrarySetSource("");
+    uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     p->live = true;
     begin();
     drawPicture();
@@ -398,7 +398,7 @@ static void collectionScene(void)
     libviewInit(&view);
     homeCompute(&home, &lib, &g_resume, &g_watched);
     libviewSetTabs(&view, &lib, true, false);
-    uiLibrarySetSource("Jellyfin");
+    uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
     uiDrawFooterHelp(HOME_HELP);
@@ -418,7 +418,7 @@ static void collectionScene(void)
         printf("TOUCH: server_films: a library's tab doesn't answer a tap\n");
         g_problems++;
     }
-    uiLibrarySetSource("");
+    uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     libraryFree(&lib);
 }
 
@@ -591,7 +591,7 @@ static void libraryScenes(void)
     uiDrawFooterHelp("[B] cancel");
     save("loading");
     begin();
-    uiLibrarySetSource("Jellyfin");
+    uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     bool source = false;
     for (int x = 0; x < GFX_WIDTH / 2; x += 4)
@@ -708,7 +708,7 @@ static void serversScene(void)
     libviewSetTabs(&view, &lib, true, true);
     SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
     uiLibrarySetStatus(&sys, false);
-    uiLibrarySetSource("Emby + Plex");
+    uiLibrarySetSource("Plex", uiServerColor(SERVER_PLEX));
     for (int pass = 0; pass < 2; pass++) {
         view.tab = pass ? TAB_COLLECTION : TAB_HOME;
         view.collection = pass ? 4 : -1;

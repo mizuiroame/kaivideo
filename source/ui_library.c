@@ -16,6 +16,7 @@
 #define TAB_GAP 28             // The header, as KaiPlayer's and KaiRadio's.
 #define TAB_TEXT_MIDDLE 28.0f
 #define HINT_GAP 9
+#define SOURCE_DOT 12         // The source's color, before its name.
 #define TAB_SIZE 20
 #define TAB_SIZE_MIN 17       // Smaller, before the tabs slide.
 #define TAB_SIDE_GAP 16       // Between the tabs' ZL and ZR and what the header shows at its sides.
@@ -181,9 +182,21 @@ void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h)
     g_clock_24h = clock_24h;
 }
 
-void uiLibrarySetSource(const char *label)
+static Color g_source_color;
+
+void uiLibrarySetSource(const char *label, Color color)
 {
     g_source_label = label;
+    g_source_color = color;
+}
+
+Color uiServerColor(ServerKind kind)
+{
+    switch (kind) {
+    case SERVER_EMBY: return GFX_RGB(0x52, 0xB5, 0x4B);
+    case SERVER_PLEX: return GFX_RGB(0xE5, 0xA0, 0x0D);
+    default: return GFX_RGB(0xAA, 0x5C, 0xC3);
+    }
 }
 
 void uiLibraryResetHits(void)
@@ -358,10 +371,12 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
     int left = MARGIN + 36 + title_w;
     if (g_source_label[0]) {  // Where the library comes from: X changes it.
         int x = MARGIN + 36 + title_w + 18, key_w = uiButtonWidth("X");
-        int w = key_w + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
+        int w = key_w + SOURCE_DOT + 8 + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
         gfxFillRoundRect(x, 15, w, 32, 16, COLOR_SURFACE_HI);
         uiDrawButton(x + 8, 31.0f, "X", COLOR_SURFACE, COLOR_TEXT);
-        fontDrawMiddle(FONT_BOLD, 17, x + 16 + key_w, 31.0f, g_source_label, COLOR_TEXT);
+        int dot_x = x + 16 + key_w;  // The source's color.
+        gfxFillRoundRect(dot_x, 31 - SOURCE_DOT / 2, SOURCE_DOT, SOURCE_DOT, SOURCE_DOT / 2, g_source_color);
+        fontDrawMiddle(FONT_BOLD, 17, dot_x + SOURCE_DOT + 8, 31.0f, g_source_label, COLOR_TEXT);
         uiLibraryAddHit(x - 4, 4, w + 8, UI_TAB_BAR_H - 8, LIBHIT_SOURCE, 0, 0);
         left = x + w;
     }

@@ -39,10 +39,10 @@ static bool waitSignedIn(void)
     return st.state == JF_SIGNED_IN;
 }
 
-static bool waitCatalog(JfCatalog *c)
+static bool waitCatalog(ServerKind kind, JfCatalog *c)
 {
     for (int i = 0; i < WAIT_SECONDS * 5; i++) {
-        if (jfSyncTakeCatalog(c))
+        if (jfSyncTakeCatalog(kind, c))
             return true;
         usleep(STEP_US);
     }
@@ -153,27 +153,25 @@ int main(int argc, char **argv)
     expect(waitSignedIn(), "signed in with a password");
     jfSyncRefresh();
     JfCatalog c;
-    bool got = waitCatalog(&c);
-    expect(got, "the library came");
+    bool got = waitCatalog(SERVER_EMBY, &c);
+    expect(got, "Emby's library came");
     if (got) {
-        printf("        %zu videos, %zu films, %zu series, %d libraries\n", c.library.count, c.library.film_count,
+        printf("        Emby: %zu videos, %zu films, %zu series, %d libraries\n", c.library.count, c.library.film_count,
                c.library.show_count, c.library.collection_count);
-        for (int i = 0; i < c.library.collection_count; i++)
-            printf("        tab: %s\n", c.library.collections[i].name);
-        if (with_plex)
-            expect(c.library.collection_count == 4 && c.library.count == 20 &&
-                       !strcmp(c.library.collections[0].name, "Movies (Emby)") &&
-                       !strcmp(c.library.collections[2].name, "Movies (Plex)"),
-                   "both servers' libraries, named after their server");
-        if (with_plex)
-            expect(c.library.show_count == 2 && c.library.film_count == 12, "the series on both servers stay two");
-        else
-            expect(c.library.collection_count == 2 && c.library.film_count == 6 && c.library.show_count == 1,
-                   "two libraries: 6 films, 1 series");
+        expect(c.library.collection_count == 2 && c.library.film_count == 6 && c.library.show_count == 1 &&
+                   !strcmp(c.library.collections[0].name, "Movies"),
+               "its two libraries: 6 films, 1 series");
         tryPlans(&c);
-        if (with_plex)
-            tryPlex(&c);
         jfCatalogFree(&c);
+    }
+    if (with_plex) {  // Plex's comes on its own, beside Emby's.
+        got = waitCatalog(SERVER_PLEX, &c);
+        expect(got, "Plex's library came too");
+        if (got) {
+            expect(c.library.count == 10 && c.library.collection_count == 2, "Plex's own: 10 videos, 2 libraries");
+            tryPlex(&c);
+            jfCatalogFree(&c);
+        }
     }
     jfSyncStop();  // Sends what's waiting.
     printf("%d failures\n", g_failures);

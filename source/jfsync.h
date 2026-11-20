@@ -41,7 +41,7 @@ typedef struct {
 // kind: the server used (each kind keeps its own session and library).
 bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_library, ServerKind kind);
 // Changes which server Settings shows (signing in and out are for it). Every
-// server signed in gives the library its videos.
+// server signed in has its library read.
 void jfSyncUseKind(ServerKind kind);
 ServerKind jfSyncKind(void);
 bool jfSyncSignedIn(ServerKind kind);
@@ -60,8 +60,9 @@ void jfSyncCancelSignIn(void);
 void jfSyncSignOut(void);
 void jfSyncRefresh(void);
 
-// True once for each library read: c gets it (the caller frees it with jfCatalogFree).
-bool jfSyncTakeCatalog(JfCatalog *c);
+// True once for each library a server's read: c gets it (built; the caller
+// frees it with jfCatalogFree). Each server's comes on its own.
+bool jfSyncTakeCatalog(ServerKind kind, JfCatalog *c);
 
 void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, bool paused);
 void jfSyncSetPlayed(const char *location, bool played);

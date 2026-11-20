@@ -56,7 +56,8 @@ typedef struct {
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the media server.
-    int server_kind;                     // ServerKind: Jellyfin, Emby or Plex.
+    int server_kind;                     // ServerKind: the one Settings' Media server page is for.
+    int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.
     bool jf_check_certificate;           // Off: an https server's own certificate is taken too.
     int subtitles;                       // SubtitleSize.

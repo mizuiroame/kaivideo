@@ -41,8 +41,7 @@ static void finishSignIn(App *app, uint64_t now)
     snprintf(message, sizeof(message), "Connected to %s as %s. Loading its library...", where, app->jf.user);
     app->jf_arriving = app->config.server_kind + 1;
     app->settings_open = false;
-    if (!app->config.use_jellyfin)  // Already the servers': it stays as it is until the new one's videos come.
-        appLibrarySetSource(app, true);
+    appLibraryShowServer(app, (ServerKind)app->config.server_kind);  // The one just signed in.
     appShowMessage(app, message, now);
 }
 
@@ -78,15 +77,21 @@ void appJellyfinUpdate(App *app, uint64_t now)
     if (app->jf_signing)
         finishSignIn(app, now);
     sayNewError(app, now);
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)  // A server signed out: its library goes.
+        if (app->server_has[k] && !jfSyncSignedIn((ServerKind)k) && !app->jf_signing)
+            appLibraryServerCatalog(app, (ServerKind)k, NULL);
     if (app->config.use_jellyfin && !jfSyncAnySignedIn() && !app->jf_signing) {  // No server left: back to the card.
         appLibrarySetSource(app, false);
         return;
     }
     JfCatalog catalog;
-    if (jfSyncTakeCatalog(&catalog)) {
-        if (app->config.use_jellyfin)
-            appLibraryInstallCatalog(app, &catalog);
-        jfCatalogFree(&catalog);
+    bool took = false;
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        if (jfSyncTakeCatalog((ServerKind)k, &catalog)) {
+            appLibraryServerCatalog(app, (ServerKind)k, &catalog);  // Kept: the app frees it.
+            took = true;
+        }
+    if (took) {
         app->jf_last_refresh = now;
         if (app->jf_arriving && !app->jf.refreshing) {  // The server just signed in: its videos are here.
             char message[96];

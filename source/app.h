@@ -130,6 +130,8 @@ struct App {
     JfStatus jf;
     bool jf_signing;            // The sign-in panel is up.
     int jf_arriving;            // A server just signed in (ServerKind + 1): said when its videos come; 0 for none.
+    JfCatalog server_catalogs[SERVER_KIND_COUNT];  // Each server's library, kept to show it at once.
+    bool server_has[SERVER_KIND_COUNT];
     char jf_last_error[128];
     uint64_t jf_last_refresh, jf_last_report;
     bool jf_reported_paused;    // What the last report said: a pause or going on is told at once.
@@ -166,6 +168,10 @@ void appLibraryToggleSource(App *app, uint64_t now);
 void appLibrarySetSource(App *app, bool jellyfin);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
 void appLibraryInstallCatalog(App *app, JfCatalog *c);
+// Shows a server's library (the one kept, at once, or empty until it comes).
+void appLibraryShowServer(App *app, ServerKind kind);
+// A server's library came, or its server signed out (c NULL): kept, and shown if it's the one viewed.
+void appLibraryServerCatalog(App *app, ServerKind kind, JfCatalog *c);
 
 // app_jellyfin.c
 // Starts the connection if it isn't running. False if the network can't be used.

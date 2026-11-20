@@ -60,8 +60,8 @@ static struct {
     volatile bool abort_call;              // Stops the request under way.
     Job jobs[REPORTS_MAX];
     int job_count;
-    JfCatalog ready;
-    bool has_ready;
+    JfCatalog ready[SERVER_KIND_COUNT];  // Each server's library, read and not yet taken.
+    bool has_ready[SERVER_KIND_COUNT];
     char play_session[JF_ID_MAX + 24];
     char live_stream[JF_LIVE_STREAM_MAX];  // The playing channel's stream the server opened, or "".
     bool converted;
@@ -421,13 +421,13 @@ static void signOut(void)
 
 // --- The library ---
 
-static void publish(JfCatalog *c)
+static void publish(ServerKind kind, JfCatalog *c)
 {
     pthread_mutex_lock(&g.lock);
-    if (g.has_ready)
-        jfCatalogFree(&g.ready);
-    g.ready = *c;
-    g.has_ready = true;
+    if (g.has_ready[kind])
+        jfCatalogFree(&g.ready[kind]);
+    g.ready[kind] = *c;
+    g.has_ready[kind] = true;
     pthread_mutex_unlock(&g.lock);
 }
 
@@ -549,26 +549,12 @@ static bool readServer(ServerKind kind, JfCatalog *c)
     return jfCatalogLoad(c, catalogFileFor(kind));
 }
 
-// The libraries of the servers signed in, as one: their own tabs (named after
-// their server when there are several), and all their videos.
+// The libraries of the servers signed in, each for the app to take.
 static void publishAll(JfCatalog parts[SERVER_KIND_COUNT], const bool have[SERVER_KIND_COUNT])
 {
-    int count = 0;
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
-        count += have[k];
-    static const char *const SUFFIXES[SERVER_KIND_COUNT] = {" (Jellyfin)", " (Emby)", " (Plex)"};
-    if (count > 1)
-        jfCatalogTagShared(parts, have, SERVER_KIND_COUNT, SUFFIXES);
-    JfCatalog all;
-    jfCatalogInit(&all);
-    for (int k = 0; k < SERVER_KIND_COUNT; k++) {
         if (have[k])
-            jfCatalogAppend(&all, &parts[k], count > 1 ? SUFFIXES[k] : NULL);
-        if (have[k])
-            jfCatalogFree(&parts[k]);
-    }
-    libraryBuild(&all.library);
-    publish(&all);
+            publish((ServerKind)k, &parts[k]);
 }
 
 static void refresh(void)
@@ -819,8 +805,9 @@ void jfSyncStop(void)
     g.running = false;
     netClientClose(g.net);
     netExit();
-    if (g.has_ready)
-        jfCatalogFree(&g.ready);
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        if (g.has_ready[k])
+            jfCatalogFree(&g.ready[k]);
     pthread_cond_destroy(&g.wake);
     pthread_mutex_destroy(&g.lock);
     memset(&g, 0, sizeof(g));
@@ -953,15 +940,15 @@ void jfSyncRefresh(void)
         wakeWith(&g.want_refresh);
 }
 
-bool jfSyncTakeCatalog(JfCatalog *c)
+bool jfSyncTakeCatalog(ServerKind kind, JfCatalog *c)
 {
-    if (!g.running)
+    if (!g.running || kind < 0 || kind >= SERVER_KIND_COUNT)
         return false;
     pthread_mutex_lock(&g.lock);
-    bool any = g.has_ready;
+    bool any = g.has_ready[kind];
     if (any) {
-        *c = g.ready;
-        g.has_ready = false;
+        *c = g.ready[kind];
+        g.has_ready[kind] = false;
     }
     pthread_mutex_unlock(&g.lock);
     return any;

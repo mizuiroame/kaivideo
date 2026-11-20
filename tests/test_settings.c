@@ -45,6 +45,8 @@ void testSettings(void)
     CHECK(configReadLine(&kind, "server=plex") && kind.server_kind == SERVER_PLEX);
     CHECK(configReadLine(&kind, "server=emby") && kind.server_kind == SERVER_EMBY);
     CHECK(configReadLine(&kind, "server=jellyfin") && kind.server_kind == SERVER_JELLYFIN);
+    CHECK(kind.server_view == SERVER_JELLYFIN && configReadLine(&kind, "view=2") && kind.server_view == SERVER_PLEX);
+    CHECK(configReadLine(&kind, "view=9") && kind.server_view == SERVER_JELLYFIN);  // Unknown: the first.
     // Emby has no Quick Connect: a password only.
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[4] == SETTING_JF_PASSWORD &&
           rows[3] == SETTING_JF_TEST);

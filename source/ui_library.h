@@ -4,7 +4,9 @@
 // uiLibraryTap answers from them.
 #pragma once
 
+#include "gfx.h"
 #include "home.h"
+#include "jellyfin.h"
 #include "library.h"
 #include "libview.h"
 #include "resume.h"
@@ -61,7 +63,10 @@ void uiLibrarySetStatus(const SysInfo *sys, bool clock_24h);
 // Forgets the touch targets: each frame starts with none.
 void uiLibraryResetHits(void);
 // The header's pill says this ("SD card", "Jellyfin"); "" leaves it out.
-void uiLibrarySetSource(const char *label);
+// Where the library comes from, with its color.
+void uiLibrarySetSource(const char *label, Color color);
+// Each server's own color (its name is shown beside it, not its logo).
+Color uiServerColor(ServerKind kind);
 // The header: the menu button and name, the tabs between ZL and ZR, and
 // status (a scan's progress, or NULL) left of the clock and battery. The
 // Files tab draws the folder list under it.
