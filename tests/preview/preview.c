@@ -567,7 +567,7 @@ static void libraryScenes(void)
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     static const char *const USERS[SERVER_KIND_COUNT] = {"mizu", "", "mizu"};
     uiSettingsSetServers(USERS);
-    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
     save("settings");
     // The main page's rows: 48 high from 76 below the panel's top (7 rows, a 60 footer).
@@ -582,7 +582,7 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTINGS_PAGE_LIBRARY, SETTING_THUMBNAILS, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawSettings(&config, SETTINGS_PAGE_LIBRARY, SETTING_THUMBNAILS, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_library");
     top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
@@ -593,7 +593,7 @@ static void libraryScenes(void)
     }
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_display");
     top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
@@ -604,7 +604,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiSettingsSetJellyfin("192.168.0.10:8096", "");
-    uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_jellyfin");
     top = (GFX_HEIGHT - (76 + 30 + 6 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
@@ -618,7 +618,7 @@ static void libraryScenes(void)
     Config plex_config = config;
     plex_config.server_kind = SERVER_PLEX;
     uiSettingsSetJellyfin("", "");
-    uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.0.0");
+    uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
     save("settings_plex");
     top = (GFX_HEIGHT - (76 + 30 + 1 * 48 + 60)) / 2 + 76 + 30;
