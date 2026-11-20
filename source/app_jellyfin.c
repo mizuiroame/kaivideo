@@ -35,7 +35,7 @@ static void finishSignIn(App *app, uint64_t now)
     app->jf_signing = false;
     if (app->jf.state != JF_SIGNED_IN)
         return;
-    char message[JF_SERVER_MAX + JF_NAME_MAX + 32];
+    char message[JF_SERVER_MAX + JF_NAME_MAX + 64];
     const char *where = app->config.server_kind == SERVER_PLEX ? app->jf.server
                                                                : serverKindName((ServerKind)app->config.server_kind);
     snprintf(message, sizeof(message), "Connected to %s as %s. Loading its library...", where, app->jf.user);
