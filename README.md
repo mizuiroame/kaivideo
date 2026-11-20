@@ -69,9 +69,10 @@ The screenshots show made-up films, series and channels.
   `Film.es.srt`), or the text subtitles inside the file (SubRip and ASS in
   MKV, mov_text in MP4, WebVTT), picked from a list (**Y**), or none. Their
   size, color, style (outline or a dark box) and **font** are at the end of
-  that list: put `.ttf` or `.otf` files in the `fonts` folder of KaiVideo's
-  `config` folder to choose one (characters a font lacks come from the
-  built-in ones).
+  that list: KaiVideo's own, five it brings (Atkinson Hyperlegible, Fira Sans,
+  Lato, PT Serif and Comic Neue), or your own `.ttf` or `.otf` files in the
+  `fonts` folder of KaiVideo's `config` folder (characters a font lacks come
+  from the built-in ones).
 - **ASS subtitles keep their look**, drawn by [libass](https://github.com/libass/libass):
   colors, positions, rotation, movement, fades and the fonts inside the file.
   The list offers only their size.
@@ -373,7 +374,11 @@ This notice is not legal advice.
 KaiVideo is released under the [MIT License](LICENSE). FFmpeg is released
 under the LGPL 2.1 ([third_party/FFmpeg-LGPL-2.1.txt](third_party/FFmpeg-LGPL-2.1.txt)).
 The fonts are Noto Sans, under the SIL Open Font License
-([third_party/NotoSans-OFL.txt](third_party/NotoSans-OFL.txt)), and images and
+([third_party/NotoSans-OFL.txt](third_party/NotoSans-OFL.txt)); the fonts for
+subtitles are Atkinson Hyperlegible, Fira Sans, Lato, PT Serif and Comic Neue,
+also under the OFL ([Atkinson Hyperlegible](third_party/AtkinsonHyperlegible-OFL.txt),
+[Fira Sans](third_party/FiraSans-OFL.txt), [Lato](third_party/Lato-OFL.txt),
+[PT Serif](third_party/PTSerif-OFL.txt), [Comic Neue](third_party/ComicNeue-OFL.txt)). Images and
 fonts are read, and thumbnails written, with [stb](https://github.com/nothings/stb)
 (public domain). Styled subtitles use [libass](https://github.com/libass/libass)
 ([ISC](third_party/libass-ISC.txt)), [FreeType](https://freetype.org/)

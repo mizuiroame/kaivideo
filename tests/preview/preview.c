@@ -222,6 +222,25 @@ static void skipScene(Player *p)
 }
 
 // The statistics panel (↓) over a converted video.
+// A line of subtitles in each font KaiVideo brings, accents and all.
+static void fontsScene(void)
+{
+    for (int i = -1; i < fontBundledCount(); i++) {
+        if (i < 0)
+            fontSetSubtitleFile(NULL);
+        else
+            fontSetSubtitleBundled(i);
+        begin();
+        gfxClear(GFX_RGB(40, 46, 60));
+        uiDrawSubtitles(i < 0 ? "KaiVideo: \xC2\xBFQu\xC3\xA9 tal? A\xC3\xB1o, ac\xC3\xA1, \xC2\xA1v\xC3\xA1monos!"
+                              : "\xC2\xBFQu\xC3\xA9 tal? A\xC3\xB1o, ac\xC3\xA1, \xC2\xA1v\xC3\xA1monos!", false);
+        char name[48];
+        snprintf(name, sizeof(name), "font_%d", i + 1);
+        save(name);
+    }
+    fontSetSubtitleFile(NULL);
+}
+
 static void statsScene(void)
 {
     StatsInfo info = {
@@ -772,6 +791,7 @@ int main(int argc, char **argv)
     playerScene("player_paused", &p, UI_MENU_AUDIO, &closed, NULL, NULL);
 
     statsScene();
+    fontsScene();
     skipScene(&p);
     liveScene(&p);
     serversScene();

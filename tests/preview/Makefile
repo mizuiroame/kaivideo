@@ -18,9 +18,14 @@ $(OUT)/font_regular_ttf.c: ../../data/font_regular.ttf embed.py
 $(OUT)/font_bold_ttf.c: ../../data/font_bold.ttf embed.py
 	python3 embed.py $< $(OUT) font_bold_ttf
 
-$(OUT)/preview: preview.c sample_paths.h font_system_host.c $(addprefix $(SRC)/,$(UI_SRC)) $(OUT)/font_regular_ttf.c $(OUT)/font_bold_ttf.c
+$(OUT)/sub_%_ttf.c: ../../data/sub_%.ttf embed.py
+	python3 embed.py $< $(OUT) sub_$*_ttf
+
+SUB_FONTS := $(addprefix $(OUT)/sub_,$(addsuffix _ttf.c,atkinson comicneue fira lato ptserif))
+
+$(OUT)/preview: preview.c sample_paths.h font_system_host.c $(addprefix $(SRC)/,$(UI_SRC)) $(OUT)/font_regular_ttf.c $(OUT)/font_bold_ttf.c $(SUB_FONTS)
 	$(CC) $(CFLAGS) preview.c font_system_host.c $(addprefix $(SRC)/,$(UI_SRC)) \
-		$(OUT)/font_regular_ttf.c $(OUT)/font_bold_ttf.c -o $@ -lm -ljansson
+		$(OUT)/font_regular_ttf.c $(OUT)/font_bold_ttf.c $(SUB_FONTS) -o $@ -lm -ljansson
 
 clean:
 	rm -rf $(OUT)

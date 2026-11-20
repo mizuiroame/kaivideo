@@ -7,6 +7,11 @@
 
 #include "font_bold_ttf.h"
 #include "font_regular_ttf.h"
+#include "sub_atkinson_ttf.h"
+#include "sub_comicneue_ttf.h"
+#include "sub_fira_ttf.h"
+#include "sub_lato_ttf.h"
+#include "sub_ptserif_ttf.h"
 #include "font_system.h"
 #include "gfx.h"
 #include "stb_truetype.h"
@@ -134,6 +139,39 @@ static unsigned char *readFile(const char *path)
     }
     fclose(f);
     return data;
+}
+
+// Fonts for subtitles that come with KaiVideo, by name (as Settings keeps them).
+static const struct {
+    const char *name;
+    const unsigned char *data;
+} BUNDLED[] = {
+    {"Atkinson Hyperlegible", sub_atkinson_ttf},
+    {"Fira Sans", sub_fira_ttf},
+    {"Lato", sub_lato_ttf},
+    {"PT Serif", sub_ptserif_ttf},
+    {"Comic Neue", sub_comicneue_ttf},
+};
+#define BUNDLED_COUNT ((int)(sizeof(BUNDLED) / sizeof(BUNDLED[0])))
+
+int fontBundledCount(void)
+{
+    return BUNDLED_COUNT;
+}
+
+const char *fontBundledName(int index)
+{
+    return index >= 0 && index < BUNDLED_COUNT ? BUNDLED[index].name : "";
+}
+
+void fontSetSubtitleBundled(int index)
+{
+    flushCache();  // Glyphs of the font before.
+    bool ok = index >= 0 && index < BUNDLED_COUNT && initFace(&g_faces[FONT_SUBTITLE], BUNDLED[index].data);
+    if (!ok)
+        initFace(&g_faces[FONT_SUBTITLE], font_bold_ttf);
+    free(g_subtitle_data);
+    g_subtitle_data = NULL;
 }
 
 bool fontSetSubtitleFile(const char *path)

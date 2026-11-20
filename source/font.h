@@ -21,6 +21,11 @@ void fontExit(void);
 // one). Characters it hasn't come from the built-in fonts. False if the file
 // can't be read as a font: the built-in one stays.
 bool fontSetSubtitleFile(const char *path);
+// The fonts KaiVideo brings for subtitles besides its own (bold, under the OFL):
+// how many, their names, and choosing one. -1 for KaiVideo's own.
+int fontBundledCount(void);
+const char *fontBundledName(int index);
+void fontSetSubtitleBundled(int index);
 
 // How many console fallback fonts loaded (0 if none: CJK shows as '?').
 int fontFallbackCount(void);

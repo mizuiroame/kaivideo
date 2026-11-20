@@ -65,11 +65,26 @@ static int listSubtitleFonts(char names[][SETTINGS_NAME_MAX], int max)
     return count;
 }
 
-// Text subtitles in the font chosen (config.subtitle_font). False if its file can't be read.
+// One of the fonts KaiVideo brings, by name, or -1.
+static int bundledFont(const char *name)
+{
+    for (int i = 0; i < fontBundledCount(); i++)
+        if (!strcmp(fontBundledName(i), name))
+            return i;
+    return -1;
+}
+
+// Text subtitles in the font chosen (config.subtitle_font): KaiVideo's own,
+// one it brings (by name), or a file in config/fonts. False if that file can't be read.
 static bool loadSubtitleFont(const App *app)
 {
     if (!app->config.subtitle_font[0])
         return fontSetSubtitleFile(NULL);
+    int bundled = bundledFont(app->config.subtitle_font);
+    if (bundled >= 0) {
+        fontSetSubtitleBundled(bundled);
+        return true;
+    }
     char folder[APPROOT_PATH_MAX + 32], path[APPROOT_PATH_MAX + SETTINGS_NAME_MAX + 40];
     appConfigPath(folder, sizeof(folder), SUBTITLE_FONTS_FOLDER);
     snprintf(path, sizeof(path), "%s/%s", folder, app->config.subtitle_font);
@@ -78,14 +93,13 @@ static bool loadSubtitleFont(const App *app)
 
 bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size)
 {
+    // KaiVideo's own font, the ones it brings, then the files in config/fonts.
     static char names[FONT_FILES_MAX][SETTINGS_NAME_MAX];
-    int count = listSubtitleFonts(names, FONT_FILES_MAX);
-    if (count == 0) {
-        app->config.subtitle_font[0] = '\0';
-        snprintf(note, note_size, "Put .ttf or .otf fonts in the config/fonts folder next to KaiVideo.");
-        return false;
-    }
-    int index = 0;  // 0 is the built-in font, then the files.
+    int bundled = fontBundledCount() < FONT_FILES_MAX ? fontBundledCount() : FONT_FILES_MAX;
+    for (int i = 0; i < bundled; i++)
+        snprintf(names[i], SETTINGS_NAME_MAX, "%s", fontBundledName(i));
+    int count = bundled + listSubtitleFonts(names + bundled, FONT_FILES_MAX - bundled);
+    int index = 0;  // 0 is the built-in font, then the others.
     for (int i = 0; i < count; i++)
         if (!strcmp(names[i], app->config.subtitle_font))
             index = i + 1;
