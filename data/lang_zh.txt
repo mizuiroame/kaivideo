@@ -1,0 +1,1369 @@
+# KaiVideo 简体中文。
+# 每行英文后面是其译文，每对之间空一行。
+# %d、%s 等占位符保持原样，顺序不变。详见 source/lang.h。
+language = 简体中文
+
+ (.srt file)
+ （.srt文件）
+
+ The connection isn't encrypted: use https outside your home.
+ 连接未加密：在家以外的地方请使用https。
+
+ · %d watched offline, told to the server when it's back
+ · %d个离线观看记录，服务器恢复后会同步
+
+ · converted, %.0f Mb/s
+ · 已转码，%.0f Mb/s
+
+%.80s can't be read as a font.
+无法将%.80s作为字体读取。
+
+%d downloading · %d on the card (%s) · %d deleted
+%d个下载中 · SD卡上%d个（%s） · 已删除%d个
+
+%d episode
+%d集
+
+%d episode added to Downloads (+ menu).
+已将%d集添加到下载（+菜单）。
+
+%d episodes
+%d集
+
+%d episodes added to Downloads (+ menu).
+已将%d集添加到下载（+菜单）。
+
+%d episodes added to Downloads; %d can't be: %s
+已将%d集添加到下载；%d集无法添加：%s
+
+%d failed
+%d个失败
+
+%d h %d min
+%d小时%d分钟
+
+%d min
+%d分钟
+
+%d paused
+%d个已暂停
+
+%d seasons · %d episodes
+%d季 · %d集
+
+%d-bit %s video can't be played.
+无法播放%d位%s视频。
+
+%s %dx%d, %.3g fps
+%s %dx%d, %.3g fps
+
+%s %dx%d, %.3g fps, software
+%s %dx%d, %.3g fps，软件解码
+
+%s %s on %s answers.%s
+%s %s（%s）已响应。%s
+
+%s (burned in)
+%s（内嵌）
+
+%s can't be read (JPEG or PNG, up to 50 megapixels).
+无法读取%s（JPEG或PNG，最多5000万像素）。
+
+%s of %s
+%s / %s
+
+%s server, like 192.168.0.10:8096
+%s服务器，例如 192.168.0.10:8096
+
+%s user name
+%s用户名
+
+%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8.
+无法播放%s视频：KaiVideo支持H.264、HEVC、VP9、AV1和VP8。
+
+%s%s; they go on after
+%s%s；之后继续
+
+%s's library couldn't be read: it shows as before.
+无法读取%s的媒体库：将显示之前的内容。
+
+%s's own
+%s默认色
+
+%s's videos are in the library.
+%s的视频已加入媒体库。
+
+%s, %d kHz, %d channel
+%s，%d kHz，%d声道
+
+%s, %d kHz, %d channels
+%s，%d kHz，%d声道
+
+1 Mb/s
+1 Mb/s
+
+1.5 Mb/s
+1.5 Mb/s
+
+10 Mb/s
+10 Mb/s
+
+12-hour
+12小时制
+
+15 Mb/s
+15 Mb/s
+
+2 Mb/s
+2 Mb/s
+
+20 Mb/s
+20 Mb/s
+
+24-hour
+24小时制
+
+3 Mb/s
+3 Mb/s
+
+30 Mb/s
+30 Mb/s
+
+4 Mb/s
+4 Mb/s
+
+40 Mb/s
+40 Mb/s
+
+420 kb/s
+420 kb/s
+
+4K: your server converts it for the console.
+4K：服务器会为主机转码。
+
+6 Mb/s
+6 Mb/s
+
+720 kb/s
+720 kb/s
+
+8 Mb/s
+8 Mb/s
+
+[^v] choose  [<>][A] change  [B] back
+[^v] 选择  [<>][A] 更改  [B] 返回
+
+[^v] choose  [>][A] open  [B] close
+[^v] 选择  [>][A] 打开  [B] 关闭
+
+[A] choose  [B] cancel  [+] exit
+[A] 选择  [B] 取消  [+] 退出
+
+[A] choose  [B] close  [+] exit
+[A] 选择  [B] 关闭  [+] 退出
+
+[A] download again  [X] take off the list
+[A] 重新下载  [X] 从列表移除
+
+[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] 打开  [B] 上一级文件夹  [<>] 翻页  [Y] 搜索  [ZL][ZR] 标签  [+] 菜单
+
+[A] open  [B] folder above  [X] use this folder  [+] menu
+[A] 打开  [B] 上一级文件夹  [X] 使用此文件夹  [+] 菜单
+
+[A] open  [B] folder above  [X] use this folder  [-] cancel
+[A] 打开  [B] 上一级文件夹  [X] 使用此文件夹  [-] 取消
+
+[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 打开  [Y] 搜索  [ZL][ZR] 标签  [-] 设置  [+] 菜单
+
+[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start
+[A] 暂停  [<>] 10秒  [L][R] 1分钟  [^] 播放  [X] 音频  [Y] 字幕  [-] 隐藏  [B] 返回  [+] 菜单  [ZL] 从头
+
+[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu
+[A] 暂停  [L][R] 频道  [^] 播放  [X] 音频  [Y] 字幕  [-] 隐藏  [B] 返回  [+] 菜单
+
+[A] pause / go on  [X] cancel
+[A] 暂停/继续  [X] 取消
+
+[A] play  [X] delete from the card
+[A] 播放  [X] 从SD卡删除
+
+[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] 播放  [X] 已观看  [<>] 季  [B] 返回  [Y] 搜索  [ZL][ZR] 标签  [+] 菜单
+
+[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
+[A] 播放  [X] 已观看  [R] 收藏  [L] 下载  [<>] 季  [B] 返回  [ZL][ZR] 标签
+
+[A] play  [Y] from the start  [X] watched  [B] back
+[A] 播放  [Y] 从头播放  [X] 已观看  [B] 返回
+
+[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
+[A] 播放  [Y] 从头播放  [X] 已观看  [R] 收藏  [L] 下载  [B] 返回
+
+[A] try again  [X] cancel
+[A] 重试  [X] 取消
+
+[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 观看  [^v] 频道  [<>] 节目表  [ZL][ZR] 标签  [-] 设置  [+] 菜单
+
+[A][B] back
+[A][B] 返回
+
+[B] cancel
+[B] 取消
+
+[L][R] channel  [B] cancel
+[L][R] 频道  [B] 取消
+
+[Y] clear deleted
+[Y] 清空已删除
+
+[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu
+[Y] 输入搜索  [A] 打开  [ZL][ZR] 标签  [-] 设置  [+] 菜单
+
+A %s
+A %s
+
+A download is on the card.
+已有下载内容存入SD卡。
+
+A video player for Switch 2 homebrew on kaiHEN.
+适用于kaiHEN的Switch 2自制视频播放器。
+
+A-B loop
+A-B循环
+
+About
+关于
+
+Accent color
+强调色
+
+Add to Favorites
+添加到收藏
+
+Added to Downloads (+ menu).
+已添加到下载（+菜单）。
+
+Added to Downloads: the server converts it first, at %.0f Mb/s.
+已添加到下载：服务器会先以%.0f Mb/s转码。
+
+Added to Favorites.
+已添加到收藏。
+
+Already looking for videos.
+正在查找视频。
+
+AM
+上午
+
+and enter this code.
+并输入此代码。
+
+Arabic
+阿拉伯语
+
+Audio
+音频
+
+Audio delay
+音频延迟
+
+Auto
+自动
+
+Back
+返回
+
+Back to the library
+返回媒体库
+
+Background
+背景
+
+Background blur
+背景模糊
+
+Black
+黑色
+
+Blue
+蓝色
+
+Built-in
+内置
+
+Cancel
+取消
+
+Cancelling...
+正在取消...
+
+Catalan
+加泰罗尼亚语
+
+CC
+CC
+
+Certificate check
+证书验证
+
+Changing the sound track
+正在切换音轨
+
+Chapter %d
+第%d章
+
+Chinese
+中文
+
+Choose the folder with your videos
+选择存放视频的文件夹
+
+Choose the library folder first.
+请先选择媒体库文件夹。
+
+Clear
+清空
+
+Cleared %d deleted download from the list.
+已从列表中清除%d个已删除的下载。
+
+Cleared %d deleted downloads from the list.
+已从列表中清除%d个已删除的下载。
+
+Clock
+时钟
+
+Color
+颜色
+
+Connected to %s as %s. Loading its library...
+已连接到%s，用户为%s。正在载入媒体库...
+
+Contacting plex.tv...
+正在连接plex.tv...
+
+Contacting the server...
+正在连接服务器...
+
+Continue watching
+继续观看
+
+Converting
+转码中
+
+Converting · %d%% · %s
+转码中 · %d%% · %s
+
+Cyan
+青色
+
+Czech
+捷克语
+
+Danish
+丹麦语
+
+Dark
+深色
+
+Dark box
+深色底框
+
+DELETED FROM THE CARD
+已从SD卡删除
+
+Deleted from the card
+已从SD卡删除
+
+Deleted from the card. It stays under Deleted, to download again.
+已从SD卡删除。它会保留在“已删除”中，可重新下载。
+
+Display
+显示
+
+Download
+下载
+
+Download again
+重新下载
+
+Download cancelled.
+已取消下载。
+
+Download converted
+下载转码版本
+
+Download paused.
+已暂停下载。
+
+Download season
+下载整季
+
+DOWNLOADING
+下载中
+
+Downloading
+下载中
+
+Downloading it again.
+正在重新下载。
+
+Downloads
+下载
+
+Downloads wait while this plays from the server
+从服务器播放时，下载会暂停等待
+
+Dutch
+荷兰语
+
+Emby
+Emby
+
+English
+英语
+
+Enter the server's address first, or find it on this network.
+请先输入服务器地址，或在此网络中查找。
+
+Enter the server's address first.
+请先输入服务器地址。
+
+EPISODE
+单集
+
+Episode %d
+第%d集
+
+Episodes are found by names like "Show S01E02".
+剧集根据“Show S01E02”这样的名称识别。
+
+Every video here is an episode of a series.
+这里的每个视频都是剧集中的一集。
+
+Exit
+退出
+
+Exit KaiVideo
+退出KaiVideo
+
+Exit KaiVideo?
+要退出KaiVideo吗？
+
+Failed
+失败
+
+Favorite
+收藏
+
+Favorite series
+收藏的剧集
+
+Favorites
+收藏
+
+Files
+文件
+
+Fill
+填充
+
+Film
+电影
+
+FILM
+电影
+
+Films
+电影
+
+Find servers on this network
+在此网络中查找服务器
+
+Finishing...
+正在完成...
+
+Finnish
+芬兰语
+
+Font
+字体
+
+Found %d servers. Using %s at %s; type another under Server.
+找到%d台服务器。正在使用%s（%s）；可在“服务器”中输入其他地址。
+
+Found %s at %s.
+已找到%s（%s）。
+
+Frames: %.1f a second, %.1f%% late
+帧：每秒%.1f帧，%.1f%%延迟
+
+Frames: measuring...
+帧：正在测量...
+
+Free and open source under the MIT license; FFmpeg under the LGPL.
+基于MIT许可证的免费开源软件；FFmpeg基于LGPL许可证。
+
+French
+法语
+
+From start
+从头播放
+
+German
+德语
+
+Greek
+希腊语
+
+Green
+绿色
+
+HDR: your server converts it for the console.
+HDR：服务器会为主机转码。
+
+Hebrew
+希伯来语
+
+High
+高
+
+High bitrate: your server converts it for the console.
+高码率：服务器会为主机转码。
+
+Hindi
+印地语
+
+Home
+首页
+
+Hungarian
+匈牙利语
+
+In Favorites
+已收藏
+
+In Jellyfin on your phone or computer, open your
+请在手机或电脑上的Jellyfin中打开你的
+
+Indonesian
+印度尼西亚语
+
+It couldn't be added to the downloads.
+无法添加到下载。
+
+It couldn't be written to the card.
+无法写入SD卡。
+
+It stopped.
+已停止。
+
+It's on the card: it plays from there. Downloads (+ menu) deletes it.
+已存入SD卡：将从SD卡播放。可在下载（+菜单）中删除。
+
+Italian
+意大利语
+
+Its download waits while it plays from the server, and the others too
+从服务器播放时，此下载和其他下载都会暂停等待
+
+Japanese
+日语
+
+Jellyfin
+Jellyfin
+
+KaiVideo can't download from there.
+KaiVideo无法从该位置下载。
+
+KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
+KaiVideo会在其中及子文件夹中查找电影和剧集：按-或进入设置 > SD卡文件夹。
+
+KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
+KaiVideo支持播放MP4、MKV和WebM文件（H.264、HEVC、VP9、AV1、VP8）。
+
+Korean
+韩语
+
+Language
+语言
+
+Large
+大
+
+LATER
+稍后
+
+Library
+媒体库
+
+Linked. Finding your Plex server...
+已关联。正在查找你的Plex服务器...
+
+LIVE
+直播
+
+Live TV
+电视直播
+
+Live TV comes from your Jellyfin server's tuners and guide.
+电视直播来自Jellyfin服务器的调谐器和节目表。
+
+Loading...
+正在载入...
+
+Look for new videos
+查找新视频
+
+Looking for %s servers on this network...
+正在此网络中查找%s服务器...
+
+Looking for videos...
+正在查找视频...
+
+Looking for videos... %zu
+正在查找视频... %zu
+
+Low
+低
+
+Made by
+制作者
+
+Malay
+马来语
+
+Medium
+中
+
+Midnight
+午夜蓝
+
+Network: %.1f Mb/s
+网络：%.1f Mb/s
+
+No channels
+没有频道
+
+No films
+没有电影
+
+No guide for now
+暂无节目表
+
+No guide for these hours
+该时段暂无节目表
+
+No Jellyfin server answered on this network. Type its address under Server.
+此网络中没有Jellyfin服务器响应。请在“服务器”中输入其地址。
+
+No series
+没有剧集
+
+No sound
+无声音
+
+No subtitles
+无字幕
+
+No videos here yet
+这里还没有视频
+
+No videos or folders here.
+这里没有视频或文件夹。
+
+None
+无
+
+Norwegian
+挪威语
+
+Not affiliated with or endorsed by Nintendo.
+与Nintendo无关，也未获得其认可。
+
+Not chosen
+未选择
+
+Not enough memory for this video's frames.
+内存不足，无法处理此视频的画面帧。
+
+Not set
+未设置
+
+Not signed in
+未登录
+
+Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
+该地址和端口没有响应。服务器是否已开启？端口是否正确（通常为8096）？
+
+Nothing downloaded yet: open a film or episode from a server and press L.
+尚未下载任何内容：请打开服务器上的电影或单集，然后按L。
+
+Nothing found
+未找到内容
+
+Nothing here yet
+这里还没有内容
+
+Nothing in the library is called "%s".
+媒体库中没有名为“%s”的内容。
+
+Nothing yet: open a film or episode from a server and press L to download it.
+还没有内容：打开服务器上的电影或单集，按L即可下载。
+
+Off
+关
+
+Off: any certificate
+关：接受任何证书
+
+On
+开
+
+ON NOW
+正在播出
+
+ON THE CARD
+SD卡上
+
+On the card
+SD卡上
+
+On your phone or computer, go to plex.tv/link
+请在手机或电脑上访问 plex.tv/link
+
+Open source (MIT)  ·  github.com/mizuiroame/kaivideo
+开源软件（MIT）  ·  github.com/mizuiroame/kaivideo
+
+Orange
+橙色
+
+Original
+原始
+
+Out of memory.
+内存不足。
+
+Outline
+描边
+
+Password
+密码
+
+Paused
+已暂停
+
+Paused at %d%%
+已暂停于%d%%
+
+Paused · %d%%
+已暂停 · %d%%
+
+Picture
+画面
+
+Pink
+粉色
+
+Play
+播放
+
+Play next episode
+播放下一集
+
+play now
+立即播放
+
+Playback
+播放
+
+Playing it streams it from the server: the downloads pause until you stop.
+播放时将从服务器串流：下载会暂停，直到停止播放。
+
+Playing: converted by Jellyfin
+播放方式：由Jellyfin转码
+
+Playing: converted by Jellyfin, at most %s
+播放方式：由Jellyfin转码，最高%s
+
+Playing: from the SD card
+播放方式：从SD卡
+
+Playing: the original file from Jellyfin
+播放方式：Jellyfin上的原始文件
+
+Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
+可播放SD卡中的MP4、MKV和WebM，也可播放来自Jellyfin、Emby或
+
+Plex
+Plex
+
+Plex server, with sound tracks, subtitles and a library of your films and series.
+Plex服务器的视频，支持音轨、字幕以及电影和剧集媒体库。
+
+plex.tv can't be reached.
+无法连接plex.tv。
+
+plex.tv refused that.
+plex.tv拒绝了请求。
+
+Plum
+梅紫色
+
+PM
+下午
+
+Polish
+波兰语
+
+Portuguese
+葡萄牙语
+
+Press X again to cancel it.
+再按一次X即可取消。
+
+Press X again to delete it from the card.
+再按一次X即可从SD卡删除。
+
+profile, choose Quick Connect and enter this code.
+个人资料，选择Quick Connect并输入此代码。
+
+Purple
+紫色
+
+Put JPEG or PNG images in a Backgrounds folder in your library folder.
+请将JPEG或PNG图片放入媒体库文件夹中的Backgrounds文件夹。
+
+Reading the guide...
+正在读取节目表...
+
+Ready ahead: %.0f MB
+已缓冲：%.0f MB
+
+Ready ahead: %.1f s
+已缓冲：%.1f秒
+
+Recently added
+最近添加
+
+Red
+红色
+
+Removed from Favorites.
+已从收藏中移除。
+
+Resume
+继续播放
+
+Resumed at %s  ·  ZL from the start
+从%s继续播放  ·  ZL 从头播放
+
+Romanian
+罗马尼亚语
+
+Russian
+俄语
+
+S%02dE%02d · %s
+S%02dE%02d · %s
+
+SD card
+SD卡
+
+SD card folder
+SD卡文件夹
+
+Search
+搜索
+
+Search films and series
+搜索电影和剧集
+
+Search films, series and episodes  (A or Y)
+搜索电影、剧集和单集  （A或Y）
+
+Season %d
+第%d季
+
+Season %d, episode %d
+第%d季 第%d集
+
+Season on the card
+SD卡上的整季
+
+Season: %d of %d on the card
+本季：%d/%d集在SD卡上
+
+Series
+剧集
+
+SERIES
+剧集
+
+Series in Favorites
+已收藏的剧集
+
+Server
+服务器
+
+Server video quality
+服务器视频画质
+
+Settings
+设置
+
+Sign in at plex.tv/link
+在 plex.tv/link 登录
+
+Sign in to its server to download it.
+请登录其服务器后再下载。
+
+Sign in to Jellyfin
+登录Jellyfin
+
+Sign in to Plex
+登录Plex
+
+Sign in with a code
+使用代码登录
+
+Sign in with a password
+使用密码登录
+
+Sign out
+退出登录
+
+Sign out first to change the server.
+请先退出登录再更换服务器。
+
+Size
+大小
+
+Skip
+跳过
+
+Skip credits
+跳过片尾
+
+Skip intro
+跳过片头
+
+Skip preview
+跳过预告
+
+Skip recap
+跳过回顾
+
+Small
+小
+
+Sound: %s
+声音：%s
+
+Sound: %s. %s
+声音：%s。%s
+
+Spanish
+西班牙语
+
+Speed
+速度
+
+Speed: %s
+速度：%s
+
+Starting...
+正在启动...
+
+Statistics
+统计信息
+
+Still asking the network...
+仍在查询网络...
+
+Still downloading: playing it streams it from the server, and its download and the others pause until you stop.
+仍在下载：播放时将从服务器串流，此下载和其他下载会暂停，直到停止播放。
+
+Stretch
+拉伸
+
+Style
+样式
+
+Subtitle delay
+字幕延迟
+
+Subtitles
+字幕
+
+Subtitles off
+关闭字幕
+
+Subtitles: %s
+字幕：%s
+
+Swedish
+瑞典语
+
+Taken off the list.
+已从列表移除。
+
+Test the connection
+测试连接
+
+Testing the connection...
+正在测试连接...
+
+Thai
+泰语
+
+That address answers (%ld), but not as %s. Check the port and the path.
+该地址有响应（%ld），但不是%s。请检查端口和路径。
+
+That address answers, but it isn't %s. Check the port (usually 8096).
+该地址有响应，但不是%s。请检查端口（通常为8096）。
+
+That folder can't be opened.
+无法打开该文件夹。
+
+That isn't a server's address.
+这不是服务器地址。
+
+That place can't convert videos.
+该位置无法转码视频。
+
+That port may want a secure connection: write https:// before the address.
+该端口可能需要安全连接：请在地址前加上 https://。
+
+That track can't be played.
+无法播放该音轨。
+
+The audio output isn't available.
+音频输出不可用。
+
+The card needs %.1f GB more free for it.
+SD卡还需要%.1f GB可用空间。
+
+The channel's own stream can't be read.
+无法读取该频道的原始视频流。
+
+The connection failed. Check the address and the network.
+连接失败。请检查地址和网络。
+
+The connection to the server was lost.
+与服务器的连接已中断。
+
+The console's decoder can't play this %s video (%dx%d, 0x%x).
+主机的解码器无法播放此%s视频（%dx%d，0x%x）。
+
+The decoding thread can't start.
+无法启动解码线程。
+
+The download goes on.
+下载继续进行。
+
+The file has no video.
+该文件没有视频。
+
+The keyboard couldn't open.
+无法打开键盘。
+
+The library couldn't be read.
+无法读取媒体库。
+
+The library's folder name is too long for downloads.
+媒体库文件夹名称过长，无法用于下载。
+
+The name in the address couldn't be found. Check it, or use the server's IP address.
+找不到地址中的名称。请检查地址，或使用服务器的IP地址。
+
+The network can't be used.
+无法使用网络。
+
+The network couldn't be asked. Type the server's address under Server.
+无法查询网络。请在“服务器”中输入服务器地址。
+
+The secure connection failed. Does the server use https on that port?
+安全连接失败。服务器在该端口上是否使用https？
+
+the server
+服务器
+
+The server answered %ld.
+服务器返回了%ld。
+
+The server can't be reached.
+无法连接服务器。
+
+The server can't convert this sound track.
+服务器无法转码此音轨。
+
+The server can't play this video here.
+服务器无法在此播放该视频。
+
+The server comes from your Plex account.
+服务器来自你的Plex帐户。
+
+The server couldn't convert this video (its log may say why).
+服务器无法转码此视频（服务器日志中可能有原因）。
+
+The server didn't answer in time. Is the console on the same network as the server?
+服务器未及时响应。主机和服务器是否在同一网络中？
+
+The server didn't let it be downloaded.
+服务器不允许下载。
+
+The server didn't start converting this sound track.
+服务器未开始转码此音轨。
+
+The server didn't start converting this video.
+服务器未开始转码此视频。
+
+The server doesn't have this video any more.
+服务器上已没有此视频。
+
+The server found can't be used: type its address under Server.
+找到的服务器无法使用：请在“服务器”中输入其地址。
+
+The server refused that.
+服务器拒绝了请求。
+
+The server signed this console out.
+服务器已将此主机退出登录。
+
+The server stopped converting it.
+服务器已停止转码。
+
+The server stopped sending it.
+服务器已停止发送。
+
+The server's answer can't be read.
+无法读取服务器的响应。
+
+The server's certificate isn't trusted. If the server has its own certificate, turn Certificate check off.
+服务器证书不受信任。如果服务器使用自签名证书，请关闭“证书验证”。
+
+The server's conversion can't be read.
+无法读取服务器的转码内容。
+
+The sound thread can't start.
+无法启动声音线程。
+
+The video can't be decoded.
+无法解码该视频。
+
+The video can't be opened now.
+现在无法打开该视频。
+
+The video can't be prepared for the decoder.
+无法为解码器准备该视频。
+
+The video couldn't be loaded.
+无法载入该视频。
+
+The video decoder refused the video (0x%x).
+视频解码器拒绝了该视频（0x%x）。
+
+The video decoder stopped taking the video.
+视频解码器已停止接收该视频。
+
+Theme
+主题
+
+This %s video can't be decoded.
+无法解码此%s视频。
+
+This isn't a video KaiVideo can read (MP4, MKV or WebM).
+这不是KaiVideo可读取的视频（MP4、MKV或WebM）。
+
+This library on the server has no films or episodes KaiVideo found.
+KaiVideo未在服务器的此媒体库中找到电影或单集。
+
+This Plex account has no server.
+此Plex帐户没有服务器。
+
+This season is in Downloads already (+ menu).
+本季已在下载中（+菜单）。
+
+This video has no subtitles.
+此视频没有字幕。
+
+This video has one sound track.
+此视频只有一条音轨。
+
+This video's picture format can't be shown.
+无法显示此视频的画面格式。
+
+This video's sound (%s) can't be played.
+无法播放此视频的声音（%s）。
+
+This video's sound can't be played.
+无法播放此视频的声音。
+
+Thumbnails
+缩略图
+
+Track %d
+音轨%d
+
+Tuning in...
+正在调台...
+
+Turkish
+土耳其语
+
+Ukrainian
+乌克兰语
+
+Unwatched
+未观看
+
+UP NEXT
+接下来
+
+UP NEXT  ·  %d s
+接下来  ·  %d秒
+
+Update the library
+更新媒体库
+
+Updating the servers' libraries... %d
+正在更新服务器的媒体库... %d
+
+Use this folder
+使用此文件夹
+
+Version %s
+版本 %s
+
+Video quality
+视频画质
+
+Video: %s
+视频：%s
+
+Vietnamese
+越南语
+
+Volume
+音量
+
+Waiting
+等待中
+
+Waiting for the network (%s)
+正在等待网络（%s）
+
+Waiting for the server...
+正在等待服务器...
+
+Waiting to download
+等待下载
+
+Watched
+已观看
+
+White
+白色
+
+Wrong user name or password.
+用户名或密码错误。
+
+Yellow
+黄色
+
+Your Emby server: sign in with its user name and password.
+你的Emby服务器：使用用户名和密码登录。
+
+Your Jellyfin server: sign in with Quick Connect or a password.
+你的Jellyfin服务器：使用Quick Connect或密码登录。
+
+Your Plex account: sign in at plex.tv/link, and its server is found.
+你的Plex帐户：在 plex.tv/link 登录后即可找到服务器。
+
+Your Plex server doesn't answer.
+你的Plex服务器没有响应。
+
+Your server converts this format for the console.
+服务器会为主机转码此格式。
+
+[ZL][ZR] tabs  [+] menu
+[ZL][ZR] 标签  [+] 菜单
+
+Address
+地址
+
+Enter the folder's address first.
+请先输入文件夹地址。
+
+Forget this folder
+忘记此文件夹
+
+Network folder
+网络文件夹
+
+Network folder set: test the connection, or open it in Files.
+网络文件夹已设置：可测试连接，或在“文件”中打开。
+
+Network folder · %s
+网络文件夹 · %s
+
+Nothing answered at that address and port. Is the server on, and is the port right?
+该地址和端口没有响应。服务器是否已开启？端口是否正确？
+
+Set up the network folder in Settings first.
+请先在“设置”中设置网络文件夹。
+
+That address answers, but it isn't a WebDAV folder. Check the path after the port.
+该地址有响应，但不是WebDAV文件夹。请检查端口后面的路径。
+
+That folder isn't on the server.
+服务器上没有该文件夹。
+
+That folder's name is too long.
+该文件夹名称过长。
+
+The network folder answers. At its top: folders %d, videos %d.
+网络文件夹有响应。顶层：文件夹%d个，视频%d个。
+
+The network folder is forgotten.
+已忘记网络文件夹。
+
+The server doesn't let this user see that folder.
+服务器不允许此用户查看该文件夹。
+
+The server's certificate isn't trusted.
+服务器证书不受信任。
+
+User and password
+用户名和密码
+
+Playing: from the network folder
+播放方式：从网络文件夹
+
+A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
+网络中的共享文件夹（SMB）或WebDAV文件夹。按X显示其媒体库；它会显示在“文件”的最前面。
+
+Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
+地址：\\PC\Videos（共享文件夹）或 192.168.0.10:8098（WebDAV）
+
+Nothing answered at that address. Is the computer on, and is the folder shared?
+该地址没有响应。电脑是否已开启？文件夹是否已共享？
+
+That isn't a network folder's address.
+这不是网络文件夹地址。
+
+That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
+这不是网络文件夹地址：\\PC\Videos、smb://、http:// 或 https://。
+
+That shared folder isn't on the computer. Check the share's name after the computer's.
+电脑上没有该共享文件夹。请检查电脑名称后面的共享名称。
+
+The shared folder couldn't be opened (%d: %s).
+无法打开共享文件夹（%d: %s）。
+
+User name (empty: none; DOMAIN\user for a domain)
+用户名（留空表示无；域用户请用 DOMAIN\user）

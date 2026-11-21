@@ -9,10 +9,14 @@ UI_SRC  := scroll.c gfx.c font.c ui.c ui_buttons.c ui_library.c ui_settings.c se
 
 .PHONY: run clean
 
+# Every language in data/ too, each in build/<id>: what no longer fits shows.
+# For Japanese, Chinese and Korean, KAIVIDEO_CJK_FONT names a font with them
+# (font_system_host.c); without one, their text draws as boxes.
+LANGS   := $(patsubst ../../data/lang_%.txt,%,$(wildcard ../../data/lang_*.txt))
+
 run: $(OUT)/preview
 	./$(OUT)/preview $(OUT)
-	@mkdir -p $(OUT)/es
-	./$(OUT)/preview $(OUT)/es ../../data/lang_es.txt
+	@for l in $(LANGS); do mkdir -p $(OUT)/$$l && ./$(OUT)/preview $(OUT)/$$l ../../data/lang_$$l.txt || exit 1; done
 
 $(OUT)/font_regular_ttf.c: ../../data/font_regular.ttf embed.py
 	python3 embed.py $< $(OUT) font_regular_ttf

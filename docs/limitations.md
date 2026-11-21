@@ -49,8 +49,6 @@
 
 ## Plans
 
-- More languages: French, Italian, Portuguese, German, Japanese, Chinese and
-  Korean.
 - `.srt` files from network folders, and pictures from `poster.jpg` or
   `folder.jpg` when a folder has one.
 - **Picture subtitles** (PGS, VobSub) from the SD card.

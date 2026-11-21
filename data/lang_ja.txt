@@ -1,0 +1,1369 @@
+# KaiVideo 日本語版。
+# 英語の行の次の行がその訳で、組ごとに空行を入れます。
+# %d、%s などはそのまま、同じ順番で残します。source/lang.h を参照。
+language = 日本語
+
+ (.srt file)
+ （.srtファイル）
+
+ The connection isn't encrypted: use https outside your home.
+ 接続は暗号化されていません。自宅の外では https を使ってください。
+
+ · %d watched offline, told to the server when it's back
+ · オフラインで%d本視聴済み、接続が戻るとサーバーに伝えます
+
+ · converted, %.0f Mb/s
+ · 変換済み、%.0f Mb/s
+
+%.80s can't be read as a font.
+%.80s はフォントとして読み込めません。
+
+%d downloading · %d on the card (%s) · %d deleted
+ダウンロード中 %d · SDカード内 %d（%s） · 削除済み %d
+
+%d episode
+%d話
+
+%d episode added to Downloads (+ menu).
+%d話をダウンロードに追加しました（+メニュー）。
+
+%d episodes
+%d話
+
+%d episodes added to Downloads (+ menu).
+%d話をダウンロードに追加しました（+メニュー）。
+
+%d episodes added to Downloads; %d can't be: %s
+%d話をダウンロードに追加しました。%d話は追加できません：%s
+
+%d failed
+失敗 %d
+
+%d h %d min
+%d時間%d分
+
+%d min
+%d分
+
+%d paused
+一時停止中 %d
+
+%d seasons · %d episodes
+%dシーズン · 全%d話
+
+%d-bit %s video can't be played.
+%dビットの%s動画は再生できません。
+
+%s %dx%d, %.3g fps
+%s %dx%d, %.3g fps
+
+%s %dx%d, %.3g fps, software
+%s %dx%d, %.3g fps, ソフトウェア
+
+%s %s on %s answers.%s
+%s %s（%s）が応答しました。%s
+
+%s (burned in)
+%s（焼き込み）
+
+%s can't be read (JPEG or PNG, up to 50 megapixels).
+%s を読み込めません（JPEG または PNG、5000万画素まで）。
+
+%s of %s
+%s / %s
+
+%s server, like 192.168.0.10:8096
+%sサーバー（例: 192.168.0.10:8096）
+
+%s user name
+%sのユーザー名
+
+%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8.
+%s動画は再生できません。KaiVideo が再生できるのは H.264、HEVC、VP9、AV1、VP8 です。
+
+%s%s; they go on after
+%s%s。終了後に再開します
+
+%s's library couldn't be read: it shows as before.
+%sのライブラリーを読み込めませんでした。前回の内容を表示しています。
+
+%s's own
+%sの色
+
+%s's videos are in the library.
+%sの動画がライブラリーに入りました。
+
+%s, %d kHz, %d channel
+%s、%d kHz、%dチャンネル
+
+%s, %d kHz, %d channels
+%s、%d kHz、%dチャンネル
+
+1 Mb/s
+1 Mb/s
+
+1.5 Mb/s
+1.5 Mb/s
+
+10 Mb/s
+10 Mb/s
+
+12-hour
+12時間制
+
+15 Mb/s
+15 Mb/s
+
+2 Mb/s
+2 Mb/s
+
+20 Mb/s
+20 Mb/s
+
+24-hour
+24時間制
+
+3 Mb/s
+3 Mb/s
+
+30 Mb/s
+30 Mb/s
+
+4 Mb/s
+4 Mb/s
+
+40 Mb/s
+40 Mb/s
+
+420 kb/s
+420 kb/s
+
+4K: your server converts it for the console.
+4K：サーバーが本体向けに変換します。
+
+6 Mb/s
+6 Mb/s
+
+720 kb/s
+720 kb/s
+
+8 Mb/s
+8 Mb/s
+
+[^v] choose  [<>][A] change  [B] back
+[^v] 選ぶ  [<>][A] 変更  [B] 戻る
+
+[^v] choose  [>][A] open  [B] close
+[^v] 選ぶ  [>][A] 開く  [B] 閉じる
+
+[A] choose  [B] cancel  [+] exit
+[A] 決定  [B] キャンセル  [+] 終了
+
+[A] choose  [B] close  [+] exit
+[A] 決定  [B] 閉じる  [+] 終了
+
+[A] download again  [X] take off the list
+[A] 再ダウンロード  [X] リストから外す
+
+[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] 開く  [B] 上のフォルダー  [<>] ページ  [Y] 検索  [ZL][ZR] タブ  [+] メニュー
+
+[A] open  [B] folder above  [X] use this folder  [+] menu
+[A] 開く  [B] 上のフォルダー  [X] このフォルダーを使う  [+] メニュー
+
+[A] open  [B] folder above  [X] use this folder  [-] cancel
+[A] 開く  [B] 上のフォルダー  [X] このフォルダーを使う  [-] キャンセル
+
+[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 開く  [Y] 検索  [ZL][ZR] タブ  [-] 設定  [+] メニュー
+
+[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start
+[A] 一時停止  [<>] 10秒  [L][R] 1分  [^] 再生  [X] 音声  [Y] 字幕  [-] 隠す  [B] 戻る  [+] メニュー  [ZL] 最初から
+
+[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu
+[A] 一時停止  [L][R] チャンネル  [^] 再生  [X] 音声  [Y] 字幕  [-] 隠す  [B] 戻る  [+] メニュー
+
+[A] pause / go on  [X] cancel
+[A] 一時停止 / 再開  [X] キャンセル
+
+[A] play  [X] delete from the card
+[A] 再生  [X] SDカードから削除
+
+[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] 再生  [X] 視聴済み  [<>] シーズン  [B] 戻る  [Y] 検索  [ZL][ZR] タブ  [+] メニュー
+
+[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
+[A] 再生  [X] 視聴済み  [R] お気に入り  [L] ダウンロード  [<>] シーズン  [B] 戻る  [ZL][ZR] タブ
+
+[A] play  [Y] from the start  [X] watched  [B] back
+[A] 再生  [Y] 最初から  [X] 視聴済み  [B] 戻る
+
+[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
+[A] 再生  [Y] 最初から  [X] 視聴済み  [R] お気に入り  [L] ダウンロード  [B] 戻る
+
+[A] try again  [X] cancel
+[A] 再試行  [X] キャンセル
+
+[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 見る  [^v] チャンネル  [<>] 番組表  [ZL][ZR] タブ  [-] 設定  [+] メニュー
+
+[A][B] back
+[A][B] 戻る
+
+[B] cancel
+[B] キャンセル
+
+[L][R] channel  [B] cancel
+[L][R] チャンネル  [B] キャンセル
+
+[Y] clear deleted
+[Y] 削除済みを消去
+
+[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu
+[Y] 検索を入力  [A] 開く  [ZL][ZR] タブ  [-] 設定  [+] メニュー
+
+[ZL][ZR] tabs  [+] menu
+[ZL][ZR] タブ  [+] メニュー
+
+A %s
+A %s
+
+A download is on the card.
+ダウンロード済みのものがSDカードにあります。
+
+A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
+ネットワーク上の共有フォルダー（SMB）または WebDAV フォルダーです。Xでそのライブラリーを表示します。「ファイル」では先頭に表示されます。
+
+A video player for Switch 2 homebrew on kaiHEN.
+kaiHEN で動く Switch 2 自作ソフト用の動画プレーヤーです。
+
+A-B loop
+A-Bリピート
+
+About
+このアプリについて
+
+Accent color
+アクセントカラー
+
+Add to Favorites
+お気に入りに追加
+
+Added to Downloads (+ menu).
+ダウンロードに追加しました（+メニュー）。
+
+Added to Downloads: the server converts it first, at %.0f Mb/s.
+ダウンロードに追加しました。先にサーバーが %.0f Mb/s に変換します。
+
+Added to Favorites.
+お気に入りに追加しました。
+
+Address
+アドレス
+
+Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
+アドレス: \\PC\Videos（共有フォルダー）または 192.168.0.10:8098（WebDAV）
+
+Already looking for videos.
+すでに動画を探しています。
+
+AM
+午前
+
+and enter this code.
+このコードを入力してください。
+
+Arabic
+アラビア語
+
+Audio
+音声
+
+Audio delay
+音声の遅延
+
+Auto
+自動
+
+Back
+戻る
+
+Back to the library
+ライブラリーに戻る
+
+Background
+背景
+
+Background blur
+背景のぼかし
+
+Black
+ブラック
+
+Blue
+ブルー
+
+Built-in
+内蔵
+
+Cancel
+キャンセル
+
+Cancelling...
+キャンセルしています...
+
+Catalan
+カタルーニャ語
+
+CC
+CC
+
+Certificate check
+証明書の確認
+
+Changing the sound track
+音声トラックを切り替えています
+
+Chapter %d
+チャプター%d
+
+Chinese
+中国語
+
+Choose the folder with your videos
+動画のあるフォルダーを選んでください
+
+Choose the library folder first.
+先にライブラリーのフォルダーを選んでください。
+
+Clear
+消去
+
+Cleared %d deleted download from the list.
+削除済みのダウンロード%d件をリストから消去しました。
+
+Cleared %d deleted downloads from the list.
+削除済みのダウンロード%d件をリストから消去しました。
+
+Clock
+時計
+
+Color
+色
+
+Connected to %s as %s. Loading its library...
+%sに%sとして接続しました。ライブラリーを読み込んでいます...
+
+Contacting plex.tv...
+plex.tv に接続しています...
+
+Contacting the server...
+サーバーに接続しています...
+
+Continue watching
+続きを見る
+
+Converting
+変換中
+
+Converting · %d%% · %s
+変換中 · %d%% · %s
+
+Cyan
+シアン
+
+Czech
+チェコ語
+
+Danish
+デンマーク語
+
+Dark
+ダーク
+
+Dark box
+暗い背景
+
+DELETED FROM THE CARD
+SDカードから削除済み
+
+Deleted from the card
+SDカードから削除済み
+
+Deleted from the card. It stays under Deleted, to download again.
+SDカードから削除しました。「削除済み」に残るので、再ダウンロードできます。
+
+Display
+画面
+
+Download
+ダウンロード
+
+Download again
+再ダウンロード
+
+Download cancelled.
+ダウンロードをキャンセルしました。
+
+Download converted
+変換してダウンロード
+
+Download paused.
+ダウンロードを一時停止しました。
+
+Download season
+シーズンをダウンロード
+
+DOWNLOADING
+ダウンロード中
+
+Downloading
+ダウンロード中
+
+Downloading it again.
+もう一度ダウンロードします。
+
+Downloads
+ダウンロード
+
+Downloads wait while this plays from the server
+サーバーから再生中はダウンロードを待機します
+
+Dutch
+オランダ語
+
+Emby
+Emby
+
+English
+英語
+
+Enter the folder's address first.
+先にフォルダーのアドレスを入力してください。
+
+Enter the server's address first, or find it on this network.
+先にサーバーのアドレスを入力するか、このネットワークで探してください。
+
+Enter the server's address first.
+先にサーバーのアドレスを入力してください。
+
+EPISODE
+エピソード
+
+Episode %d
+第%d話
+
+Episodes are found by names like "Show S01E02".
+エピソードは「Show S01E02」のような名前で見つけます。
+
+Every video here is an episode of a series.
+ここの動画はすべてシリーズのエピソードです。
+
+Exit
+終了
+
+Exit KaiVideo
+KaiVideoを終了
+
+Exit KaiVideo?
+KaiVideoを終了しますか？
+
+Failed
+失敗
+
+Favorite
+お気に入り
+
+Favorite series
+お気に入りのシリーズ
+
+Favorites
+お気に入り
+
+Files
+ファイル
+
+Fill
+画面いっぱい
+
+Film
+映画
+
+FILM
+映画
+
+Films
+映画
+
+Find servers on this network
+このネットワークでサーバーを探す
+
+Finishing...
+仕上げています...
+
+Finnish
+フィンランド語
+
+Font
+フォント
+
+Forget this folder
+このフォルダーの登録を解除
+
+Found %d servers. Using %s at %s; type another under Server.
+%d台のサーバーが見つかりました。%s（%s）を使います。ほかのサーバーは「サーバー」に入力してください。
+
+Found %s at %s.
+%s が見つかりました（%s）。
+
+Frames: %.1f a second, %.1f%% late
+フレーム: 毎秒%.1f、遅れ%.1f%%
+
+Frames: measuring...
+フレーム: 測定中...
+
+Free and open source under the MIT license; FFmpeg under the LGPL.
+MIT ライセンスの無料オープンソースソフトです。FFmpeg は LGPL です。
+
+French
+フランス語
+
+From start
+最初から
+
+German
+ドイツ語
+
+Greek
+ギリシャ語
+
+Green
+グリーン
+
+HDR: your server converts it for the console.
+HDR：サーバーが本体向けに変換します。
+
+Hebrew
+ヘブライ語
+
+High
+高
+
+High bitrate: your server converts it for the console.
+高ビットレート：サーバーが本体向けに変換します。
+
+Hindi
+ヒンディー語
+
+Home
+ホーム
+
+Hungarian
+ハンガリー語
+
+In Favorites
+お気に入り登録済み
+
+In Jellyfin on your phone or computer, open your
+スマートフォンかパソコンの Jellyfin でプロフィールを開き、
+
+Indonesian
+インドネシア語
+
+It couldn't be added to the downloads.
+ダウンロードに追加できませんでした。
+
+It couldn't be written to the card.
+SDカードに書き込めませんでした。
+
+It stopped.
+停止しました。
+
+It's on the card: it plays from there. Downloads (+ menu) deletes it.
+SDカード内にあるので、そこから再生します。削除は「ダウンロード」（+メニュー）で行えます。
+
+Italian
+イタリア語
+
+Its download waits while it plays from the server, and the others too
+サーバーから再生中は、このダウンロードもほかのダウンロードも待機します
+
+Japanese
+日本語
+
+Jellyfin
+Jellyfin
+
+KaiVideo can't download from there.
+KaiVideo はそこからダウンロードできません。
+
+KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
+KaiVideo はその中とサブフォルダーの映画とシリーズを見つけます。変更は - か「設定 > SDカードのフォルダー」で行えます。
+
+KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
+KaiVideo は MP4、MKV、WebM ファイル（H.264、HEVC、VP9、AV1、VP8）を再生できます。
+
+Korean
+韓国語
+
+Language
+言語
+
+Large
+大
+
+LATER
+このあと
+
+Library
+ライブラリー
+
+Linked. Finding your Plex server...
+連携しました。Plex サーバーを探しています...
+
+LIVE
+ライブ
+
+Live TV
+ライブTV
+
+Live TV comes from your Jellyfin server's tuners and guide.
+ライブTVは Jellyfin サーバーのチューナーと番組表を使います。
+
+Loading...
+読み込み中...
+
+Look for new videos
+新しい動画を探す
+
+Looking for %s servers on this network...
+このネットワークで%sサーバーを探しています...
+
+Looking for videos...
+動画を探しています...
+
+Looking for videos... %zu
+動画を探しています... %zu
+
+Low
+低
+
+Made by
+制作
+
+Malay
+マレー語
+
+Medium
+中
+
+Midnight
+ミッドナイト
+
+Network folder
+ネットワークフォルダー
+
+Network folder set: test the connection, or open it in Files.
+ネットワークフォルダーを設定しました。接続をテストするか、「ファイル」で開いてください。
+
+Network folder · %s
+ネットワークフォルダー · %s
+
+Network: %.1f Mb/s
+ネットワーク: %.1f Mb/s
+
+No channels
+チャンネルがありません
+
+No films
+映画がありません
+
+No guide for now
+番組表はまだありません
+
+No guide for these hours
+この時間帯の番組表はありません
+
+No Jellyfin server answered on this network. Type its address under Server.
+このネットワークで応答した Jellyfin サーバーはありません。「サーバー」にアドレスを入力してください。
+
+No series
+シリーズがありません
+
+No sound
+音声なし
+
+No subtitles
+字幕なし
+
+No videos here yet
+まだ動画がありません
+
+No videos or folders here.
+ここには動画もフォルダーもありません。
+
+None
+なし
+
+Norwegian
+ノルウェー語
+
+Not affiliated with or endorsed by Nintendo.
+Nintendo とは無関係で、承認を受けたものではありません。
+
+Not chosen
+未選択
+
+Not enough memory for this video's frames.
+この動画のフレームに必要なメモリーが足りません。
+
+Not set
+未設定
+
+Not signed in
+未ログイン
+
+Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
+そのアドレスとポートから応答がありません。サーバーは起動していますか？ポートは正しいですか（通常は8096）？
+
+Nothing answered at that address and port. Is the server on, and is the port right?
+そのアドレスとポートから応答がありません。サーバーは起動していますか？ポートは正しいですか？
+
+Nothing answered at that address. Is the computer on, and is the folder shared?
+そのアドレスから応答がありません。パソコンは起動していますか？フォルダーは共有されていますか？
+
+Nothing downloaded yet: open a film or episode from a server and press L.
+まだダウンロードはありません。サーバーの映画やエピソードを開いてLを押してください。
+
+Nothing found
+見つかりませんでした
+
+Nothing here yet
+まだ何もありません
+
+Nothing in the library is called "%s".
+ライブラリーに「%s」という名前のものはありません。
+
+Nothing yet: open a film or episode from a server and press L to download it.
+まだ何もありません。サーバーの映画やエピソードを開いてLを押すとダウンロードできます。
+
+Off
+オフ
+
+Off: any certificate
+オフ：どの証明書も許可
+
+On
+オン
+
+ON NOW
+放送中
+
+ON THE CARD
+SDカード内
+
+On the card
+SDカード内
+
+On your phone or computer, go to plex.tv/link
+スマートフォンかパソコンで plex.tv/link を開き、
+
+Open source (MIT)  ·  github.com/mizuiroame/kaivideo
+オープンソース（MIT）  ·  github.com/mizuiroame/kaivideo
+
+Orange
+オレンジ
+
+Original
+オリジナル
+
+Out of memory.
+メモリーが足りません。
+
+Outline
+縁取り
+
+Password
+パスワード
+
+Paused
+一時停止中
+
+Paused at %d%%
+%d%%で一時停止中
+
+Paused · %d%%
+一時停止中 · %d%%
+
+Picture
+映像
+
+Pink
+ピンク
+
+Play
+再生
+
+Play next episode
+次のエピソードを再生
+
+play now
+今すぐ再生
+
+Playback
+再生
+
+Playing it streams it from the server: the downloads pause until you stop.
+再生するとサーバーからストリーミングします。停止するまでダウンロードは一時停止します。
+
+Playing: converted by Jellyfin
+再生中: Jellyfin で変換
+
+Playing: converted by Jellyfin, at most %s
+再生中: Jellyfin で変換（最大 %s）
+
+Playing: from the network folder
+再生中: ネットワークフォルダーから
+
+Playing: from the SD card
+再生中: SDカードから
+
+Playing: the original file from Jellyfin
+再生中: Jellyfin の元のファイル
+
+Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
+SDカードや Jellyfin、Emby、Plex サーバーの MP4、MKV、WebM を再生します。
+
+Plex
+Plex
+
+Plex server, with sound tracks, subtitles and a library of your films and series.
+音声トラック、字幕、映画とシリーズのライブラリーにも対応しています。
+
+plex.tv can't be reached.
+plex.tv に接続できません。
+
+plex.tv refused that.
+plex.tv に拒否されました。
+
+Plum
+プラム
+
+PM
+午後
+
+Polish
+ポーランド語
+
+Portuguese
+ポルトガル語
+
+Press X again to cancel it.
+もう一度Xを押すとキャンセルします。
+
+Press X again to delete it from the card.
+もう一度Xを押すとSDカードから削除します。
+
+profile, choose Quick Connect and enter this code.
+Quick Connect を選んでこのコードを入力してください。
+
+Purple
+パープル
+
+Put JPEG or PNG images in a Backgrounds folder in your library folder.
+ライブラリーのフォルダー内の Backgrounds フォルダーに JPEG か PNG の画像を入れてください。
+
+Reading the guide...
+番組表を読み込んでいます...
+
+Ready ahead: %.0f MB
+先読み: %.0f MB
+
+Ready ahead: %.1f s
+先読み: %.1f秒
+
+Recently added
+最近追加された動画
+
+Red
+レッド
+
+Removed from Favorites.
+お気に入りから外しました。
+
+Resume
+続きから
+
+Resumed at %s  ·  ZL from the start
+%sから再開  ·  ZLで最初から
+
+Romanian
+ルーマニア語
+
+Russian
+ロシア語
+
+S%02dE%02d · %s
+S%02dE%02d · %s
+
+SD card
+SDカード
+
+SD card folder
+SDカードのフォルダー
+
+Search
+検索
+
+Search films and series
+映画とシリーズを検索
+
+Search films, series and episodes  (A or Y)
+映画、シリーズ、エピソードを検索  （AかY）
+
+Season %d
+シーズン%d
+
+Season %d, episode %d
+シーズン%d 第%d話
+
+Season on the card
+シーズンはSDカード内
+
+Season: %d of %d on the card
+シーズン: %d/%d話がSDカード内
+
+Series
+シリーズ
+
+SERIES
+シリーズ
+
+Series in Favorites
+シリーズをお気に入り登録済み
+
+Server
+サーバー
+
+Server video quality
+サーバーの画質
+
+Set up the network folder in Settings first.
+先に「設定」でネットワークフォルダーを設定してください。
+
+Settings
+設定
+
+Sign in at plex.tv/link
+plex.tv/link でログイン
+
+Sign in to its server to download it.
+ダウンロードするには、そのサーバーにログインしてください。
+
+Sign in to Jellyfin
+Jellyfin にログイン
+
+Sign in to Plex
+Plex にログイン
+
+Sign in with a code
+コードでログイン
+
+Sign in with a password
+パスワードでログイン
+
+Sign out
+ログアウト
+
+Sign out first to change the server.
+サーバーを変更するには、先にログアウトしてください。
+
+Size
+サイズ
+
+Skip
+スキップ
+
+Skip credits
+エンディングをスキップ
+
+Skip intro
+オープニングをスキップ
+
+Skip preview
+予告をスキップ
+
+Skip recap
+あらすじをスキップ
+
+Small
+小
+
+Sound: %s
+音声: %s
+
+Sound: %s. %s
+音声: %s。%s
+
+Spanish
+スペイン語
+
+Speed
+速度
+
+Speed: %s
+速度: %s
+
+Starting...
+開始しています...
+
+Statistics
+統計情報
+
+Still asking the network...
+ネットワークに問い合わせ中です...
+
+Still downloading: playing it streams it from the server, and its download and the others pause until you stop.
+ダウンロード中です。再生するとサーバーからストリーミングし、停止するまでこのダウンロードもほかのダウンロードも一時停止します。
+
+Stretch
+引き伸ばし
+
+Style
+スタイル
+
+Subtitle delay
+字幕の遅延
+
+Subtitles
+字幕
+
+Subtitles off
+字幕オフ
+
+Subtitles: %s
+字幕: %s
+
+Swedish
+スウェーデン語
+
+Taken off the list.
+リストから外しました。
+
+Test the connection
+接続をテスト
+
+Testing the connection...
+接続をテストしています...
+
+Thai
+タイ語
+
+That address answers (%ld), but not as %s. Check the port and the path.
+そのアドレスは応答しました（%ld）が、%sではありません。ポートとパスを確認してください。
+
+That address answers, but it isn't %s. Check the port (usually 8096).
+そのアドレスは応答しましたが、%sではありません。ポートを確認してください（通常は8096）。
+
+That address answers, but it isn't a WebDAV folder. Check the path after the port.
+そのアドレスは応答しましたが、WebDAV フォルダーではありません。ポートのあとのパスを確認してください。
+
+That folder can't be opened.
+そのフォルダーは開けません。
+
+That folder isn't on the server.
+そのフォルダーはサーバーにありません。
+
+That folder's name is too long.
+そのフォルダーの名前が長すぎます。
+
+That isn't a network folder's address.
+ネットワークフォルダーのアドレスではありません。
+
+That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
+ネットワークフォルダーのアドレスではありません。\\PC\Videos、smb://、http://、https:// のいずれかで入力してください。
+
+That isn't a server's address.
+サーバーのアドレスではありません。
+
+That place can't convert videos.
+そこでは動画を変換できません。
+
+That port may want a secure connection: write https:// before the address.
+そのポートは安全な接続が必要かもしれません。アドレスの前に https:// を付けてください。
+
+That shared folder isn't on the computer. Check the share's name after the computer's.
+その共有フォルダーはパソコンにありません。パソコン名のあとの共有名を確認してください。
+
+That track can't be played.
+そのトラックは再生できません。
+
+The audio output isn't available.
+音声出力を使用できません。
+
+The card needs %.1f GB more free for it.
+SDカードの空き容量があと%.1f GB必要です。
+
+The channel's own stream can't be read.
+チャンネル本来のストリームを読み込めません。
+
+The connection failed. Check the address and the network.
+接続できませんでした。アドレスとネットワークを確認してください。
+
+The connection to the server was lost.
+サーバーとの接続が切れました。
+
+The console's decoder can't play this %s video (%dx%d, 0x%x).
+本体のデコーダーでは、この%s動画（%dx%d、0x%x）を再生できません。
+
+The decoding thread can't start.
+デコード用スレッドを開始できません。
+
+The download goes on.
+ダウンロードを続けます。
+
+The file has no video.
+このファイルには映像がありません。
+
+The keyboard couldn't open.
+キーボードを開けませんでした。
+
+The library couldn't be read.
+ライブラリーを読み込めませんでした。
+
+The library's folder name is too long for downloads.
+ライブラリーのフォルダー名が長すぎて、ダウンロードに使えません。
+
+The name in the address couldn't be found. Check it, or use the server's IP address.
+アドレスの名前が見つかりませんでした。確認するか、サーバーのIPアドレスを使ってください。
+
+The network can't be used.
+ネットワークを使用できません。
+
+The network couldn't be asked. Type the server's address under Server.
+ネットワークに問い合わせできませんでした。「サーバー」にサーバーのアドレスを入力してください。
+
+The network folder answers. At its top: folders %d, videos %d.
+ネットワークフォルダーが応答しました。最上位: フォルダー%d、動画%d。
+
+The network folder is forgotten.
+ネットワークフォルダーの登録を解除しました。
+
+The secure connection failed. Does the server use https on that port?
+安全な接続ができませんでした。サーバーはそのポートで https を使っていますか？
+
+the server
+サーバー
+
+The server answered %ld.
+サーバーの応答: %ld。
+
+The server can't be reached.
+サーバーに接続できません。
+
+The server can't convert this sound track.
+サーバーはこの音声トラックを変換できません。
+
+The server can't play this video here.
+サーバーはこの動画をここで再生できません。
+
+The server comes from your Plex account.
+サーバーは Plex アカウントから取得されます。
+
+The server couldn't convert this video (its log may say why).
+サーバーはこの動画を変換できませんでした（理由はサーバーのログで確認できる場合があります）。
+
+The server didn't answer in time. Is the console on the same network as the server?
+サーバーが時間内に応答しませんでした。本体はサーバーと同じネットワークにありますか？
+
+The server didn't let it be downloaded.
+サーバーがダウンロードを許可しませんでした。
+
+The server didn't start converting this sound track.
+サーバーがこの音声トラックの変換を開始しませんでした。
+
+The server didn't start converting this video.
+サーバーがこの動画の変換を開始しませんでした。
+
+The server doesn't have this video any more.
+この動画はサーバーにもうありません。
+
+The server doesn't let this user see that folder.
+このユーザーはサーバーでそのフォルダーを見る権限がありません。
+
+The server found can't be used: type its address under Server.
+見つかったサーバーは使用できません。「サーバー」にアドレスを入力してください。
+
+The server refused that.
+サーバーに拒否されました。
+
+The server signed this console out.
+サーバーによってこの本体がログアウトされました。
+
+The server stopped converting it.
+サーバーが変換を停止しました。
+
+The server stopped sending it.
+サーバーが送信を停止しました。
+
+The server's answer can't be read.
+サーバーの応答を読み込めません。
+
+The server's certificate isn't trusted.
+サーバーの証明書は信頼されていません。
+
+The server's certificate isn't trusted. If the server has its own certificate, turn Certificate check off.
+サーバーの証明書は信頼されていません。サーバーが独自の証明書を使っている場合は、「証明書の確認」をオフにしてください。
+
+The server's conversion can't be read.
+サーバーが変換したデータを読み込めません。
+
+The shared folder couldn't be opened (%d: %s).
+共有フォルダーを開けませんでした（%d: %s）。
+
+The sound thread can't start.
+音声用スレッドを開始できません。
+
+The video can't be decoded.
+動画をデコードできません。
+
+The video can't be opened now.
+今は動画を開けません。
+
+The video can't be prepared for the decoder.
+デコーダー用に動画を準備できません。
+
+The video couldn't be loaded.
+動画を読み込めませんでした。
+
+The video decoder refused the video (0x%x).
+ビデオデコーダーが動画を受け付けませんでした（0x%x）。
+
+The video decoder stopped taking the video.
+ビデオデコーダーが動画を受け付けなくなりました。
+
+Theme
+テーマ
+
+This %s video can't be decoded.
+この%s動画はデコードできません。
+
+This isn't a video KaiVideo can read (MP4, MKV or WebM).
+KaiVideo で読み込める動画（MP4、MKV、WebM）ではありません。
+
+This library on the server has no films or episodes KaiVideo found.
+サーバーのこのライブラリーには、KaiVideo が見つけられる映画やエピソードがありません。
+
+This Plex account has no server.
+この Plex アカウントにはサーバーがありません。
+
+This season is in Downloads already (+ menu).
+このシーズンはすでに「ダウンロード」にあります（+メニュー）。
+
+This video has no subtitles.
+この動画には字幕がありません。
+
+This video has one sound track.
+この動画の音声トラックは1つだけです。
+
+This video's picture format can't be shown.
+この動画の映像フォーマットは表示できません。
+
+This video's sound (%s) can't be played.
+この動画の音声（%s）は再生できません。
+
+This video's sound can't be played.
+この動画の音声は再生できません。
+
+Thumbnails
+サムネイル
+
+Track %d
+トラック%d
+
+Tuning in...
+チャンネルに接続しています...
+
+Turkish
+トルコ語
+
+Ukrainian
+ウクライナ語
+
+Unwatched
+未視聴
+
+UP NEXT
+次のエピソード
+
+UP NEXT  ·  %d s
+次のエピソード  ·  %d秒
+
+Update the library
+ライブラリーを更新
+
+Updating the servers' libraries... %d
+サーバーのライブラリーを更新しています... %d
+
+Use this folder
+このフォルダーを使う
+
+User and password
+ユーザー名とパスワード
+
+User name (empty: none; DOMAIN\user for a domain)
+ユーザー名（空欄: なし、ドメインは DOMAIN\user）
+
+Version %s
+バージョン %s
+
+Video quality
+画質
+
+Video: %s
+映像: %s
+
+Vietnamese
+ベトナム語
+
+Volume
+音量
+
+Waiting
+待機中
+
+Waiting for the network (%s)
+ネットワークを待っています（%s）
+
+Waiting for the server...
+サーバーを待っています...
+
+Waiting to download
+ダウンロード待ち
+
+Watched
+視聴済み
+
+White
+ホワイト
+
+Wrong user name or password.
+ユーザー名またはパスワードが違います。
+
+Yellow
+イエロー
+
+Your Emby server: sign in with its user name and password.
+Emby サーバーです。ユーザー名とパスワードでログインします。
+
+Your Jellyfin server: sign in with Quick Connect or a password.
+Jellyfin サーバーです。Quick Connect かパスワードでログインします。
+
+Your Plex account: sign in at plex.tv/link, and its server is found.
+Plex アカウントです。plex.tv/link でログインすると、サーバーが見つかります。
+
+Your Plex server doesn't answer.
+Plex サーバーが応答しません。
+
+Your server converts this format for the console.
+この形式はサーバーが本体向けに変換します。

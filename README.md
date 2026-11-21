@@ -52,7 +52,8 @@ The screenshots show made-up films, series and channels.
 - **Resume, next episode, watched marks**, and a **Playback list** with
   chapters, speed (0.5x to 2x, voices keep their pitch), volume up to 200%,
   picture size, an A-B loop and audio and subtitle delays.
-- **In English and Spanish**, and in any language you add as a text file.
+- **In nine languages**: English, Spanish, French, Italian, Portuguese, German,
+  Japanese, Chinese and Korean, and any other you add as a text file.
   [More](docs/languages.md)
 - **Touch and buttons** for every control. Lists glide under your finger.
   [Controls](docs/controls.md)

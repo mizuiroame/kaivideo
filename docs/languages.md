@@ -4,8 +4,23 @@
 
 ![Home in Spanish](screenshots/home_es.png)
 
-KaiVideo comes in **English** and **Spanish** (Latin America). Choose one in
-**Settings > Display > Language**; the change shows at once.
+KaiVideo comes in nine languages. Choose one in **Settings > Display >
+Language**; the change shows at once.
+
+| Language | File |
+|----------|------|
+| English | built in |
+| Español (Latinoamérica) | [lang_es.txt](../data/lang_es.txt) |
+| Français | [lang_fr.txt](../data/lang_fr.txt) |
+| Italiano | [lang_it.txt](../data/lang_it.txt) |
+| Português (Brasil) | [lang_pt.txt](../data/lang_pt.txt) |
+| Deutsch | [lang_de.txt](../data/lang_de.txt) |
+| 日本語 | [lang_ja.txt](../data/lang_ja.txt) |
+| 简体中文 | [lang_zh.txt](../data/lang_zh.txt) |
+| 한국어 | [lang_ko.txt](../data/lang_ko.txt) |
+
+Spanish has been checked on the console. The other seven haven't been
+reviewed by native speakers yet: corrections are welcome as pull requests.
 
 Names that come from your files or your server (titles, libraries, track
 names) are shown as they are.
@@ -46,7 +61,7 @@ python tools/lang_check.py --template > italiano.txt   # every text, to fill in
 python tools/lang_check.py italiano.txt                # what's missing, unused or wrong
 ```
 
-Spanish, built into KaiVideo, is [data/lang_es.txt](../data/lang_es.txt).
-Translations are welcome as pull requests.
+The languages built into KaiVideo are the `data/lang_*.txt` files above.
+New translations are welcome as pull requests.
 
 Japanese, Chinese and Korean text is drawn with the console's own fonts.

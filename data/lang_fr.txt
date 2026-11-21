@@ -1,0 +1,1369 @@
+# KaiVideo en français (France).
+# Chaque ligne en anglais est suivie de sa traduction, avec une ligne vide
+# entre les paires. %d, %s et similaires restent tels quels, dans le même ordre. Voir source/lang.h.
+language = Français
+
+ (.srt file)
+ (fichier .srt)
+
+ The connection isn't encrypted: use https outside your home.
+ La connexion n'est pas chiffrée : utilisez https hors de chez vous.
+
+ · %d watched offline, told to the server when it's back
+ · %d vus hors ligne, signalés au serveur à son retour
+
+ · converted, %.0f Mb/s
+ · converti, %.0f Mb/s
+
+%.80s can't be read as a font.
+%.80s ne peut pas être lu comme police.
+
+%d downloading · %d on the card (%s) · %d deleted
+%d en cours · %d sur la carte (%s) · %d supprimés
+
+%d episode
+%d épisode
+
+%d episode added to Downloads (+ menu).
+%d épisode ajouté aux Téléchargements (menu +).
+
+%d episodes
+%d épisodes
+
+%d episodes added to Downloads (+ menu).
+%d épisodes ajoutés aux Téléchargements (menu +).
+
+%d episodes added to Downloads; %d can't be: %s
+%d épisodes ajoutés aux Téléchargements ; %d impossibles : %s
+
+%d failed
+%d en échec
+
+%d h %d min
+%d h %d min
+
+%d min
+%d min
+
+%d paused
+%d en pause
+
+%d seasons · %d episodes
+%d saisons · %d épisodes
+
+%d-bit %s video can't be played.
+Impossible de lire la vidéo %d bits %s.
+
+%s %dx%d, %.3g fps
+%s %dx%d, %.3g i/s
+
+%s %dx%d, %.3g fps, software
+%s %dx%d, %.3g i/s, logiciel
+
+%s %s on %s answers.%s
+%s %s sur %s répond.%s
+
+%s (burned in)
+%s (incrustés)
+
+%s can't be read (JPEG or PNG, up to 50 megapixels).
+Impossible de lire %s (JPEG ou PNG, 50 mégapixels max.).
+
+%s of %s
+%s sur %s
+
+%s server, like 192.168.0.10:8096
+Serveur %s, par ex. 192.168.0.10:8096
+
+%s user name
+Nom d'utilisateur %s
+
+%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8.
+Impossible de lire la vidéo %s : KaiVideo lit H.264, HEVC, VP9, AV1 et VP8.
+
+%s%s; they go on after
+%s%s ; ils reprendront ensuite
+
+%s's library couldn't be read: it shows as before.
+Impossible de lire la bibliothèque de %s : elle s'affiche comme avant.
+
+%s's own
+Celle de %s
+
+%s's videos are in the library.
+Les vidéos de %s sont dans la bibliothèque.
+
+%s, %d kHz, %d channel
+%s, %d kHz, %d canal
+
+%s, %d kHz, %d channels
+%s, %d kHz, %d canaux
+
+1 Mb/s
+1 Mb/s
+
+1.5 Mb/s
+1,5 Mb/s
+
+10 Mb/s
+10 Mb/s
+
+12-hour
+12 heures
+
+15 Mb/s
+15 Mb/s
+
+2 Mb/s
+2 Mb/s
+
+20 Mb/s
+20 Mb/s
+
+24-hour
+24 heures
+
+3 Mb/s
+3 Mb/s
+
+30 Mb/s
+30 Mb/s
+
+4 Mb/s
+4 Mb/s
+
+40 Mb/s
+40 Mb/s
+
+420 kb/s
+420 kb/s
+
+4K: your server converts it for the console.
+4K : votre serveur la convertit pour la console.
+
+6 Mb/s
+6 Mb/s
+
+720 kb/s
+720 kb/s
+
+8 Mb/s
+8 Mb/s
+
+[^v] choose  [<>][A] change  [B] back
+[^v] choisir  [<>][A] changer  [B] retour
+
+[^v] choose  [>][A] open  [B] close
+[^v] choisir  [>][A] ouvrir  [B] fermer
+
+[A] choose  [B] cancel  [+] exit
+[A] choisir  [B] annuler  [+] quitter
+
+[A] choose  [B] close  [+] exit
+[A] choisir  [B] fermer  [+] quitter
+
+[A] download again  [X] take off the list
+[A] retélécharger  [X] retirer de la liste
+
+[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] ouvrir  [B] dossier parent  [<>] page  [Y] chercher  [ZL][ZR] onglets  [+] menu
+
+[A] open  [B] folder above  [X] use this folder  [+] menu
+[A] ouvrir  [B] dossier parent  [X] choisir ce dossier  [+] menu
+
+[A] open  [B] folder above  [X] use this folder  [-] cancel
+[A] ouvrir  [B] dossier parent  [X] choisir ce dossier  [-] annuler
+
+[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] ouvrir  [Y] chercher  [ZL][ZR] onglets  [-] paramètres  [+] menu
+
+[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start
+[A] pause  [<>] 10 s  [L][R] 1 min  [^] lecture  [X] audio  [Y] sous-titres  [-] masquer  [B] retour  [+] menu  [ZL] début
+
+[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu
+[A] pause  [L][R] chaîne  [^] lecture  [X] audio  [Y] sous-titres  [-] masquer  [B] retour  [+] menu
+
+[A] pause / go on  [X] cancel
+[A] pause / reprendre  [X] annuler
+
+[A] play  [X] delete from the card
+[A] lire  [X] supprimer de la carte
+
+[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
+[A] lire  [X] vu  [<>] saison  [B] retour  [Y] chercher  [ZL][ZR] onglets  [+] menu
+
+[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
+[A] lire  [X] vu  [R] favori  [L] télécharger  [<>] saison  [B] retour  [ZL][ZR] onglets
+
+[A] play  [Y] from the start  [X] watched  [B] back
+[A] lire  [Y] du début  [X] vu  [B] retour
+
+[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
+[A] lire  [Y] du début  [X] vu  [R] favori  [L] télécharger  [B] retour
+
+[A] try again  [X] cancel
+[A] réessayer  [X] annuler
+
+[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] regarder  [^v] chaîne  [<>] guide  [ZL][ZR] onglets  [-] paramètres  [+] menu
+
+[A][B] back
+[A][B] retour
+
+[B] cancel
+[B] annuler
+
+[L][R] channel  [B] cancel
+[L][R] chaîne  [B] annuler
+
+[Y] clear deleted
+[Y] vider les supprimés
+
+[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu
+[Y] saisir  [A] ouvrir  [ZL][ZR] onglets  [-] paramètres  [+] menu
+
+A %s
+A %s
+
+A download is on the card.
+Un téléchargement est déjà sur la carte.
+
+A video player for Switch 2 homebrew on kaiHEN.
+Un lecteur vidéo homebrew pour Switch 2 avec kaiHEN.
+
+A-B loop
+Boucle A-B
+
+About
+À propos
+
+Accent color
+Couleur d'accent
+
+Add to Favorites
+Ajouter aux favoris
+
+Added to Downloads (+ menu).
+Ajouté aux Téléchargements (menu +).
+
+Added to Downloads: the server converts it first, at %.0f Mb/s.
+Ajouté aux Téléchargements : le serveur le convertit d'abord, à %.0f Mb/s.
+
+Added to Favorites.
+Ajouté aux favoris.
+
+Already looking for videos.
+Recherche de vidéos déjà en cours.
+
+AM
+AM
+
+and enter this code.
+et saisissez ce code.
+
+Arabic
+Arabe
+
+Audio
+Audio
+
+Audio delay
+Décalage audio
+
+Auto
+Auto
+
+Back
+Retour
+
+Back to the library
+Retour à la bibliothèque
+
+Background
+Fond
+
+Background blur
+Flou du fond
+
+Black
+Noir
+
+Blue
+Bleu
+
+Built-in
+Intégrée
+
+Cancel
+Annuler
+
+Cancelling...
+Annulation...
+
+Catalan
+Catalan
+
+CC
+CC
+
+Certificate check
+Vérif. certificat
+
+Changing the sound track
+Changement de piste audio
+
+Chapter %d
+Chapitre %d
+
+Chinese
+Chinois
+
+Choose the folder with your videos
+Choisissez le dossier de vos vidéos
+
+Choose the library folder first.
+Choisissez d'abord le dossier de la bibliothèque.
+
+Clear
+Vider
+
+Cleared %d deleted download from the list.
+%d téléchargement supprimé retiré de la liste.
+
+Cleared %d deleted downloads from the list.
+%d téléchargements supprimés retirés de la liste.
+
+Clock
+Horloge
+
+Color
+Couleur
+
+Connected to %s as %s. Loading its library...
+Connecté à %s en tant que %s. Chargement de sa bibliothèque...
+
+Contacting plex.tv...
+Connexion à plex.tv...
+
+Contacting the server...
+Connexion au serveur...
+
+Continue watching
+Reprendre la lecture
+
+Converting
+Conversion
+
+Converting · %d%% · %s
+Conversion · %d%% · %s
+
+Cyan
+Cyan
+
+Czech
+Tchèque
+
+Danish
+Danois
+
+Dark
+Sombre
+
+Dark box
+Fond sombre
+
+DELETED FROM THE CARD
+SUPPRIMÉS DE LA CARTE
+
+Deleted from the card
+Supprimé de la carte
+
+Deleted from the card. It stays under Deleted, to download again.
+Supprimé de la carte. Il reste dans Supprimés, pour le retélécharger.
+
+Display
+Affichage
+
+Download
+Télécharger
+
+Download again
+Retélécharger
+
+Download cancelled.
+Téléchargement annulé.
+
+Download converted
+Télécharger converti
+
+Download paused.
+Téléchargement en pause.
+
+Download season
+Télécharger la saison
+
+DOWNLOADING
+EN COURS
+
+Downloading
+Téléchargement
+
+Downloading it again.
+Nouveau téléchargement en cours.
+
+Downloads
+Téléchargements
+
+Downloads wait while this plays from the server
+Les téléchargements attendent pendant la lecture depuis le serveur
+
+Dutch
+Néerlandais
+
+Emby
+Emby
+
+English
+Anglais
+
+Enter the server's address first, or find it on this network.
+Saisissez d'abord l'adresse du serveur, ou cherchez-le sur ce réseau.
+
+Enter the server's address first.
+Saisissez d'abord l'adresse du serveur.
+
+EPISODE
+ÉPISODE
+
+Episode %d
+Épisode %d
+
+Episodes are found by names like "Show S01E02".
+Les épisodes sont repérés par des noms comme "Série S01E02".
+
+Every video here is an episode of a series.
+Chaque vidéo ici est un épisode d'une série.
+
+Exit
+Quitter
+
+Exit KaiVideo
+Quitter KaiVideo
+
+Exit KaiVideo?
+Quitter KaiVideo ?
+
+Failed
+Échec
+
+Favorite
+Favori
+
+Favorite series
+Série favorite
+
+Favorites
+Favoris
+
+Files
+Fichiers
+
+Fill
+Remplir
+
+Film
+Film
+
+FILM
+FILM
+
+Films
+Films
+
+Find servers on this network
+Chercher des serveurs sur ce réseau
+
+Finishing...
+Finalisation...
+
+Finnish
+Finnois
+
+Font
+Police
+
+Found %d servers. Using %s at %s; type another under Server.
+%d serveurs trouvés. Utilisation de %s à %s ; saisissez-en un autre dans Serveur.
+
+Found %s at %s.
+%s trouvé à %s.
+
+Frames: %.1f a second, %.1f%% late
+Images : %.1f par seconde, %.1f%% en retard
+
+Frames: measuring...
+Images : mesure...
+
+Free and open source under the MIT license; FFmpeg under the LGPL.
+Libre et open source sous licence MIT ; FFmpeg sous licence LGPL.
+
+French
+Français
+
+From start
+Du début
+
+German
+Allemand
+
+Greek
+Grec
+
+Green
+Vert
+
+HDR: your server converts it for the console.
+HDR : votre serveur la convertit pour la console.
+
+Hebrew
+Hébreu
+
+High
+Fort
+
+High bitrate: your server converts it for the console.
+Débit élevé : votre serveur la convertit pour la console.
+
+Hindi
+Hindi
+
+Home
+Accueil
+
+Hungarian
+Hongrois
+
+In Favorites
+Dans les favoris
+
+In Jellyfin on your phone or computer, open your
+Dans Jellyfin, sur votre téléphone ou ordinateur, ouvrez votre
+
+Indonesian
+Indonésien
+
+It couldn't be added to the downloads.
+Impossible de l'ajouter aux téléchargements.
+
+It couldn't be written to the card.
+Impossible de l'écrire sur la carte.
+
+It stopped.
+Il s'est arrêté.
+
+It's on the card: it plays from there. Downloads (+ menu) deletes it.
+Il est sur la carte : il est lu depuis celle-ci. Téléchargements (menu +) le supprime.
+
+Italian
+Italien
+
+Its download waits while it plays from the server, and the others too
+Son téléchargement attend pendant la lecture depuis le serveur, les autres aussi
+
+Japanese
+Japonais
+
+Jellyfin
+Jellyfin
+
+KaiVideo can't download from there.
+KaiVideo ne peut pas télécharger depuis cet endroit.
+
+KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
+KaiVideo y trouve les films et séries, sous-dossiers compris : - ou Paramètres > Dossier carte SD.
+
+KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
+KaiVideo lit les fichiers MP4, MKV et WebM (H.264, HEVC, VP9, AV1, VP8).
+
+Korean
+Coréen
+
+Language
+Langue
+
+Large
+Grand
+
+LATER
+PLUS TARD
+
+Library
+Bibliothèque
+
+Linked. Finding your Plex server...
+Associé. Recherche de votre serveur Plex...
+
+LIVE
+DIRECT
+
+Live TV
+TV en direct
+
+Live TV comes from your Jellyfin server's tuners and guide.
+La TV en direct vient des tuners et du guide de votre serveur Jellyfin.
+
+Loading...
+Chargement...
+
+Look for new videos
+Chercher de nouvelles vidéos
+
+Looking for %s servers on this network...
+Recherche de serveurs %s sur ce réseau...
+
+Looking for videos...
+Recherche de vidéos...
+
+Looking for videos... %zu
+Recherche de vidéos... %zu
+
+Low
+Faible
+
+Made by
+Créé par
+
+Malay
+Malais
+
+Medium
+Moyen
+
+Midnight
+Minuit
+
+Network: %.1f Mb/s
+Réseau : %.1f Mb/s
+
+No channels
+Aucune chaîne
+
+No films
+Aucun film
+
+No guide for now
+Pas de guide pour le moment
+
+No guide for these hours
+Pas de guide pour ces heures
+
+No Jellyfin server answered on this network. Type its address under Server.
+Aucun serveur Jellyfin n'a répondu sur ce réseau. Saisissez son adresse dans Serveur.
+
+No series
+Aucune série
+
+No sound
+Sans son
+
+No subtitles
+Sans sous-titres
+
+No videos here yet
+Aucune vidéo ici pour l'instant
+
+No videos or folders here.
+Aucune vidéo ni aucun dossier ici.
+
+None
+Aucun
+
+Norwegian
+Norvégien
+
+Not affiliated with or endorsed by Nintendo.
+Ni affilié à Nintendo, ni approuvé par Nintendo.
+
+Not chosen
+Non choisi
+
+Not enough memory for this video's frames.
+Mémoire insuffisante pour les images de cette vidéo.
+
+Not set
+Non défini
+
+Not signed in
+Non connecté
+
+Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
+Rien n'a répondu à cette adresse et ce port. Le serveur est-il allumé, et le port est-il correct (souvent 8096) ?
+
+Nothing downloaded yet: open a film or episode from a server and press L.
+Aucun téléchargement : ouvrez un film ou un épisode d'un serveur et appuyez sur L.
+
+Nothing found
+Aucun résultat
+
+Nothing here yet
+Rien ici pour l'instant
+
+Nothing in the library is called "%s".
+Rien dans la bibliothèque ne s'appelle "%s".
+
+Nothing yet: open a film or episode from a server and press L to download it.
+Rien pour l'instant : ouvrez un film ou un épisode d'un serveur et appuyez sur L pour le télécharger.
+
+Off
+Non
+
+Off: any certificate
+Non : tout certificat
+
+On
+Oui
+
+ON NOW
+EN CE MOMENT
+
+ON THE CARD
+SUR LA CARTE
+
+On the card
+Sur la carte
+
+On your phone or computer, go to plex.tv/link
+Sur votre téléphone ou ordinateur, allez sur plex.tv/link
+
+Open source (MIT)  ·  github.com/mizuiroame/kaivideo
+Open source (MIT)  ·  github.com/mizuiroame/kaivideo
+
+Orange
+Orange
+
+Original
+Original
+
+Out of memory.
+Mémoire insuffisante.
+
+Outline
+Contour
+
+Password
+Mot de passe
+
+Paused
+En pause
+
+Paused at %d%%
+En pause à %d%%
+
+Paused · %d%%
+En pause · %d%%
+
+Picture
+Image
+
+Pink
+Rose
+
+Play
+Lire
+
+Play next episode
+Épisode suivant auto
+
+play now
+lire maintenant
+
+Playback
+Lecture
+
+Playing it streams it from the server: the downloads pause until you stop.
+La lecture se fait en streaming depuis le serveur : les téléchargements sont en pause jusqu'à l'arrêt.
+
+Playing: converted by Jellyfin
+Lecture : converti par Jellyfin
+
+Playing: converted by Jellyfin, at most %s
+Lecture : converti par Jellyfin, %s maximum
+
+Playing: from the SD card
+Lecture : depuis la carte SD
+
+Playing: the original file from Jellyfin
+Lecture : fichier original de Jellyfin
+
+Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
+Lit les MP4, MKV et WebM depuis votre carte SD, ou depuis votre serveur Jellyfin, Emby ou
+
+Plex
+Plex
+
+Plex server, with sound tracks, subtitles and a library of your films and series.
+Plex, avec pistes audio, sous-titres et une bibliothèque de vos films et séries.
+
+plex.tv can't be reached.
+Impossible de joindre plex.tv.
+
+plex.tv refused that.
+plex.tv a refusé.
+
+Plum
+Prune
+
+PM
+PM
+
+Polish
+Polonais
+
+Portuguese
+Portugais
+
+Press X again to cancel it.
+Appuyez à nouveau sur X pour l'annuler.
+
+Press X again to delete it from the card.
+Appuyez à nouveau sur X pour le supprimer de la carte.
+
+profile, choose Quick Connect and enter this code.
+profil, choisissez Quick Connect et saisissez ce code.
+
+Purple
+Violet
+
+Put JPEG or PNG images in a Backgrounds folder in your library folder.
+Placez des images JPEG ou PNG dans un dossier Backgrounds du dossier de votre bibliothèque.
+
+Reading the guide...
+Lecture du guide...
+
+Ready ahead: %.0f MB
+Préchargé : %.0f Mo
+
+Ready ahead: %.1f s
+Préchargé : %.1f s
+
+Recently added
+Ajouts récents
+
+Red
+Rouge
+
+Removed from Favorites.
+Retiré des favoris.
+
+Resume
+Reprendre
+
+Resumed at %s  ·  ZL from the start
+Reprise à %s  ·  ZL du début
+
+Romanian
+Roumain
+
+Russian
+Russe
+
+S%02dE%02d · %s
+S%02dE%02d · %s
+
+SD card
+Carte SD
+
+SD card folder
+Dossier carte SD
+
+Search
+Recherche
+
+Search films and series
+Chercher films et séries
+
+Search films, series and episodes  (A or Y)
+Cherchez films, séries et épisodes  (A ou Y)
+
+Season %d
+Saison %d
+
+Season %d, episode %d
+Saison %d, épisode %d
+
+Season on the card
+Saison sur la carte
+
+Season: %d of %d on the card
+Saison : %d sur %d sur la carte
+
+Series
+Séries
+
+SERIES
+SÉRIE
+
+Series in Favorites
+Série dans les favoris
+
+Server
+Serveur
+
+Server video quality
+Qualité vidéo serveur
+
+Settings
+Paramètres
+
+Sign in at plex.tv/link
+Connectez-vous sur plex.tv/link
+
+Sign in to its server to download it.
+Connectez-vous à son serveur pour le télécharger.
+
+Sign in to Jellyfin
+Se connecter à Jellyfin
+
+Sign in to Plex
+Se connecter à Plex
+
+Sign in with a code
+Se connecter avec un code
+
+Sign in with a password
+Se connecter avec un mot de passe
+
+Sign out
+Se déconnecter
+
+Sign out first to change the server.
+Déconnectez-vous d'abord pour changer de serveur.
+
+Size
+Taille
+
+Skip
+Passer
+
+Skip credits
+Passer le générique
+
+Skip intro
+Passer l'intro
+
+Skip preview
+Passer l'aperçu
+
+Skip recap
+Passer le résumé
+
+Small
+Petit
+
+Sound: %s
+Son : %s
+
+Sound: %s. %s
+Son : %s. %s
+
+Spanish
+Espagnol
+
+Speed
+Vitesse
+
+Speed: %s
+Vitesse : %s
+
+Starting...
+Démarrage...
+
+Statistics
+Statistiques
+
+Still asking the network...
+Recherche sur le réseau en cours...
+
+Still downloading: playing it streams it from the server, and its download and the others pause until you stop.
+Téléchargement en cours : la lecture se fait en streaming depuis le serveur, et ce téléchargement et les autres sont en pause jusqu'à l'arrêt.
+
+Stretch
+Étirer
+
+Style
+Style
+
+Subtitle delay
+Décalage sous-titres
+
+Subtitles
+Sous-titres
+
+Subtitles off
+Sous-titres désactivés
+
+Subtitles: %s
+Sous-titres : %s
+
+Swedish
+Suédois
+
+Taken off the list.
+Retiré de la liste.
+
+Test the connection
+Tester la connexion
+
+Testing the connection...
+Test de la connexion...
+
+Thai
+Thaï
+
+That address answers (%ld), but not as %s. Check the port and the path.
+Cette adresse répond (%ld), mais pas comme %s. Vérifiez le port et le chemin.
+
+That address answers, but it isn't %s. Check the port (usually 8096).
+Cette adresse répond, mais ce n'est pas %s. Vérifiez le port (souvent 8096).
+
+That folder can't be opened.
+Impossible d'ouvrir ce dossier.
+
+That isn't a server's address.
+Ce n'est pas l'adresse d'un serveur.
+
+That place can't convert videos.
+Cet emplacement ne peut pas convertir de vidéos.
+
+That port may want a secure connection: write https:// before the address.
+Ce port demande peut-être une connexion sécurisée : saisissez https:// avant l'adresse.
+
+That track can't be played.
+Impossible de lire cette piste.
+
+The audio output isn't available.
+La sortie audio n'est pas disponible.
+
+The card needs %.1f GB more free for it.
+Il faut %.1f Go de plus sur la carte.
+
+The channel's own stream can't be read.
+Impossible de lire le flux propre à la chaîne.
+
+The connection failed. Check the address and the network.
+La connexion a échoué. Vérifiez l'adresse et le réseau.
+
+The connection to the server was lost.
+La connexion au serveur a été perdue.
+
+The console's decoder can't play this %s video (%dx%d, 0x%x).
+Le décodeur de la console ne peut pas lire cette vidéo %s (%dx%d, 0x%x).
+
+The decoding thread can't start.
+Le thread de décodage ne peut pas démarrer.
+
+The download goes on.
+Le téléchargement continue.
+
+The file has no video.
+Le fichier ne contient pas de vidéo.
+
+The keyboard couldn't open.
+Impossible d'ouvrir le clavier.
+
+The library couldn't be read.
+Impossible de lire la bibliothèque.
+
+The library's folder name is too long for downloads.
+Le nom du dossier de la bibliothèque est trop long pour les téléchargements.
+
+The name in the address couldn't be found. Check it, or use the server's IP address.
+Le nom de l'adresse est introuvable. Vérifiez-le, ou utilisez l'adresse IP du serveur.
+
+The network can't be used.
+Impossible d'utiliser le réseau.
+
+The network couldn't be asked. Type the server's address under Server.
+Impossible d'interroger le réseau. Saisissez l'adresse du serveur dans Serveur.
+
+The secure connection failed. Does the server use https on that port?
+La connexion sécurisée a échoué. Le serveur utilise-t-il https sur ce port ?
+
+the server
+le serveur
+
+The server answered %ld.
+Le serveur a répondu %ld.
+
+The server can't be reached.
+Impossible de joindre le serveur.
+
+The server can't convert this sound track.
+Le serveur ne peut pas convertir cette piste audio.
+
+The server can't play this video here.
+Le serveur ne peut pas lire cette vidéo ici.
+
+The server comes from your Plex account.
+Le serveur provient de votre compte Plex.
+
+The server couldn't convert this video (its log may say why).
+Le serveur n'a pas pu convertir cette vidéo (son journal peut en indiquer la raison).
+
+The server didn't answer in time. Is the console on the same network as the server?
+Le serveur n'a pas répondu à temps. La console est-elle sur le même réseau que le serveur ?
+
+The server didn't let it be downloaded.
+Le serveur n'a pas autorisé le téléchargement.
+
+The server didn't start converting this sound track.
+Le serveur n'a pas commencé à convertir cette piste audio.
+
+The server didn't start converting this video.
+Le serveur n'a pas commencé à convertir cette vidéo.
+
+The server doesn't have this video any more.
+Le serveur n'a plus cette vidéo.
+
+The server found can't be used: type its address under Server.
+Le serveur trouvé est inutilisable : saisissez son adresse dans Serveur.
+
+The server refused that.
+Le serveur a refusé.
+
+The server signed this console out.
+Le serveur a déconnecté cette console.
+
+The server stopped converting it.
+Le serveur a arrêté la conversion.
+
+The server stopped sending it.
+Le serveur a arrêté l'envoi.
+
+The server's answer can't be read.
+Impossible de lire la réponse du serveur.
+
+The server's certificate isn't trusted. If the server has its own certificate, turn Certificate check off.
+Le certificat du serveur n'est pas reconnu. Si le serveur a son propre certificat, désactivez Vérif. certificat.
+
+The server's conversion can't be read.
+Impossible de lire la conversion du serveur.
+
+The sound thread can't start.
+Le thread audio ne peut pas démarrer.
+
+The video can't be decoded.
+Impossible de décoder la vidéo.
+
+The video can't be opened now.
+Impossible d'ouvrir la vidéo pour le moment.
+
+The video can't be prepared for the decoder.
+Impossible de préparer la vidéo pour le décodeur.
+
+The video couldn't be loaded.
+Impossible de charger la vidéo.
+
+The video decoder refused the video (0x%x).
+Le décodeur vidéo a refusé la vidéo (0x%x).
+
+The video decoder stopped taking the video.
+Le décodeur vidéo n'accepte plus la vidéo.
+
+Theme
+Thème
+
+This %s video can't be decoded.
+Impossible de décoder cette vidéo %s.
+
+This isn't a video KaiVideo can read (MP4, MKV or WebM).
+Ce n'est pas une vidéo que KaiVideo peut lire (MP4, MKV ou WebM).
+
+This library on the server has no films or episodes KaiVideo found.
+KaiVideo n'a trouvé aucun film ni épisode dans cette bibliothèque du serveur.
+
+This Plex account has no server.
+Ce compte Plex n'a pas de serveur.
+
+This season is in Downloads already (+ menu).
+Cette saison est déjà dans les Téléchargements (menu +).
+
+This video has no subtitles.
+Cette vidéo n'a pas de sous-titres.
+
+This video has one sound track.
+Cette vidéo n'a qu'une piste audio.
+
+This video's picture format can't be shown.
+Impossible d'afficher le format d'image de cette vidéo.
+
+This video's sound (%s) can't be played.
+Impossible de lire le son de cette vidéo (%s).
+
+This video's sound can't be played.
+Impossible de lire le son de cette vidéo.
+
+Thumbnails
+Miniatures
+
+Track %d
+Piste %d
+
+Tuning in...
+Syntonisation...
+
+Turkish
+Turc
+
+Ukrainian
+Ukrainien
+
+Unwatched
+Non vu
+
+UP NEXT
+À SUIVRE
+
+UP NEXT  ·  %d s
+À SUIVRE  ·  %d s
+
+Update the library
+Actualiser la bibliothèque
+
+Updating the servers' libraries... %d
+Actualisation des bibliothèques des serveurs... %d
+
+Use this folder
+Choisir ce dossier
+
+Version %s
+Version %s
+
+Video quality
+Qualité vidéo
+
+Video: %s
+Vidéo : %s
+
+Vietnamese
+Vietnamien
+
+Volume
+Volume
+
+Waiting
+En attente
+
+Waiting for the network (%s)
+En attente du réseau (%s)
+
+Waiting for the server...
+En attente du serveur...
+
+Waiting to download
+En attente de téléchargement
+
+Watched
+Vu
+
+White
+Blanc
+
+Wrong user name or password.
+Nom d'utilisateur ou mot de passe incorrect.
+
+Yellow
+Jaune
+
+Your Emby server: sign in with its user name and password.
+Votre serveur Emby : connectez-vous avec son nom d'utilisateur et son mot de passe.
+
+Your Jellyfin server: sign in with Quick Connect or a password.
+Votre serveur Jellyfin : connectez-vous avec Quick Connect ou un mot de passe.
+
+Your Plex account: sign in at plex.tv/link, and its server is found.
+Votre compte Plex : connectez-vous sur plex.tv/link, et son serveur est trouvé.
+
+Your Plex server doesn't answer.
+Votre serveur Plex ne répond pas.
+
+Your server converts this format for the console.
+Votre serveur convertit ce format pour la console.
+
+[ZL][ZR] tabs  [+] menu
+[ZL][ZR] onglets  [+] menu
+
+Address
+Adresse
+
+Enter the folder's address first.
+Saisissez d'abord l'adresse du dossier.
+
+Forget this folder
+Oublier ce dossier
+
+Network folder
+Dossier réseau
+
+Network folder set: test the connection, or open it in Files.
+Dossier réseau défini : testez la connexion, ou ouvrez-le dans Fichiers.
+
+Network folder · %s
+Dossier réseau · %s
+
+Nothing answered at that address and port. Is the server on, and is the port right?
+Rien n'a répondu à cette adresse et ce port. Le serveur est-il allumé, et le port est-il correct ?
+
+Set up the network folder in Settings first.
+Configurez d'abord le dossier réseau dans Paramètres.
+
+That address answers, but it isn't a WebDAV folder. Check the path after the port.
+Cette adresse répond, mais ce n'est pas un dossier WebDAV. Vérifiez le chemin après le port.
+
+That folder isn't on the server.
+Ce dossier n'est pas sur le serveur.
+
+That folder's name is too long.
+Le nom de ce dossier est trop long.
+
+The network folder answers. At its top: folders %d, videos %d.
+Le dossier réseau répond. À sa racine : dossiers %d, vidéos %d.
+
+The network folder is forgotten.
+Le dossier réseau a été oublié.
+
+The server doesn't let this user see that folder.
+Le serveur n'autorise pas cet utilisateur à voir ce dossier.
+
+The server's certificate isn't trusted.
+Le certificat du serveur n'est pas reconnu.
+
+User and password
+Utilisateur et mot de passe
+
+Playing: from the network folder
+Lecture : depuis le dossier réseau
+
+A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
+Un dossier partagé (SMB) ou WebDAV de votre réseau. X affiche sa bibliothèque ; il apparaît en premier dans Fichiers.
+
+Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
+Adresse : \\PC\Videos (dossier partagé) ou 192.168.0.10:8098 (WebDAV)
+
+Nothing answered at that address. Is the computer on, and is the folder shared?
+Rien n'a répondu à cette adresse. L'ordinateur est-il allumé, et le dossier est-il partagé ?
+
+That isn't a network folder's address.
+Ce n'est pas l'adresse d'un dossier réseau.
+
+That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
+Ce n'est pas l'adresse d'un dossier réseau : \\PC\Videos, smb://, http:// ou https://.
+
+That shared folder isn't on the computer. Check the share's name after the computer's.
+Ce dossier partagé n'est pas sur l'ordinateur. Vérifiez le nom du partage après celui de l'ordinateur.
+
+The shared folder couldn't be opened (%d: %s).
+Impossible d'ouvrir le dossier partagé (%d : %s).
+
+User name (empty: none; DOMAIN\user for a domain)
+Nom d'utilisateur (vide : aucun ; DOMAINE\utilisateur pour un domaine)
