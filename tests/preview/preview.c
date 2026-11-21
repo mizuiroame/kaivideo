@@ -401,6 +401,30 @@ static void checkTabTaps(const char *name)
     }
 }
 
+// The + menu just drawn: down its middle, every item answers once and in order,
+// the line after this screen's `screen` items is no item, and outside closes it.
+static void checkPlusMenu(const char *name, int count, int screen)
+{
+    int next = 0, last = -1;
+    bool ok = true;
+    for (int y = 0; y < GFX_HEIGHT; y++) {
+        LibHit hit = uiLibraryTap(GFX_WIDTH / 2, y);
+        if (hit.kind != LIBHIT_MENU_ITEM || hit.a == last)
+            continue;
+        ok = ok && hit.a == next;
+        last = hit.a;
+        next++;
+    }
+    int divider = screen > 0 ? 12 : 0, h = 76 + count * 48 + divider + 20;
+    int line_y = (GFX_HEIGHT - h) / 2 + 76 + screen * 48 + (divider - 6) / 2;
+    if (screen > 0 && uiLibraryTap(GFX_WIDTH / 2, line_y).kind != LIBHIT_PANEL)
+        ok = false;
+    if (!ok || next != count || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: %s: an item, the line or the outside doesn't answer as drawn\n", name);
+        g_problems++;
+    }
+}
+
 // A Jellyfin server's libraries as tabs: the films in one, the series in another.
 static void collectionScene(void)
 {
@@ -796,21 +820,26 @@ static void libraryScenes(void)
     downloadsScene();
 
     // The + menu, and its question.
-    static const char *const MENU[] = {"Downloads", "Look for new videos", "Settings", "Exit KaiVideo"};
+    static const char *const MENU[] = {"Downloads", "Update the library", "Settings", "Exit KaiVideo"};
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawMenu("KaiVideo", "1.0.0", MENU, 4, 2);
+    uiDrawMenu("KaiVideo", "1.0.0", MENU, 4, 0, 2);
     uiDrawFooterHelp(T("[A] choose  [B] close  [+] exit"));
     save("menu");
-    LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 4 * 48 + 20)) / 2 + 76 + 3 * 48 + 20);
-    if (item.kind != LIBHIT_MENU_ITEM || item.a != 3 || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
-        printf("TOUCH: menu: an item or the outside doesn't answer as drawn\n");
-        g_problems++;
-    }
+    checkPlusMenu("menu", 4, 0);
+    // Over a video: its own item, the line, then the app's.
+    static const char *const VIDEO_MENU[] = {"Back to the library", "Downloads", "Update the library", "Settings",
+                                             "Exit KaiVideo"};
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawMenu("KaiVideo", "1.0.0", VIDEO_MENU, 5, 1, 3);
+    uiDrawFooterHelp(T("[A] choose  [B] close  [+] exit"));
+    save("menu_video");
+    checkPlusMenu("menu_video", 5, 1);
     static const char *const EXIT[] = {"Exit", "Cancel"};
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0);
+    uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0, 0);
     uiDrawFooterHelp(T("[A] choose  [B] cancel  [+] exit"));
     save("menu_exit");
     themeApply(0, 0);

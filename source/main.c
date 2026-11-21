@@ -1251,6 +1251,7 @@ int main(int argc, char **argv)
                     appShowMessage(&app, error, now);
                 else if (play_next && next >= 0)
                     appLibraryPlay(&app, next, now);
+                appMenuAfterVideo(&app, now);
                 appLibraryDraw(&app, now);
             } else {
                 followLoop(&app, now);

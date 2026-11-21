@@ -94,6 +94,7 @@ struct App {
     AppMenu app_menu;           // The + menu, or its exit question (app_menu.c).
     int app_menu_cursor;
     bool stop_requested;        // "Back to the library" from the + menu over a video.
+    int menu_after_video;       // An item of that menu to run once the video has stopped, or 0 (app_menu.c).
     bool scrubbing;             // A finger drags the progress bar.
     double scrub_fraction;
     // Favorites changed here since the last catalog came: one read before
@@ -314,6 +315,8 @@ void appDownloadsTabChanged(App *app);
 void appOpenMenu(App *app);
 void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appMenuDraw(const App *app);
+// After a video stops: runs the + menu's item chosen over it (Downloads, Update the library, Settings).
+void appMenuAfterVideo(App *app, uint64_t now);
 // The help line for the library's screens and overlays: "[A] open  [+] menu".
 const char *appFooterHelp(const App *app);
 

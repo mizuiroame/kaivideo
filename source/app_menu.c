@@ -15,6 +15,7 @@
 #endif
 
 typedef enum {
+    ITEM_NONE,  // menu_after_video's "nothing to run".
     ITEM_DOWNLOADS,
     ITEM_RESCAN,
     ITEM_SETTINGS,
@@ -24,13 +25,13 @@ typedef enum {
     ITEM_CANCEL,
 } MenuItemId;
 
-#define ITEMS_MAX 5
+#define ITEMS_MAX 6
 
 static const char *itemLabel(MenuItemId id)
 {
     switch (id) {
     case ITEM_DOWNLOADS: return T("Downloads");
-    case ITEM_RESCAN: return T("Look for new videos");
+    case ITEM_RESCAN: return T("Update the library");
     case ITEM_SETTINGS: return T("Settings");
     case ITEM_BACK_TO_LIBRARY: return T("Back to the library");
     case ITEM_EXIT: return T("Exit KaiVideo");
@@ -39,23 +40,24 @@ static const char *itemLabel(MenuItemId id)
     }
 }
 
-// The menu's items now: over a video, over the library, or the exit question.
-static int items(const App *app, MenuItemId out[ITEMS_MAX])
+// This screen's actions (over a video: back to the library), how many in
+// *screen; then the app's, the same on every screen. Or the exit question.
+static int items(const App *app, MenuItemId out[ITEMS_MAX], int *screen)
 {
     int n = 0;
+    *screen = 0;
     if (app->app_menu == APP_MENU_EXIT) {
         out[n++] = ITEM_EXIT_CONFIRMED;
         out[n++] = ITEM_CANCEL;
         return n;
     }
-    if (app->player) {
+    if (app->player)
         out[n++] = ITEM_BACK_TO_LIBRARY;
-    } else {
-        out[n++] = ITEM_DOWNLOADS;
-        if (app->library_root[0])
-            out[n++] = ITEM_RESCAN;
-        out[n++] = ITEM_SETTINGS;
-    }
+    *screen = n;
+    out[n++] = ITEM_DOWNLOADS;
+    if (app->library_root[0])
+        out[n++] = ITEM_RESCAN;
+    out[n++] = ITEM_SETTINGS;
     out[n++] = ITEM_EXIT;
     return n;
 }
@@ -63,12 +65,7 @@ static int items(const App *app, MenuItemId out[ITEMS_MAX])
 void appOpenMenu(App *app)
 {
     app->app_menu = APP_MENU_MAIN;
-    MenuItemId ids[ITEMS_MAX];
-    int n = items(app, ids);
-    app->app_menu_cursor = 0;
-    for (int i = 0; i < n; i++)  // On Settings, where there is one.
-        if (ids[i] == ITEM_SETTINGS)
-            app->app_menu_cursor = i;
+    app->app_menu_cursor = 0;  // On the first item, as KaiPlayer's and KaiRadio's: this screen's, if it has some.
 }
 
 static void confirmExit(App *app)
@@ -80,6 +77,12 @@ static void confirmExit(App *app)
 static void run(App *app, MenuItemId id, uint64_t now)
 {
     app->app_menu = APP_MENU_NONE;
+    bool library_item = id == ITEM_DOWNLOADS || id == ITEM_RESCAN || id == ITEM_SETTINGS;
+    if (app->player && library_item) {  // These live on the library: the video stops first.
+        app->menu_after_video = id;
+        app->stop_requested = true;
+        return;
+    }
     switch (id) {
     case ITEM_DOWNLOADS: appDownloadsOpen(app, now); break;
     case ITEM_RESCAN: appLibraryRescan(app, now); break;
@@ -91,10 +94,18 @@ static void run(App *app, MenuItemId id, uint64_t now)
     }
 }
 
+void appMenuAfterVideo(App *app, uint64_t now)
+{
+    MenuItemId id = (MenuItemId)app->menu_after_video;
+    app->menu_after_video = ITEM_NONE;
+    if (id != ITEM_NONE && !app->player)
+        run(app, id, now);
+}
+
 void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     MenuItemId ids[ITEMS_MAX];
-    int n = items(app, ids);
+    int screen, n = items(app, ids, &screen);
     if (pressed & HidNpadButton_Plus) {  // + again: the question, then out.
         if (app->app_menu == APP_MENU_MAIN)
             confirmExit(app);
@@ -129,13 +140,13 @@ void appMenuDraw(const App *app)
         return;
     MenuItemId ids[ITEMS_MAX];
     const char *labels[ITEMS_MAX];
-    int n = items(app, ids);
+    int screen, n = items(app, ids, &screen);
     for (int i = 0; i < n; i++)
         labels[i] = itemLabel(ids[i]);
     if (app->app_menu == APP_MENU_EXIT)
-        uiDrawMenu(T("Exit KaiVideo?"), NULL, labels, n, app->app_menu_cursor);
+        uiDrawMenu(T("Exit KaiVideo?"), NULL, labels, n, 0, app->app_menu_cursor);
     else
-        uiDrawMenu("KaiVideo", KAIVIDEO_VERSION, labels, n, app->app_menu_cursor);
+        uiDrawMenu("KaiVideo", KAIVIDEO_VERSION, labels, n, screen, app->app_menu_cursor);
 }
 
 const char *appFooterHelp(const App *app)

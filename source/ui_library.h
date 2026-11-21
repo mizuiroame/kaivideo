@@ -97,8 +97,9 @@ void uiDrawPlayerStatus(void);
 void uiDrawFooterStrip(void);
 void uiDrawFooterHelp(const char *help);
 // The + menu, or a question with its answers: title (the app's name, with
-// its version, or a question when version is NULL) and items.
-void uiDrawMenu(const char *title, const char *version, const char *const *items, int count, int cursor);
+// its version, or a question when version is NULL) and items. The first
+// `screen` items are this screen's: a thin line parts them from the app's.
+void uiDrawMenu(const char *title, const char *version, const char *const *items, int count, int screen, int cursor);
 // The current tab (not Files) or a series' page, under the tab bar, which
 // it draws too. folder_set: false before a library folder is chosen.
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,

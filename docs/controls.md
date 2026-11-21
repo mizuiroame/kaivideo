@@ -18,7 +18,7 @@ KaiRadio.
 | **Y** | Search |
 | **−** | Settings |
 | **L** | On a server's film or episode (its panel) or series' page: download it, or the season |
-| **+** | The menu: Downloads, Look for new videos, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
+| **+** | The menu: Downloads, Update the library, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
 - **Live TV**: **↑** / **↓** change channel, **◀** / **▶** move through the
   guide and **A** watches the channel.
@@ -45,7 +45,7 @@ KaiRadio.
 | **Y** | The list of subtitles |
 | **−** | Hide the bar (**−** again, or a tap, shows it) |
 | **B** | Back to the library (where you were is remembered) |
-| **+** | The menu, over the video: Back to the library, Exit |
+| **+** | The menu, over the video: Back to the library, then the same items as on the library (Downloads, Update the library and Settings stop the video first) |
 
 - **Lists**: **↑** / **↓** move, **A** picks and **B** closes. The subtitles
   list stays open after you pick, for the options that apply to them (**◀** /

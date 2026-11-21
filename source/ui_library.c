@@ -38,6 +38,7 @@
 #define MENU_PANEL_W 640       // The + menu.
 #define MENU_PANEL_ROW_H 48
 #define MENU_PANEL_PAD 32
+#define MENU_PANEL_DIVIDER 12  // The room for the line between this screen's items and the app's.
 #define GAP 16
 #define HOME_Y 76              // Home's first row; three fit above the help line.
 #define HOME_TITLE_H 34
@@ -505,9 +506,10 @@ static void drawMenuRow(int x, int row_y, int i, int cursor, const char *label)
     uiLibraryAddHit(x + 16, row_y, MENU_PANEL_W - 32, MENU_PANEL_ROW_H - 6, LIBHIT_MENU_ITEM, i, 0);
 }
 
-void uiDrawMenu(const char *title, const char *version, const char *const *items, int count, int cursor)
+void uiDrawMenu(const char *title, const char *version, const char *const *items, int count, int screen, int cursor)
 {
-    int h = 76 + count * MENU_PANEL_ROW_H + 20;
+    int divider = screen > 0 && screen < count ? MENU_PANEL_DIVIDER : 0;
+    int h = 76 + count * MENU_PANEL_ROW_H + divider + 20;
     int x = (GFX_WIDTH - MENU_PANEL_W) / 2, y = (GFX_HEIGHT - h) / 2;
     gfxBlendRect(0, 0, GFX_WIDTH, GFX_HEIGHT, GFX_RGB(0, 0, 0), UI_DIM_ALPHA);
     uiLibraryAddHit(0, 0, GFX_WIDTH, GFX_HEIGHT, LIBHIT_CLOSE, 0, 0);
@@ -517,8 +519,13 @@ void uiDrawMenu(const char *title, const char *version, const char *const *items
     int title_w = fontDraw(FONT_BOLD, 22, x + MENU_PANEL_PAD, y + 24, title, version ? COLOR_ACCENT : COLOR_TEXT);
     if (version)
         fontDraw(FONT_REGULAR, 15, x + MENU_PANEL_PAD + title_w + 12, y + 31, version, COLOR_FAINT);
-    for (int i = 0; i < count; i++)
-        drawMenuRow(x, y + 76 + i * MENU_PANEL_ROW_H, i, cursor, items[i]);
+    for (int i = 0; i < count; i++) {
+        int row_y = y + 76 + i * MENU_PANEL_ROW_H + (i >= screen ? divider : 0);
+        drawMenuRow(x, row_y, i, cursor, items[i]);
+    }
+    if (divider)  // Between this screen's items and the app's, in the gap the rows leave under them.
+        gfxFillRect(x + 16, y + 76 + screen * MENU_PANEL_ROW_H + (divider - 6) / 2, MENU_PANEL_W - 32, 1,
+                    COLOR_SURFACE_HI);
 }
 
 // A card's colors, the same for the same name every time.

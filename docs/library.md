@@ -32,8 +32,8 @@ kept:
   name (`Movies/Paper Lanterns (1998)/anything.mkv`). Otherwise the file's
   name does, without tags like `1080p`, `BluRay` or `x264`.
 
-After you copy more videos, **Update the library** (in Settings' Library
-page) or **Look for new videos** (in the **+** menu) looks again.
+After you copy more videos, **Update the library** (in the **+** menu, or
+in Settings' Library page) looks again.
 
 ## Settings
 
