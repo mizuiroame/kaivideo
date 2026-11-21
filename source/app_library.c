@@ -8,6 +8,7 @@
 #include <switch.h>
 
 #include "app.h"
+#include "davnet.h"
 #include "background.h"
 #include "buttons.h"
 #include "gfx.h"
@@ -21,10 +22,18 @@
 #define BUTTONS_TAB_LEFT (HidNpadButton_L | HidNpadButton_ZL)
 #define BUTTONS_TAB_RIGHT (HidNpadButton_R | HidNpadButton_ZR)
 
-static void cachePath(char *out, size_t size)
+static void cachePath(const App *app, char *out, size_t size)
 {
-    appConfigPath(out, size, "library.txt");
+    appConfigPath(out, size, app->config.use_network ? "library-network.txt" : "library.txt");
 }
+
+// The folder the library is of: the card's, or the network folder's top.
+static const char *libraryRoot(const App *app)
+{
+    return app->config.use_network ? DAV_ROOT : app->library_root;
+}
+
+#define NETWORK_COLOR GFX_RGB(0x2E, 0xC4, 0xB6)  // The network folder's, as servers have theirs.
 
 // --- The library and its scan ---
 
@@ -39,26 +48,30 @@ void appLibraryRefreshHome(App *app)
 
 static void startScan(App *app)
 {
-    if (!app->library_root[0])
+    const char *root = libraryRoot(app);
+    if (!root[0])
         return;
-    if (!libscanStart(app->library_root))
+    if (!libscanStart(root))
         appLog("The library scan couldn't start.");
 }
 
-// The card's library: what was found last time at once, and a new scan.
+// The card's library, or the network folder's: what was found last time at once, and a new scan.
 static void loadCardLibrary(App *app)
 {
-    if (!app->library_root[0]) {
+    if (app->config.use_network && !davConfigured())
+        app->config.use_network = false;  // Forgotten: the card's.
+    const char *root = libraryRoot(app);
+    if (!root[0]) {
         libraryInit(&app->library, "");
         app->picking = browserOpen(&app->picker, BROWSER_ROOT);  // The first run: choose a folder.
         return;
     }
     // What was found last time shows at once; a new scan replaces it.
     char path[LIBRARY_PATH_MAX];
-    cachePath(path, sizeof(path));
-    if (!libraryLoad(&app->library, path) || strcmp(app->library.root, app->library_root) != 0) {
+    cachePath(app, path, sizeof(path));
+    if (!libraryLoad(&app->library, path) || strcmp(app->library.root, root) != 0) {
         libraryFree(&app->library);
-        libraryInit(&app->library, app->library_root);
+        libraryInit(&app->library, root);
     }
     appDownloadsNameLibrary(app, &app->library);
     appLibraryRefreshHome(app);
@@ -94,11 +107,32 @@ void appLibrarySetSource(App *app, bool jellyfin)
         return;
     }
     libscanStop();
-    app->config.use_jellyfin = false;
+    app->config.use_jellyfin = app->config.use_network = false;
     appSaveSettings(app);
     libraryFree(&app->library);
     libviewInit(&app->view);
     loadCardLibrary(app);
+}
+
+void appLibraryShowNetwork(App *app)
+{
+    libscanStop();
+    app->config.use_jellyfin = false;
+    app->config.use_network = true;
+    appSaveSettings(app);
+    libraryFree(&app->library);
+    libviewInit(&app->view);
+    loadCardLibrary(app);
+}
+
+void appLibraryNetworkChanged(App *app)
+{
+    if (app->config.use_jellyfin || !app->config.use_network)
+        return;
+    if (davConfigured())
+        appLibraryShowNetwork(app);  // Another address or user: its library again.
+    else
+        appLibrarySetSource(app, false);
 }
 
 static void installCopy(App *app, const JfCatalog *kept);
@@ -108,6 +142,7 @@ void appLibraryShowServer(App *app, ServerKind kind)
     libscanStop();
     bool changed = !app->config.use_jellyfin || app->config.server_view != (int)kind;
     app->config.use_jellyfin = true;
+    app->config.use_network = false;
     app->config.server_view = kind;
     appSaveSettings(app);
     if (changed)
@@ -124,15 +159,20 @@ void appLibraryShowServer(App *app, ServerKind kind)
         appLiveReadSoon(app);  // The server may have channels now that it didn't have before.
 }
 
-// X goes through the card and each server signed in, in turn.
+// X goes through the card, the network folder (if there's one) and each server signed in, in turn.
 void appLibraryToggleSource(App *app, uint64_t now)
 {
     if (appJellyfinEnsure(app))
         jfSyncGetStatus(&app->jf);
+    bool on_card = !app->config.use_jellyfin && !app->config.use_network;
+    if (on_card && davConfigured()) {
+        appLibraryShowNetwork(app);
+        return;
+    }
     int next = nextSignedIn(app->config.use_jellyfin ? app->config.server_view : -1);
     if (next >= 0)
         appLibraryShowServer(app, (ServerKind)next);
-    else if (app->config.use_jellyfin)
+    else if (!on_card)
         appLibrarySetSource(app, false);
     else
         appOpenJellyfinSettings(app, now);
@@ -207,13 +247,13 @@ void appLibraryUpdate(App *app)
     bool ok;
     if (app->config.use_jellyfin || !libscanTake(&found, &ok))
         return;
-    if (strcmp(found.root, app->library_root) != 0) {  // An old folder's scan.
+    if (strcmp(found.root, libraryRoot(app)) != 0) {  // An old folder's scan.
         libraryFree(&found);
         return;
     }
     appLog("Library %s: %zu videos, %zu films, %zu series%s", found.root, found.count, found.film_count,
            found.show_count, ok ? "" : " (the folder can't be read)");
-    if (!ok && found.count == 0 && app->library.count > 0) {  // The card didn't answer: keep what was there.
+    if (!ok && found.count == 0 && app->library.count > 0) {  // The card or server didn't answer: keep what was there.
         libraryFree(&found);
         return;
     }
@@ -221,7 +261,7 @@ void appLibraryUpdate(App *app)
     libraryFree(&app->library);
     app->library = found;
     char path[LIBRARY_PATH_MAX];
-    cachePath(path, sizeof(path));
+    cachePath(app, path, sizeof(path));
     if (ok)
         librarySave(&app->library, path);
     afterNewLibrary(app, "");
@@ -232,7 +272,7 @@ static void useFolder(App *app, const char *folder)
     app->config.background[0] = '\0';  // Its images were in the old folder.
     backgroundLoad(folder, "", app->config.blur);
     libscanStop();
-    app->config.use_jellyfin = false;  // A folder on the card was chosen: the library is there.
+    app->config.use_jellyfin = app->config.use_network = false;  // A folder on the card was chosen: the library is there.
     snprintf(app->library_root, sizeof(app->library_root), "%s", folder);
     appSaveSettings(app);
     libraryFree(&app->library);
@@ -695,7 +735,7 @@ void appLibraryRescan(App *app, uint64_t now)
 {
     if (app->config.use_jellyfin) {
         jfSyncRefresh();
-    } else if (!app->library_root[0]) {
+    } else if (!libraryRoot(app)[0]) {
         appShowMessage(app, T("Choose the library folder first."), now);
     } else if (libscanBusy(NULL)) {
         appShowMessage(app, T("Already looking for videos."), now);
@@ -728,8 +768,12 @@ void appLibraryDraw(App *app, uint64_t now)
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
     ServerKind view = (ServerKind)app->config.server_view;
-    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName(view) : T("SD card"),
-                       app->config.use_jellyfin ? uiServerColor(view) : COLOR_ACCENT);
+    if (app->config.use_jellyfin)
+        uiLibrarySetSource(serverKindName(view), uiServerColor(view));
+    else if (app->config.use_network)
+        uiLibrarySetSource(T("Network folder"), NETWORK_COLOR);
+    else
+        uiLibrarySetSource(T("SD card"), COLOR_ACCENT);
     if (app->picking) {
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));

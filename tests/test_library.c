@@ -1,5 +1,6 @@
 // The library: scanning a folder tree, grouping series, the cache, search.
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <utime.h>
@@ -38,6 +39,57 @@ static const LibraryShow *findShow(const Library *lib, const char *name)
 
 // A server's libraries ("collections") and favorites: what each tab and the
 // Favorites row show.
+// A network folder's server, as davList answers.
+static bool g_fake_down;
+
+static void fakeEntry(DavEntry *e, const char *name, bool dir, int64_t size, int64_t modified)
+{
+    snprintf(e->name, sizeof(e->name), "%s", name);
+    e->is_dir = dir;
+    e->size = size;
+    e->modified = modified;
+}
+
+static bool fakeList(const char *path, DavEntry **out, size_t *count, char *why, size_t why_size)
+{
+    *out = calloc(4, sizeof(DavEntry));
+    *count = 0;
+    if (g_fake_down || !*out) {
+        free(*out);
+        *out = NULL;
+        snprintf(why, why_size, "down");
+        return false;
+    }
+    DavEntry *e = *out;
+    if (!strcmp(path, "dav:/")) {
+        fakeEntry(&e[0], "Movies", true, -1, 0);
+        fakeEntry(&e[1], "TV", true, -1, 0);
+        fakeEntry(&e[2], ".trash", true, -1, 0);
+        *count = 3;
+    } else if (!strcmp(path, "dav:/Movies")) {
+        fakeEntry(&e[0], "Kite Hill (2019).mkv", false, 900, 1700000000);
+        fakeEntry(&e[1], "notes.txt", false, 5, 0);
+        *count = 2;
+    } else if (!strcmp(path, "dav:/TV")) {
+        fakeEntry(&e[0], "Rook", true, -1, 0);
+        *count = 1;
+    } else if (!strcmp(path, "dav:/TV/Rook")) {
+        fakeEntry(&e[0], "Season 1", true, -1, 0);
+        fakeEntry(&e[1], "Rook S02E01.mp4", false, 700, 1795221535);
+        *count = 2;
+    } else if (!strcmp(path, "dav:/TV/Rook/Season 1")) {
+        fakeEntry(&e[0], "Rook S01E01.mkv", false, 800, 1600000000);
+        fakeEntry(&e[1], "Rook S01E02.mkv", false, 800, 1600000001);
+        *count = 2;
+    } else {
+        snprintf(why, why_size, "no such folder: %s", path);
+        free(*out);
+        *out = NULL;
+        return false;
+    }
+    return true;
+}
+
 static void testCollections(void)
 {
     static Library lib;
@@ -133,6 +185,22 @@ void testLibrary(void)
     CHECK(librarySearch(&lib, "páper", found, 8) == 1 && !found[0].is_show);
     CHECK(librarySearch(&lib, "  ", found, 8) == 0);
     CHECK(librarySearch(&lib, "zzz", found, 8) == 0);
+
+    // A network folder: the same films and series, listed by its server.
+    static Library net;
+    libraryInit(&net, DAV_ROOT);
+    CHECK(libraryScanNetwork(&net, fakeList, NULL));
+    CHECK(net.count == 4 && net.film_count == 1 && net.show_count == 1);
+    const LibraryShow *net_rook = findShow(&net, "Rook");
+    CHECK(net_rook && net_rook->count == 3 && net_rook->added == 1795221535);
+    CHECK(libraryFind(&net, "dav:/TV/Rook/Season 1/Rook S01E02.mkv") >= 0);
+    CHECK(strcmp(net.items[net.films[0]].name.title, "Kite Hill") == 0);
+    libraryFree(&net);
+    libraryInit(&net, DAV_ROOT);
+    g_fake_down = true;
+    CHECK(!libraryScanNetwork(&net, fakeList, NULL) && net.count == 0);
+    g_fake_down = false;
+    libraryFree(&net);
 
     // A missing folder is an empty library.
     static Library gone;

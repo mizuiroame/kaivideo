@@ -357,6 +357,47 @@ bool libraryScan(Library *lib, const volatile bool *cancel)
     return ok;
 }
 
+typedef struct {
+    bool (*list)(const char *, DavEntry **, size_t *, char *, size_t);
+    const volatile bool *cancel;
+    int folders;  // Asked for so far.
+} NetworkScan;
+
+static bool scanNetworkFolder(Library *lib, NetworkScan *s, const char *folder, int depth)
+{
+    DavEntry *entries = NULL;
+    size_t count = 0;
+    char why[160];
+    if (++s->folders > LIBRARY_NETWORK_FOLDERS || !s->list(folder, &entries, &count, why, sizeof(why)))
+        return false;
+    char path[LIBRARY_PATH_MAX];
+    for (size_t i = 0; i < count && !(s->cancel && *s->cancel); i++) {
+        const DavEntry *e = &entries[i];
+        if (e->name[0] == '.' || !joinPath(path, sizeof(path), folder, e->name))
+            continue;
+        if (e->is_dir && depth < LIBRARY_DEPTH)
+            scanNetworkFolder(lib, s, path, depth + 1);
+        else if (!e->is_dir && browserIsVideo(e->name) && lib->count < LIBRARY_NETWORK_VIDEOS)
+            libraryAdd(lib, path, e->size, e->modified);
+    }
+    free(entries);
+    return true;
+}
+
+bool libraryScanNetwork(Library *lib, bool (*list)(const char *, DavEntry **, size_t *, char *, size_t),
+                        const volatile bool *cancel)
+{
+    char root[LIBRARY_PATH_MAX];
+    snprintf(root, sizeof(root), "%s", lib->root);
+    libraryFree(lib);
+    libraryInit(lib, root);
+    NetworkScan s = {list, cancel, 0};
+    bool ok = scanNetworkFolder(lib, &s, root, 0) && !(cancel && *cancel);
+    if (!(cancel && *cancel))
+        libraryBuild(lib);
+    return ok;
+}
+
 // --- The cache ---
 
 bool librarySave(const Library *lib, const char *file)

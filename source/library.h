@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "dav.h"
 #include "naming.h"
 
 #define LIBRARY_PATH_MAX 512
@@ -94,6 +95,16 @@ void libraryBuild(Library *lib);
 // Finds the videos under lib->root (emptying it first) and builds it.
 // False if the folder can't be read, or *cancel was set meanwhile.
 bool libraryScan(Library *lib, const volatile bool *cancel);
+
+#define LIBRARY_NETWORK_FOLDERS 2000  // A network folder's scan asks for at most this many folders.
+#define LIBRARY_NETWORK_VIDEOS 20000
+
+// The same for a network folder (lib->root "dav:/"), listed through list
+// (davList's shape: it asks the server, one folder at a time). False if its
+// top can't be listed, or *cancel was set.
+bool libraryScanNetwork(Library *lib, bool (*list)(const char *path, DavEntry **out, size_t *count, char *why,
+                                                   size_t why_size),
+                        const volatile bool *cancel);
 
 // The cache: the root on the first line, then "size<TAB>time<TAB>path".
 bool librarySave(const Library *lib, const char *file);

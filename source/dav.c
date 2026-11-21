@@ -174,6 +174,34 @@ bool davAccountWrite(const DavAccount *a, char *out, size_t size)
     return n > 0 && (size_t)n < size;
 }
 
+// --- Dates ---
+
+static int64_t daysFromCivil(int64_t y, int m, int d)  // Days since 1970-01-01 (Howard Hinnant's).
+{
+    y -= m <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400;
+    int64_t yoe = y - era * 400;
+    int64_t doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    int64_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return era * 146097 + doe - 719468;
+}
+
+int64_t davParseDate(const char *text)
+{
+    static const char MONTHS[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    const char *comma = strchr(text, ',');
+    char month[4];
+    int day, year, hour, minute, second;
+    if (!comma || sscanf(comma + 1, " %d %3s %d %d:%d:%d", &day, month, &year, &hour, &minute, &second) != 6)
+        return 0;
+    const char *at = strstr(MONTHS, month);
+    if (strlen(month) != 3 || !at || (at - MONTHS) % 3 || day < 1 || day > 31 || year < 1970 || year > 9999 ||
+        hour > 23 || minute > 59 || second > 60 || hour < 0 || minute < 0 || second < 0)
+        return 0;
+    int m = (int)(at - MONTHS) / 3 + 1;
+    return daysFromCivil(year, m, day) * 86400 + hour * 3600 + minute * 60 + second;
+}
+
 // --- The listing ---
 
 typedef struct {
@@ -388,6 +416,8 @@ bool davParseListing(const char *xml, const char *folder_url, DavEntry **out, si
             char *end;
             long long size = strtoll(text, &end, 10);
             e.size = end != text && size >= 0 ? size : -1;
+        } else if (in_response && !t.closing && !t.empty && tagIs(&t, "getlastmodified")) {
+            e.modified = tagText(t.after, text, sizeof(text)) ? davParseDate(text) : 0;
         }
     }
     if (!listing || !ok) {

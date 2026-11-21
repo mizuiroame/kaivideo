@@ -75,6 +75,7 @@ typedef struct {
     bool clock_24h;                      // The header's clock: 21:47 or 9:47 PM.
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the media server.
+    bool use_network;                    // Not a server's: the network folder's (dav.h), not the card's.
     int server_kind;                     // ServerKind: the one Settings' Media server page is for.
     int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.

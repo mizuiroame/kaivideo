@@ -4,7 +4,9 @@
 
 #include <switch.h>
 
-#define STACK_SIZE 0x20000
+#include "davnet.h"
+
+#define STACK_SIZE 0x40000  // A network folder's scan goes through curl (and TLS) a folder deep at a time.
 #define PRIORITY 0x2C
 
 static Thread g_thread;
@@ -17,7 +19,9 @@ static Library g_result;
 static void scanThread(void *arg)
 {
     (void)arg;
-    g_ok = libraryScan(&g_result, &g_cancel);
+    // The network folder ("dav:/") is listed by its server, a folder at a time.
+    g_ok = davIsLocation(g_result.root) ? libraryScanNetwork(&g_result, davList, &g_cancel)
+                                        : libraryScan(&g_result, &g_cancel);
     g_done = true;
 }
 

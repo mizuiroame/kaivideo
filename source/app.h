@@ -183,6 +183,10 @@ void appOpenPicker(App *app);
 void appLibraryToggleSource(App *app, uint64_t now);
 // Switches the library between the card and the Jellyfin server.
 void appLibrarySetSource(App *app, bool jellyfin);
+// Shows the network folder's library (what was found last time, and a new look).
+void appLibraryShowNetwork(App *app);
+// The network folder's account changed: its library is looked for again, or, gone, the card's shows.
+void appLibraryNetworkChanged(App *app);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
 void appLibraryInstallCatalog(App *app, JfCatalog *c);
 // app_scroll.c

@@ -124,6 +124,8 @@ bool configReadLine(Config *c, const char *line)
         c->autoplay = strcmp(value, "0") != 0;
     else if (isKey(line, length, "jellyfin"))
         c->use_jellyfin = strcmp(value, "1") == 0;
+    else if (isKey(line, length, "network_view"))
+        c->use_network = strcmp(value, "1") == 0;
     else if (isKey(line, length, "server"))
         c->server_kind = !strcmp(value, "plex") ? SERVER_PLEX : !strcmp(value, "emby") ? SERVER_EMBY : SERVER_JELLYFIN;
     else if (isKey(line, length, "view"))
@@ -156,7 +158,7 @@ void configWrite(const Config *c, FILE *f)
             c->use_jellyfin ? 1 : 0, c->jf_quality);
     fprintf(f, "jellyfin_check_certificate=%d\nserver=%s\n", c->jf_check_certificate ? 1 : 0,
             c->server_kind == SERVER_PLEX ? "plex" : c->server_kind == SERVER_EMBY ? "emby" : "jellyfin");
-    fprintf(f, "view=%d\n", c->server_view);
+    fprintf(f, "view=%d\nnetwork_view=%d\n", c->server_view, c->use_network ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))

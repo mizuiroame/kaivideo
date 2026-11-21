@@ -58,6 +58,7 @@ static void save(App *app, const DavAccount *a, uint64_t now)
     if (!davSaveAccount(path))
         appShowMessage(app, T("It couldn't be written to the card."), now);
     refreshFiles(app);
+    appLibraryNetworkChanged(app);
 }
 
 static void typeAddress(App *app, uint64_t now)

@@ -27,8 +27,12 @@ typedef struct {
 typedef struct {
     char name[DAV_NAME_MAX];
     bool is_dir;
-    int64_t size;  // Bytes; -1 if the server didn't say.
+    int64_t size;      // Bytes; -1 if the server didn't say.
+    int64_t modified;  // Seconds since 1970 (UTC); 0 if the server didn't say.
 } DavEntry;
+
+// An HTTP date ("Sat, 21 Nov 2026 00:38:55 GMT") in seconds since 1970; 0 if it isn't one.
+int64_t davParseDate(const char *text);
 
 // True for "dav:/..." locations.
 bool davIsLocation(const char *path);

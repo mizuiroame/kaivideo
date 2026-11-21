@@ -157,8 +157,27 @@ static void testListing(void)
     free(e);
 }
 
+static void testDates(void)
+{
+    CHECK(davParseDate("Sat, 21 Nov 2026 00:38:55 GMT") == 1795221535);
+    CHECK(davParseDate("Thu, 01 Jan 1970 00:00:00 GMT") == 0);
+    CHECK(davParseDate("Tue, 29 Feb 2028 12:00:00 GMT") == 1835438400);
+    CHECK(davParseDate("2026-11-21T00:38:55Z") == 0);
+    CHECK(davParseDate("Sat, 21 Foo 2026 00:38:55 GMT") == 0);
+    CHECK(davParseDate("Sat, 21 Nov 2026 25:38:55 GMT") == 0);
+    CHECK(davParseDate("") == 0);
+    DavEntry *e = NULL;
+    size_t n = 0;
+    CHECK(davParseListing("<D:multistatus><D:response><D:href>/a/x.mkv</D:href><D:prop><D:getlastmodified>"
+                          "Sat, 21 Nov 2026 00:38:55 GMT</D:getlastmodified></D:prop></D:response></D:multistatus>",
+                          "http://pc/a/", &e, &n));
+    CHECK(n == 1 && e[0].modified == 1795221535);
+    free(e);
+}
+
 void testDav(void)
 {
+    testDates();
     testAddresses();
     testUrls();
     testAccountFile();
