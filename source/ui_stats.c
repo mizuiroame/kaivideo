@@ -2,6 +2,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "ui_style.h"
 
 #define STATS_PX 18
@@ -9,7 +10,7 @@
 #define STATS_PAD 14
 #define STATS_TOP 24
 #define STATS_ALPHA 190
-#define STATS_TITLE "Statistics"
+#define STATS_TITLE T("Statistics")
 
 void uiDrawStats(char lines[][STATS_LINE_MAX], int count)
 {

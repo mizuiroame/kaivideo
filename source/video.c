@@ -13,6 +13,7 @@
 #include <switch.h>
 
 #include "hlsio.h"
+#include "lang.h"
 #include "mediafile.h"
 #include "subs.h"
 #include "swframe.h"
@@ -212,7 +213,7 @@ static bool handleSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
 {
     int bits = softwareBits(f->format);
     if (!bits) {
-        fail(v, "This video's picture format can't be shown.");
+        fail(v, T("This video's picture format can't be shown."));
         return false;
     }
     if (pts_ns >= v->skip_until_ns) {
@@ -236,7 +237,7 @@ static bool takeSoftwareFrames(Video *v)
         if (got < 0) {  // A damaged frame: the next ones may be fine.
             if (++errors < MAX_RECEIVE_ERRORS)
                 continue;
-            fail(v, "The video can't be decoded.");
+            fail(v, T("The video can't be decoded."));
             return false;
         }
         errors = 0;
@@ -266,7 +267,7 @@ static bool submitSoftware(Video *v, const AVPacket *p, bool last)
         if (!takeSoftwareFrames(v))
             return false;
     if (sent < 0 && sent != AVERROR_INVALIDDATA) {
-        fail(v, "The video can't be decoded.");
+        fail(v, T("The video can't be decoded."));
         return false;
     }
     if (last)
@@ -324,13 +325,13 @@ static bool submit(Video *v, const AVPacket *p, bool last)
             return true;
         if (rc != KERNELRESULT(TimedOut) && rc != VIDDEC_RESULT_SUBMIT_BUSY) {
             char message[96];
-            snprintf(message, sizeof(message), "The video decoder refused the video (0x%x).", rc);
+            snprintf(message, sizeof(message), T("The video decoder refused the video (0x%x)."), rc);
             fail(v, message);
             return false;
         }
     }
     if (!interrupted(v))
-        fail(v, "The video decoder stopped taking the video.");
+        fail(v, T("The video decoder stopped taking the video."));
     return false;
 }
 
@@ -462,7 +463,7 @@ static bool decodeToEnd(Video *v, AVPacket *pkt, AVPacket *held)
     }
     if (!interrupted(v) && mediaFileFailed(v->input.file)) {  // Not the end: the network went.
         av_packet_unref(held);
-        fail(v, "The connection to the server was lost.");
+        fail(v, T("The connection to the server was lost."));
         return false;
     }
     bool ok = !interrupted(v) && (!have_held || submit(v, held, true));
@@ -475,7 +476,7 @@ static void *decodeThread(void *arg)
     Video *v = arg;
     AVPacket *pkt = av_packet_alloc(), *held = av_packet_alloc();
     if (!pkt || !held)
-        fail(v, "Out of memory.");
+        fail(v, T("Out of memory."));
     while (pkt && held) {
         pthread_mutex_lock(&v->lock);
         bool stop = v->stop, seek = v->seek_requested;
@@ -540,7 +541,7 @@ static bool openSoftware(Video *v, AVStream *st, double fps, char *error, size_t
     v->software = codec ? avcodec_alloc_context3(codec) : NULL;
     v->software_frame = av_frame_alloc();
     if (!v->software || !v->software_frame || avcodec_parameters_to_context(v->software, par) < 0) {
-        snprintf(error, error_size, "This %s video can't be decoded.", codecName(par->codec_id));
+        snprintf(error, error_size, T("This %s video can't be decoded."), codecName(par->codec_id));
         return false;
     }
     int threads = swframeThreads(cpuCores());
@@ -548,11 +549,11 @@ static bool openSoftware(Video *v, AVStream *st, double fps, char *error, size_t
     v->software->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     v->software->pkt_timebase = st->time_base;
     if (avcodec_open2(v->software, codec, NULL) < 0) {
-        snprintf(error, error_size, "This %s video can't be decoded.", codecName(par->codec_id));
+        snprintf(error, error_size, T("This %s video can't be decoded."), codecName(par->codec_id));
         return false;
     }
     v->frame_ns = fps > 0 ? (int64_t)(1e9 / fps) : DEFAULT_FRAME_NS;
-    snprintf(v->description, sizeof(v->description), "%s %dx%d, %.3g fps, software", codecName(par->codec_id),
+    snprintf(v->description, sizeof(v->description), T("%s %dx%d, %.3g fps, software"), codecName(par->codec_id),
              par->width, par->height, fps);
     return true;
 }
@@ -574,7 +575,7 @@ static bool openHardware(Video *v, AVStream *st, double fps, char *error, size_t
         const AVBitStreamFilter *spec = av_bsf_get_by_name(filter);
         if (!spec || av_bsf_alloc(spec, &v->bsf) < 0 || avcodec_parameters_copy(v->bsf->par_in, par) < 0 ||
             (v->bsf->time_base_in = st->time_base, av_bsf_init(v->bsf) < 0)) {
-            snprintf(error, error_size, "The video can't be prepared for the decoder.");
+            snprintf(error, error_size, "%s", T("The video can't be prepared for the decoder."));
             return false;
         }
     }
@@ -591,12 +592,12 @@ static bool openHardware(Video *v, AVStream *st, double fps, char *error, size_t
     };
     Result rc = videoDecoderCreate(&v->decoder, &config);
     if (R_FAILED(rc)) {
-        snprintf(error, error_size, "The console's decoder can't play this %s video (%dx%d, 0x%x).",
+        snprintf(error, error_size, T("The console's decoder can't play this %s video (%dx%d, 0x%x)."),
                  codecName(par->codec_id), par->width, par->height, rc);
         return false;
     }
     v->decoder_open = true;
-    snprintf(v->description, sizeof(v->description), "%s %dx%d, %.3g fps", codecName(par->codec_id), par->width,
+    snprintf(v->description, sizeof(v->description), T("%s %dx%d, %.3g fps"), codecName(par->codec_id), par->width,
              par->height, fps);
     return true;
 }
@@ -620,10 +621,10 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
         return openSoftware(v, st, fps, error, error_size);
     default:
         if (kind == SWFRAME_OTHER)
-            snprintf(error, error_size, "%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8.",
+            snprintf(error, error_size, T("%s video can't be played: KaiVideo plays H.264, HEVC, VP9, AV1 and VP8."),
                      codecName(par->codec_id));
         else
-            snprintf(error, error_size, "%d-bit %s video can't be played.", bits, codecName(par->codec_id));
+            snprintf(error, error_size, T("%d-bit %s video can't be played."), bits, codecName(par->codec_id));
         return false;
     }
 }
@@ -765,7 +766,7 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
 {
     Video *v = calloc(1, sizeof(*v));
     if (!v) {
-        snprintf(error, error_size, "Out of memory.");
+        snprintf(error, error_size, "%s", T("Out of memory."));
         return NULL;
     }
     pthread_mutex_init(&v->lock, NULL);
@@ -774,20 +775,20 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     v->max_threads = max_threads;
     v->fmt = avformat_alloc_context();
     if (!v->fmt) {
-        snprintf(error, error_size, "Out of memory.");
+        snprintf(error, error_size, "%s", T("Out of memory."));
         videoClose(v);
         return NULL;
     }
     if (hlsIsLocation(path))
         v->fmt->interrupt_callback = (AVIOInterruptCB){readInterrupted, v};
     if (!mediaInputOpen(&v->input, &v->fmt, path, IO_BUFFER)) {
-        snprintf(error, error_size, "This isn't a video KaiVideo can read (MP4, MKV or WebM).");
+        snprintf(error, error_size, "%s", T("This isn't a video KaiVideo can read (MP4, MKV or WebM)."));
         videoClose(v);
         return NULL;
     }
     v->stream = av_find_best_stream(v->fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
     if (v->stream < 0) {
-        snprintf(error, error_size, "The file has no video.");
+        snprintf(error, error_size, "%s", T("The file has no video."));
         videoClose(v);
         return NULL;
     }
@@ -809,7 +810,7 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
         s->y = malloc((size_t)v->width * v->height);
         s->uv = malloc((size_t)v->width * v->height / 2);
         if (!s->y || !s->uv) {
-            snprintf(error, error_size, "Not enough memory for this video's frames.");
+            snprintf(error, error_size, "%s", T("Not enough memory for this video's frames."));
             videoClose(v);
             return NULL;
         }
@@ -833,7 +834,7 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
         v->audio_count++;
     }
     if (pthread_create(&v->thread, NULL, decodeThread, v) != 0) {
-        snprintf(error, error_size, "The decoding thread can't start.");
+        snprintf(error, error_size, "%s", T("The decoding thread can't start."));
         videoClose(v);
         return NULL;
     }

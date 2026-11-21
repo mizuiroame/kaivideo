@@ -9,6 +9,7 @@
 
 #include "jfsync.h"
 #include "jfsync_internal.h"
+#include "lang.h"
 #include "livetv.h"
 #include "net.h"
 #include "plexsync.h"
@@ -56,7 +57,7 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
     char *body = malloc(PLAN_BODY_MAX);
     NetClient *net = netClientOpen();
     bool ok = false;
-    snprintf(error, error_size, "The server can't be reached.");
+    snprintf(error, error_size, "%s", T("The server can't be reached."));
     if (jfSyncIsUp() && body && net && jfLocationIds(location, item, source)) {
         JfSession s = sessionOf(location);
         bool live = !strcmp(source, LIVE_SOURCE);  // A channel: the server opens its stream.
@@ -71,7 +72,7 @@ bool jfSyncResolve(const char *location, long long max_bitrate, int audio_index,
             ok = jfPlanParse(r.data, out);
             netResponseFree(&r);
             if (!ok)
-                snprintf(error, error_size, "The server can't play this video here.");
+                snprintf(error, error_size, "%s", T("The server can't play this video here."));
         }
     }
     netClientClose(net);

@@ -41,7 +41,7 @@ typedef enum {
 
 typedef struct {
     StatsSource source;
-    const char *quality;     // Converted: the setting's name, "Auto" included.
+    const char *quality;     // Converted: the setting's name, "" on Auto.
     const char *video, *sound;
     StatsRates rates;
     double ahead_s;          // Video in memory past where it plays; < 0 if unknown.

@@ -10,6 +10,7 @@
 #include <jansson.h>
 
 #include "jfsync_internal.h"
+#include "lang.h"
 #include "livetv.h"
 #include "net.h"
 #include "plexsync.h"
@@ -188,13 +189,13 @@ static json_t *callJson(const char *path, const char *post)
 {
     NetResponse r;
     if (!callText(path, post, SMALL_MAX_BYTES, API_TIMEOUT_S, &r)) {
-        setError(r.status ? "The server refused that." : "The server can't be reached.");
+        setError(r.status ? T("The server refused that.") : T("The server can't be reached."));
         return NULL;
     }
     json_t *root = json_loads(r.data, 0, NULL);
     netResponseFree(&r);
     if (!root)
-        setError("The server's answer can't be read.");
+        setError(T("The server's answer can't be read."));
     return root;
 }
 
@@ -283,8 +284,9 @@ static bool signInWithPassword(void)
         free(body);
     }
     if (!ok) {
-        setError(r.status == HTTP_UNAUTHORIZED ? "Wrong user name or password."
-                 : r.status ? "The server refused that." : "The server can't be reached.");
+        setError(r.status == HTTP_UNAUTHORIZED ? T("Wrong user name or password.")
+                 : r.status                    ? T("The server refused that.")
+                                               : T("The server can't be reached."));
         return false;
     }
     json_t *answer = json_loads(r.data, 0, NULL);
@@ -311,7 +313,7 @@ static bool plexSignIn(unsigned generation)
     long long id = 0;
     char code[16], error[128] = "";
     if (!plexNetStartPin(g.net, &s, g.version, &id, code, sizeof(code), &g.abort_call)) {
-        setError("plex.tv can't be reached.");
+        setError(T("plex.tv can't be reached."));
         return false;
     }
     if (g.sign_in_generation != generation)
@@ -454,7 +456,7 @@ static bool readCollection(JfCatalog *c, const JfSession *s, const char *parent,
                  user, parent ? "&ParentId=" : "", parent ? parent : "", start, JF_PAGE_ITEMS);
         NetResponse r;
         if (!callAs(s, path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r)) {
-            setError(r.status == 401 ? "The server signed this console out." : "The library couldn't be read.");
+            setError(r.status == 401 ? T("The server signed this console out.") : T("The library couldn't be read."));
             return false;
         }
         int count = jfCatalogAddPage(c, r.data, &total);
@@ -542,7 +544,7 @@ static bool readServer(ServerKind kind, JfCatalog *c)
         return true;
     }
     char message[96];
-    snprintf(message, sizeof(message), "%s's library couldn't be read: it shows as before.", serverKindName(kind));
+    snprintf(message, sizeof(message), T("%s's library couldn't be read: it shows as before."), serverKindName(kind));
     setError(message);
     jfCatalogFree(c);
     jfCatalogInit(c);

@@ -7,6 +7,7 @@
 
 #include "app.h"
 #include "buttons.h"
+#include "lang.h"
 #include "ui_library.h"
 
 #ifndef KAIVIDEO_VERSION
@@ -28,13 +29,13 @@ typedef enum {
 static const char *itemLabel(MenuItemId id)
 {
     switch (id) {
-    case ITEM_DOWNLOADS: return "Downloads";
-    case ITEM_RESCAN: return "Look for new videos";
-    case ITEM_SETTINGS: return "Settings";
-    case ITEM_BACK_TO_LIBRARY: return "Back to the library";
-    case ITEM_EXIT: return "Exit KaiVideo";
-    case ITEM_EXIT_CONFIRMED: return "Exit";
-    default: return "Cancel";
+    case ITEM_DOWNLOADS: return T("Downloads");
+    case ITEM_RESCAN: return T("Look for new videos");
+    case ITEM_SETTINGS: return T("Settings");
+    case ITEM_BACK_TO_LIBRARY: return T("Back to the library");
+    case ITEM_EXIT: return T("Exit KaiVideo");
+    case ITEM_EXIT_CONFIRMED: return T("Exit");
+    default: return T("Cancel");
     }
 }
 
@@ -132,7 +133,7 @@ void appMenuDraw(const App *app)
     for (int i = 0; i < n; i++)
         labels[i] = itemLabel(ids[i]);
     if (app->app_menu == APP_MENU_EXIT)
-        uiDrawMenu("Exit KaiVideo?", NULL, labels, n, app->app_menu_cursor);
+        uiDrawMenu(T("Exit KaiVideo?"), NULL, labels, n, app->app_menu_cursor);
     else
         uiDrawMenu("KaiVideo", KAIVIDEO_VERSION, labels, n, app->app_menu_cursor);
 }
@@ -140,31 +141,32 @@ void appMenuDraw(const App *app)
 const char *appFooterHelp(const App *app)
 {
     if (app->app_menu == APP_MENU_EXIT)
-        return "[A] choose  [B] cancel  [+] exit";
+        return T("[A] choose  [B] cancel  [+] exit");
     if (app->app_menu == APP_MENU_MAIN)
-        return "[A] choose  [B] close  [+] exit";
+        return T("[A] choose  [B] close  [+] exit");
     if (app->settings_open && app->jf_signing)
-        return "[B] cancel";
+        return T("[B] cancel");
     if (app->settings_open && app->about_open)
-        return "[A][B] back";
+        return T("[A][B] back");
     if (app->settings_open)
-        return app->settings_page == 0 ? "[^v] choose  [>][A] open  [B] close"
-                                       : "[^v] choose  [<>][A] change  [B] back";
+        return app->settings_page == 0 ? T("[^v] choose  [>][A] open  [B] close")
+                                       : T("[^v] choose  [<>][A] change  [B] back");
     if (app->picking)
-        return app->library_root[0] ? "[A] open  [B] folder above  [X] use this folder  [-] cancel"
-                                    : "[A] open  [B] folder above  [X] use this folder  [+] menu";
+        return app->library_root[0] ? T("[A] open  [B] folder above  [X] use this folder  [-] cancel")
+                                    : T("[A] open  [B] folder above  [X] use this folder  [+] menu");
     bool server = app->config.use_jellyfin;  // Favorites are kept on the server.
     if (app->view.details >= 0)
-        return server ? "[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back"
-                      : "[A] play  [Y] from the start  [X] watched  [B] back";
+        return server ? T("[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back")
+                      : T("[A] play  [Y] from the start  [X] watched  [B] back");
     if (app->view.show >= 0)
-        return server ? "[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs"
-                      : "[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu";
+        return server
+                   ? T("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs")
+                   : T("[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu");
     switch (app->view.tab) {
     case TAB_DOWNLOADS: return appDownloadsHelp(app);
-    case TAB_SEARCH: return "[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu";
-    case TAB_LIVE: return "[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu";
-    case TAB_FILES: return "[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu";
-    default: return "[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu";
+    case TAB_SEARCH: return T("[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu");
+    case TAB_LIVE: return T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
+    case TAB_FILES: return T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
+    default: return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     }
 }

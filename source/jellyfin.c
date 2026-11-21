@@ -10,6 +10,8 @@
 
 #include <jansson.h>
 
+#include "lang.h"
+
 #define DEFAULT_PORT "8096"
 #define DEFAULT_HTTPS_PORT "8920"
 #define HTTP_BAD_REQUEST 400
@@ -194,10 +196,10 @@ JfPlayability jfPlayability(const JfVideoFacts *v)
 const char *jfPlayabilityMessage(JfPlayability p)
 {
     switch (p) {
-    case JF_TOO_LARGE: return "4K: your server converts it for the console.";
-    case JF_HDR: return "HDR: your server converts it for the console.";
-    case JF_TOO_HEAVY: return "High bitrate: your server converts it for the console.";
-    case JF_FORMAT: return "Your server converts this format for the console.";
+    case JF_TOO_LARGE: return T("4K: your server converts it for the console.");
+    case JF_HDR: return T("HDR: your server converts it for the console.");
+    case JF_TOO_HEAVY: return T("High bitrate: your server converts it for the console.");
+    case JF_FORMAT: return T("Your server converts this format for the console.");
     default: return "";
     }
 }
@@ -301,7 +303,7 @@ static void readTracks(const json_t *source, JfPlan *p)
 
 void jfPictureLabel(const JfTrack *t, char *out, size_t size)
 {
-    snprintf(out, size, "%s (burned in)", t->name);
+    snprintf(out, size, T("%s (burned in)"), t->name);
 }
 
 // The picture subtitle the server draws on the conversion: its address says
@@ -805,14 +807,15 @@ bool jfAddressIsLocal(const char *server)
 static const char *problemAdvice(NetProblem problem)
 {
     switch (problem) {
-    case NET_NO_NAME: return "The name in the address couldn't be found. Check it, or use the server's IP address.";
+    case NET_NO_NAME: return T("The name in the address couldn't be found. Check it, or use the server's IP address.");
     case NET_NO_CONNECT:
-        return "Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?";
-    case NET_TIMEOUT: return "The server didn't answer in time. Is the console on the same network as the server?";
-    case NET_SECURE: return "The secure connection failed. Does the server use https on that port?";
+        return T("Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?");
+    case NET_TIMEOUT: return T("The server didn't answer in time. Is the console on the same network as the server?");
+    case NET_SECURE: return T("The secure connection failed. Does the server use https on that port?");
     case NET_CERTIFICATE:
-        return "The server's certificate isn't trusted. If the server has its own certificate, turn Certificate check off.";
-    default: return "The connection failed. Check the address and the network.";
+        return T("The server's certificate isn't trusted. "
+                 "If the server has its own certificate, turn Certificate check off.");
+    default: return T("The connection failed. Check the address and the network.");
     }
 }
 
@@ -836,11 +839,11 @@ bool jfConnectionVerdictFor(ServerKind kind, NetProblem problem, long status, co
     const char *name = serverKindName(kind);
     if (problem == NET_STATUS && status == HTTP_BAD_REQUEST && !strncmp(server, "http://", 7)) {
         // What a server answers when plain http comes to its https port.
-        snprintf(out, size, "That port may want a secure connection: write https:// before the address.");
+        snprintf(out, size, "%s", T("That port may want a secure connection: write https:// before the address."));
         return false;
     }
     if (problem == NET_STATUS) {
-        snprintf(out, size, "That address answers (%ld), but not as %s. Check the port and the path.", status, name);
+        snprintf(out, size, T("That address answers (%ld), but not as %s. Check the port and the path."), status, name);
         return false;
     }
     if (problem != NET_OK) {
@@ -850,12 +853,12 @@ bool jfConnectionVerdictFor(ServerKind kind, NetProblem problem, long status, co
     json_t *root = body ? json_loads(body, 0, NULL) : NULL;
     bool jellyfin = answersAs(kind, root);
     if (!jellyfin) {
-        snprintf(out, size, "That address answers, but it isn't %s. Check the port (usually 8096).", name);
+        snprintf(out, size, T("That address answers, but it isn't %s. Check the port (usually 8096)."), name);
     } else {
         bool plain = strncmp(server, "https://", 8) != 0 && !jfAddressIsLocal(server);
-        snprintf(out, size, "%s %s on %s answers.%s", name, textOf(root, "Version"),
-                 textOf(root, "ServerName")[0] ? textOf(root, "ServerName") : "the server",
-                 plain ? " The connection isn't encrypted: use https outside your home." : "");
+        snprintf(out, size, T("%s %s on %s answers.%s"), name, textOf(root, "Version"),
+                 textOf(root, "ServerName")[0] ? textOf(root, "ServerName") : T("the server"),
+                 plain ? T(" The connection isn't encrypted: use https outside your home.") : "");
     }
     json_decref(root);
     return jellyfin;
@@ -943,12 +946,12 @@ int jfSegmentAt(const JfSegment *s, int count, int64_t pos_ns)
 const char *jfSegmentLabel(JfSegmentKind kind)
 {
     switch (kind) {
-    case JF_SEGMENT_INTRO: return "Skip intro";
-    case JF_SEGMENT_RECAP: return "Skip recap";
-    case JF_SEGMENT_PREVIEW: return "Skip preview";
-    case JF_SEGMENT_OUTRO: return "Skip credits";
+    case JF_SEGMENT_INTRO: return T("Skip intro");
+    case JF_SEGMENT_RECAP: return T("Skip recap");
+    case JF_SEGMENT_PREVIEW: return T("Skip preview");
+    case JF_SEGMENT_OUTRO: return T("Skip credits");
     }
-    return "Skip";
+    return T("Skip");
 }
 
 // --- Where the user left a video, told later ---

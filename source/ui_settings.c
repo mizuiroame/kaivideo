@@ -8,6 +8,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "ui_buttons.h"
 #include "ui_library.h"
 #include "ui_style.h"
@@ -39,7 +40,7 @@ static void panel(int x, int y, int w, int h)
 // "◀ Back", as KaiPlayer's pages have it. Returns its width.
 static int backButton(int x, int y)
 {
-    static const char LABEL[] = "Back";
+    const char *const LABEL = T("Back");
     int w = fontTextWidth(FONT_BOLD, 17, LABEL) + 44;
     float mid = (float)y + 15.0f;
     gfxFillRoundRect(x, y, w, 30, 15, COLOR_SURFACE_HI);
@@ -82,18 +83,18 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
 {
     if (row == SETTING_LIBRARY) {
         const char *slash = strrchr(library_root, '/');
-        snprintf(out, size, "%s", !library_root[0] ? "Not chosen" : slash && slash[1] ? slash + 1 : library_root);
+        snprintf(out, size, "%s", !library_root[0] ? T("Not chosen") : slash && slash[1] ? slash + 1 : library_root);
     } else if (row == SETTING_ABOUT) {
         snprintf(out, size, "KaiVideo %s", version);
     } else if (row == SETTING_JF_SERVER || row == SETTING_PLEX_SERVER) {
-        snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : "Not set");
+        snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : T("Not set"));
     } else if (row == SETTING_JF_SIGN_OUT) {
         snprintf(out, size, "%s", g_jf_user);
     } else if (row == SETTING_OPEN_JELLYFIN || row == SETTING_OPEN_EMBY || row == SETTING_OPEN_PLEX) {
         SettingsPage page;
         ServerKind kind;
         settingOpensPage(row, &page, &kind);
-        snprintf(out, size, "%s", g_users[kind][0] ? g_users[kind] : "Not signed in");
+        snprintf(out, size, "%s", g_users[kind][0] ? g_users[kind] : T("Not signed in"));
     } else {
         settingValue(c, row, out, size);
     }
@@ -168,7 +169,7 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
         }
     }
     fontDrawClipped(FONT_REGULAR, 16, x + PANEL_PAD, y + h - 40, SETTINGS_W - 2 * PANEL_PAD,
-                    "Open source (MIT)  \xC2\xB7  github.com/mizuiroame/kaivideo", COLOR_FAINT);
+                    T("Open source (MIT)  \xC2\xB7  github.com/mizuiroame/kaivideo"), COLOR_FAINT);
 }
 
 // A screen with a play symbol: KaiVideo's mark.
@@ -185,33 +186,35 @@ void uiDrawSignInCode(bool plex, const char *code, const char *server, bool link
     int w = 680, h = 340, x = (GFX_WIDTH - w) / 2, y = (GFX_HEIGHT - h) / 2;
     dimScreen();
     panel(x, y, w, h);
-    fontDraw(FONT_BOLD, 26, x + PANEL_PAD, y + 26, plex ? "Sign in to Plex" : "Sign in to Jellyfin", COLOR_TEXT);
+    fontDraw(FONT_BOLD, 26, x + PANEL_PAD, y + 26, plex ? T("Sign in to Plex") : T("Sign in to Jellyfin"),
+             COLOR_TEXT);
     fontDrawClipped(FONT_REGULAR, 18, x + PANEL_PAD, y + 62, w - 2 * PANEL_PAD, plex ? "plex.tv" : server, COLOR_DIM);
     if (!code[0] || linked) {
-        const char *doing = linked ? "Linked. Finding your Plex server..."
-                            : plex ? "Contacting plex.tv..." : "Contacting the server...";
+        const char *doing = linked ? T("Linked. Finding your Plex server...")
+                            : plex ? T("Contacting plex.tv...") : T("Contacting the server...");
         fontDraw(FONT_REGULAR, 21, x + PANEL_PAD, y + 150, doing, COLOR_TEXT);
         return;
     }
     int code_w = fontTextWidth(FONT_BOLD, 64, code);
     fontDraw(FONT_BOLD, 64, x + (w - code_w) / 2, y + 104, code, COLOR_ACCENT);
     fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, y + 216,
-             plex ? "On your phone or computer, go to plex.tv/link" : "In Jellyfin on your phone or computer, open your",
+             plex ? T("On your phone or computer, go to plex.tv/link")
+                  : T("In Jellyfin on your phone or computer, open your"),
              COLOR_TEXT);
     fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, y + 244,
-             plex ? "and enter this code." : "profile, choose Quick Connect and enter this code.", COLOR_TEXT);
+             plex ? T("and enter this code.") : T("profile, choose Quick Connect and enter this code."), COLOR_TEXT);
 }
 
 void uiDrawAbout(const char *version)
 {
     static const char *const LINES[] = {
-        "A video player for Switch 2 homebrew on kaiHEN.",
-        "Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or",
-        "Plex server, with sound tracks, subtitles and a library of your films and series.",
+        N_("A video player for Switch 2 homebrew on kaiHEN."),
+        N_("Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or"),
+        N_("Plex server, with sound tracks, subtitles and a library of your films and series."),
         "",
         "",
-        "Free and open source under the MIT license; FFmpeg under the LGPL.",
-        "Not affiliated with or endorsed by Nintendo.",
+        N_("Free and open source under the MIT license; FFmpeg under the LGPL."),
+        N_("Not affiliated with or endorsed by Nintendo."),
     };
     int x = (GFX_WIDTH - ABOUT_W) / 2, y = (GFX_HEIGHT - ABOUT_H) / 2;
     dimScreen();
@@ -220,13 +223,13 @@ void uiDrawAbout(const char *version)
     int text_x = x + PANEL_PAD + 108;
     fontDraw(FONT_BOLD, 34, text_x, y + 36, "KaiVideo", COLOR_TEXT);
     char line[64];
-    snprintf(line, sizeof(line), "Version %s", version);
+    snprintf(line, sizeof(line), T("Version %s"), version);
     fontDraw(FONT_REGULAR, 20, text_x, y + 84, line, COLOR_DIM);
     int line_y = y + 150;
-    fontDraw(FONT_REGULAR, 18, x + PANEL_PAD, line_y, "Made by", COLOR_DIM);
+    fontDraw(FONT_REGULAR, 18, x + PANEL_PAD, line_y, T("Made by"), COLOR_DIM);
     fontDraw(FONT_BOLD, 26, x + PANEL_PAD, line_y + 24, "Mizuiro", COLOR_ACCENT);
     line_y += 82;
     for (size_t i = 0; i < sizeof(LINES) / sizeof(LINES[0]); i++, line_y += 28)
-        fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, line_y, LINES[i], COLOR_TEXT);
+        fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, line_y, T(LINES[i]), COLOR_TEXT);
     fontDraw(FONT_BOLD, 18, x + PANEL_PAD, y + ABOUT_H - 46, "github.com/mizuiroame/kaivideo", COLOR_ACCENT);
 }

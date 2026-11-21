@@ -9,6 +9,7 @@
 #include "font.h"
 #include "gfx.h"
 #include "home.h"
+#include "lang.h"
 #include "library.h"
 #include "libview.h"
 #include "menu.h"
@@ -172,7 +173,7 @@ static void liveScene(Player *p)
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
-    uiDrawFooterHelp("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_tab");
     const int row2_y = 116 + 76 + 38;  // The middle of the second channel's row.
     if (uiLibraryTap(100, row2_y).kind != LIBHIT_LIVE_ROW) {
@@ -190,7 +191,7 @@ static void liveScene(Player *p)
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
-    uiDrawFooterHelp("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_guide_later");
     view.live_at = 0;
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
@@ -490,8 +491,8 @@ static void downloadsScene(void)
                            "4 downloading \xC2\xB7 2 on the card (5.5 GB) \xC2\xB7 1 deleted \xC2\xB7 2 watched offline, "
                            "told to the server when it's back",
                            "");
-        uiDrawFooterHelp(pass ? "[A] download again  [X] take off the list  [Y] clear deleted  [ZL][ZR] tabs  [+] menu"
-                              : "[A] pause / go on  [X] cancel  [ZL][ZR] tabs  [+] menu");
+        uiDrawFooterHelp(pass ? T("[A] download again  [X] take off the list  [Y] clear deleted  [ZL][ZR] tabs  [+] menu")
+                              : T("[A] pause / go on  [X] cancel  [ZL][ZR] tabs  [+] menu"));
         save(pass ? "downloads_end" : "downloads");
     }
     bool rows = false, deletes = false, heading = false, tab = false, clear = false;
@@ -517,7 +518,7 @@ static void downloadsScene(void)
     uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawDownloadsTab(ROWS, 0, &(Scroll){0}, -1, "0 downloading \xC2\xB7 0 on the card (0 MB) \xC2\xB7 0 deleted",
                        "Nothing yet: open a film or episode from a server and press L to download it.");
-    uiDrawFooterHelp("[ZL][ZR] tabs  [-] settings  [+] menu");
+    uiDrawFooterHelp(T("[ZL][ZR] tabs  [-] settings  [+] menu"));
     save("downloads_empty");
 }
 
@@ -564,7 +565,7 @@ static void libraryScenes(void)
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawShowFavorite(false);
     uiDrawShowDownload("Download season", false, true, false);
-    uiDrawFooterHelp("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs");
+    uiDrawFooterHelp(T("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs"));
     save("lib_show_server");
     bool pill = false;
     for (int x = GFX_WIDTH / 2; x < GFX_WIDTH; x += 4)
@@ -658,7 +659,7 @@ static void libraryScenes(void)
     uiLibrarySetSource("Plex", uiServerColor(SERVER_PLEX));
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawFooterHelp("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
+    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("library_plex");
     g_colors.accent = chosen_accent;
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
@@ -674,7 +675,7 @@ static void libraryScenes(void)
     static const char *const USERS[SERVER_KIND_COUNT] = {"mizu", "", "mizu"};
     uiSettingsSetServers(USERS);
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
-    uiDrawFooterHelp("[^v] choose  [>][A] open  [B] close");
+    uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
     save("settings");
     // The main page's rows: 48 high from 76 below the panel's top (7 rows, a 60 footer).
     int top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
@@ -689,7 +690,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_LIBRARY, SETTING_THUMBNAILS, "sdmc:/Media/Videos", "1.9.0");
-    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_library");
     top = (GFX_HEIGHT - (76 + 3 * 48 + 60)) / 2 + 76;
     LibHit thumbs = uiLibraryTap((GFX_WIDTH + 760) / 2 - 40, top + 2 * 48 + 20);
@@ -700,7 +701,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.9.0");
-    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_display");
     top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
     if (uiLibraryTap((GFX_WIDTH - 760) / 2 + 60, top + 33).kind != LIBHIT_PAGE_BACK) {
@@ -711,7 +712,7 @@ static void libraryScenes(void)
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiSettingsSetJellyfin("192.168.0.10:8096", "");
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.9.0");
-    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_jellyfin");
     top = (GFX_HEIGHT - (76 + 30 + 7 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
     LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
@@ -725,7 +726,7 @@ static void libraryScenes(void)
     plex_config.server_kind = SERVER_PLEX;
     uiSettingsSetJellyfin("", "");
     uiDrawSettings(&plex_config, SETTINGS_PAGE_JELLYFIN, SETTING_PLEX_CODE, "sdmc:/Media/Videos", "1.9.0");
-    uiDrawFooterHelp("[^v] choose  [<>][A] change  [B] back");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_plex");
     top = (GFX_HEIGHT - (76 + 30 + 2 * 48 + 60)) / 2 + 76 + 30;
     LibHit plex_code = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 20);
@@ -736,16 +737,16 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSignInCode(true, "K7QX", "", false);
-    uiDrawFooterHelp("[B] cancel");
+    uiDrawFooterHelp(T("[B] cancel"));
     save("plex_code");
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawSignInCode(false, "482913", "192.168.0.10:8096", false);
-    uiDrawFooterHelp("[B] cancel");
+    uiDrawFooterHelp(T("[B] cancel"));
     save("jellyfin_code");
     begin();
     uiDrawLoading("Paper Lanterns (1998)", 1.0f, false);
-    uiDrawFooterHelp("[B] cancel");
+    uiDrawFooterHelp(T("[B] cancel"));
     save("loading");
     begin();
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
@@ -766,7 +767,7 @@ static void libraryScenes(void)
     uiDrawDetails(&g_lib, g_lib.films[0], &g_resume,
                   "Still downloading: playing it streams it from the server, and its download and the others pause until you stop.",
                   true, "Downloading 42%");
-    uiDrawFooterHelp("[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back");
+    uiDrawFooterHelp(T("[A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back"));
     save("details");
     film->favorite = false;
     bool played = false, marked = false, download = false;
@@ -784,7 +785,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawAbout("1.0.0");
-    uiDrawFooterHelp("[A][B] back");
+    uiDrawFooterHelp(T("[A][B] back"));
     save("about");
     downloadsScene();
 
@@ -793,7 +794,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawMenu("KaiVideo", "1.0.0", MENU, 4, 2);
-    uiDrawFooterHelp("[A] choose  [B] close  [+] exit");
+    uiDrawFooterHelp(T("[A] choose  [B] close  [+] exit"));
     save("menu");
     LibHit item = uiLibraryTap(GFX_WIDTH / 2, (GFX_HEIGHT - (76 + 4 * 48 + 20)) / 2 + 76 + 3 * 48 + 20);
     if (item.kind != LIBHIT_MENU_ITEM || item.a != 3 || uiLibraryTap(20, 400).kind != LIBHIT_CLOSE) {
@@ -804,7 +805,7 @@ static void libraryScenes(void)
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
     uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0);
-    uiDrawFooterHelp("[A] choose  [B] cancel  [+] exit");
+    uiDrawFooterHelp(T("[A] choose  [B] cancel  [+] exit"));
     save("menu_exit");
     themeApply(0, 0);
 
@@ -829,14 +830,14 @@ static void libraryScenes(void)
     uiDrawTabBar(&g_view, &g_lib, NULL);
     uiDrawBrowser(&b, &g_resume, BROWSE_FILES);
     uiDrawFooterStrip();
-    uiDrawFooterHelp("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
+    uiDrawFooterHelp(T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu"));
     save("lib_files");
     checkTabTaps("lib_files");
     begin();
     gfxClear(COLOR_BG);
     uiDrawBrowser(&b, &g_resume, BROWSE_PICK);
     uiDrawFooterStrip();
-    uiDrawFooterHelp("[A] open  [B] folder above  [X] use this folder  [-] cancel");
+    uiDrawFooterHelp(T("[A] open  [B] folder above  [X] use this folder  [-] cancel"));
     save("lib_picker");
     size_t row;
     if (uiTapBrowser(&b, GFX_WIDTH - 100, 34, BROWSE_PICK, &row) != TAP_USE_FOLDER ||
@@ -877,7 +878,7 @@ static void serversScene(void)
         uiLibraryResetHits();
         begin();
         uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
-        uiDrawFooterHelp("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
+        uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
         save(pass ? "tabs_servers_last" : "tabs_servers");
         if (uiLibraryTap(MARGIN_PREVIEW_SOURCE_X, 30).kind != LIBHIT_SOURCE) {
             printf("TOUCH: tabs_servers: the source doesn't answer a tap\n");
@@ -886,9 +887,24 @@ static void serversScene(void)
     }
 }
 
+// With a language file as the second argument, the screens are drawn in it
+// (to see what no longer fits): preview build/es ../../data/lang_es.txt
+static void useLanguageFile(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    static char text[1 << 20];
+    size_t size = f ? fread(text, 1, sizeof(text), f) : 0;
+    if (f)
+        fclose(f);
+    if (!size || !langLoadText(text, size))
+        fprintf(stderr, "cannot read the language in %s\n", path);
+}
+
 int main(int argc, char **argv)
 {
     g_dir = argc > 1 ? argv[1] : ".";
+    if (argc > 2)
+        useLanguageFile(argv[2]);
     if (!fontInit()) {
         fprintf(stderr, "fonts failed\n");
         return 1;

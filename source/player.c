@@ -10,6 +10,7 @@
 #include "hlsio.h"
 #include "jellyfin.h"
 #include "jfsync.h"
+#include "lang.h"
 #include "livetv.h"
 #include "subs.h"
 #include "webvtt.h"
@@ -134,7 +135,8 @@ static void labelExternal(Player *p, const char *srt_path)
         lang[ext - dot] = '\0';
     }
     const char *language = subsLanguageName(lang);
-    snprintf(p->ext[0].label, sizeof(p->ext[0].label), "%s%s", language ? language : "Subtitles", " (.srt file)");
+    snprintf(p->ext[0].label, sizeof(p->ext[0].label), "%s%s", language ? language : T("Subtitles"),
+             T(" (.srt file)"));
 }
 
 static void openSubtitles(Player *p, const char *path)
@@ -154,7 +156,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
 {
     Player *p = calloc(1, sizeof(*p));
     if (!p) {
-        snprintf(error, error_size, "Out of memory.");
+        snprintf(error, error_size, "%s", T("Out of memory."));
         return NULL;
     }
     p->video = videoOpen(path, error, error_size);
@@ -175,7 +177,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     if (p->audio)
         snprintf(p->audio_info, sizeof(p->audio_info), "%s", audioDescription(p->audio));
     else
-        snprintf(p->audio_info, sizeof(p->audio_info), "%s", why[0] ? why : "No sound");
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", why[0] ? why : T("No sound"));
     p->own_clock = !p->audio;
     p->holding = true;  // The sound starts with the first frame (it opens paused).
     p->hold_since_ns = now_ns;
@@ -727,7 +729,7 @@ int64_t playerDuration(const Player *p)
 bool playerFinished(Player *p, char *error, size_t error_size)
 {
     if (p->audio && audioReadFailed(p->audio)) {
-        snprintf(error, error_size, "The connection to the server was lost.");
+        snprintf(error, error_size, "%s", T("The connection to the server was lost."));
         return true;
     }
     return videoFinished(p->video, error, error_size);
@@ -793,7 +795,7 @@ static Audio *openConvertedTrack(Player *p, char *error, size_t error_size)
     p->swap_session[0] = '\0';
     if (!jfSyncAudioConversion(p->location, p->swap_audio_index, url, sizeof(url), auth, sizeof(auth),
                                p->swap_session, sizeof(p->swap_session))) {
-        snprintf(error, error_size, "The server can't convert this sound track.");
+        snprintf(error, error_size, "%s", T("The server can't convert this sound track."));
         return NULL;
     }
     if (!hlsStartAudio(url, auth, p->swap_start_ns, &p->ext_cancel, error, error_size))
@@ -810,7 +812,7 @@ static void *swapThread(void *arg)
                                  : audioOpen(p->path, p->swap_track, error, sizeof(error));  // Paused: it gets ready.
     pthread_mutex_lock(&p->swap_lock);
     p->swap_new = a;
-    snprintf(p->swap_error, sizeof(p->swap_error), "%s", a ? "" : error[0] ? error : "No sound");
+    snprintf(p->swap_error, sizeof(p->swap_error), "%s", a ? "" : error[0] ? error : T("No sound"));
     p->swap_done = true;
     pthread_mutex_unlock(&p->swap_lock);
     return NULL;
@@ -863,7 +865,7 @@ void playerSetAudioTrack(Player *p, int track, uint64_t now_ns)
         audioSwitchTrack(p->audio, track, p->position_ns);
         p->audio_track = track;
         p->joining = false;
-        snprintf(p->audio_info, sizeof(p->audio_info), "Changing the sound track");
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", T("Changing the sound track"));
         if (p->holding) {  // Opening or a jump is under way: the sound follows it as usual.
             audioSeek(p->audio, p->position_ns);
             p->own_clock = false;
@@ -884,10 +886,10 @@ void playerSetAudioTrack(Player *p, int track, uint64_t now_ns)
     p->swap_track = track;
     p->swap_done = false;
     p->audio_track = track;
-    snprintf(p->audio_info, sizeof(p->audio_info), "Changing the sound track");
+    snprintf(p->audio_info, sizeof(p->audio_info), "%s", T("Changing the sound track"));
     if (pthread_create(&p->swap_thread, NULL, swapThread, p) != 0) {
         audioClose(p->swap_old);  // Can't happen in practice; the video goes on silent.
-        snprintf(p->audio_info, sizeof(p->audio_info), "The sound thread can't start.");
+        snprintf(p->audio_info, sizeof(p->audio_info), "%s", T("The sound thread can't start."));
         return;
     }
     p->swapping = true;

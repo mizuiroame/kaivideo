@@ -11,6 +11,7 @@
 
 #include "hlslist.h"
 #include "hlsmaster.h"
+#include "lang.h"
 #include "mediafile.h"
 #include "net.h"
 
@@ -649,7 +650,7 @@ bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool 
     HlsSession *ses = &g_main;
     bool ok = start(ses, url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
     if (!ok)
-        snprintf(error, error_size, "The channel's own stream can't be read.");
+        snprintf(error, error_size, "%s", T("The channel's own stream can't be read."));
     return ok;
 }
 
@@ -659,7 +660,7 @@ bool hlsStart(const char *master_url, const char *authorization, int64_t start_n
     HlsSession *ses = &g_main;
     bool ok = start(ses, master_url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
     if (!ok)
-        snprintf(error, error_size, "The server didn't start converting this video.");
+        snprintf(error, error_size, "%s", T("The server didn't start converting this video."));
     return ok;
 }
 
@@ -668,7 +669,7 @@ bool hlsStartAudio(const char *url, const char *authorization, int64_t start_ns,
 {
     bool ok = start(&g_audio, url, authorization, 0, PLAYLIST_TIMEOUT_S, start_ns, cancel);
     if (!ok)
-        snprintf(error, error_size, "The server didn't start converting this sound track.");
+        snprintf(error, error_size, "%s", T("The server didn't start converting this sound track."));
     return ok;
 }
 

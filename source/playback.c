@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "lang.h"
+
 static const int SPEEDS[PLAYBACK_SPEED_COUNT] = {500, 750, PLAYBACK_PERMILLE, 1250, 1500, 2000};
 
 int playbackSpeedPermille(int index)
@@ -92,8 +94,8 @@ PlaybackAspect playbackAspectStep(PlaybackAspect aspect, int delta)
 
 const char *playbackAspectName(PlaybackAspect aspect)
 {
-    static const char *const NAMES[PLAYBACK_ASPECT_COUNT] = {"Original", "Fill", "Stretch", "4:3", "16:9"};
-    return aspect >= 0 && aspect < PLAYBACK_ASPECT_COUNT ? NAMES[aspect] : NAMES[0];
+    static const char *const NAMES[PLAYBACK_ASPECT_COUNT] = {N_("Original"), N_("Fill"), N_("Stretch"), "4:3", "16:9"};
+    return T(aspect >= 0 && aspect < PLAYBACK_ASPECT_COUNT ? NAMES[aspect] : NAMES[0]);
 }
 
 void playbackVideoBox(double video_aspect, PlaybackAspect aspect, float screen_w, float screen_h, float *w, float *h)
@@ -145,9 +147,9 @@ void playbackFormatLoop(char *out, size_t size, const PlaybackLoop *loop)
     formatTime(a, sizeof(a), loop->a_ns);
     formatTime(b, sizeof(b), loop->b_ns);
     if (loop->a_ns < 0)
-        snprintf(out, size, "Off");
+        snprintf(out, size, "%s", T("Off"));
     else if (loop->b_ns < 0)
-        snprintf(out, size, "A %s", a);
+        snprintf(out, size, T("A %s"), a);
     else
         snprintf(out, size, "%s - %s", a, b);
 }
@@ -173,7 +175,7 @@ void playbackChaptersPrepare(PlaybackChapter *chapters, int count)
     qsort(chapters, (size_t)count, sizeof(*chapters), compareChapters);
     for (int i = 0; i < count; i++)
         if (!chapters[i].title[0])
-            snprintf(chapters[i].title, sizeof(chapters[i].title), "Chapter %d", i + 1);
+            snprintf(chapters[i].title, sizeof(chapters[i].title), T("Chapter %d"), i + 1);
 }
 
 int playbackChapterAt(const PlaybackChapter *chapters, int count, int64_t pos_ns)

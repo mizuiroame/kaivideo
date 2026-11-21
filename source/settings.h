@@ -38,6 +38,7 @@ typedef enum {
     SETTING_OPEN_LIBRARY,   // Opens the Library page: the card's folder and its scan.
     SETTING_OPEN_PLAYBACK,  // Opens the Playback page.
     SETTING_SERVER_COLOR,   // The color a server's library wears (its own, or an accent).
+    SETTING_LANGUAGE,       // The language KaiVideo is shown in (languages.h; the app steps it).
     SETTING_COUNT,
 } SettingRow;
 
@@ -77,6 +78,8 @@ typedef struct {
     int subtitle_style;                  // SubtitleStyle.
     char subtitle_font[SETTINGS_NAME_MAX];  // A file in config/fonts, or "" for the built-in font.
     int server_color[SERVER_KIND_COUNT];  // 0: the server's own color; else the accent number + 1.
+    char language[SETTINGS_NAME_MAX];     // Its id: "en", "es", or a file in config/lang; "" is English.
+    char language_name[SETTINGS_NAME_MAX];  // Its name, as Settings shows it (not kept: the app sets it).
 } Config;
 
 void configDefaults(Config *c);

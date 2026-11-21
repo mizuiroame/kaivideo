@@ -5,6 +5,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "playback.h"
 #include "ui_buttons.h"
 #include "ui_style.h"
@@ -85,12 +86,12 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
     bool picking = mode != BROWSE_FILES;
     if (mode == BROWSE_PICK) {
         gfxFillRoundRect(CANCEL_X, USE_Y, CANCEL_W, USE_H, USE_H / 2, COLOR_SURFACE_HI);
-        fontDrawCentered(FONT_BOLD, 19, CANCEL_X + CANCEL_W / 2.0f, USE_Y + USE_H / 2.0f, "Cancel", COLOR_TEXT);
+        fontDrawCentered(FONT_BOLD, 19, CANCEL_X + CANCEL_W / 2.0f, USE_Y + USE_H / 2.0f, T("Cancel"), COLOR_TEXT);
     }
     if (picking) {
-        fontDraw(FONT_BOLD, 26, MARGIN, 18, "Choose the folder with your videos", COLOR_TEXT);
+        fontDraw(FONT_BOLD, 26, MARGIN, 18, T("Choose the folder with your videos"), COLOR_TEXT);
         gfxFillRoundRect(USE_X, USE_Y, USE_W, USE_H, USE_H / 2, COLOR_ACCENT);
-        fontDrawCentered(FONT_BOLD, 19, USE_X + USE_W / 2.0f, USE_Y + USE_H / 2.0f, "Use this folder",
+        fontDrawCentered(FONT_BOLD, 19, USE_X + USE_W / 2.0f, USE_Y + USE_H / 2.0f, T("Use this folder"),
                          COLOR_BG);
     }
     // The folder, with an arrow back up when there's one above.
@@ -104,9 +105,9 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
     fontDrawClipped(FONT_REGULAR, 19, x, y, GFX_WIDTH - MARGIN - x, b->path, can_go_up ? COLOR_TEXT : COLOR_DIM);
 
     if (b->count == 0) {
-        fontDrawCentered(FONT_BOLD, 24, GFX_WIDTH / 2.0f, 300, "No videos or folders here.", COLOR_TEXT);
+        fontDrawCentered(FONT_BOLD, 24, GFX_WIDTH / 2.0f, 300, T("No videos or folders here."), COLOR_TEXT);
         fontDrawCentered(FONT_REGULAR, 19, GFX_WIDTH / 2.0f, 340,
-                         "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).", COLOR_DIM);
+                         T("KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8)."), COLOR_DIM);
     }
     size_t first = (size_t)browserFirst(b, UI_ROWS);
     int offset = b->free ? b->offset : 0;
@@ -203,15 +204,15 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
     }
     fontDrawClipped(FONT_BOLD, 22, MARGIN + 40, y + 16, PLAYBACK_X - MARGIN - 60, name, COLOR_TEXT);
     gfxFillRoundRect(PLAYBACK_X, y + 14, PLAYBACK_W, CC_H, 6, COLOR_SURFACE_HI);
-    fontDrawCentered(FONT_BOLD, 18, PLAYBACK_X + PLAYBACK_W / 2.0f, y + 14 + CC_H / 2.0f, "Playback", COLOR_TEXT);
+    fontDrawCentered(FONT_BOLD, 18, PLAYBACK_X + PLAYBACK_W / 2.0f, y + 14 + CC_H / 2.0f, T("Playback"), COLOR_TEXT);
     if (playerAudioTrackCount(p) > 1) {
         gfxFillRoundRect(AUDIO_X, y + 14, AUDIO_W, CC_H, 6, COLOR_SURFACE_HI);
-        fontDrawCentered(FONT_BOLD, 18, AUDIO_X + AUDIO_W / 2.0f, y + 14 + CC_H / 2.0f, "Audio", COLOR_TEXT);
+        fontDrawCentered(FONT_BOLD, 18, AUDIO_X + AUDIO_W / 2.0f, y + 14 + CC_H / 2.0f, T("Audio"), COLOR_TEXT);
     }
     if (playerSubtitleCount(p) > 0) {  // CC: filled when subtitles show.
         bool on = playerSubtitle(p) >= 0;
         gfxFillRoundRect(CC_X, y + 14, CC_W, CC_H, 6, on ? COLOR_TEXT : COLOR_SURFACE_HI);
-        fontDrawCentered(FONT_BOLD, 18, CC_X + CC_W / 2.0f, y + 14 + CC_H / 2.0f, "CC",
+        fontDrawCentered(FONT_BOLD, 18, CC_X + CC_W / 2.0f, y + 14 + CC_H / 2.0f, T("CC"),
                          on ? GFX_RGB(0, 0, 0) : COLOR_DIM);
     }
     char pos[16], len[16], time[40];
@@ -222,7 +223,7 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
     snprintf(time, sizeof(time), "%s / %s", pos, len);
     bool live = duration <= 0;  // Live TV: it has no length, and plays on.
     if (live)
-        snprintf(time, sizeof(time), "LIVE");
+        snprintf(time, sizeof(time), "%s", T("LIVE"));
     fontDraw(live ? FONT_BOLD : FONT_REGULAR, 20, GFX_WIDTH - MARGIN - fontTextWidth(live ? FONT_BOLD : FONT_REGULAR, 20, time),
              y + 18, time, live ? COLOR_ACCENT : COLOR_TEXT);
     int track_w = GFX_WIDTH - 2 * MARGIN, done = live ? track_w : duration > 0 ? (int)(track_w * (position / duration)) : 0;
@@ -249,8 +250,10 @@ void uiDrawPlayerBar(const Player *p, const char *name, const char *note, double
         info_w = track_w / 3;
     fontDrawClipped(FONT_REGULAR, 16, GFX_WIDTH - MARGIN - info_w, y + 82, info_w, info, COLOR_FAINT);
     uiDrawHelp(MARGIN, (float)y + 93.0f, track_w - info_w - 24,
-               live ? "[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu"
-                    : "[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  [+] menu  [ZL] start");
+               live ? T("[A] pause  [L][R] channel  [^] playback  [X] audio  [Y] subtitles  [-] hide  [B] back  "
+                        "[+] menu")
+                    : T("[A] pause  [<>] 10 s  [L][R] 1 min  [^] playback  [X] audio  [Y] subtitles  [-] hide  "
+                        "[B] back  [+] menu  [ZL] start"));
 }
 
 TapTarget uiTapPlayer(int x, int y, bool has_subtitles, bool has_tracks, double *fraction)
@@ -362,7 +365,7 @@ void uiDrawLoading(const char *name, float angle, bool cancelling)
     int w = fontTextWidth(FONT_BOLD, 24, name), max = GFX_WIDTH - 160;
     w = w < max ? w : max;
     fontDrawClipped(FONT_BOLD, 24, (GFX_WIDTH - w) / 2, (int)cy + 70, w, name, COLOR_TEXT);
-    fontDrawCentered(FONT_REGULAR, 19, cx, cy + 124, cancelling ? "Cancelling..." : "Loading...", COLOR_DIM);
+    fontDrawCentered(FONT_REGULAR, 19, cx, cy + 124, cancelling ? T("Cancelling...") : T("Loading..."), COLOR_DIM);
 }
 
 void uiDrawPausedSymbol(void)
@@ -400,7 +403,7 @@ static const char *menuLabel(const Player *p, UiMenuKind kind, int row)
         return playerChapterName(p, row);
     if (kind == UI_MENU_AUDIO)
         return playerAudioTrackName(p, row);
-    return row == 0 ? "Off" : playerSubtitleLabel(p, row - 1);
+    return row == 0 ? T("Off") : playerSubtitleLabel(p, row - 1);
 }
 
 // The Playback list's options: "Speed  < 1.25x >".
@@ -410,36 +413,36 @@ static const char *playbackOption(const Player *p, const Config *config, Playbac
     switch (option) {
     case PLAYBACK_OPT_QUALITY:
         settingValue(config, SETTING_JF_QUALITY, value, size);
-        return "Video quality";
+        return T("Video quality");
     case PLAYBACK_OPT_SPEED:
         playbackFormatSpeed(value, size, playerSpeed(p));
-        return "Speed";
+        return T("Speed");
     case PLAYBACK_OPT_VOLUME:
         if (playerAudioTrackCount(p) > 0)
             playbackFormatVolume(value, size, playerVolume(p));
         else
-            snprintf(value, size, "No sound");
-        return "Volume";
+            snprintf(value, size, "%s", T("No sound"));
+        return T("Volume");
     case PLAYBACK_OPT_ASPECT:
         snprintf(value, size, "%s", playbackAspectName(playerAspect(p)));
-        return "Picture";
+        return T("Picture");
     case PLAYBACK_OPT_LOOP: {
         PlaybackLoop loop = playerLoop(p);
         playbackFormatLoop(value, size, &loop);
-        return "A-B loop";
+        return T("A-B loop");
     }
     case PLAYBACK_OPT_AUDIO_DELAY:
         if (playerAudioTrackCount(p) > 0)
             playbackFormatDelay(value, size, playerAudioDelay(p));
         else
-            snprintf(value, size, "No sound");
-        return "Audio delay";
+            snprintf(value, size, "%s", T("No sound"));
+        return T("Audio delay");
     default:
         if (playerSubtitleCount(p) > 0)
             playbackFormatDelay(value, size, playerSubtitleDelay(p));
         else
-            snprintf(value, size, "No subtitles");
-        return "Subtitle delay";
+            snprintf(value, size, "%s", T("No subtitles"));
+        return T("Subtitle delay");
     }
 }
 
@@ -489,7 +492,7 @@ void uiDrawTrackMenu(const Player *p, UiMenuKind kind, const Menu *m, const Conf
     menuBox(kind, m, &x, &y, &w, &h);
     gfxFillRoundRect(x - 2, y - 2, w + 4, h + 4, 14, COLOR_SURFACE_HI);  // An edge against the picture.
     gfxFillRoundRect(x, y, w, h, 12, COLOR_SURFACE);
-    const char *title = kind == UI_MENU_PLAYBACK ? "Playback" : kind == UI_MENU_AUDIO ? "Audio" : "Subtitles";
+    const char *title = kind == UI_MENU_PLAYBACK ? T("Playback") : kind == UI_MENU_AUDIO ? T("Audio") : T("Subtitles");
     fontDrawMiddle(FONT_BOLD, 20, x + 20, y + MENU_HEAD / 2.0f + 2, title, COLOR_DIM);
     int current = kind == UI_MENU_PLAYBACK ? playerChapter(p)
                   : kind == UI_MENU_AUDIO  ? playerAudioTrack(p)

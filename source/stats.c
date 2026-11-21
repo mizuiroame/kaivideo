@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "lang.h"
 #include "playback.h"
 
 #define NS_PER_S 1e9
@@ -42,13 +43,13 @@ StatsRates statsRates(const StatsWindow *w)
 static void describeSource(const StatsInfo *info, char *out, size_t size)
 {
     switch (info->source) {
-    case STATS_CARD: snprintf(out, size, "Playing: from the SD card"); break;
-    case STATS_DIRECT: snprintf(out, size, "Playing: the original file from Jellyfin"); break;
+    case STATS_CARD: snprintf(out, size, "%s", T("Playing: from the SD card")); break;
+    case STATS_DIRECT: snprintf(out, size, "%s", T("Playing: the original file from Jellyfin")); break;
     case STATS_CONVERTED:
-        if (info->quality && info->quality[0] && info->quality[0] != 'A')
-            snprintf(out, size, "Playing: converted by Jellyfin, at most %s", info->quality);
+        if (info->quality && info->quality[0])
+            snprintf(out, size, T("Playing: converted by Jellyfin, at most %s"), info->quality);
         else
-            snprintf(out, size, "Playing: converted by Jellyfin");
+            snprintf(out, size, "%s", T("Playing: converted by Jellyfin"));
         break;
     }
 }
@@ -57,25 +58,25 @@ int statsFormat(const StatsInfo *info, char lines[STATS_LINES][STATS_LINE_MAX])
 {
     int n = 0;
     describeSource(info, lines[n++], STATS_LINE_MAX);
-    snprintf(lines[n++], STATS_LINE_MAX, "Video: %s", info->video ? info->video : "");
-    snprintf(lines[n++], STATS_LINE_MAX, "Sound: %s", info->sound ? info->sound : "");
+    snprintf(lines[n++], STATS_LINE_MAX, T("Video: %s"), info->video ? info->video : "");
+    snprintf(lines[n++], STATS_LINE_MAX, T("Sound: %s"), info->sound ? info->sound : "");
     if (info->rates.valid)
-        snprintf(lines[n++], STATS_LINE_MAX, "Frames: %.1f a second, %.1f%% late", info->rates.fps,
+        snprintf(lines[n++], STATS_LINE_MAX, T("Frames: %.1f a second, %.1f%% late"), info->rates.fps,
                  info->rates.late_percent);
     else
-        snprintf(lines[n++], STATS_LINE_MAX, "Frames: measuring...");
+        snprintf(lines[n++], STATS_LINE_MAX, "%s", T("Frames: measuring..."));
     if (info->source != STATS_CARD) {
         if (info->rates.valid)
-            snprintf(lines[n++], STATS_LINE_MAX, "Network: %.1f Mb/s", info->rates.mbps);
+            snprintf(lines[n++], STATS_LINE_MAX, T("Network: %.1f Mb/s"), info->rates.mbps);
         if (info->ahead_s >= 0)
-            snprintf(lines[n++], STATS_LINE_MAX, "Ready ahead: %.1f s", info->ahead_s);
+            snprintf(lines[n++], STATS_LINE_MAX, T("Ready ahead: %.1f s"), info->ahead_s);
         else if (info->ahead_mb >= 0)
-            snprintf(lines[n++], STATS_LINE_MAX, "Ready ahead: %.0f MB", info->ahead_mb);
+            snprintf(lines[n++], STATS_LINE_MAX, T("Ready ahead: %.0f MB"), info->ahead_mb);
     }
     if (info->speed_permille != PLAYBACK_PERMILLE) {
         char speed[16];
         playbackFormatSpeed(speed, sizeof(speed), info->speed_permille);
-        snprintf(lines[n++], STATS_LINE_MAX, "Speed: %s", speed);
+        snprintf(lines[n++], STATS_LINE_MAX, T("Speed: %s"), speed);
     }
     return n;
 }

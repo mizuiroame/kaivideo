@@ -8,6 +8,7 @@
 #include "dlworker.h"
 #include "hlslist.h"
 #include "jfsync.h"
+#include "lang.h"
 
 #define STALL_S 30L
 #define CONVERSION_STALL_S 120L  // A part may wait while the server converts up to it.
@@ -39,13 +40,13 @@ static void sayStatus(long status, const char *error, char *out, size_t size)
 {
     g_refused = g_refused || isRefusal(status);
     if (status == HTTP_UNAUTHORIZED || status == HTTP_FORBIDDEN)
-        snprintf(out, size, "The server didn't let it be downloaded.");
+        snprintf(out, size, "%s", T("The server didn't let it be downloaded."));
     else if (status == HTTP_NOT_FOUND)
-        snprintf(out, size, "The server doesn't have this video any more.");
+        snprintf(out, size, "%s", T("The server doesn't have this video any more."));
     else if (status)
-        snprintf(out, size, "The server answered %ld.", status);
+        snprintf(out, size, T("The server answered %ld."), status);
     else
-        snprintf(out, size, "%s", error[0] ? error : "The server can't be reached.");
+        snprintf(out, size, "%s", error[0] ? error : T("The server can't be reached."));
 }
 
 static bool fetch(const char *origin, int64_t offset, NetSink sink, void *user, long long *total,
@@ -54,12 +55,12 @@ static bool fetch(const char *origin, int64_t offset, NetSink sink, void *user, 
     char url[JF_URL_MAX], auth[JF_AUTH_MAX], range[48], why[NET_ERROR_MAX] = "";
     g_refused = false;
     if (!jfSyncStreamRequest(origin, url, sizeof(url), auth, sizeof(auth))) {
-        snprintf(error, error_size, "Sign in to its server to download it.");
+        snprintf(error, error_size, "%s", T("Sign in to its server to download it."));
         return false;
     }
     NetClient *net = netClientOpen();
     if (!net) {
-        snprintf(error, error_size, "The network can't be used.");
+        snprintf(error, error_size, "%s", T("The network can't be used."));
         return false;
     }
     snprintf(range, sizeof(range), "%" PRId64 "-", offset);
@@ -116,7 +117,7 @@ static bool readParts(NetClient *net, const char *url, const char *auth, long lo
     }
     netResponseFree(&master);
     if (!ok && !error[0])
-        snprintf(error, error_size, "The server's conversion can't be read.");
+        snprintf(error, error_size, "%s", T("The server's conversion can't be read."));
     return ok;
 }
 
@@ -147,7 +148,7 @@ static bool fetchConverted(const char *origin, long long max_bitrate, int first,
     bool ok = false;
     g_refused = false;
     if (!net) {
-        snprintf(error, error_size, "The network can't be used.");
+        snprintf(error, error_size, "%s", T("The network can't be used."));
     } else if (!jfSyncResolve(origin, max_bitrate, -1, -1, plan, error, error_size, cancel)) {
         // error says why.
     } else if (plan->direct) {  // The server sends it as it is: one part, the file.

@@ -5,12 +5,14 @@ CC      ?= gcc
 SRC     := ../../source
 OUT     := build
 CFLAGS  := -std=gnu11 -O1 -g -Wall -Wextra -I$(SRC) -I../../third_party -I$(OUT)
-UI_SRC  := scroll.c gfx.c font.c ui.c ui_buttons.c ui_library.c ui_settings.c settings.c theme.c background.c menu.c browser.c resume.c util.c image_impl.c library.c naming.c home.c libview.c watched.c playback.c stats.c ui_stats.c ui_details.c ui_live.c livetv.c jellyfin.c ui_downloads.c
+UI_SRC  := scroll.c gfx.c font.c ui.c ui_buttons.c ui_library.c ui_settings.c settings.c theme.c background.c menu.c browser.c resume.c util.c image_impl.c library.c naming.c home.c libview.c watched.c playback.c stats.c ui_stats.c ui_details.c ui_live.c livetv.c jellyfin.c ui_downloads.c lang.c
 
 .PHONY: run clean
 
 run: $(OUT)/preview
 	./$(OUT)/preview $(OUT)
+	@mkdir -p $(OUT)/es
+	./$(OUT)/preview $(OUT)/es ../../data/lang_es.txt
 
 $(OUT)/font_regular_ttf.c: ../../data/font_regular.ttf embed.py
 	python3 embed.py $< $(OUT) font_regular_ttf

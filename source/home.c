@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lang.h"
+
 static HomeRow *addRow(Home *home, HomeRowKind kind)
 {
     HomeRow *row = &home->rows[home->count];
@@ -105,11 +107,11 @@ void homeCompute(Home *home, const Library *lib, const ResumeList *resume, const
 const char *homeRowTitle(HomeRowKind kind)
 {
     switch (kind) {
-    case HOME_CONTINUE: return "Continue watching";
-    case HOME_FAVORITES: return "Favorites";
-    case HOME_RECENT: return "Recently added";
-    case HOME_SERIES: return "Series";
-    case HOME_FILMS: return "Films";
+    case HOME_CONTINUE: return T("Continue watching");
+    case HOME_FAVORITES: return T("Favorites");
+    case HOME_RECENT: return T("Recently added");
+    case HOME_SERIES: return T("Series");
+    case HOME_FILMS: return T("Films");
     default: return "";
     }
 }

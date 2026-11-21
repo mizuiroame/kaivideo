@@ -5,6 +5,7 @@
 
 #include "app.h"
 #include "jfprobe.h"
+#include "lang.h"
 
 #ifndef KAIVIDEO_VERSION
 #define KAIVIDEO_VERSION "dev"
@@ -38,7 +39,7 @@ static void finishSignIn(App *app, uint64_t now)
     char message[JF_SERVER_MAX + JF_NAME_MAX + 64];
     const char *where = app->config.server_kind == SERVER_PLEX ? app->jf.server
                                                                : serverKindName((ServerKind)app->config.server_kind);
-    snprintf(message, sizeof(message), "Connected to %s as %s. Loading its library...", where, app->jf.user);
+    snprintf(message, sizeof(message), T("Connected to %s as %s. Loading its library..."),where, app->jf.user);
     app->jf_arriving = app->config.server_kind + 1;
     app->settings_open = false;
     appLibraryShowServer(app, (ServerKind)app->config.server_kind);  // The one just signed in.
@@ -62,7 +63,8 @@ static void takeProbe(App *app, uint64_t now)
         return;
     appLog("Jellyfin %s: %s%s%s", r.finding ? "search" : "test", r.message, r.detail[0] ? " | " : "", r.detail);
     if (r.finding && r.ok && app->jf.state != JF_SIGNED_IN && !jfSyncSetServer(r.found))
-        snprintf(r.message, sizeof(r.message), "The server found can't be used: type its address under Server.");
+        snprintf(r.message, sizeof(r.message), "%s",
+                 T("The server found can't be used: type its address under Server."));
     if (!r.finding && r.ok)
         appLiveReadSoon(app);  // A test that worked also looks for Live TV channels again.
     appShowMessage(app, r.message, now);
@@ -95,7 +97,7 @@ void appJellyfinUpdate(App *app, uint64_t now)
         app->jf_last_refresh = now;
         if (app->jf_arriving && !app->jf.refreshing) {  // The server just signed in: its videos are here.
             char message[96];
-            snprintf(message, sizeof(message), "%s's videos are in the library.",
+            snprintf(message, sizeof(message), T("%s's videos are in the library."),
                      serverKindName((ServerKind)(app->jf_arriving - 1)));
             appShowMessage(app, message, now);
             app->jf_arriving = 0;

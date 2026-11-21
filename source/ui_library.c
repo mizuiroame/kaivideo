@@ -8,6 +8,7 @@
 #include "background.h"
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "thumbs.h"
 #include "ui.h"
 #include "ui_buttons.h"
@@ -122,7 +123,7 @@ void uiLibrarySetWatched(const Watched *watched)
 
 static UiDownloadOf g_download_of;
 static const void *g_download_user;
-static char g_pill_label[48];
+static char g_pill_label[96];
 static double g_pill_fraction;
 
 void uiLibrarySetDownloads(UiDownloadOf download_of, const void *user)
@@ -221,8 +222,8 @@ void uiLibDrawPicture(const uint32_t *pixels, int x, int y, int w, int h, int ra
     uiLibDrawImage(pixels, THUMB_W, THUMB_H, x, y, w, h, radius);
 }
 
-static const char *const TAB_NAMES[TAB_COUNT] = {"Home", "Films", "Series", "Search", "Files", "", "Live TV",
-                                                 "Downloads"};
+static const char *const TAB_NAMES[TAB_COUNT] = {N_("Home"), N_("Films"), N_("Series"), N_("Search"), N_("Files"),
+                                                 "", N_("Live TV"), N_("Downloads")};
 
 static SysInfo g_sys;
 static bool g_clock_24h;
@@ -284,7 +285,7 @@ static const char *tabName(const LibView *v, const Library *lib, int index)
     LibTabRef t = v->tabs[index];
     if (t.kind == TAB_COLLECTION)
         return t.collection >= 0 && t.collection < lib->collection_count ? lib->collections[t.collection].name : "";
-    return t.kind >= 0 && t.kind < TAB_COUNT ? TAB_NAMES[t.kind] : "";
+    return t.kind >= 0 && t.kind < TAB_COUNT ? T(TAB_NAMES[t.kind]) : "";
 }
 
 // The tabs' widths at a size; their total, gaps included.
@@ -652,17 +653,17 @@ double uiLibWatched(const Library *lib, const ResumeList *resume, int item)
 void uiLibEpisodeLabel(const LibraryItem *item, char *out, size_t size)
 {
     if (item->name.title[0])
-        snprintf(out, size, "S%02dE%02d \xC2\xB7 %s", item->name.season, item->name.episode, item->name.title);
+        snprintf(out, size, T("S%02dE%02d \xC2\xB7 %s"), item->name.season, item->name.episode, item->name.title);
     else
-        snprintf(out, size, "Season %d, episode %d", item->name.season, item->name.episode);
+        snprintf(out, size, T("Season %d, episode %d"), item->name.season, item->name.episode);
 }
 
 static void showLabel(const LibraryShow *show, char *out, size_t size)
 {
     if (show->seasons > 1)
-        snprintf(out, size, "%d seasons \xC2\xB7 %d episodes", show->seasons, show->count);
+        snprintf(out, size, T("%d seasons \xC2\xB7 %d episodes"), show->seasons, show->count);
     else
-        snprintf(out, size, "%d episode%s", show->count, show->count == 1 ? "" : "s");
+        snprintf(out, size, show->count == 1 ? T("%d episode") : T("%d episodes"), show->count);
 }
 
 // What a card shows for ref: its name in the tile, a tag, and a line under it.
@@ -672,18 +673,18 @@ static void describe(const Library *lib, LibraryRef ref, const char **name, cons
     below[0] = '\0';
     if (ref.is_show) {
         *name = lib->shows[ref.index].name;
-        *tag = "SERIES";
+        *tag = T("SERIES");
         showLabel(&lib->shows[ref.index], below, size);
         return;
     }
     const LibraryItem *item = &lib->items[ref.index];
     if (item->show >= 0) {
         *name = lib->shows[item->show].name;
-        *tag = "EPISODE";
+        *tag = T("EPISODE");
         uiLibEpisodeLabel(item, below, size);
     } else {
         *name = item->name.title;
-        *tag = "FILM";
+        *tag = T("FILM");
         if (item->name.year)
             snprintf(below, size, "%d", item->name.year);
     }
@@ -759,7 +760,7 @@ static void drawHome(const LibView *v, const Library *lib, const Home *home, con
             if (x >= GFX_WIDTH)
                 break;
             drawRefCard(lib, resume, row->items[c], x, y + HOME_TITLE_H, HOME_CARD_W, HOME_CARD_H,
-                        r == v->home_row && c == cols->cursor, row->up_next[c] ? "UP NEXT" : NULL);
+                        r == v->home_row && c == cols->cursor, row->up_next[c] ? T("UP NEXT") : NULL);
             int left = x < 0 ? 0 : x, right = x + HOME_CARD_W > GFX_WIDTH ? GFX_WIDTH : x + HOME_CARD_W;
             if (right > left)
                 addListHit(left, y + HOME_TITLE_H, right - left, HOME_CARD_H + 40, top, bottom, LIBHIT_HOME_CARD, r, c);
@@ -856,7 +857,7 @@ static void drawSeasonChips(const LibView *v, const Library *lib)
     char label[32];
     int widths[LIBVIEW_SEASONS];
     for (int i = 0; i < n; i++) {
-        snprintf(label, sizeof(label), "Season %d", seasons[i]);
+        snprintf(label, sizeof(label), T("Season %d"), seasons[i]);
         widths[i] = fontTextWidth(FONT_BOLD, 18, label) + 28;
     }
     // From the first chip, or later so that the current one fits.
@@ -868,7 +869,7 @@ static void drawSeasonChips(const LibView *v, const Library *lib)
         right -= widths[first] + 8;
     int x = MARGIN, y = 140;
     for (int i = first; i < n && x < GFX_WIDTH; i++) {
-        snprintf(label, sizeof(label), "Season %d", seasons[i]);
+        snprintf(label, sizeof(label), T("Season %d"), seasons[i]);
         bool on = i == v->season;
         gfxFillRoundRect(x, y, widths[i], 38, 19, on ? COLOR_TEXT : COLOR_SURFACE_HI);
         fontDrawCentered(FONT_BOLD, 18, x + widths[i] / 2.0f, y + 19, label, on ? COLOR_BG : COLOR_DIM);
@@ -905,7 +906,7 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
         if (it->name.title[0])
             snprintf(title, sizeof(title), "%s", it->name.title);
         else
-            snprintf(title, sizeof(title), "Episode %d", it->name.episode);
+            snprintf(title, sizeof(title), T("Episode %d"), it->name.episode);
         formatSize(it->size, size, sizeof(size));
         drawListRow(y, e == v->episodes.cursor, number, title, size, uiLibWatched(lib, resume, item),
                     uiLibPicture(lib, (LibraryRef){false, item}), uiLibSeen(lib, item) ? 1 : 0, it->path);
@@ -934,14 +935,15 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
     drawSearchIcon(MARGIN + 22, SEARCH_BOX_Y + 16, COLOR_DIM);
     bool typed = v->query[0] != '\0';
     fontDrawClipped(FONT_REGULAR, 21, MARGIN + 62, SEARCH_BOX_Y + 13, w - 90,
-                    typed ? v->query : "Search films, series and episodes  (A or Y)", typed ? COLOR_TEXT : COLOR_FAINT);
+                    typed ? v->query : T("Search films, series and episodes  (A or Y)"),
+                    typed ? COLOR_TEXT : COLOR_FAINT);
     uiLibraryAddHit(MARGIN, SEARCH_BOX_Y - 6, w, SEARCH_BOX_H + 12, LIBHIT_SEARCH_BOX, 0, 0);
     if (!typed)
         return;
     if (v->result_count == 0) {
         char line[120];
-        snprintf(line, sizeof(line), "Nothing in the library is called \"%s\".", v->query);
-        drawCentered("Nothing found", line);
+        snprintf(line, sizeof(line), T("Nothing in the library is called \"%s\"."), v->query);
+        drawCentered(T("Nothing found"), line);
         return;
     }
     const Scroll *s = &v->results_scroll;
@@ -990,8 +992,8 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     uiDrawTabBar(v, lib, status);
     gfxSetClip(0, UI_TAB_BAR_H, GFX_WIDTH, UI_FOOTER_Y - UI_TAB_BAR_H);
     if (!folder_set) {
-        drawCentered("Choose the folder with your videos",
-                     "KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.");
+        drawCentered(T("Choose the folder with your videos"),
+                     T("KaiVideo finds the films and series in it and its folders: - or Settings > Library folder."));
     } else if (v->show >= 0 && (size_t)v->show < lib->show_count) {
         drawShow(v, lib, resume);
     } else if (v->tab == TAB_SEARCH) {
@@ -999,16 +1001,16 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     } else if (v->tab == TAB_LIVE || v->tab == TAB_DOWNLOADS) {
         // Drawn by the app over this (app_live.c, app_dltab.c): it holds what they show.
     } else if (lib->count == 0) {
-        drawCentered(status && status[0] ? "Looking for videos..." : "No videos here yet",
-                     "KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).");
+        drawCentered(status && status[0] ? T("Looking for videos...") : T("No videos here yet"),
+                     T("KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8)."));
     } else if (v->tab == TAB_HOME) {
         drawHome(v, lib, home, resume);
     } else if (v->tab == TAB_FILMS && lib->film_count == 0) {
-        drawCentered("No films", "Every video here is an episode of a series.");
+        drawCentered(T("No films"), T("Every video here is an episode of a series."));
     } else if (v->tab == TAB_SERIES && lib->show_count == 0) {
-        drawCentered("No series", "Episodes are found by names like \"Show S01E02\".");
+        drawCentered(T("No series"), T("Episodes are found by names like \"Show S01E02\"."));
     } else if (v->tab == TAB_COLLECTION && libviewGridCount(v, lib, libviewGrid(v)) == 0) {
-        drawCentered("Nothing here yet", "This library on the server has no films or episodes KaiVideo found.");
+        drawCentered(T("Nothing here yet"), T("This library on the server has no films or episodes KaiVideo found."));
     } else if (libviewGrid(v) >= 0) {
         drawGrid(v, libviewGrid(v), lib, resume);
     }

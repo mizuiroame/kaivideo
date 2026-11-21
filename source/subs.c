@@ -7,6 +7,8 @@
 #include <string.h>
 #include <strings.h>
 
+#include "lang.h"
+
 #define SRT_FILE_MAX (8u << 20)
 
 void subsFree(SubTrack *t)
@@ -236,16 +238,16 @@ const char *subsLanguageName(const char *code)
     static const struct {
         const char *codes, *name;  // The codes: 639-2 (both forms) and 639-1, space-separated.
     } LANGUAGES[] = {
-        {"eng en", "English"},     {"spa es", "Spanish"},     {"fre fra fr", "French"},
-        {"ger deu de", "German"},  {"ita it", "Italian"},     {"por pt", "Portuguese"},
-        {"jpn ja", "Japanese"},    {"chi zho zh", "Chinese"}, {"kor ko", "Korean"},
-        {"rus ru", "Russian"},     {"ara ar", "Arabic"},      {"dut nld nl", "Dutch"},
-        {"pol pl", "Polish"},      {"tur tr", "Turkish"},     {"swe sv", "Swedish"},
-        {"nor nob no nb", "Norwegian"}, {"dan da", "Danish"}, {"fin fi", "Finnish"},
-        {"hin hi", "Hindi"},       {"cat ca", "Catalan"},     {"gre ell el", "Greek"},
-        {"heb he", "Hebrew"},      {"ukr uk", "Ukrainian"},   {"cze ces cs", "Czech"},
-        {"hun hu", "Hungarian"},   {"rum ron ro", "Romanian"}, {"tha th", "Thai"},
-        {"vie vi", "Vietnamese"},  {"ind id", "Indonesian"},  {"may msa ms", "Malay"},
+        {"eng en", N_("English")},     {"spa es", N_("Spanish")},     {"fre fra fr", N_("French")},
+        {"ger deu de", N_("German")},  {"ita it", N_("Italian")},     {"por pt", N_("Portuguese")},
+        {"jpn ja", N_("Japanese")},    {"chi zho zh", N_("Chinese")}, {"kor ko", N_("Korean")},
+        {"rus ru", N_("Russian")},     {"ara ar", N_("Arabic")},      {"dut nld nl", N_("Dutch")},
+        {"pol pl", N_("Polish")},      {"tur tr", N_("Turkish")},     {"swe sv", N_("Swedish")},
+        {"nor nob no nb", N_("Norwegian")}, {"dan da", N_("Danish")}, {"fin fi", N_("Finnish")},
+        {"hin hi", N_("Hindi")},       {"cat ca", N_("Catalan")},     {"gre ell el", N_("Greek")},
+        {"heb he", N_("Hebrew")},      {"ukr uk", N_("Ukrainian")},   {"cze ces cs", N_("Czech")},
+        {"hun hu", N_("Hungarian")},   {"rum ron ro", N_("Romanian")}, {"tha th", N_("Thai")},
+        {"vie vi", N_("Vietnamese")},  {"ind id", N_("Indonesian")},  {"may msa ms", N_("Malay")},
     };
     if (!code || !code[0])
         return NULL;
@@ -254,7 +256,7 @@ const char *subsLanguageName(const char *code)
         for (const char *p = LANGUAGES[i].codes; *p;) {
             size_t n = strcspn(p, " ");
             if (n == len && strncasecmp(p, code, n) == 0)
-                return LANGUAGES[i].name;
+                return T(LANGUAGES[i].name);
             p += n;
             while (*p == ' ')
                 p++;
@@ -271,7 +273,7 @@ void subsTrackName(char *out, size_t size, const char *title, const char *langua
     else if (name)
         snprintf(out, size, "%s", name);
     else
-        snprintf(out, size, "Track %d", number);
+        snprintf(out, size, T("Track %d"), number);
 }
 
 bool subsFindFor(const char *video_path, char *out, size_t size)

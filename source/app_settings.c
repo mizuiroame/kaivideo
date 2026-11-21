@@ -13,16 +13,18 @@
 #include "app.h"
 #include "approot.h"
 #include "background.h"
-#include "font.h"
-#include "util.h"
 #include "buttons.h"
+#include "font.h"
 #include "jfprobe.h"
 #include "keyboard_system.h"
+#include "lang.h"
+#include "languages.h"
 #include "net.h"
 #include "theme.h"
 #include "ui.h"
 #include "ui_library.h"
 #include "ui_settings.h"
+#include "util.h"
 
 #ifndef KAIVIDEO_VERSION
 #define KAIVIDEO_VERSION "dev"
@@ -106,7 +108,7 @@ bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size)
     index = ((index + delta) % (count + 1) + count + 1) % (count + 1);
     snprintf(app->config.subtitle_font, sizeof(app->config.subtitle_font), "%s", index ? names[index - 1] : "");
     if (!loadSubtitleFont(app)) {
-        snprintf(note, note_size, "%.80s can't be read as a font.", app->config.subtitle_font);
+        snprintf(note, note_size, T("%.80s can't be read as a font."), app->config.subtitle_font);
         app->config.subtitle_font[0] = '\0';
         fontSetSubtitleFile(NULL);
         return false;
@@ -134,8 +136,22 @@ void appApplyViewAccent(const App *app)
     g_colors.accent = server ? uiServerColor((ServerKind)app->config.server_view) : g_theme_accent;
 }
 
+// Puts the chosen language in use (English if it's gone), and says its name in Settings.
+static void useLanguage(App *app)
+{
+    if (!languageUse(app->config.language[0] ? app->config.language : "en"))
+        snprintf(app->config.language, sizeof(app->config.language), "en");
+    int at = languageIndex(app->config.language);
+    snprintf(app->config.language_name, sizeof(app->config.language_name), "%s", languageName(at));
+}
+
 void appSettingsStart(App *app)
 {
+    char lang[APPROOT_PATH_MAX + 32];
+    appConfigPath(lang, sizeof(lang), "lang");
+    mkdir(lang, 0777);  // Where to put more languages' files, there to be seen.
+    languagesFind(lang);
+    useLanguage(app);
     applyLooks(app);
     char fonts[APPROOT_PATH_MAX + 32];
     appConfigPath(fonts, sizeof(fonts), SUBTITLE_FONTS_FOLDER);
@@ -188,8 +204,10 @@ static void stepBackground(App *app, int delta, uint64_t now)
     int count = (int)backgroundList(app->library_root, names, BACKGROUND_MAX_IMAGES);
     if (count == 0) {
         app->config.background[0] = '\0';
-        appShowMessage(app, app->library_root[0] ? "Put JPEG or PNG images in a Backgrounds folder in your library folder."
-                                                 : "Choose the library folder first.",
+        appShowMessage(app,
+                       app->library_root[0]
+                           ? T("Put JPEG or PNG images in a Backgrounds folder in your library folder.")
+                           : T("Choose the library folder first."),
                        now);
         return;
     }
@@ -201,7 +219,7 @@ static void stepBackground(App *app, int delta, uint64_t now)
     snprintf(app->config.background, sizeof(app->config.background), "%s", index ? names[index - 1] : "");
     if (!backgroundLoad(app->library_root, app->config.background, app->config.blur)) {
         char message[BACKGROUND_NAME_MAX + 80];
-        snprintf(message, sizeof(message), "%s can't be read (JPEG or PNG, up to 50 megapixels).",
+        snprintf(message, sizeof(message), T("%s can't be read (JPEG or PNG, up to 50 megapixels)."),
                  app->config.background);
         appShowMessage(app, message, now);
         app->config.background[0] = '\0';
@@ -211,7 +229,7 @@ static void stepBackground(App *app, int delta, uint64_t now)
 static void openJellyfin(App *app, uint64_t now)
 {
     if (!appJellyfinEnsure(app)) {
-        appShowMessage(app, "The network can't be used.", now);
+        appShowMessage(app, T("The network can't be used."), now);
         return;
     }
     jfSyncGetStatus(&app->jf);
@@ -229,20 +247,21 @@ void appOpenJellyfinSettings(App *app, uint64_t now)
 static void typeServer(App *app, uint64_t now)
 {
     if (signedIn(app)) {
-        appShowMessage(app, "Sign out first to change the server.", now);
+        appShowMessage(app, T("Sign out first to change the server."), now);
         return;
     }
     char text[JF_SERVER_MAX];
     const char *initial = app->jf.server;
     if (!strncmp(initial, HTTP_PREFIX, sizeof(HTTP_PREFIX) - 1))
         initial += sizeof(HTTP_PREFIX) - 1;
-    char prompt[80];
-    snprintf(prompt, sizeof(prompt), "%s server, like 192.168.0.10:8096", serverKindName((ServerKind)app->config.server_kind));
+    char prompt[160];
+    snprintf(prompt, sizeof(prompt), T("%s server, like 192.168.0.10:8096"),
+             serverKindName((ServerKind)app->config.server_kind));
     SystemKeyboardResult result = systemKeyboardInput(prompt, initial, text, sizeof(text), JF_SERVER_MAX - 1);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE)
-        appShowMessage(app, "The keyboard couldn't open.", now);
+        appShowMessage(app, T("The keyboard couldn't open."), now);
     else if (result == SYSTEM_KEYBOARD_OK && !jfSyncSetServer(text))
-        appShowMessage(app, "That isn't a server's address.", now);
+        appShowMessage(app, T("That isn't a server's address."), now);
 }
 
 // The library keeps the other servers signed in; with none left, it's the card's.
@@ -259,7 +278,7 @@ static void signOut(App *app)
 static void codeSignIn(App *app, uint64_t now)
 {
     if (!app->jf.server[0]) {
-        appShowMessage(app, "Enter the server's address first.", now);
+        appShowMessage(app, T("Enter the server's address first."), now);
     } else {
         app->jf_signing = true;
         jfSyncSignIn();
@@ -269,19 +288,19 @@ static void codeSignIn(App *app, uint64_t now)
 static void passwordSignIn(App *app, uint64_t now)
 {
     if (!app->jf.server[0]) {
-        appShowMessage(app, "Enter the server's address first.", now);
+        appShowMessage(app, T("Enter the server's address first."), now);
         return;
     }
     char user[CREDENTIAL_TEXT_MAX], password[CREDENTIAL_TEXT_MAX];
-    char prompt[64];
-    snprintf(prompt, sizeof(prompt), "%s user name", serverKindName((ServerKind)app->config.server_kind));
+    char prompt[160];
+    snprintf(prompt, sizeof(prompt), T("%s user name"), serverKindName((ServerKind)app->config.server_kind));
     SystemKeyboardResult result = systemKeyboardInput(prompt, "", user, sizeof(user), sizeof(user) - 1);
     if (result == SYSTEM_KEYBOARD_OK && user[0])
-        result = systemKeyboardPassword("Password", password, sizeof(password), sizeof(password) - 1);
+        result = systemKeyboardPassword(T("Password"), password, sizeof(password), sizeof(password) - 1);
     else if (result == SYSTEM_KEYBOARD_OK)
         return;
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
-        appShowMessage(app, "The keyboard couldn't open.", now);
+        appShowMessage(app, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         app->jf_signing = true;
         jfSyncSignInWithPassword(user, password);
@@ -305,6 +324,13 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
     if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
+    } else if (row == SETTING_LANGUAGE) {  // Through the languages found (English, Spanish, files).
+        int count = languagesCount();
+        int at = (languageIndex(app->config.language) + delta % count + count) % count;
+        snprintf(app->config.language, sizeof(app->config.language), "%s", languageId(at));
+        useLanguage(app);
+        appSaveSettings(app);
+        appLibraryRefreshHome(app);
     } else {
         settingStep(&app->config, row, delta);
         applyLooks(app);
@@ -319,17 +345,17 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
 static void askNetwork(App *app, SettingRow row, uint64_t now)
 {
     if (jfProbeRunning()) {
-        appShowMessage(app, "Still asking the network...", now);
+        appShowMessage(app, T("Still asking the network..."), now);
     } else if (row == SETTING_JF_FIND) {
         char looking[80];
-        snprintf(looking, sizeof(looking), "Looking for %s servers on this network...",
+        snprintf(looking, sizeof(looking), T("Looking for %s servers on this network..."),
                  serverKindName((ServerKind)app->config.server_kind));
         if (jfProbeStartFind(JF_PROBE_BROADCAST))
             appShowMessage(app, looking, now);
     } else if (!app->jf.server[0]) {
-        appShowMessage(app, "Enter the server's address first, or find it on this network.", now);
+        appShowMessage(app, T("Enter the server's address first, or find it on this network."), now);
     } else if (jfProbeStartTest(app->jf.server)) {
-        appShowMessage(app, "Testing the connection...", now);
+        appShowMessage(app, T("Testing the connection..."), now);
     }
 }
 
@@ -356,13 +382,13 @@ static void activate(App *app, SettingRow row, uint64_t now)
         app->jf_signing = true;
         jfSyncSignIn();
         break;
-    case SETTING_PLEX_SERVER: appShowMessage(app, "The server comes from your Plex account.", now); break;
+    case SETTING_PLEX_SERVER: appShowMessage(app, T("The server comes from your Plex account."), now); break;
     case SETTING_JF_PASSWORD: passwordSignIn(app, now); break;
     case SETTING_JF_SIGN_OUT: signOut(app); break;
     case SETTING_JF_FIND:
     case SETTING_JF_TEST:
         if (row == SETTING_JF_FIND && signedIn(app))
-            appShowMessage(app, "Sign out first to change the server.", now);
+            appShowMessage(app, T("Sign out first to change the server."), now);
         else
             askNetwork(app, row, now);
         break;

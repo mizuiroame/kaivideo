@@ -2,6 +2,7 @@
 #include "audio.h"
 #include "clock.h"
 #include "hlsio.h"
+#include "lang.h"
 #include "playback.h"
 #include "video.h"
 
@@ -549,7 +550,8 @@ static AVCodecContext *openDecoder(const AVStream *st, char *error, size_t error
 {
     const AVCodec *decoder = avcodec_find_decoder(st->codecpar->codec_id);
     if (!decoder) {
-        snprintf(error, error_size, "This video's sound (%s) can't be played.", avcodec_get_name(st->codecpar->codec_id));
+        snprintf(error, error_size, T("This video's sound (%s) can't be played."),
+                 avcodec_get_name(st->codecpar->codec_id));
         return NULL;
     }
     AVCodecContext *codec = avcodec_alloc_context3(decoder);
@@ -560,7 +562,7 @@ static AVCodecContext *openDecoder(const AVStream *st, char *error, size_t error
               avcodec_open2(codec, decoder, &options) >= 0;
     av_dict_free(&options);
     if (!ok) {
-        snprintf(error, error_size, "This video's sound can't be played.");
+        snprintf(error, error_size, "%s", T("This video's sound can't be played."));
         avcodec_free_context(&codec);
     }
     return codec;
@@ -568,9 +570,10 @@ static AVCodecContext *openDecoder(const AVStream *st, char *error, size_t error
 
 static void describeSound(Audio *a, const AVStream *st)
 {
-    snprintf(a->description, sizeof(a->description), "%s, %d kHz, %d channel%s", avcodec_get_name(st->codecpar->codec_id),
-             st->codecpar->sample_rate / 1000, st->codecpar->ch_layout.nb_channels,
-             st->codecpar->ch_layout.nb_channels == 1 ? "" : "s");
+    int channels = st->codecpar->ch_layout.nb_channels;  // Each number its own text: plurals differ by language.
+    const char *format = channels == 1 ? T("%s, %d kHz, %d channel") : T("%s, %d kHz, %d channels");
+    snprintf(a->description, sizeof(a->description), format, avcodec_get_name(st->codecpar->codec_id),
+             st->codecpar->sample_rate / 1000, channels);
 }
 
 // Sound starts anew from target_ns, with nothing of what came before.
@@ -625,7 +628,8 @@ static void switchTrack(Audio *a, int track, int64_t from_ns)
         a->track = track;
         describeSound(a, st);
     }
-    snprintf(a->switch_error, sizeof(a->switch_error), "%s", codec ? "" : error[0] ? error : "That track can't be played.");
+    snprintf(a->switch_error, sizeof(a->switch_error), "%s",
+             codec ? "" : error[0] ? error : T("That track can't be played."));
     mutexUnlock(&a->lock);
     restartFrom(a, from_ns);
     replayFrom(a, from_ns);
@@ -717,7 +721,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     if (error_size)
         error[0] = '\0';
     if (!g_ready) {
-        snprintf(error, error_size, "The audio output isn't available.");
+        snprintf(error, error_size, "%s", T("The audio output isn't available."));
         return NULL;
     }
     Audio *a = calloc(1, sizeof(*a));
@@ -780,7 +784,7 @@ Audio *audioOpen(const char *path, int track, char *error, size_t error_size)
     a->speed = a->speed_wanted = PLAYBACK_PERMILLE;
     if (R_FAILED(threadCreate(&a->thread, audioThread, a, NULL, THREAD_STACK_SIZE, THREAD_PRIORITY, -2)) ||
         R_FAILED(threadStart(&a->thread))) {
-        snprintf(error, error_size, "The sound thread can't start.");
+        snprintf(error, error_size, "%s", T("The sound thread can't start."));
         audioClose(a);
         return NULL;
     }

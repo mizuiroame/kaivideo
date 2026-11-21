@@ -13,6 +13,7 @@
 #include "buttons.h"
 #include "dlworker.h"
 #include "kinetic.h"
+#include "lang.h"
 #include "ui_downloads.h"
 #include "ui_library.h"
 #include "util.h"
@@ -87,14 +88,14 @@ static void updatePill(const App *app)
         if (on_way)
             progress += dlProgress(d);
     }
-    char label[48] = "";
+    char label[96] = "";
     double fraction = coming ? progress / coming : 0;
     if (coming)
         snprintf(label, sizeof(label), "%d \xC2\xB7 %d%%", coming, (int)(fraction * 100));
     else if (failed)
-        snprintf(label, sizeof(label), "%d failed", failed);
+        snprintf(label, sizeof(label), T("%d failed"), failed);
     else if (paused)
-        snprintf(label, sizeof(label), "%d paused", paused);
+        snprintf(label, sizeof(label), T("%d paused"), paused);
     uiLibrarySetDownloadsPill(label, fraction);
 }
 
@@ -164,10 +165,10 @@ static void sayDownloadsWait(App *app, uint64_t now)
     }
     if (!coming)
         return;
-    const char *note = this_one ? "Its download waits while it plays from the server, and the others too"
-                                : "Downloads wait while this plays from the server";
+    const char *note = this_one ? T("Its download waits while it plays from the server, and the others too")
+                                : T("Downloads wait while this plays from the server");
     size_t n = strlen(app->bar_note);  // After what's said already ("Resumed at...").
-    snprintf(app->bar_note + n, sizeof(app->bar_note) - n, "%s%s; they go on after", n ? "  \xC2\xB7  " : "", note);
+    snprintf(app->bar_note + n, sizeof(app->bar_note) - n, T("%s%s; they go on after"), n ? "  \xC2\xB7  " : "", note);
     app->bar_note_until = now + WAIT_NOTE_NS;
     app->overlay_until = app->overlay_until > now + WAIT_NOTE_NS ? app->overlay_until : now + WAIT_NOTE_NS;
 }
@@ -184,7 +185,7 @@ void appDownloadsUpdate(App *app, uint64_t now)
     if (finished == app->dl_finished)
         return;
     app->dl_finished = finished;
-    appShowMessage(app, "A download is on the card.", now);
+    appShowMessage(app, T("A download is on the card."), now);
     if (!app->config.use_jellyfin && !app->player && !app->opening)
         appLibraryRescan(app, now);  // The card's library shows it.
 }
@@ -240,15 +241,15 @@ const char *appDownloadLabel(const App *app, int item, char *out, size_t size)
         return NULL;
     const Download *d = downloadOf(app, it->path);
     if (!d || d->state == DL_DELETED)
-        return it->blocked ? "Download converted" : "Download";
+        return it->blocked ? T("Download converted") : T("Download");
     switch (d->state) {
-    case DL_QUEUED: return "Waiting to download";
+    case DL_QUEUED: return T("Waiting to download");
     case DL_ACTIVE:
-        snprintf(out, size, "%s %d%%", d->max_bitrate ? "Converting" : "Downloading", percentOf(d));
+        snprintf(out, size, "%s %d%%", d->max_bitrate ? T("Converting") : T("Downloading"), percentOf(d));
         return out;
-    case DL_PAUSED: snprintf(out, size, "Paused at %d%%", percentOf(d)); return out;
-    case DL_FAILED: return "Download again";
-    default: return "On the card";
+    case DL_PAUSED: snprintf(out, size, T("Paused at %d%%"), percentOf(d)); return out;
+    case DL_FAILED: return T("Download again");
+    default: return T("On the card");
     }
 }
 
@@ -268,9 +269,9 @@ const char *appDetailsNote(const App *app, int item, char *out, size_t size)
     if (!coming)
         return plays;
     snprintf(out, size, "%s%s%s",
-             this_one ? "Still downloading: playing it streams it from the server, and its download and the others "
-                        "pause until you stop."
-                      : "Playing it streams it from the server: the downloads pause until you stop.",
+             this_one ? T("Still downloading: playing it streams it from the server, and its download and the "
+                          "others pause until you stop.")
+                      : T("Playing it streams it from the server: the downloads pause until you stop."),
              plays[0] ? " " : "", plays);
     return out;
 }
@@ -291,11 +292,11 @@ static bool enqueue(App *app, int item, char *why, size_t why_size)
     const LibraryItem *it = &app->library.items[item];
     char account[DL_ACCOUNT_MAX], root[LIBRARY_PATH_MAX], path[LIBRARY_PATH_MAX], fallback[NAMING_MAX];
     if (!jfSyncAccountOf(it->path, account, sizeof(account))) {
-        snprintf(why, why_size, "Sign in to its server to download it.");
+        snprintf(why, why_size, "%s", T("Sign in to its server to download it."));
         return false;
     }
     if (!downloadsRoot(app, root, sizeof(root))) {
-        snprintf(why, why_size, "The library's folder name is too long for downloads.");
+        snprintf(why, why_size, "%s", T("The library's folder name is too long for downloads."));
         return false;
     }
     dlSafeName(it->path, fallback, sizeof(fallback));  // For names with nothing a card can keep.
@@ -315,7 +316,7 @@ static bool enqueue(App *app, int item, char *why, size_t why_size)
             return true;
         }
     }
-    snprintf(why, why_size, "It couldn't be added to the downloads.");
+    snprintf(why, why_size, "%s", T("It couldn't be added to the downloads."));
     return false;
 }
 
@@ -330,21 +331,23 @@ void appDownloadItem(App *app, int item, uint64_t now)
         if (!enqueue(app, item, why, sizeof(why)))
             appShowMessage(app, why, now);
         else if (it->blocked) {
-            snprintf(why, sizeof(why), "Added to Downloads: the server converts it first, at %.0f Mb/s.",
+            snprintf(why, sizeof(why), T("Added to Downloads: the server converts it first, at %.0f Mb/s."),
                      convertedBitrate(app) / 1e6);
             appShowMessage(app, why, now);
         } else {
-            appShowMessage(app, "Added to Downloads (+ menu).", now);
+            appShowMessage(app, T("Added to Downloads (+ menu)."), now);
         }
         return;
     }
     switch (d->state) {
     case DL_QUEUED:
-    case DL_ACTIVE: dlWorkerPause(d->path, true); appShowMessage(app, "Download paused.", now); break;
-    case DL_PAUSED: dlWorkerPause(d->path, false); appShowMessage(app, "The download goes on.", now); break;
+    case DL_ACTIVE: dlWorkerPause(d->path, true); appShowMessage(app, T("Download paused."), now); break;
+    case DL_PAUSED: dlWorkerPause(d->path, false); appShowMessage(app, T("The download goes on."), now); break;
     case DL_FAILED:
-    case DL_DELETED: dlWorkerRetry(d->path); appShowMessage(app, "Downloading it again.", now); break;
-    default: appShowMessage(app, "It's on the card: it plays from there. Downloads (+ menu) deletes it.", now); break;
+    case DL_DELETED: dlWorkerRetry(d->path); appShowMessage(app, T("Downloading it again."), now); break;
+    default:
+        appShowMessage(app, T("It's on the card: it plays from there. Downloads (+ menu) deletes it."), now);
+        break;
     }
     takeList(app);
 }
@@ -378,13 +381,13 @@ const char *appSeasonDownloadLabel(const App *app, int show, int season, bool *d
     }
     *done = whole == n;
     if (*done)
-        snprintf(out, size, "Season on the card");
+        snprintf(out, size, "%s", T("Season on the card"));
     else if (asked == n)  // All asked for: how many have come.
-        snprintf(out, size, "Season: %d of %d on the card", whole, n);
+        snprintf(out, size, T("Season: %d of %d on the card"), whole, n);
     else if (asked)  // Some: L asks for the others.
-        snprintf(out, size, "Download season");
+        snprintf(out, size, "%s", T("Download season"));
     else
-        snprintf(out, size, "Download season");
+        snprintf(out, size, "%s", T("Download season"));
     return out;
 }
 
@@ -409,13 +412,16 @@ void appDownloadSeason(App *app, int show, int season, uint64_t now)
     }
     char message[200];
     if (added && skipped)
-        snprintf(message, sizeof(message), "%d episodes added to Downloads; %d can't be: %s", added, skipped, why);
+        snprintf(message, sizeof(message), T("%d episodes added to Downloads; %d can't be: %s"), added, skipped, why);
     else if (added)
-        snprintf(message, sizeof(message), "%d episode%s added to Downloads (+ menu).", added, added == 1 ? "" : "s");
+        snprintf(message, sizeof(message),
+                 added == 1 ? T("%d episode added to Downloads (+ menu).")
+                            : T("%d episodes added to Downloads (+ menu)."),
+                 added);
     else if (skipped)
         snprintf(message, sizeof(message), "%s", why);
     else
-        snprintf(message, sizeof(message), "This season is in Downloads already (+ menu).");
+        snprintf(message, sizeof(message), "%s", T("This season is in Downloads already (+ menu)."));
     appShowMessage(app, message, now);
 }
 

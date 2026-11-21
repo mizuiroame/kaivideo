@@ -10,6 +10,7 @@
 #include "app.h"
 #include "buttons.h"
 #include "dlworker.h"
+#include "lang.h"
 #include "ui_downloads.h"
 #include "ui_library.h"
 
@@ -20,7 +21,8 @@
 
 typedef enum { SECTION_COMING, SECTION_CARD, SECTION_DELETED, SECTION_COUNT } Section;
 
-static const char *const SECTION_NAMES[SECTION_COUNT] = {"DOWNLOADING", "ON THE CARD", "DELETED FROM THE CARD"};
+static const char *const SECTION_NAMES[SECTION_COUNT] = {N_("DOWNLOADING"), N_("ON THE CARD"),
+                                                         N_("DELETED FROM THE CARD")};
 
 static Section sectionOf(const Download *d)
 {
@@ -116,7 +118,7 @@ void appDownloadsOpen(App *app, uint64_t now)
     if (libviewShowTab(&app->view, TAB_DOWNLOADS))
         app->downloads_confirm = -1;
     else
-        appShowMessage(app, "Nothing downloaded yet: open a film or episode from a server and press L.", now);
+        appShowMessage(app, T("Nothing downloaded yet: open a film or episode from a server and press L."), now);
 }
 
 bool appDownloadsScrollPx(App *app, int px)
@@ -149,7 +151,7 @@ static void activate(App *app, const Download *found, uint64_t now)
     case DL_QUEUED:
     case DL_ACTIVE: dlWorkerPause(d.path, true); break;
     case DL_PAUSED: dlWorkerPause(d.path, false); break;
-    default: dlWorkerRetry(d.path); appShowMessage(app, "Downloading it again.", now); break;
+    default: dlWorkerRetry(d.path); appShowMessage(app, T("Downloading it again."), now); break;
     }
     appDownloadsRefresh(app);
 }
@@ -167,23 +169,23 @@ static void pressX(App *app, int row, const Download *found, uint64_t now)
         app->downloads_confirm = row;
         snprintf(app->downloads_confirm_path, sizeof(app->downloads_confirm_path), "%s", d.path);
         app->downloads_confirm_state = (int)section;
-        appShowMessage(app, section == SECTION_CARD ? "Press X again to delete it from the card."
-                                                    : "Press X again to cancel it.",
+        appShowMessage(app, section == SECTION_CARD ? T("Press X again to delete it from the card.")
+                                                    : T("Press X again to cancel it."),
                        now);
         return;
     }
     app->downloads_confirm = -1;
     if (section == SECTION_CARD) {
         dlWorkerDeleteFile(d.path);
-        appShowMessage(app, "Deleted from the card. It stays under Deleted, to download again.", now);
+        appShowMessage(app, T("Deleted from the card. It stays under Deleted, to download again."), now);
         if (!app->config.use_jellyfin)
             appLibraryRescan(app, now);  // The card's library lets it go.
     } else if (section == SECTION_DELETED) {
         dlWorkerForget(d.path);
-        appShowMessage(app, "Taken off the list.", now);
+        appShowMessage(app, T("Taken off the list."), now);
     } else {
         dlWorkerRemove(d.path);
-        appShowMessage(app, "Download cancelled.", now);
+        appShowMessage(app, T("Download cancelled."), now);
     }
     appDownloadsRefresh(app);
 }
@@ -196,7 +198,10 @@ static void clearDeleted(App *app, uint64_t now)
     if (n == 0)
         return;
     char message[96];
-    snprintf(message, sizeof(message), "Cleared %d deleted download%s from the list.", n, n == 1 ? "" : "s");
+    snprintf(message, sizeof(message),
+             n == 1 ? T("Cleared %d deleted download from the list.")
+                    : T("Cleared %d deleted downloads from the list."),
+             n);
     appShowMessage(app, message, now);
     appDownloadsRefresh(app);
 }
@@ -248,19 +253,21 @@ void appDownloadsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t no
 const char *appDownloadsHelp(const App *app)
 {
     static Rows r;
-    static char help[160];
+    static char help[320];
     buildRows(app, &r);
     const Download *d = downloadAt(app, &r, app->downloads_scroll.cursor);
     const char *row = "";
     if (d) {
         switch (sectionOf(d)) {
-        case SECTION_CARD: row = "[A] play  [X] delete from the card  "; break;
-        case SECTION_DELETED: row = "[A] download again  [X] take off the list  "; break;
-        default: row = d->state == DL_FAILED ? "[A] try again  [X] cancel  " : "[A] pause / go on  [X] cancel  "; break;
+        case SECTION_CARD: row = T("[A] play  [X] delete from the card"); break;
+        case SECTION_DELETED: row = T("[A] download again  [X] take off the list"); break;
+        default: row = d->state == DL_FAILED ? T("[A] try again  [X] cancel") : T("[A] pause / go on  [X] cancel"); break;
         }
     }
-    snprintf(help, sizeof(help), "%s%s[ZL][ZR] tabs  [+] menu", row,
-             r.in_section[SECTION_DELETED] ? "[Y] clear deleted  " : "");
+    // The pieces have no spaces at their ends (a translator's editor may drop them): they're put between here.
+    const char *clear = r.in_section[SECTION_DELETED] ? T("[Y] clear deleted") : "";
+    snprintf(help, sizeof(help), "%s%s%s%s%s", row, row[0] ? "  " : "", clear, clear[0] ? "  " : "",
+             T("[ZL][ZR] tabs  [+] menu"));
     return help;
 }
 
@@ -285,21 +292,21 @@ static void stateText(const Download *d, char *out, size_t size)
     sizeText(d->done, done, sizeof(done));
     sizeText(d->size, total, sizeof(total));
     switch (d->state) {
-    case DL_QUEUED: snprintf(out, size, "%s", d->error[0] ? d->error : "Waiting"); break;
+    case DL_QUEUED: snprintf(out, size, "%s", d->error[0] ? d->error : T("Waiting")); break;
     case DL_ACTIVE:
         if (d->finishing)
-            snprintf(out, size, "Finishing...");
+            snprintf(out, size, "%s", T("Finishing..."));
         else if (d->max_bitrate > 0 && d->part_count > 0)
-            snprintf(out, size, "Converting \xC2\xB7 %d%% \xC2\xB7 %s", percent, done);
+            snprintf(out, size, T("Converting \xC2\xB7 %d%% \xC2\xB7 %s"), percent, done);
         else if (d->size > 0)
-            snprintf(out, size, "%s of %s", done, total);
+            snprintf(out, size, T("%s of %s"), done, total);
         else
-            snprintf(out, size, "Starting...");
+            snprintf(out, size, "%s", T("Starting..."));
         break;
-    case DL_PAUSED: snprintf(out, size, "Paused \xC2\xB7 %d%%", percent); break;
-    case DL_FAILED: snprintf(out, size, "%s", d->error[0] ? d->error : "It stopped."); break;
-    case DL_DELETED: snprintf(out, size, "Deleted from the card"); break;
-    default: snprintf(out, size, "%s", d->finishing ? "Finishing..." : total); break;
+    case DL_PAUSED: snprintf(out, size, T("Paused \xC2\xB7 %d%%"), percent); break;
+    case DL_FAILED: snprintf(out, size, "%s", d->error[0] ? d->error : T("It stopped.")); break;
+    case DL_DELETED: snprintf(out, size, "%s", T("Deleted from the card")); break;
+    default: snprintf(out, size, "%s", d->finishing ? T("Finishing...") : total); break;
     }
 }
 
@@ -310,11 +317,11 @@ static void describe(const Download *d, RowText *t, UiDownloadRow *row)
         snprintf(t->detail, sizeof(t->detail), "%s \xC2\xB7 S%02dE%02d", d->name.show, d->name.season, d->name.episode);
     } else {
         snprintf(t->title, sizeof(t->title), d->name.year ? "%s (%d)" : "%s", d->name.title, d->name.year);
-        snprintf(t->detail, sizeof(t->detail), "Film");
+        snprintf(t->detail, sizeof(t->detail), "%s", T("Film"));
     }
     if (d->max_bitrate > 0) {  // Converted by the server: at what bitrate.
         size_t n = strlen(t->detail);
-        snprintf(t->detail + n, sizeof(t->detail) - n, " \xC2\xB7 converted, %.0f Mb/s", d->max_bitrate / 1e6);
+        snprintf(t->detail + n, sizeof(t->detail) - n, T(" \xC2\xB7 converted, %.0f Mb/s"), d->max_bitrate / 1e6);
     }
     stateText(d, t->state, sizeof(t->state));
     double progress = dlProgress(d);
@@ -331,18 +338,19 @@ static void summaryText(const App *app, const Rows *r, char *out, size_t size)
             on_card += app->downloads.items[i].size;
     char bytes[32];
     sizeText(on_card, bytes, sizeof(bytes));
-    int n = snprintf(out, size, "%d downloading \xC2\xB7 %d on the card (%s) \xC2\xB7 %d deleted",
+    int n = snprintf(out, size, T("%d downloading \xC2\xB7 %d on the card (%s) \xC2\xB7 %d deleted"),
                      r->in_section[SECTION_COMING], r->in_section[SECTION_CARD], bytes, r->in_section[SECTION_DELETED]);
     int untold = dlWorkerSyncWaiting();
     if (untold > 0 && n > 0 && (size_t)n < size)
-        snprintf(out + n, size - (size_t)n, " \xC2\xB7 %d watched offline, told to the server when it's back", untold);
+        snprintf(out + n, size - (size_t)n, T(" \xC2\xB7 %d watched offline, told to the server when it's back"),
+                 untold);
 }
 
 void appDownloadsDraw(const App *app)
 {
     static Rows r;
     static RowText texts[ROWS_MAX];
-    static char headings[SECTION_COUNT][48];
+    static char headings[SECTION_COUNT][96];
     static UiDownloadRow rows[ROWS_MAX];
     buildRows(app, &r);
     for (int i = 0; i < r.count; i++) {
@@ -351,12 +359,12 @@ void appDownloadsDraw(const App *app)
             continue;
         }
         Section s = r.section[i];
-        snprintf(headings[s], sizeof(headings[s]), "%s \xC2\xB7 %d", SECTION_NAMES[s], r.in_section[s]);
+        snprintf(headings[s], sizeof(headings[s]), "%s \xC2\xB7 %d", T(SECTION_NAMES[s]), r.in_section[s]);
         rows[i] = (UiDownloadRow){.title = headings[s], .detail = "", .state = "", .progress = -1, .header = true,
-                                  .action = s == SECTION_DELETED ? "Clear" : NULL};
+                                  .action = s == SECTION_DELETED ? T("Clear") : NULL};
     }
     char summary[TEXT_MAX];
     summaryText(app, &r, summary, sizeof(summary));
     uiDrawDownloadsTab(rows, r.count, &app->downloads_scroll, app->downloads_confirm, summary,
-                       "Nothing yet: open a film or episode from a server and press L to download it.");
+                       T("Nothing yet: open a film or episode from a server and press L to download it."));
 }

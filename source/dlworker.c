@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "jfsync.h"
+#include "lang.h"
 #include "remux.h"
 
 #define FILE_PATH_MAX 600
@@ -265,11 +266,11 @@ static bool fetchAll(const DlSource *src, const Download *d, Fetch *f, char *err
         bool ok = src->fetch(d->origin, offset, takeBytes, f, &f->total, &g.abort, error, error_size);
         fflush(f->file);
         if (f->no_room) {
-            snprintf(error, error_size, "The card needs %.1f GB more free for it.", f->room_needed / GIB);
+            snprintf(error, error_size, T("The card needs %.1f GB more free for it."), f->room_needed / GIB);
             return false;
         }
         if (f->write_failed) {
-            snprintf(error, error_size, "It couldn't be written to the card.");
+            snprintf(error, error_size, "%s", T("It couldn't be written to the card."));
             return false;
         }
         if (ok && !f->restart && f->total >= 0 && f->done >= f->total)
@@ -281,7 +282,7 @@ static bool fetchAll(const DlSource *src, const Download *d, Fetch *f, char *err
         if (f->restart) {  // It sent the file from the start: again, whole, from 0.
             f->done = f->reported = 0;
             if (ftruncate(fileno(f->file), 0) != 0 || fseeko(f->file, 0, SEEK_SET) != 0) {
-                snprintf(error, error_size, "It couldn't be written to the card.");
+                snprintf(error, error_size, "%s", T("It couldn't be written to the card."));
                 return false;
             }
             continue;
@@ -291,7 +292,7 @@ static bool fetchAll(const DlSource *src, const Download *d, Fetch *f, char *err
             return false;  // Asking again won't change it.
         if (tries >= TRIES) {
             if (!error[0])
-                snprintf(error, error_size, "The server stopped sending it.");
+                snprintf(error, error_size, "%s", T("The server stopped sending it."));
             f->offline = true;
             return false;
         }
@@ -325,7 +326,7 @@ static bool convertedFits(const Download *d, const Fetch *f, char *error, size_t
     long long room = roomOn(f->path);
     if (d->runtime_ns <= 0 || room < 0 || room >= needed)
         return true;
-    snprintf(error, error_size, "The card needs %.1f GB more free for it.", (needed - room) / GIB);
+    snprintf(error, error_size, T("The card needs %.1f GB more free for it."), (needed - room) / GIB);
     return false;
 }
 
@@ -342,7 +343,7 @@ static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, 
 {
     error[0] = '\0';
     if (!src->fetch_converted) {
-        snprintf(error, error_size, "That place can't convert videos.");
+        snprintf(error, error_size, "%s", T("That place can't convert videos."));
         return false;
     }
     if (f->part_count > 0 && f->parts_done >= f->part_count)
@@ -353,7 +354,7 @@ static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, 
     while (!g.abort) {
         int first = f->parts_done;
         if (!backToWholeParts(f)) {
-            snprintf(error, error_size, "It couldn't be written to the card.");
+            snprintf(error, error_size, "%s", T("It couldn't be written to the card."));
             return false;
         }
         error[0] = '\0';
@@ -361,7 +362,7 @@ static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, 
                                        error_size);
         fflush(f->file);
         if (f->write_failed) {
-            snprintf(error, error_size, "It couldn't be written to the card.");
+            snprintf(error, error_size, "%s", T("It couldn't be written to the card."));
             return false;
         }
         if (ok && f->part_count > 0 && f->parts_done >= f->part_count)
@@ -373,7 +374,7 @@ static bool fetchConvertedAll(const DlSource *src, const Download *d, Fetch *f, 
             return false;
         if (tries >= TRIES) {
             if (!error[0])
-                snprintf(error, error_size, "The server stopped converting it.");
+                snprintf(error, error_size, "%s", T("The server stopped converting it."));
             f->offline = true;
             return false;
         }
@@ -420,7 +421,7 @@ static bool finishConverted(const char *path, const char *part, char *error, siz
     }
     remove(wrapped);
     if (rename(part, path) != 0) {
-        snprintf(error, error_size, "It couldn't be written to the card.");
+        snprintf(error, error_size, "%s", T("It couldn't be written to the card."));
         return false;
     }
     return true;
@@ -450,7 +451,7 @@ static bool stillTs(const char *path)
 static void waitForNetwork(Download *d, const char *why)
 {
     d->state = DL_QUEUED;
-    snprintf(d->error, sizeof(d->error), "Waiting for the network (%s)", why);
+    snprintf(d->error, sizeof(d->error), T("Waiting for the network (%s)"), why);
     int wait = RETRY_FIRST_S << (g.retry_round < 3 ? g.retry_round : 3);
     g.retry_at = time(NULL) + (wait < RETRY_MOST_S ? wait : RETRY_MOST_S);
     g.retry_round++;
@@ -474,7 +475,7 @@ static void runDownload(const Download *d)
     const DlSource *src = sourceFor(d->origin);
     if (!src) {
         pthread_mutex_lock(&g.lock);
-        setFailed(d->path, "KaiVideo can't download from there.");
+        setFailed(d->path, T("KaiVideo can't download from there."));
         pthread_mutex_unlock(&g.lock);
         return;
     }
@@ -508,7 +509,7 @@ static void runDownload(const Download *d)
     if (f.converted && !whole && f.file)
         backToWholeParts(&f);
     if (!f.file)
-        snprintf(error, sizeof(error), "It couldn't be written to the card.");
+        snprintf(error, sizeof(error), "%s", T("It couldn't be written to the card."));
     if (f.file)
         fclose(f.file);
     if (whole) {
@@ -520,7 +521,7 @@ static void runDownload(const Download *d)
             remove(d->path);
             if (rename(part, d->path) != 0) {
                 whole = false;
-                snprintf(error, sizeof(error), "It couldn't be written to the card.");
+                snprintf(error, sizeof(error), "%s", T("It couldn't be written to the card."));
             }
         }
         if (whole && src->extras) {

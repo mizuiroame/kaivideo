@@ -4,6 +4,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "thumbs.h"
 #include "ui.h"
 #include "ui_buttons.h"
@@ -56,13 +57,13 @@ void uiDrawUpNextCard(const Library *lib, int item, double fraction_left, int se
 
     int ty = py + UP_NEXT_PIC_H + 12;
     char when[48];
-    snprintf(when, sizeof(when), "UP NEXT  \xC2\xB7  %d s", seconds_left);
+    snprintf(when, sizeof(when), T("UP NEXT  \xC2\xB7  %d s"), seconds_left);
     fontDraw(FONT_BOLD, 14, px, ty, when, COLOR_ACCENT);
     char label[200];
     uiLibEpisodeLabel(it, label, sizeof(label));
     fontDrawClipped(FONT_BOLD, 19, px, ty + 22, pw, label, COLOR_TEXT);
     uiDrawButton(px, ty + 68.0f, "ZR", COLOR_SURFACE_HI, COLOR_TEXT);
-    fontDrawMiddle(FONT_REGULAR, 17, px + uiButtonWidth("ZR") + 10, ty + 68.0f, "play now", COLOR_DIM);
+    fontDrawMiddle(FONT_REGULAR, 17, px + uiButtonWidth("ZR") + 10, ty + 68.0f, T("play now"), COLOR_DIM);
 }
 
 // --- A video's details ---
@@ -82,14 +83,14 @@ static void detailsLine(const LibraryItem *it, char *out, size_t size)
 {
     char first[48] = "", length[32] = "";
     if (it->show >= 0)
-        snprintf(first, sizeof(first), "Season %d, episode %d", it->name.season, it->name.episode);
+        snprintf(first, sizeof(first), T("Season %d, episode %d"), it->name.season, it->name.episode);
     else if (it->name.year)
         snprintf(first, sizeof(first), "%d", it->name.year);
     int minutes = (int)(it->runtime_ns / 60000000000ll);
     if (minutes >= 60)
-        snprintf(length, sizeof(length), "%d h %d min", minutes / 60, minutes % 60);
+        snprintf(length, sizeof(length), T("%d h %d min"), minutes / 60, minutes % 60);
     else if (minutes > 0)
-        snprintf(length, sizeof(length), "%d min", minutes);
+        snprintf(length, sizeof(length), T("%d min"), minutes);
     snprintf(out, size, "%s%s%s", first, first[0] && length[0] ? "  \xC2\xB7  " : "", length);
 }
 
@@ -156,7 +157,7 @@ static int showPill(int right, const char *key, const char *label, bool lit, Lib
 
 static const char *favoriteLabel(bool favorite)
 {
-    return favorite ? "In Favorites" : "Add to Favorites";
+    return favorite ? T("In Favorites") : T("Add to Favorites");
 }
 
 void uiDrawShowFavorite(bool favorite)
@@ -224,15 +225,16 @@ void uiDrawDetails(const Library *lib, int item, const ResumeList *resume, const
                     it->overview ? it->overview : "", COLOR_TEXT);
 
     int bx = px, by = py + DETAILS_PIC_H + 24;
-    bx += detailsButton(bx, by, "A", progress >= 0 ? "Resume" : "Play", LIBHIT_DETAILS_PLAY) + DETAILS_BUTTON_GAP;
+    bx += detailsButton(bx, by, "A", progress >= 0 ? T("Resume") : T("Play"), LIBHIT_DETAILS_PLAY) +
+          DETAILS_BUTTON_GAP;
     if (progress >= 0)
-        bx += detailsButton(bx, by, "Y", "From start", LIBHIT_DETAILS_START) + DETAILS_BUTTON_GAP;
-    bx += detailsButton(bx, by, "X", uiLibSeen(lib, item) ? "Unwatched" : "Watched", LIBHIT_DETAILS_WATCHED) +
+        bx += detailsButton(bx, by, "Y", T("From start"), LIBHIT_DETAILS_START) + DETAILS_BUTTON_GAP;
+    bx += detailsButton(bx, by, "X", uiLibSeen(lib, item) ? T("Unwatched") : T("Watched"), LIBHIT_DETAILS_WATCHED) +
           DETAILS_BUTTON_GAP;
     if (favorites) {
         bool favorite = it->favorite;
-        const char *label = it->show >= 0 ? (favorite ? "Series in Favorites" : "Favorite series")
-                                          : (favorite ? "In Favorites" : "Favorite");
+        const char *label = it->show >= 0 ? (favorite ? T("Series in Favorites") : T("Favorite series"))
+                                          : (favorite ? T("In Favorites") : T("Favorite"));
         bx += detailsButton(bx, by, "R", label, LIBHIT_FAVORITE) + DETAILS_BUTTON_GAP;
     }
     if (download)

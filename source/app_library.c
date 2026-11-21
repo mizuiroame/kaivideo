@@ -12,6 +12,7 @@
 #include "buttons.h"
 #include "gfx.h"
 #include "keyboard_system.h"
+#include "lang.h"
 #include "libscan.h"
 #include "thumbs.h"
 #include "ui_library.h"
@@ -378,7 +379,7 @@ static void toggleFavorite(App *app, LibraryRef ref, uint64_t now)
     jfSyncSetFavorite(location, favorite);
     rememberFavoriteChange(app, location, favorite);
     appLibraryRefreshHome(app);
-    appShowMessage(app, favorite ? "Added to Favorites." : "Removed from Favorites.", now);
+    appShowMessage(app, favorite ? T("Added to Favorites.") : T("Removed from Favorites."), now);
 }
 
 // True if a film or series can be a favorite: it comes from the server.
@@ -404,7 +405,7 @@ static bool hasResume(const App *app, int item)
 // The series page shown is a server's: its season can be downloaded.
 static bool seasonDownloadable(const App *app)
 {
-    char label[64];
+    char label[128];
     bool done;
     return appSeasonDownloadLabel(app, app->view.show, app->view.season, &done, label, sizeof(label)) != NULL;
 }
@@ -446,10 +447,10 @@ static void search(App *app, uint64_t now)
     app->view.tab = TAB_SEARCH;
     app->view.show = -1;
     char text[LIBVIEW_QUERY_MAX];
-    switch (systemKeyboardInput("Search films and series", app->view.query, text, sizeof(text),
+    switch (systemKeyboardInput(T("Search films and series"),app->view.query, text, sizeof(text),
                                 LIBVIEW_QUERY_MAX - 1)) {
     case SYSTEM_KEYBOARD_OK: libviewSearch(&app->view, &app->library, text); break;
-    case SYSTEM_KEYBOARD_UNAVAILABLE: appShowMessage(app, "The keyboard couldn't open.", now); break;
+    case SYSTEM_KEYBOARD_UNAVAILABLE: appShowMessage(app, T("The keyboard couldn't open."), now); break;
     default: break;
     }
 }
@@ -472,7 +473,7 @@ static void openEntry(App *app, Browser *b, bool picking, uint64_t now)
         return;
     if (b->items[b->cursor].is_dir) {
         if (!browserEnter(b))
-            appShowMessage(app, "That folder can't be opened.", now);
+            appShowMessage(app, T("That folder can't be opened."), now);
     } else if (!picking) {
         char path[BROWSER_PATH_MAX];
         if (browserSelectedPath(b, path, sizeof(path)) && appStartVideo(app, path, b->items[b->cursor].name, now))
@@ -695,9 +696,9 @@ void appLibraryRescan(App *app, uint64_t now)
     if (app->config.use_jellyfin) {
         jfSyncRefresh();
     } else if (!app->library_root[0]) {
-        appShowMessage(app, "Choose the library folder first.", now);
+        appShowMessage(app, T("Choose the library folder first."), now);
     } else if (libscanBusy(NULL)) {
-        appShowMessage(app, "Already looking for videos.", now);
+        appShowMessage(app, T("Already looking for videos."), now);
     } else {
         startScan(app);
     }
@@ -713,7 +714,7 @@ static void drawShowButtons(const App *app)
     bool favorites = canBeFavorite(app, shown), favorite = app->library.shows[v->show].favorite, done;
     if (favorites)
         uiDrawShowFavorite(favorite);
-    char label[64];
+    char label[128];
     if (appSeasonDownloadLabel(app, v->show, v->season, &done, label, sizeof(label)))
         uiDrawShowDownload(label, done, favorites, favorite);
 }
@@ -727,7 +728,7 @@ void appLibraryDraw(App *app, uint64_t now)
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
     ServerKind view = (ServerKind)app->config.server_view;
-    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName(view) : "SD card",
+    uiLibrarySetSource(app->config.use_jellyfin ? serverKindName(view) : T("SD card"),
                        app->config.use_jellyfin ? uiServerColor(view) : COLOR_ACCENT);
     if (app->picking) {
         uiDrawBackground();
@@ -741,12 +742,12 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawFooterHelp(appFooterHelp(app));
         return;
     }
-    char status[64] = "";
+    char status[128] = "";
     size_t found;
     if (app->config.use_jellyfin && app->jf.refreshing)
-        snprintf(status, sizeof(status), "Updating the servers' libraries... %d", app->jf.loaded);  // All signed in.
+        snprintf(status, sizeof(status), T("Updating the servers' libraries... %d"),app->jf.loaded);  // All signed in.
     else if (libscanBusy(&found))
-        snprintf(status, sizeof(status), "Looking for videos... %zu", found);
+        snprintf(status, sizeof(status), T("Looking for videos... %zu"),found);
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
         uiDrawBackground();
         uiDrawTabBar(&app->view, &app->library, status);
@@ -764,7 +765,7 @@ void appLibraryDraw(App *app, uint64_t now)
     }
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count) {
         int item = app->view.details;
-        char download[64], note[200];
+        char download[128], note[320];
         uiDrawDetails(&app->library, item, &app->resume, appDetailsNote(app, item, note, sizeof(note)),
                       canBeFavorite(app, (LibraryRef){false, item}),
                       appDownloadLabel(app, item, download, sizeof(download)));

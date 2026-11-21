@@ -4,6 +4,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "ui_library.h"
 #include "ui_style.h"
 
@@ -112,7 +113,7 @@ static void drawPrograms(const LiveChannel *c, int index, int y, int focus, cons
         any = true;
     }
     if (!any) {
-        fontDraw(FONT_REGULAR, 16, GRID_X + 12, y + LIVE_ROW_H / 2 - 10, "No guide for these hours", COLOR_FAINT);
+        fontDraw(FONT_REGULAR, 16, GRID_X + 12, y + LIVE_ROW_H / 2 - 10, T("No guide for these hours"), COLOR_FAINT);
         uiLibraryAddHit(GRID_X, y, GRID_W, LIVE_ROW_H, LIBHIT_LIVE_ROW, index, 0);
     }
 }
@@ -126,12 +127,12 @@ static void drawStrip(const LiveChannel *c, int focus, const GuideTime *t)
     int channel_w = fontTextWidth(FONT_REGULAR, 16, c->name);
     fontDraw(FONT_REGULAR, 16, right - channel_w, STRIP_Y + 14, c->name, COLOR_FAINT);
     if (focus < 0) {
-        fontDraw(FONT_BOLD, 20, tx, STRIP_Y + 26, "No guide for now", COLOR_DIM);
+        fontDraw(FONT_BOLD, 20, tx, STRIP_Y + 26, T("No guide for now"), COLOR_DIM);
         return;
     }
     const LiveProgram *p = &c->programs[focus];
     bool on_now = p->start <= t->now_s;
-    const char *label = on_now ? "ON NOW" : "LATER";
+    const char *label = on_now ? T("ON NOW") : T("LATER");
     char when[48];
     liveTimeRange(p, t->offset, t->h24, when, sizeof(when));
     fontDraw(FONT_BOLD, 14, tx, STRIP_Y + 14, label, COLOR_ACCENT);
@@ -143,8 +144,8 @@ void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int6
                    bool loading)
 {
     if (guide->count == 0) {
-        drawCentered(loading ? "Reading the guide..." : "No channels",
-                     "Live TV comes from your Jellyfin server's tuners and guide.");
+        drawCentered(loading ? T("Reading the guide...") : T("No channels"),
+                     T("Live TV comes from your Jellyfin server's tuners and guide."));
         return;
     }
     const Scroll *s = &v->live;

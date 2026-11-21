@@ -7,6 +7,8 @@
 
 #include <jansson.h>
 
+#include "lang.h"
+
 #define API_TIMEOUT_S 30L
 #define PROBE_TIMEOUT_S 5L      // An address of the server that doesn't answer in this is passed over.
 #define PROBE_STALL_S 3L
@@ -123,7 +125,7 @@ bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char
     tvUrl(s, version, "/api/v2/resources?includeHttps=1&includeRelay=1", true, url, sizeof(url));
     NetResponse r;
     if (!fetchJson(net, url, NULL, RESOURCES_MAX_BYTES, API_TIMEOUT_S, cancel, &r)) {
-        snprintf(error, error_size, "%s", r.status ? "plex.tv refused that." : "plex.tv can't be reached.");
+        snprintf(error, error_size, "%s", r.status ? T("plex.tv refused that.") : T("plex.tv can't be reached."));
         return false;
     }
     PlexServer *servers = calloc(SERVERS_MAX, sizeof(*servers));
@@ -135,7 +137,7 @@ bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char
     free(servers);
     if (!ok)
         snprintf(error, error_size, "%s",
-                 count <= 0 ? "This Plex account has no server." : "Your Plex server doesn't answer.");
+                 count <= 0 ? T("This Plex account has no server.") : T("Your Plex server doesn't answer."));
     return ok;
 }
 
@@ -232,7 +234,7 @@ bool plexNetResolve(NetClient *net, const PlexSession *s, const char *version, c
                     char *error, size_t error_size, const volatile bool *cancel)
 {
     char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[96], url[PLEX_URL_MAX];
-    snprintf(error, error_size, "The server can't be reached.");
+    snprintf(error, error_size, "%s", T("The server can't be reached."));
     if (!plexLocationIds(location, item, part))
         return false;
     snprintf(path, sizeof(path), "/library/metadata/%s", item);
@@ -244,7 +246,7 @@ bool plexNetResolve(NetClient *net, const PlexSession *s, const char *version, c
     *duration_ns = durationOf(r.data);
     netResponseFree(&r);
     if (!ok) {
-        snprintf(error, error_size, "The server can't play this video here.");
+        snprintf(error, error_size, "%s", T("The server can't play this video here."));
         return false;
     }
     if (plan->direct)

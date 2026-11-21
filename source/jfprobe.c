@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "lang.h"
 #include "net.h"
 
 #define TEST_TIMEOUT_S 8L
@@ -170,16 +171,17 @@ static void runFind(JfProbeResult *r)
     int count = askNetwork(found, names, r);
     r->ok = count > 0;
     if (count < 0) {
-        snprintf(r->message, sizeof(r->message), "The network couldn't be asked. Type the server's address under Server.");
+        snprintf(r->message, sizeof(r->message), "%s",
+                 T("The network couldn't be asked. Type the server's address under Server."));
     } else if (count == 0) {
-        snprintf(r->message, sizeof(r->message),
-                 "No Jellyfin server answered on this network. Type its address under Server.");
+        snprintf(r->message, sizeof(r->message), "%s",
+                 T("No Jellyfin server answered on this network. Type its address under Server."));
     } else {
         snprintf(r->found, sizeof(r->found), "%s", found[0]);
         if (count == 1)
-            snprintf(r->message, sizeof(r->message), "Found %s at %s.", names[0], found[0]);
+            snprintf(r->message, sizeof(r->message), T("Found %s at %s."), names[0], found[0]);
         else
-            snprintf(r->message, sizeof(r->message), "Found %d servers. Using %s at %s; type another under Server.",
+            snprintf(r->message, sizeof(r->message), T("Found %d servers. Using %s at %s; type another under Server."),
                      count, names[0], found[0]);
     }
 }

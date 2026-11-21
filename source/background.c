@@ -7,6 +7,7 @@
 
 #include "gfx.h"
 #include "image_config.h"
+#include "lang.h"
 #include "stb_image.h"
 #include "theme.h"
 #include "util.h"
@@ -22,8 +23,8 @@ static const struct {
 
 const char *backgroundBlurName(int blur)
 {
-    static const char *const NAMES[BLUR_COUNT] = {"Off", "Low", "Medium", "High"};
-    return blur >= 0 && blur < BLUR_COUNT ? NAMES[blur] : NAMES[BLUR_MEDIUM];
+    static const char *const NAMES[BLUR_COUNT] = {N_("Off"), N_("Low"), N_("Medium"), N_("High")};
+    return T(blur >= 0 && blur < BLUR_COUNT ? NAMES[blur] : NAMES[BLUR_MEDIUM]);
 }
 #define IMAGE_WEIGHT 90      // Of 255: how much of the picture shows through the dark base.
 #define BASE_COLOR (g_colors.bg)  // The theme's background color.

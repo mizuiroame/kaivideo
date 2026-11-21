@@ -7,6 +7,7 @@
 #include <jansson.h>
 
 #include "jellyfin.h"
+#include "lang.h"
 
 #define SECONDS_PER_DAY 86400
 #define SECONDS_PER_HOUR 3600
@@ -145,7 +146,7 @@ void liveClock(int64_t utc_s, int64_t offset_s, bool clock_24h, char *out, size_
     if (clock_24h)
         snprintf(out, size, "%d:%02d", hour, minute);
     else
-        snprintf(out, size, "%d:%02d %s", hour % NOON ? hour % NOON : NOON, minute, hour < NOON ? "AM" : "PM");
+        snprintf(out, size, "%d:%02d %s", hour % NOON ? hour % NOON : NOON, minute, hour < NOON ? T("AM") : T("PM"));
 }
 
 void liveTimeRange(const LiveProgram *p, int64_t utc_offset_s, bool clock_24h, char *out, size_t size)

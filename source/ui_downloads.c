@@ -6,6 +6,7 @@
 
 #include "font.h"
 #include "gfx.h"
+#include "lang.h"
 #include "ui_buttons.h"
 #include "ui_library.h"
 #include "ui_style.h"
@@ -75,11 +76,11 @@ void uiDrawDownloadVeil(int x, int y, int w, int h, int radius, UiDownloadMark m
     gfxArc(cx, cy, r, 4, 0, TURN, GFX_RGB(0x60, 0x60, 0x68));
     if (mark != UI_DL_FAILED && done > 0)
         gfxArc(cx, cy, r, 4, TOP, TOP + TURN * done, mark == UI_DL_ACTIVE ? COLOR_ACCENT : COLOR_DIM);
-    char text[16];
+    char text[48];
     switch (mark) {
-    case UI_DL_QUEUED: snprintf(text, sizeof(text), "Waiting"); break;
-    case UI_DL_PAUSED: snprintf(text, sizeof(text), "Paused"); break;
-    case UI_DL_FAILED: snprintf(text, sizeof(text), "Failed"); break;
+    case UI_DL_QUEUED: snprintf(text, sizeof(text), "%s", T("Waiting")); break;
+    case UI_DL_PAUSED: snprintf(text, sizeof(text), "%s", T("Paused")); break;
+    case UI_DL_FAILED: snprintf(text, sizeof(text), "%s", T("Failed")); break;
     default: snprintf(text, sizeof(text), "%d%%", (int)(done * 100)); break;
     }
     if (mark == UI_DL_ACTIVE)

@@ -26,6 +26,7 @@
 #include "input.h"
 #include "dlworker.h"
 #include "hlsio.h"
+#include "lang.h"
 #include "mediafile.h"
 #include "menu.h"
 #include "playback.h"
@@ -310,7 +311,8 @@ static void *openThread(void *arg)
     if (!app->open_result && remote && !app->open_cancelled && app->open_plan.transcode_url[0] && !app->open_plan.direct) {
         // Its pieces didn't come or can't be read: the server's conversion failed, not the format.
         appLog("  %s", app->open_error);
-        snprintf(app->open_error, sizeof(app->open_error), "The server couldn't convert this video (its log may say why).");
+        snprintf(app->open_error, sizeof(app->open_error), "%s",
+                 T("The server couldn't convert this video (its log may say why)."));
     }
     if (app->open_result && remote && !liveIsLocation(app->playing_path))
         app->segment_count = jfSyncFetchSegments(app->playing_path, app->segments, JF_SEGMENTS_MAX);
@@ -365,7 +367,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     app->opening = pthread_create(&app->open_thread, NULL, openThread, app) == 0;
     if (!app->opening) {
         thumbsPause(false);
-        appShowMessage(app, "The video can't be opened now.", now);
+        appShowMessage(app, T("The video can't be opened now."), now);
     }
     return app->opening;
 }
@@ -406,7 +408,7 @@ static void beginPlaying(App *app, uint64_t now)
         playerSeekTo(app->player, resume_at, now);
         char at[16];
         utilFormatTime(at, sizeof(at), resume_at / 1e9);
-        snprintf(app->bar_note, sizeof(app->bar_note), "Resumed at %s  \xC2\xB7  ZL from the start", at);
+        snprintf(app->bar_note, sizeof(app->bar_note), T("Resumed at %s  \xC2\xB7  ZL from the start"), at);
         app->bar_note_until = now + OVERLAY_NS + 2000000000ull;
     }
     appLog("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
@@ -460,7 +462,7 @@ static void finishOpening(App *app, uint64_t now)
         thumbsPause(false);
         appLog("%s: %s", app->playing_path, app->open_error);
         if (!app->open_cancelled)
-            appShowMessage(app, app->open_error[0] ? app->open_error : "The video couldn't be loaded.", now);
+            appShowMessage(app, app->open_error[0] ? app->open_error : T("The video couldn't be loaded."), now);
     }
 }
 
@@ -672,9 +674,9 @@ static void openMenu(App *app, UiMenuKind kind, uint64_t now)
         int rows = playbackOptionRows(app);
         menuOpen(&app->menu, playerChapterCount(p) + rows, rows, chapter > 0 ? chapter : 0);
     } else if (kind == UI_MENU_AUDIO && playerAudioTrackCount(p) < 2)
-        sayInBar(app, now, "%s", "This video has one sound track.");
+        sayInBar(app, now, "%s", T("This video has one sound track."));
     else if (kind == UI_MENU_SUBTITLES && playerSubtitleCount(p) == 0)
-        sayInBar(app, now, "%s", "This video has no subtitles.");
+        sayInBar(app, now, "%s", T("This video has no subtitles."));
     else if (kind == UI_MENU_AUDIO)
         menuOpen(&app->menu, playerAudioTrackCount(p), 0, playerAudioTrack(p));
     else {
@@ -750,16 +752,16 @@ static void chooseRow(App *app, int row, uint64_t now)
     } else if (app->menu_kind == UI_MENU_AUDIO) {
         if (row != playerAudioTrack(p))
             playerSetAudioTrack(p, row, now);
-        sayInBar(app, now, "Sound: %s", playerAudioTrackName(p, row));
+        sayInBar(app, now, T("Sound: %s"), playerAudioTrackName(p, row));
         rememberTracks(app, playerAudioTrackName(p, row), NULL);
         menuClose(&app->menu);
     } else {
         playerSetSubtitle(p, row - 1);
         menuSetFixed(&app->menu, subtitleOptionRows(p));
         if (row == 0)
-            sayInBar(app, now, "%s", "Subtitles off");
+            sayInBar(app, now, "%s", T("Subtitles off"));
         else
-            sayInBar(app, now, "Subtitles: %s", playerSubtitleLabel(p, row - 1));
+            sayInBar(app, now, T("Subtitles: %s"), playerSubtitleLabel(p, row - 1));
         rememberTracks(app, NULL, row == 0 ? TRACKPREFS_OFF : playerSubtitleLabel(p, row - 1));
     }
 }
@@ -1061,14 +1063,15 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
     bool waiting = app->waiting_since && now - app->waiting_since > SPINNER_DELAY_NS;
     appTrickplayBehind(app, waiting);
     if (waiting && appPlayingLive(app))
-        uiDrawWaiting(spinnerAngle(now), "Tuning in...");  // Live TV waits once at the start, a moment behind the edge.
+        uiDrawWaiting(spinnerAngle(now),
+                      T("Tuning in..."));  // Live TV waits once at the start, a moment behind the edge.
     else if (waiting)
         uiDrawSpinner(GFX_WIDTH / 2.0f, GFX_HEIGHT / 2.0f, spinnerAngle(now));
     else if (stalled && playingStream(app))
-        uiDrawWaiting(spinnerAngle(now), "Waiting for the server...");
+        uiDrawWaiting(spinnerAngle(now), T("Waiting for the server..."));
     char error[160];
     if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.
-        snprintf(app->bar_note, sizeof(app->bar_note), "Sound: %s. %s",
+        snprintf(app->bar_note, sizeof(app->bar_note), T("Sound: %s. %s"),
                  playerAudioTrackName(app->player, playerAudioTrack(app->player)), error);
         app->bar_note_until = now + NOTE_NS;
         app->overlay_until = now + NOTE_NS;
@@ -1221,12 +1224,12 @@ int main(int argc, char **argv)
         }
         if (app.opening && app.open_dismissed && app.queued) {
             uiDrawLoading(app.queued_name, spinnerAngle(now), false);  // Waiting for the last one to let go.
-            uiDrawFooterHelp("[B] cancel");
+            uiDrawFooterHelp(T("[B] cancel"));
         } else if (app.opening && !app.open_dismissed) {
             bool switching = app.live_pending_set;
             uiDrawLoading(switching ? app.live_pending_name : app.playing_name, spinnerAngle(now),
                           app.open_cancelled && !switching);
-            uiDrawFooterHelp(liveIsLocation(app.playing_path) ? "[L][R] channel  [B] cancel" : "[B] cancel");
+            uiDrawFooterHelp(liveIsLocation(app.playing_path) ? T("[L][R] channel  [B] cancel") : T("[B] cancel"));
         } else if (app.player) {
             char error[160] = "";
             bool keep = playerInput(&app, pressed, t, now);

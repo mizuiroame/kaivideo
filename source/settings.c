@@ -4,21 +4,23 @@
 #include <string.h>
 
 #include "background.h"
+#include "lang.h"
 #include "theme.h"
 
 static const char *const LABELS[SETTING_COUNT] = {
-    "SD card folder", "Update the library", "Thumbnails", "Play next episode", "Display", "About",
-    "Theme", "Accent color", "Background", "Background blur", "Clock",
-    "Jellyfin", "Server", "Sign in with a code", "Sign in with a password", "Sign out", "Server video quality",
-    "Find servers on this network", "Test the connection", "Certificate check",
-    "Sign in at plex.tv/link", "Server", "Emby", "Plex", "Library", "Playback", "Color",
+    N_("SD card folder"), N_("Update the library"), N_("Thumbnails"), N_("Play next episode"), N_("Display"),
+    N_("About"), N_("Theme"), N_("Accent color"), N_("Background"), N_("Background blur"), N_("Clock"),
+    N_("Jellyfin"), N_("Server"), N_("Sign in with a code"), N_("Sign in with a password"), N_("Sign out"),
+    N_("Server video quality"), N_("Find servers on this network"), N_("Test the connection"),
+    N_("Certificate check"), N_("Sign in at plex.tv/link"), N_("Server"), N_("Emby"), N_("Plex"), N_("Library"),
+    N_("Playback"), N_("Color"), N_("Language"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX, SETTING_OPEN_PLAYBACK,
      SETTING_OPEN_DISPLAY, SETTING_ABOUT},
-    {SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
+    {SETTING_LANGUAGE, SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
      SETTING_SERVER_COLOR},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
@@ -32,11 +34,12 @@ static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF
 // Emby has no Quick Connect: a user name and password.
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
                                        SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
-static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {"Settings", "Display", "", "Library", "Playback"};
+static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
+                                                              N_("Playback")};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
-    "Your Jellyfin server: sign in with Quick Connect or a password.",
-    "Your Emby server: sign in with its user name and password.",
-    "Your Plex account: sign in at plex.tv/link, and its server is found.",
+    N_("Your Jellyfin server: sign in with Quick Connect or a password."),
+    N_("Your Emby server: sign in with its user name and password."),
+    N_("Your Plex account: sign in at plex.tv/link, and its server is found."),
 };
 
 // Auto: the original when the console can play it, else a good conversion.
@@ -44,19 +47,19 @@ static const struct {
     const char *name;
     long long bitrate;
 } QUALITIES[] = {
-    {"Auto", 25000000},    {"40 Mb/s", 40000000}, {"30 Mb/s", 30000000}, {"20 Mb/s", 20000000},
-    {"15 Mb/s", 15000000}, {"10 Mb/s", 10000000}, {"8 Mb/s", 8000000},   {"6 Mb/s", 6000000},
-    {"4 Mb/s", 4000000},   {"3 Mb/s", 3000000},   {"2 Mb/s", 2000000},   {"1.5 Mb/s", 1500000},
-    {"1 Mb/s", 1000000},   {"720 kb/s", 720000},  {"420 kb/s", 420000},
+    {N_("Auto"), 25000000},    {N_("40 Mb/s"), 40000000}, {N_("30 Mb/s"), 30000000},  {N_("20 Mb/s"), 20000000},
+    {N_("15 Mb/s"), 15000000}, {N_("10 Mb/s"), 10000000}, {N_("8 Mb/s"), 8000000},     {N_("6 Mb/s"), 6000000},
+    {N_("4 Mb/s"), 4000000},   {N_("3 Mb/s"), 3000000},   {N_("2 Mb/s"), 2000000},     {N_("1.5 Mb/s"), 1500000},
+    {N_("1 Mb/s"), 1000000},   {N_("720 kb/s"), 720000},  {N_("420 kb/s"), 420000},
 };
 #define QUALITY_COUNT ((int)(sizeof(QUALITIES) / sizeof(QUALITIES[0])))
 
-static const char *const SIZE_NAMES[SUBTITLES_SIZE_COUNT] = {"Small", "Medium", "Large"};
+static const char *const SIZE_NAMES[SUBTITLES_SIZE_COUNT] = {N_("Small"), N_("Medium"), N_("Large")};
 static const int SIZE_PX[SUBTITLES_SIZE_COUNT] = {28, 34, 42};
-static const char *const COLOR_NAMES[SUBTITLE_COLOR_COUNT] = {"White", "Yellow", "Cyan", "Green"};
+static const char *const COLOR_NAMES[SUBTITLE_COLOR_COUNT] = {N_("White"), N_("Yellow"), N_("Cyan"), N_("Green")};
 static const unsigned COLORS[SUBTITLE_COLOR_COUNT] = {0xF2F2F5, 0xFFE45C, 0x6CE4FF, 0x7CF29A};
-static const char *const STYLE_NAMES[SUBTITLE_STYLE_COUNT] = {"Outline", "Dark box"};
-static const char *const OPTION_LABELS[SUBOPT_COUNT] = {"Size", "Color", "Style", "Font"};
+static const char *const STYLE_NAMES[SUBTITLE_STYLE_COUNT] = {N_("Outline"), N_("Dark box")};
+static const char *const OPTION_LABELS[SUBOPT_COUNT] = {N_("Size"), N_("Color"), N_("Style"), N_("Font")};
 
 static int inRange(int value, int count)
 {
@@ -135,6 +138,8 @@ bool configReadLine(Config *c, const char *line)
         c->subtitle_style = readChoice(value, SUBTITLE_STYLE_COUNT, SUBTITLE_OUTLINE);
     else if (isKey(line, length, "subtitle_font"))  // A name in the fonts folder, never a path.
         snprintf(c->subtitle_font, sizeof(c->subtitle_font), "%s", strpbrk(value, "/\\") ? "" : value);
+    else if (isKey(line, length, "language"))  // An id, or a name in the lang folder: never a path.
+        snprintf(c->language, sizeof(c->language), "%s", strpbrk(value, "/\\") ? "" : value);
     else
         return readServerColor(c, line, length, value);
     return true;
@@ -156,6 +161,8 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
         fprintf(f, "%s=%d\n", SERVER_COLOR_KEYS[k], c->server_color[k]);
+    if (c->language[0] && !strpbrk(c->language, "\r\n"))
+        fprintf(f, "language=%s\n", c->language);
 }
 
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
@@ -181,12 +188,12 @@ const char *settingsPageTitle(SettingsPage page, ServerKind kind)
 {
     if (page == SETTINGS_PAGE_JELLYFIN)
         return serverKindName(kind);
-    return page >= 0 && page < SETTINGS_PAGE_COUNT ? PAGE_TITLES[page] : "";
+    return page >= 0 && page < SETTINGS_PAGE_COUNT ? T(PAGE_TITLES[page]) : "";
 }
 
 const char *settingsPageNote(SettingsPage page, ServerKind kind)
 {
-    return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? SERVER_NOTES[kind] : NULL;
+    return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? T(SERVER_NOTES[kind]) : NULL;
 }
 
 bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind)
@@ -217,14 +224,14 @@ SettingRow settingPageOpener(SettingsPage page, ServerKind kind)
 
 const char *settingLabel(SettingRow row)
 {
-    return row >= 0 && row < SETTING_COUNT ? LABELS[row] : "";
+    return row >= 0 && row < SETTING_COUNT ? T(LABELS[row]) : "";
 }
 
 bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
-           row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR;
+           row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE;
 }
 
 static int wrap(int value, int delta, int count)
@@ -257,17 +264,22 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     switch (row) {
     case SETTING_THEME: snprintf(out, size, "%s", themeName(c->theme)); break;
     case SETTING_ACCENT: snprintf(out, size, "%s", themeAccentName(c->accent)); break;
-    case SETTING_BACKGROUND: snprintf(out, size, "%s", c->background[0] ? c->background : "None"); break;
+    case SETTING_BACKGROUND: snprintf(out, size, "%s", c->background[0] ? c->background : T("None")); break;
     case SETTING_BLUR: snprintf(out, size, "%s", backgroundBlurName(c->blur)); break;
-    case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? "On" : "Off"); break;
-    case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? "24-hour" : "12-hour"); break;
-    case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? "On" : "Off"); break;
-    case SETTING_JF_QUALITY: snprintf(out, size, "%s", QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name); break;
-    case SETTING_JF_CERTIFICATE: snprintf(out, size, "%s", c->jf_check_certificate ? "On" : "Off: any certificate"); break;
+    case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? T("On") : T("Off")); break;
+    case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? T("24-hour") : T("12-hour")); break;
+    case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? T("On") : T("Off")); break;
+    case SETTING_JF_QUALITY:
+        snprintf(out, size, "%s", T(QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name));
+        break;
+    case SETTING_JF_CERTIFICATE:
+        snprintf(out, size, "%s", c->jf_check_certificate ? T("On") : T("Off: any certificate"));
+        break;
+    case SETTING_LANGUAGE: snprintf(out, size, "%s", c->language_name[0] ? c->language_name : "English"); break;
     case SETTING_SERVER_COLOR: {
         int k = inRange(c->server_kind, SERVER_KIND_COUNT), choice = c->server_color[k];
         if (choice <= 0)
-            snprintf(out, size, "%s's own", serverKindName((ServerKind)k));
+            snprintf(out, size, T("%s's own"), serverKindName((ServerKind)k));
         else
             snprintf(out, size, "%s", themeAccentName(choice - 1));
         break;
@@ -288,21 +300,25 @@ int subtitleOptionCount(bool color_applies)
 
 const char *subtitleOptionLabel(SubtitleOption option)
 {
-    return option >= 0 && option < SUBOPT_COUNT ? OPTION_LABELS[option] : "";
+    return option >= 0 && option < SUBOPT_COUNT ? T(OPTION_LABELS[option]) : "";
 }
 
 void subtitleOptionValue(const Config *c, SubtitleOption option, char *out, size_t size)
 {
     switch (option) {
-    case SUBOPT_SIZE: snprintf(out, size, "%s", SIZE_NAMES[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)]); break;
-    case SUBOPT_COLOR: snprintf(out, size, "%s", COLOR_NAMES[inRange(c->subtitle_color, SUBTITLE_COLOR_COUNT)]); break;
-    case SUBOPT_STYLE: snprintf(out, size, "%s", STYLE_NAMES[inRange(c->subtitle_style, SUBTITLE_STYLE_COUNT)]); break;
+    case SUBOPT_SIZE: snprintf(out, size, "%s", T(SIZE_NAMES[inRange(c->subtitles, SUBTITLES_SIZE_COUNT)])); break;
+    case SUBOPT_COLOR:
+        snprintf(out, size, "%s", T(COLOR_NAMES[inRange(c->subtitle_color, SUBTITLE_COLOR_COUNT)]));
+        break;
+    case SUBOPT_STYLE:
+        snprintf(out, size, "%s", T(STYLE_NAMES[inRange(c->subtitle_style, SUBTITLE_STYLE_COUNT)]));
+        break;
     case SUBOPT_FONT: {  // The file's name without its extension.
         const char *dot = strrchr(c->subtitle_font, '.');
         int n = dot && dot != c->subtitle_font ? (int)(dot - c->subtitle_font) : (int)strlen(c->subtitle_font);
-        snprintf(out, size, "%.*s", n, c->subtitle_font[0] ? c->subtitle_font : "Built-in");
+        snprintf(out, size, "%.*s", n, c->subtitle_font[0] ? c->subtitle_font : T("Built-in"));
         if (!c->subtitle_font[0])
-            snprintf(out, size, "Built-in");
+            snprintf(out, size, "%s", T("Built-in"));
         break;
     }
     default: out[0] = '\0'; break;
