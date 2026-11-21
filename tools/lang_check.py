@@ -44,7 +44,7 @@ def c_unescape(body):
 
 def texts_in_code():
     found = {}
-    for path in sorted((ROOT / 'source').glob('*.c')):
+    for path in sorted([*(ROOT / 'source').glob('*.c'), *(ROOT / 'source').glob('*.h')]):
         source = path.read_text(encoding='utf-8')
         for m in CALL.finditer(source):
             parts = re.findall(LITERAL, m.group(1))
@@ -83,6 +83,7 @@ def read_language(path):
 
 
 def main():
+    sys.stdout.reconfigure(encoding='utf-8')  # The texts aren't the console's code page.
     code = texts_in_code()
     if sys.argv[1:] == ['--template']:
         print('# KaiVideo in <language>. Each English line is followed by its translation;')
