@@ -372,7 +372,7 @@ static void libraryHelpScene(const char *name, const char *help)
 {
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
-    uiDrawFooterHelp(help);
+    uiDrawFooterHelp(T(help));
     save(name);
 }
 
@@ -380,7 +380,7 @@ static void libraryScene(const char *name, bool folder_set, const char *status, 
 {
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, folder_set, status, message);
-    uiDrawFooterHelp(HOME_HELP);
+    uiDrawFooterHelp(T(HOME_HELP));
     save(name);
 }
 
@@ -422,12 +422,12 @@ static void collectionScene(void)
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
-    uiDrawFooterHelp(HOME_HELP);
+    uiDrawFooterHelp(T(HOME_HELP));
     save("server_home");
     libviewNextTab(&view, 1);
     begin();
     uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
-    uiDrawFooterHelp(HOME_HELP);
+    uiDrawFooterHelp(T(HOME_HELP));
     save("server_films");
     int found = 0;
     for (int x = 0; x < GFX_WIDTH; x += 4) {
@@ -662,6 +662,12 @@ static void libraryScenes(void)
     uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("library_plex");
     g_colors.accent = chosen_accent;
+    // The network folder as the library's source (its color is app_library.c's NETWORK_COLOR).
+    uiLibrarySetSource(T("Network folder"), GFX_RGB(0x2E, 0xC4, 0xB6));
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("library_network");
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
 
     // Settings and About over Home, in another theme.
