@@ -30,8 +30,8 @@ static void testAddresses(void)
     CHECK_STR(out, "smb://PC/Videos/");
     CHECK(davNormalizeAddress("\\\\PC\\Mis Videos\\Pelis\\", out, sizeof(out)));
     CHECK_STR(out, "smb://PC/Mis Videos/Pelis/");
-    CHECK(davNormalizeAddress(" //192.168.0.168:4450/Videos ", out, sizeof(out)));
-    CHECK_STR(out, "smb://192.168.0.168:4450/Videos/");
+    CHECK(davNormalizeAddress(" //192.168.0.10:4450/Videos ", out, sizeof(out)));
+    CHECK_STR(out, "smb://192.168.0.10:4450/Videos/");
     CHECK(davIsSmbAddress(out) && !davIsSmbAddress("http://pc/"));
     CHECK(!davNormalizeAddress("smb://PC", out, sizeof(out)));
     CHECK(!davNormalizeAddress("\\\\PC\\", out, sizeof(out)));
