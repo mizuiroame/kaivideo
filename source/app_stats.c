@@ -1,4 +1,5 @@
 // The statistics panel over a playing video: sampled while it plays, drawn on ↓.
+#include "dav.h"
 #include "app.h"
 #include "hlsio.h"
 #include "jfsync.h"
@@ -25,7 +26,10 @@ void appStatsDraw(const App *app)
     settingValue(&app->config, SETTING_JF_QUALITY, quality, sizeof(quality));
     bool converted = playerIsConverted(p);
     StatsInfo info = {
-        .source = converted ? STATS_CONVERTED : jfIsRemoteLocation(app->playing_path) && !app->open_copy[0] ? STATS_DIRECT : STATS_CARD,
+        .source = converted                                                    ? STATS_CONVERTED
+                  : davIsLocation(app->playing_path)                           ? STATS_NETWORK
+                  : jfIsRemoteLocation(app->playing_path) && !app->open_copy[0] ? STATS_DIRECT
+                                                                               : STATS_CARD,
         .quality = app->config.jf_quality == 0 ? "" : quality,  // Auto says nothing (in any language).
         .video = playerVideoInfo(p),
         .sound = playerAudioInfo(p),

@@ -16,9 +16,21 @@ void testSettings(void)
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
     // The main page opens the others: the library, each server, playback, display.
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_OPEN_LIBRARY &&
-          rows[1] == SETTING_OPEN_JELLYFIN && rows[2] == SETTING_OPEN_EMBY && rows[3] == SETTING_OPEN_PLEX &&
-          rows[4] == SETTING_OPEN_PLAYBACK && rows[5] == SETTING_OPEN_DISPLAY && rows[6] == SETTING_ABOUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 4 && rows[0] == SETTING_NET_ADDRESS &&
+          rows[3] == SETTING_NET_FORGET);
+    CHECK(settingsPageNote(SETTINGS_PAGE_NETWORK, SERVER_JELLYFIN) != NULL);
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_OPEN_LIBRARY &&
+          rows[1] == SETTING_OPEN_NETWORK && rows[2] == SETTING_OPEN_JELLYFIN && rows[3] == SETTING_OPEN_EMBY &&
+          rows[4] == SETTING_OPEN_PLEX && rows[5] == SETTING_OPEN_PLAYBACK && rows[6] == SETTING_OPEN_DISPLAY &&
+          rows[7] == SETTING_ABOUT);
+    // Every page ends where its list does (none takes an empty row as the first setting).
+    for (int p = 0; p < SETTINGS_PAGE_COUNT; p++)
+        for (int k = 0; k < SERVER_KIND_COUNT; k++)
+            for (int in = 0; in < 2; in++) {
+                int n = settingsPageRows((SettingsPage)p, in, (ServerKind)k, rows);
+                for (int r = 1; r < n; r++)
+                    CHECK(rows[r] != SETTING_LIBRARY);
+            }
     CHECK(!strcmp(settingLabel(SETTING_OPEN_JELLYFIN), "Jellyfin") && !strcmp(settingLabel(SETTING_OPEN_PLEX), "Plex"));
     CHECK(settingsPageRows(SETTINGS_PAGE_LIBRARY, false, SERVER_JELLYFIN, rows) == 3 && rows[0] == SETTING_LIBRARY &&
           rows[1] == SETTING_RESCAN && rows[2] == SETTING_THUMBNAILS);
@@ -28,6 +40,8 @@ void testSettings(void)
     ServerKind opens;
     CHECK(settingOpensPage(SETTING_OPEN_EMBY, &page, &opens) && page == SETTINGS_PAGE_JELLYFIN && opens == SERVER_EMBY);
     CHECK(settingOpensPage(SETTING_OPEN_LIBRARY, &page, &opens) && page == SETTINGS_PAGE_LIBRARY);
+    CHECK(settingOpensPage(SETTING_OPEN_NETWORK, &page, &opens) && page == SETTINGS_PAGE_NETWORK &&
+          settingPageOpener(SETTINGS_PAGE_NETWORK, SERVER_JELLYFIN) == SETTING_OPEN_NETWORK);
     CHECK(!settingOpensPage(SETTING_THUMBNAILS, &page, &opens));
     CHECK(settingPageOpener(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) == SETTING_OPEN_PLEX &&
           settingPageOpener(SETTINGS_PAGE_PLAYBACK, SERVER_JELLYFIN) == SETTING_OPEN_PLAYBACK);

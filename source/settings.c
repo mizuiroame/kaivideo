@@ -13,18 +13,20 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Jellyfin"), N_("Server"), N_("Sign in with a code"), N_("Sign in with a password"), N_("Sign out"),
     N_("Server video quality"), N_("Find servers on this network"), N_("Test the connection"),
     N_("Certificate check"), N_("Sign in at plex.tv/link"), N_("Server"), N_("Emby"), N_("Plex"), N_("Library"),
-    N_("Playback"), N_("Color"), N_("Language"),
+    N_("Playback"), N_("Color"), N_("Language"), N_("Network folder"), N_("Address"), N_("User and password"),
+    N_("Test the connection"), N_("Forget this folder"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
-    {SETTING_OPEN_LIBRARY, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX, SETTING_OPEN_PLAYBACK,
-     SETTING_OPEN_DISPLAY, SETTING_ABOUT},
+    {SETTING_OPEN_LIBRARY, SETTING_OPEN_NETWORK, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX,
+     SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
     {SETTING_LANGUAGE, SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
-     SETTING_SERVER_COLOR},
+     SETTING_SERVER_COLOR, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
+    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -35,7 +37,7 @@ static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
                                        SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
-                                                              N_("Playback")};
+                                                              N_("Playback"), N_("Network folder")};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
     N_("Your Jellyfin server: sign in with Quick Connect or a password."),
     N_("Your Emby server: sign in with its user name and password."),
@@ -193,6 +195,8 @@ const char *settingsPageTitle(SettingsPage page, ServerKind kind)
 
 const char *settingsPageNote(SettingsPage page, ServerKind kind)
 {
+    if (page == SETTINGS_PAGE_NETWORK)
+        return T("A WebDAV folder on your network: a NAS, Nextcloud or a computer. Files shows it first.");
     return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? T(SERVER_NOTES[kind]) : NULL;
 }
 
@@ -203,6 +207,7 @@ bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind)
     case SETTING_OPEN_DISPLAY: *page = SETTINGS_PAGE_DISPLAY; return true;
     case SETTING_OPEN_LIBRARY: *page = SETTINGS_PAGE_LIBRARY; return true;
     case SETTING_OPEN_PLAYBACK: *page = SETTINGS_PAGE_PLAYBACK; return true;
+    case SETTING_OPEN_NETWORK: *page = SETTINGS_PAGE_NETWORK; return true;
     case SETTING_OPEN_JELLYFIN: *page = SETTINGS_PAGE_JELLYFIN; return true;
     case SETTING_OPEN_EMBY: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_EMBY; return true;
     case SETTING_OPEN_PLEX: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_PLEX; return true;
@@ -216,6 +221,7 @@ SettingRow settingPageOpener(SettingsPage page, ServerKind kind)
     case SETTINGS_PAGE_DISPLAY: return SETTING_OPEN_DISPLAY;
     case SETTINGS_PAGE_LIBRARY: return SETTING_OPEN_LIBRARY;
     case SETTINGS_PAGE_PLAYBACK: return SETTING_OPEN_PLAYBACK;
+    case SETTINGS_PAGE_NETWORK: return SETTING_OPEN_NETWORK;
     case SETTINGS_PAGE_JELLYFIN:
         return kind == SERVER_PLEX ? SETTING_OPEN_PLEX : kind == SERVER_EMBY ? SETTING_OPEN_EMBY : SETTING_OPEN_JELLYFIN;
     default: return SETTING_OPEN_LIBRARY;

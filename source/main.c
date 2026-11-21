@@ -18,6 +18,7 @@
 #include "approot.h"
 #include "audio.h"
 #include "browser.h"
+#include "dav.h"
 #include "buttons.h"
 #include "font.h"
 #include "font_bold_ttf.h"
@@ -116,7 +117,8 @@ void appSaveSettings(const App *app)
     FILE *f = fopen(path, "w");
     if (!f)
         return;
-    if (!strpbrk(app->browser.path, "\r\n"))
+    // A network folder isn't kept: KaiVideo would start by waiting for its server.
+    if (!strpbrk(app->browser.path, "\r\n") && !davIsLocation(app->browser.path))
         fprintf(f, "folder=%s\n", app->browser.path);
     if (app->library_root[0] && !strpbrk(app->library_root, "\r\n"))
         fprintf(f, "library=%s\n", app->library_root);
@@ -1165,6 +1167,7 @@ int main(int argc, char **argv)
     thumbsInit(path);
     sysinfoInit();
     appSettingsStart(&app);
+    appNetworkStart(&app);  // After the language: Files names the folder in it.
     appDownloadsStart(&app);  // Before the library: the card's downloads take their servers' names.
     appLibraryStart(&app);
     InputRepeat repeat;
@@ -1179,6 +1182,7 @@ int main(int argc, char **argv)
         TouchEvent t = readTouch(&touch, now);
         appLibraryUpdate(&app);
         appJellyfinUpdate(&app, now);
+        appNetworkUpdate(&app, now);
         appDownloadsUpdate(&app, now);
         appLiveUpdate(&app, now);
         updateScreenKeeping(&app);

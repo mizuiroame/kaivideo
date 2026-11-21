@@ -43,3 +43,4 @@ void testKinetic(void);
 void testHlsMaster(void);
 void testDownloads(void);
 void testLang(void);
+void testDav(void);

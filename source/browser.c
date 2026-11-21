@@ -41,10 +41,48 @@ static bool join(char *out, size_t size, const char *folder, const char *name)
     return n > 0 && (size_t)n < size;
 }
 
+static bool grow(Browser *b, size_t *capacity)
+{
+    if (b->count < *capacity)
+        return true;
+    size_t grown = *capacity ? *capacity * 2 : 64;
+    BrowserEntry *items = realloc(b->items, grown * sizeof(BrowserEntry));
+    if (!items)
+        return false;
+    b->items = items;
+    *capacity = grown;
+    return true;
+}
+
+static bool openNetwork(Browser *b, const char *path)
+{
+    DavEntry *entries = NULL;
+    size_t count = 0, capacity = 0;
+    if (!b->network || !b->network(path, &entries, &count, b->problem, sizeof(b->problem)))
+        return false;
+    for (size_t i = 0; i < count; i++) {
+        const DavEntry *e = &entries[i];
+        if (hidden(e->name, false) || (!e->is_dir && !browserIsVideo(e->name)) || !grow(b, &capacity))
+            continue;
+        BrowserEntry *item = &b->items[b->count++];
+        snprintf(item->name, sizeof(item->name), "%s", e->name);
+        item->is_dir = e->is_dir;
+        item->is_network = false;
+        item->size = e->size;
+    }
+    free(entries);
+    if (b->count > 1)
+        qsort(b->items, b->count, sizeof(BrowserEntry), compareEntries);
+    return true;
+}
+
 bool browserOpen(Browser *b, const char *path)
 {
     browserFree(b);
     snprintf(b->path, sizeof(b->path), "%s", path);
+    b->problem[0] = '\0';
+    if (davIsLocation(path))
+        return openNetwork(b, path);
     DIR *dir = opendir(path);
     if (!dir)
         return false;
@@ -61,17 +99,12 @@ bool browserOpen(Browser *b, const char *path)
             is_dir = S_ISDIR(st.st_mode);  // The file system didn't say: ask.
         if (!is_dir && !browserIsVideo(e->d_name))
             continue;
-        if (b->count == capacity) {
-            size_t grown = capacity ? capacity * 2 : 64;
-            BrowserEntry *items = realloc(b->items, grown * sizeof(BrowserEntry));
-            if (!items)
-                break;
-            b->items = items;
-            capacity = grown;
-        }
+        if (!grow(b, &capacity))
+            break;
         BrowserEntry *item = &b->items[b->count++];
         snprintf(item->name, sizeof(item->name), "%s", e->d_name);
         item->is_dir = is_dir;
+        item->is_network = false;
         item->size = -1;
         if (!is_dir && join(full, sizeof(full), path, e->d_name) && stat(full, &st) == 0)
             item->size = (int64_t)st.st_size;
@@ -79,6 +112,14 @@ bool browserOpen(Browser *b, const char *path)
     closedir(dir);
     if (b->count > 1)
         qsort(b->items, b->count, sizeof(BrowserEntry), compareEntries);
+    if (at_root && b->network && grow(b, &capacity)) {  // First, above the card's folders.
+        memmove(b->items + 1, b->items, b->count * sizeof(BrowserEntry));
+        b->count++;
+        BrowserEntry *item = &b->items[0];
+        snprintf(item->name, sizeof(item->name), "%s", b->network_name);
+        item->is_dir = item->is_network = true;
+        item->size = -1;
+    }
     return true;
 }
 
@@ -96,13 +137,20 @@ bool browserEnter(Browser *b)
 {
     if (b->cursor >= b->count || !b->items[b->cursor].is_dir)
         return false;
-    char path[BROWSER_PATH_MAX], previous[BROWSER_PATH_MAX];
-    if (!join(path, sizeof(path), b->path, b->items[b->cursor].name))
+    char path[BROWSER_PATH_MAX], previous[BROWSER_PATH_MAX], name[BROWSER_NAME_MAX];
+    if (b->items[b->cursor].is_network)
+        snprintf(path, sizeof(path), "%s", DAV_ROOT);
+    else if (!join(path, sizeof(path), b->path, b->items[b->cursor].name))
         return false;
     snprintf(previous, sizeof(previous), "%s", b->path);
+    snprintf(name, sizeof(name), "%s", b->items[b->cursor].name);
     if (browserOpen(b, path))
         return true;
-    browserOpen(b, previous);  // Unreadable: stay where it was.
+    char problem[BROWSER_PROBLEM_MAX];  // Unreadable: stay where it was, saying why.
+    snprintf(problem, sizeof(problem), "%s", b->problem);
+    browserOpen(b, previous);
+    browserSelect(b, name);
+    snprintf(b->problem, sizeof(b->problem), "%s", problem);
     return false;
 }
 
@@ -110,6 +158,11 @@ bool browserUp(Browser *b)
 {
     if (strcmp(b->path, BROWSER_ROOT) == 0)
         return false;
+    if (strcmp(b->path, DAV_ROOT) == 0) {  // Back to the card's top, on the network folder.
+        browserOpen(b, BROWSER_ROOT);
+        b->cursor = 0;
+        return true;
+    }
     char parent[BROWSER_PATH_MAX], child[BROWSER_NAME_MAX];
     snprintf(parent, sizeof(parent), "%s", b->path);
     char *slash = strrchr(parent, '/');
@@ -132,6 +185,10 @@ bool browserSelectedPath(const Browser *b, char *out, size_t size)
 
 bool browserEntryPath(const Browser *b, size_t i, char *out, size_t size)
 {
+    if (i < b->count && b->items[i].is_network) {
+        snprintf(out, size, "%s", DAV_ROOT);
+        return true;
+    }
     return i < b->count && join(out, size, b->path, b->items[i].name);
 }
 

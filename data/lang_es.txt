@@ -1292,3 +1292,66 @@ Tu servidor convierte este formato para la consola.
 
 [ZL][ZR] tabs  [+] menu
 [ZL][ZR] pestañas  [+] menú
+
+A WebDAV folder on your network: a NAS, Nextcloud or a computer. Files shows it first.
+Una carpeta WebDAV de tu red: un NAS, Nextcloud o una computadora. Aparece primero en Archivos.
+
+Address
+Dirección
+
+Enter the folder's address first.
+Primero escribe la dirección de la carpeta.
+
+Forget this folder
+Olvidar esta carpeta
+
+Network folder
+Carpeta de red
+
+Network folder set: test the connection, or open it in Files.
+Carpeta de red lista: prueba la conexión, o ábrela en Archivos.
+
+Network folder · %s
+Carpeta de red · %s
+
+Nothing answered at that address and port. Is the server on, and is the port right?
+Nada respondió en esa dirección y puerto. ¿Está encendido el servidor y es el puerto correcto?
+
+Set up the network folder in Settings first.
+Primero configura la carpeta de red en Configuración.
+
+That address answers, but it isn't a WebDAV folder. Check the path after the port.
+Esa dirección responde, pero no es una carpeta WebDAV. Revisa la ruta después del puerto.
+
+That folder isn't on the server.
+Esa carpeta no está en el servidor.
+
+That folder's name is too long.
+El nombre de esa carpeta es demasiado largo.
+
+That isn't a WebDAV address (http:// or https://).
+Esa no es una dirección WebDAV (http:// o https://).
+
+The network folder answers. At its top: folders %d, videos %d.
+La carpeta de red responde. En su nivel principal: carpetas %d, videos %d.
+
+The network folder is forgotten.
+Se olvidó la carpeta de red.
+
+The server doesn't let this user see that folder.
+El servidor no deja que este usuario vea esa carpeta.
+
+The server's certificate isn't trusted.
+El certificado del servidor no es de confianza.
+
+User and password
+Usuario y contraseña
+
+User name (empty: none)
+Usuario (vacío: ninguno)
+
+WebDAV address, like 192.168.0.10:8098/videos
+Dirección WebDAV, por ejemplo 192.168.0.10:8098/videos
+
+Playing: from the network folder
+Reproduciendo: desde la carpeta de red

@@ -393,7 +393,11 @@ static void activate(App *app, SettingRow row, uint64_t now)
             askNetwork(app, row, now);
         break;
     case SETTING_ABOUT: app->about_open = true; break;
-    default: change(app, row, 1, now); break;
+    case SETTING_OPEN_NETWORK: openPage(app, SETTINGS_PAGE_NETWORK); break;
+    default:
+        if (!appNetworkActivate(app, row, now))
+            change(app, row, 1, now);
+        break;
     }
 }
 
@@ -501,6 +505,7 @@ void appSettingsDraw(const App *app)
         names[k] = users[k];
     }
     uiSettingsSetServers(names);
+    appNetworkFeedSettings();
     if (app->jf_signing)
         uiDrawSignInCode(app->config.server_kind == SERVER_PLEX, app->jf.code, server, app->jf.linked);
     else if (app->about_open)

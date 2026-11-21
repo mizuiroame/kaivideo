@@ -16,3 +16,5 @@ void uiSettingsSetJellyfin(const char *server, const char *user);
 void uiDrawSignInCode(bool plex, const char *code, const char *server, bool linked);
 // Who's signed in to each server ("" for none), shown on the main page's rows.
 void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT]);
+// What the network folder's rows say: its address and user ("" for none).
+void uiSettingsSetNetwork(const char *address, const char *user);

@@ -45,6 +45,7 @@ static void describeSource(const StatsInfo *info, char *out, size_t size)
     switch (info->source) {
     case STATS_CARD: snprintf(out, size, "%s", T("Playing: from the SD card")); break;
     case STATS_DIRECT: snprintf(out, size, "%s", T("Playing: the original file from Jellyfin")); break;
+    case STATS_NETWORK: snprintf(out, size, "%s", T("Playing: from the network folder")); break;
     case STATS_CONVERTED:
         if (info->quality && info->quality[0])
             snprintf(out, size, T("Playing: converted by Jellyfin, at most %s"), info->quality);

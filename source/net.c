@@ -124,6 +124,11 @@ static struct curl_slist *buildHeaders(const NetRequest *r)
         headers = curl_slist_append(headers, "Content-Type: application/json");
     if (r->accept_json)
         headers = curl_slist_append(headers, "Accept: application/json");
+    if (r->depth) {
+        char line[HEADER_MAX];
+        snprintf(line, sizeof(line), "Depth: %s", r->depth);
+        headers = curl_slist_append(headers, line);
+    }
     return headers;
 }
 

@@ -8,7 +8,7 @@
 #include "jellyfin.h"
 
 #define SETTINGS_NAME_MAX 128
-#define SETTINGS_PAGE_MAX_ROWS 7
+#define SETTINGS_PAGE_MAX_ROWS 8
 
 typedef enum {
     SETTING_LIBRARY,       // Opens the folder picker.
@@ -39,6 +39,11 @@ typedef enum {
     SETTING_OPEN_PLAYBACK,  // Opens the Playback page.
     SETTING_SERVER_COLOR,   // The color a server's library wears (its own, or an accent).
     SETTING_LANGUAGE,       // The language KaiVideo is shown in (languages.h; the app steps it).
+    SETTING_OPEN_NETWORK,   // Opens the network folder's page.
+    SETTING_NET_ADDRESS,    // Types the network folder's address.
+    SETTING_NET_ACCOUNT,    // Types its user name and password.
+    SETTING_NET_TEST,       // Asks it for its top folder.
+    SETTING_NET_FORGET,     // Forgets it: address, user and password.
     SETTING_COUNT,
 } SettingRow;
 
@@ -50,6 +55,7 @@ typedef enum {
     SETTINGS_PAGE_JELLYFIN,
     SETTINGS_PAGE_LIBRARY,
     SETTINGS_PAGE_PLAYBACK,
+    SETTINGS_PAGE_NETWORK,
     SETTINGS_PAGE_COUNT
 } SettingsPage;
 

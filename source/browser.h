@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "dav.h"
+
 #define BROWSER_PATH_MAX 512
 #define BROWSER_NAME_MAX 256
 #define BROWSER_ROOT "sdmc:/"
@@ -13,8 +15,14 @@
 typedef struct {
     char name[BROWSER_NAME_MAX];
     bool is_dir;
-    int64_t size;  // Bytes, for videos; -1 if unknown.
+    bool is_network;  // The card's top: the network folder's entry, opening DAV_ROOT.
+    int64_t size;     // Bytes, for videos; -1 if unknown.
 } BrowserEntry;
+
+// Lists a network folder (davList's shape). False with why if it can't.
+typedef bool (*BrowserLister)(const char *path, DavEntry **out, size_t *count, char *why, size_t why_size);
+
+#define BROWSER_PROBLEM_MAX 192
 
 typedef struct {
     char path[BROWSER_PATH_MAX];  // "sdmc:/" or "sdmc:/Videos/Series", no trailing slash but the root's.
@@ -25,12 +33,18 @@ typedef struct {
     // Not free, the list keeps the cursor in its middle.
     bool free;
     int first, offset;
+    // Files sets these: with a lister, the card's top starts with the network
+    // folder's entry (named so), and "dav:/" paths are listed through it.
+    BrowserLister network;
+    char network_name[BROWSER_NAME_MAX];
+    char problem[BROWSER_PROBLEM_MAX];  // Why the last folder couldn't be listed; "" if it could.
 } Browser;
 
 // True for the files KaiVideo plays: .mp4, .m4v, .mkv and .webm.
 bool browserIsVideo(const char *name);
 
-// Lists path. False (and the browser left empty at that path) if it can't be read.
+// Lists path. False (and the browser left empty at that path, with problem
+// set for a network folder) if it can't be read.
 bool browserOpen(Browser *b, const char *path);
 void browserFree(Browser *b);
 

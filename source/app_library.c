@@ -473,7 +473,7 @@ static void openEntry(App *app, Browser *b, bool picking, uint64_t now)
         return;
     if (b->items[b->cursor].is_dir) {
         if (!browserEnter(b))
-            appShowMessage(app, T("That folder can't be opened."), now);
+            appShowMessage(app, b->problem[0] ? b->problem : T("That folder can't be opened."), now);
     } else if (!picking) {
         char path[BROWSER_PATH_MAX];
         if (browserSelectedPath(b, path, sizeof(path)) && appStartVideo(app, path, b->items[b->cursor].name, now))

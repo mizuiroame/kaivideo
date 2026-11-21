@@ -12,6 +12,7 @@
 #include <libavutil/mem.h>
 
 #include "blockcache.h"
+#include "davnet.h"
 #include "hlsio.h"
 #include "jfsync.h"
 #include "net.h"
@@ -23,6 +24,7 @@
 #define NS_PER_MS 1000000L
 #define HTTP_PARTIAL 206
 
+#define REMOTE_URL_MAX 2048    // A network folder's paths, percent-encoded, run long.
 #define REMOTE_READERS 3      // Picture, sound, and a sound being changed.
 
 static unsigned g_interrupts;    // Files opened before the last interrupt give up.
@@ -33,7 +35,7 @@ typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t wake;  // The reader moved, a block came, or stop.
     NetClient *net;
-    char url[JF_URL_MAX], authorization[JF_AUTH_MAX];
+    char url[REMOTE_URL_MAX], authorization[JF_AUTH_MAX];
     BlockSlot slots[BLOCK_SLOTS];
     uint8_t *memory;       // BLOCK_SLOTS blocks.
     char location[LIBRARY_PATH_MAX];
@@ -274,7 +276,9 @@ static Remote *remoteOpen(const char *location)
     r->interrupts = __atomic_load_n(&g_interrupts, __ATOMIC_RELAXED);
     r->memory = malloc((size_t)BLOCK_SLOTS * BLOCK_SIZE);
     r->net = netClientOpen();
-    bool ok = r->memory && r->net && jfSyncStreamRequest(location, r->url, sizeof(r->url), r->authorization,
+    bool (*request)(const char *, char *, size_t, char *, size_t) =
+        davIsLocation(location) ? davStreamRequest : jfSyncStreamRequest;
+    bool ok = r->memory && r->net && request(location, r->url, sizeof(r->url), r->authorization,
                                                          sizeof(r->authorization));
     r->thread_started = ok && pthread_create(&r->thread, NULL, fetchThread, r) == 0;
     if (!r->thread_started) {
@@ -354,7 +358,7 @@ MediaFile *mediaFileOpen(const char *location)
     MediaFile *f = calloc(1, sizeof(*f));
     if (!f)
         return NULL;
-    if (jfIsRemoteLocation(location))
+    if (jfIsRemoteLocation(location) || davIsLocation(location))
         remoteAttach(f, location);
     else
         f->file = fopen(location, "rb");

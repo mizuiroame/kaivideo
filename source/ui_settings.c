@@ -57,6 +57,13 @@ static void rowHighlight(int x, int y, int w, int h, Color mark)
 }
 
 static const char *g_jf_server = "", *g_jf_user = "";
+static const char *g_net_address = "", *g_net_user = "";
+
+void uiSettingsSetNetwork(const char *address, const char *user)
+{
+    g_net_address = address;
+    g_net_user = user;
+}
 static const char *g_users[SERVER_KIND_COUNT] = {"", "", ""};
 
 void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT])
@@ -88,6 +95,10 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "KaiVideo %s", version);
     } else if (row == SETTING_JF_SERVER || row == SETTING_PLEX_SERVER) {
         snprintf(out, size, "%s", g_jf_server[0] ? g_jf_server : T("Not set"));
+    } else if (row == SETTING_OPEN_NETWORK || row == SETTING_NET_ADDRESS) {
+        snprintf(out, size, "%s", g_net_address[0] ? g_net_address : T("Not set"));
+    } else if (row == SETTING_NET_ACCOUNT) {
+        snprintf(out, size, "%s", g_net_user[0] ? g_net_user : T("None"));
     } else if (row == SETTING_JF_SIGN_OUT) {
         snprintf(out, size, "%s", g_jf_user);
     } else if (row == SETTING_OPEN_JELLYFIN || row == SETTING_OPEN_EMBY || row == SETTING_OPEN_PLEX) {

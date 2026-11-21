@@ -37,6 +37,7 @@ typedef enum {
     STATS_CARD,       // A file on the SD card.
     STATS_DIRECT,     // The original file from Jellyfin.
     STATS_CONVERTED,  // Converted by the server.
+    STATS_NETWORK,    // A file in the network folder (dav.h).
 } StatsSource;
 
 typedef struct {

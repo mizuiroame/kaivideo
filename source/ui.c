@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "dav.h"
 #include "font.h"
 #include "gfx.h"
 #include "lang.h"
@@ -102,7 +103,15 @@ void uiDrawBrowser(const Browser *b, const ResumeList *resume, BrowseMode mode)
         gfxLine((float)x + 3, y + 11, (float)x + 10, y + 18, 3, COLOR_TEXT);
         x += 22;
     }
-    fontDrawClipped(FONT_REGULAR, 19, x, y, GFX_WIDTH - MARGIN - x, b->path, can_go_up ? COLOR_TEXT : COLOR_DIM);
+    char shown[BROWSER_PATH_MAX + BROWSER_NAME_MAX];
+    if (davIsLocation(b->path))  // "Network folder · 192.168.0.10:8098/Movies", not "dav:/Movies".
+        snprintf(shown, sizeof(shown), "%s%s", b->network_name, b->path + sizeof(DAV_PREFIX) - 2);
+    else
+        snprintf(shown, sizeof(shown), "%s", b->path);
+    size_t shown_length = strlen(shown);
+    if (shown_length > 1 && shown[shown_length - 1] == '/' && davIsLocation(b->path))
+        shown[shown_length - 1] = '\0';
+    fontDrawClipped(FONT_REGULAR, 19, x, y, GFX_WIDTH - MARGIN - x, shown, can_go_up ? COLOR_TEXT : COLOR_DIM);
 
     if (b->count == 0) {
         fontDrawCentered(FONT_BOLD, 24, GFX_WIDTH / 2.0f, 300, T("No videos or folders here."), COLOR_TEXT);

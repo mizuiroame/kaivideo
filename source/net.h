@@ -24,6 +24,7 @@ typedef struct {
     const char *post_json;        // POSTs this as JSON; NULL for a GET.
     const char *range;            // "100-199" or "100-"; NULL for everything.
     const char *custom_method;    // "DELETE" and the like, instead of GET or POST.
+    const char *depth;            // WebDAV's Depth header ("1"), or NULL.
     long long *total_size;        // If not NULL, gets the whole file's size from a range's answer.
     const volatile bool *cancel;  // Stops the transfer when it becomes true; may be NULL.
     long timeout_s;               // For the whole transfer; 0: as long as data keeps coming.

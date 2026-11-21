@@ -677,10 +677,10 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
     save("settings");
-    // The main page's rows: 48 high from 76 below the panel's top (7 rows, a 60 footer).
-    int top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2 + 76;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 6 * 48 + 20), outside = uiLibraryTap(20, 400);
-    LibHit plex_row = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
+    // The main page's rows: 48 high from 76 below the panel's top (8 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 8 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 7 * 48 + 20), outside = uiLibraryTap(20, 400);
+    LibHit plex_row = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
         plex_row.kind != LIBHIT_SETTING || plex_row.a != SETTING_OPEN_PLEX) {
         printf("TOUCH: settings: a row or the outside doesn't answer as drawn (%d %d %d)\n", about.kind, plex_row.kind,
@@ -812,6 +812,14 @@ static void libraryScenes(void)
     libraryScene("lib_no_folder", false, NULL, NULL);
     libraryScene("lib_message", true, NULL, "The keyboard couldn't open.");
 
+    // The network folder's page.
+    uiSettingsSetNetwork("192.168.0.10:8098/videos", "kai");
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawSettings(&config, SETTINGS_PAGE_NETWORK, SETTING_NET_ACCOUNT, "sdmc:/Media/Videos", "1.9.0");
+    uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
+    save("settings_network");
+
     // Files and the folder picker: the folder list.
     static Browser b;
     b.items = calloc(4, sizeof(BrowserEntry));
@@ -833,6 +841,36 @@ static void libraryScenes(void)
     uiDrawFooterHelp(T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu"));
     save("lib_files");
     checkTabTaps("lib_files");
+
+    // Files at the card's top, the network folder first; then inside it.
+    static Browser top_b;
+    top_b.items = calloc(3, sizeof(BrowserEntry));
+    snprintf(top_b.path, sizeof(top_b.path), "%s", "sdmc:/");
+    snprintf(top_b.network_name, sizeof(top_b.network_name), T("Network folder · %s"), "192.168.0.10:8098/videos");
+    snprintf(top_b.items[0].name, sizeof(top_b.items[0].name), "%s", top_b.network_name);
+    top_b.items[0].is_dir = top_b.items[0].is_network = true;
+    snprintf(top_b.items[1].name, sizeof(top_b.items[1].name), "%s", "Media");
+    snprintf(top_b.items[2].name, sizeof(top_b.items[2].name), "%s", "switch");
+    top_b.items[1].is_dir = top_b.items[2].is_dir = true;
+    top_b.items[0].size = top_b.items[1].size = top_b.items[2].size = -1;
+    top_b.count = 3;
+    begin();
+    gfxClear(COLOR_BG);
+    uiDrawTabBar(&g_view, &g_lib, NULL);
+    uiDrawBrowser(&top_b, &g_resume, BROWSE_FILES);
+    uiDrawFooterStrip();
+    uiDrawFooterHelp(T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu"));
+    save("lib_files_network");
+    snprintf(b.path, sizeof(b.path), "%s", "dav:/Movies");
+    snprintf(b.network_name, sizeof(b.network_name), "%s", top_b.network_name);
+    begin();
+    gfxClear(COLOR_BG);
+    uiDrawTabBar(&g_view, &g_lib, NULL);
+    uiDrawBrowser(&b, &g_resume, BROWSE_FILES);
+    uiDrawFooterStrip();
+    uiDrawFooterHelp(T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu"));
+    save("lib_files_in_network");
+    snprintf(b.path, sizeof(b.path), "%s", "sdmc:/Media/Movies");
     begin();
     gfxClear(COLOR_BG);
     uiDrawBrowser(&b, &g_resume, BROWSE_PICK);

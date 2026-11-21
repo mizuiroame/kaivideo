@@ -208,6 +208,16 @@ void appJellyfinPlaybackStarted(App *app, uint64_t now);
 void appJellyfinPlaybackTick(App *app, uint64_t now);
 void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
 
+// app_network.c: the network folder (dav.h).
+// Reads its account, and puts it at the top of Files.
+void appNetworkStart(App *app);
+// A Settings row of its page: true if it was one.
+bool appNetworkActivate(App *app, SettingRow row, uint64_t now);
+// Once a frame: a test's answer.
+void appNetworkUpdate(App *app, uint64_t now);
+// What its rows say, before Settings is drawn.
+void appNetworkFeedSettings(void);
+
 // app_live.c
 // Once a frame: reads the guide now and then (often while its tab shows), and takes it when read.
 void appLiveUpdate(App *app, uint64_t now);
