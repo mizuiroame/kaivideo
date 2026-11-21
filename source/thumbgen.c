@@ -27,19 +27,26 @@
 #define IMAGE_TIMEOUT_S 20L
 #define FETCH_SCALE 2
 #define IMAGE_MAX_PIXELS (16 * 1000 * 1000)
+#define STALE_FRAMES 20               // Not asked for this many frames: off the screen, dropped (asked again when shown).
 
 typedef struct {
     char path[PATH_MAX_LEN], jpg[PATH_MAX_LEN];
     uint64_t key;
     bool large;
+    uint64_t frame;  // The last frame that asked for it (drew it).
+    uint32_t order;  // Its place among that frame's: the screen is drawn from its top left.
 } Request;
 
 static Thread g_thread;
 static bool g_started;
 static Mutex g_lock;
 static CondVar g_wake;
-static Request g_queue[QUEUE_MAX];   // A stack: the latest asked is made first.
+// What's on screen now is made first, in the order it's drawn (top left
+// first); what left the screen is dropped.
+static Request g_queue[QUEUE_MAX];
 static int g_count;
+static uint64_t g_frame;             // thumbgenNextFrame's count.
+static uint32_t g_order;             // Requests in this frame so far.
 static uint64_t g_done[QUEUE_MAX];
 static int g_done_count;
 static volatile bool g_stop, g_paused;
@@ -169,6 +176,25 @@ static bool make(const Request *r)
     return !interrupted;
 }
 
+// The request to make next, under g_lock: the latest frame's, first drawn;
+// requests no frame has asked for lately go. -1 if none is left.
+static int nextRequest(void)
+{
+    int kept = 0;
+    for (int i = 0; i < g_count; i++)
+        if (g_queue[i].frame + STALE_FRAMES >= g_frame)
+            g_queue[kept++] = g_queue[i];
+    g_count = kept;
+    int best = -1;
+    for (int i = 0; i < g_count; i++) {
+        const Request *q = &g_queue[i];
+        if (best < 0 || q->frame > g_queue[best].frame ||
+            (q->frame == g_queue[best].frame && q->order < g_queue[best].order))
+            best = i;
+    }
+    return best;
+}
+
 static void thumbThread(void *arg)
 {
     (void)arg;
@@ -179,7 +205,12 @@ static void thumbThread(void *arg)
             condvarWait(&g_wake, &g_lock);
             continue;
         }
-        r = g_queue[--g_count];
+        int at = nextRequest();
+        if (at < 0)
+            continue;  // All were off the screen.
+        r = g_queue[at];
+        memmove(&g_queue[at], &g_queue[at + 1], (size_t)(g_count - at - 1) * sizeof(Request));
+        g_count--;
         g_busy = true;
         mutexUnlock(&g_lock);
         bool finished = make(&r);
@@ -234,16 +265,19 @@ void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool 
         return;
     mutexLock(&g_lock);
     for (int i = 0; i < g_count; i++) {
-        if (g_queue[i].key == key) {  // Asked again: to the top.
-            Request r = g_queue[i];
-            memmove(&g_queue[i], &g_queue[i + 1], (size_t)(g_count - i - 1) * sizeof(Request));
-            g_queue[g_count - 1] = r;
+        if (g_queue[i].key == key) {  // Drawn again: still on screen, in this place.
+            g_queue[i].frame = g_frame;
+            g_queue[i].order = g_order++;
             mutexUnlock(&g_lock);
             return;
         }
     }
-    if (g_count == QUEUE_MAX) {  // The oldest request drops off; it's asked again when shown.
-        memmove(&g_queue[0], &g_queue[1], (QUEUE_MAX - 1) * sizeof(Request));
+    if (g_count == QUEUE_MAX) {  // Full: the one asked longest ago goes; it's asked again when shown.
+        int oldest = 0;
+        for (int i = 1; i < g_count; i++)
+            if (g_queue[i].frame < g_queue[oldest].frame)
+                oldest = i;
+        memmove(&g_queue[oldest], &g_queue[oldest + 1], (size_t)(g_count - oldest - 1) * sizeof(Request));
         g_count--;
     }
     Request *r = &g_queue[g_count++];
@@ -251,7 +285,19 @@ void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool 
     snprintf(r->jpg, sizeof(r->jpg), "%s", jpg_path);
     r->key = key;
     r->large = large;
+    r->frame = g_frame;
+    r->order = g_order++;
     condvarWakeAll(&g_wake);
+    mutexUnlock(&g_lock);
+}
+
+void thumbgenNextFrame(void)
+{
+    if (!g_started)
+        return;
+    mutexLock(&g_lock);
+    g_frame++;
+    g_order = 0;
     mutexUnlock(&g_lock);
 }
 

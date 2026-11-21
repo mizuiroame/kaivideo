@@ -32,6 +32,8 @@ ThumbFileKind thumbgenFileKind(long long size);
 void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool large);
 // True once for each finished request: its key.
 bool thumbgenTakeDone(uint64_t *key);
+// Once a frame, before it's drawn: what it asks for is what's on screen now.
+void thumbgenNextFrame(void);
 // Paused, the thread lets go of the decoder (waiting for it) and makes
 // nothing until resumed.
 void thumbgenPause(bool paused);

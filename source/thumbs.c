@@ -191,6 +191,7 @@ void thumbsUpdate(void)
 {
     g_frame++;
     g_loads = 0;
+    thumbgenNextFrame();
     uint64_t key;
     while (thumbgenTakeDone(&key)) {
         Entry *e = find(key, false);
