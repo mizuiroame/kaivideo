@@ -70,7 +70,7 @@ ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map) \
 			-Wl,--wrap=__syscall_thread_create
 
-LIBS	:= -lavfilter -lavformat -lavcodec -lswresample -lavutil \
+LIBS	:= -lsmb2 -lavfilter -lavformat -lavcodec -lswresample -lavutil \
 			-lass -lfreetype -lharfbuzz -lfreetype -lfribidi -lpng -lbz2 -lcurl -ljansson -lz -lnx -lm
 ifeq ($(GPU),1)
 LIBS	:= -lEGL $(LIBS)

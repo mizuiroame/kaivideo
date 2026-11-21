@@ -17,7 +17,6 @@ static void testAddresses(void)
     CHECK_STR(out, "HTTP://Box:80/share/");
     CHECK(!davNormalizeAddress("", out, sizeof(out)));
     CHECK(!davNormalizeAddress("http://", out, sizeof(out)));
-    CHECK(!davNormalizeAddress("smb://pc/share", out, sizeof(out)));
     CHECK(!davNormalizeAddress("my pc:8098", out, sizeof(out)));
     CHECK(!davNormalizeAddress("ftp://pc", out, sizeof(out)));
     CHECK(!davNormalizeAddress("http://me:secret@pc:8098/", out, sizeof(out)));
@@ -25,6 +24,44 @@ static void testAddresses(void)
     CHECK(davSameServer("http://pc:8098/a/", "HTTP://PC:8098/b/"));
     CHECK(!davSameServer("http://pc:8098/", "http://pc:8099/"));
     CHECK(!davSameServer("http://pc/", "https://pc/"));
+
+    // SMB: a Windows shared folder, typed either way.
+    CHECK(davNormalizeAddress("smb://PC/Videos", out, sizeof(out)));
+    CHECK_STR(out, "smb://PC/Videos/");
+    CHECK(davNormalizeAddress("\\\\PC\\Mis Videos\\Pelis\\", out, sizeof(out)));
+    CHECK_STR(out, "smb://PC/Mis Videos/Pelis/");
+    CHECK(davNormalizeAddress(" //192.168.0.168:4450/Videos ", out, sizeof(out)));
+    CHECK_STR(out, "smb://192.168.0.168:4450/Videos/");
+    CHECK(davIsSmbAddress(out) && !davIsSmbAddress("http://pc/"));
+    CHECK(!davNormalizeAddress("smb://PC", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("\\\\PC\\", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("smb://me:pw@PC/Videos", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("smb:///Videos", out, sizeof(out)));
+
+    char server[64], share[64], folder[64];
+    CHECK(davSmbParts("smb://PC:4450/Videos/Media/Movies/", server, sizeof(server), share, sizeof(share), folder,
+                      sizeof(folder)));
+    CHECK_STR(server, "PC:4450");
+    CHECK_STR(share, "Videos");
+    CHECK_STR(folder, "Media/Movies");
+    CHECK(davSmbParts("smb://PC/Videos/", server, sizeof(server), share, sizeof(share), folder, sizeof(folder)));
+    CHECK_STR(folder, "");
+    CHECK(!davSmbParts("http://PC/Videos/", server, sizeof(server), share, sizeof(share), folder, sizeof(folder)));
+    CHECK(davSmbPath("smb://PC/Videos/", "dav:/", out, sizeof(out)));
+    CHECK_STR(out, "");
+    CHECK(davSmbPath("smb://PC/Videos/", "dav:/Movies/a b.mkv", out, sizeof(out)));
+    CHECK_STR(out, "Movies/a b.mkv");
+    CHECK(davSmbPath("smb://PC/Videos/Media/", "dav:/Movies/", out, sizeof(out)));
+    CHECK_STR(out, "Media/Movies");
+    CHECK(davSmbPath("smb://PC/Videos/Media/", "dav:/", out, sizeof(out)));
+    CHECK_STR(out, "Media");
+    char domain[32], name[32];
+    davSplitUser("WORK\\kai", domain, sizeof(domain), name, sizeof(name));
+    CHECK_STR(domain, "WORK");
+    CHECK_STR(name, "kai");
+    davSplitUser("kai@outlook.com", domain, sizeof(domain), name, sizeof(name));
+    CHECK_STR(domain, "");
+    CHECK_STR(name, "kai@outlook.com");
 
     davShownAddress("http://192.168.0.10:8098/", out, sizeof(out));
     CHECK_STR(out, "192.168.0.10:8098");

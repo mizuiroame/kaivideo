@@ -219,6 +219,8 @@ void appNetworkStart(App *app);
 bool appNetworkActivate(App *app, SettingRow row, uint64_t now);
 // Once a frame: a test's answer.
 void appNetworkUpdate(App *app, uint64_t now);
+// Closes its connections and lets the console's network go.
+void appNetworkExit(void);
 // What its rows say, before Settings is drawn.
 void appNetworkFeedSettings(void);
 

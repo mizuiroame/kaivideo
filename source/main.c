@@ -1282,6 +1282,7 @@ int main(int argc, char **argv)
     thumbsExit();
     appDownloadsExit(&app);  // Before the servers' thread: it may be telling one what was watched.
     jfSyncStop();
+    appNetworkExit();  // After the scan and the players: they used its connections.
     sysinfoExit();
     browserFree(&app.browser);
     appLog("Done.");

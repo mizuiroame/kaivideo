@@ -16,10 +16,16 @@ bool davConfigured(void);
 void davLoadAccount(const char *path);
 bool davSaveAccount(const char *path);
 
-// A location's URL and Authorization header, for reading it with ranges. False if there's no folder.
+// True when the folder is an SMB share (read with smbnet.h), not WebDAV.
+bool davIsSmb(void);
+// Opens a video of an SMB folder (smbnet.h). NULL with why if it can't be.
+struct SmbFile *davSmbOpen(const char *location, char *why, size_t why_size);
+
+// A WebDAV location's URL and Authorization header, for reading it with ranges. False if there's no folder
+// (or it's an SMB share).
 bool davStreamRequest(const char *location, char *url, size_t url_size, char *auth, size_t auth_size);
 
-// Lists a folder ("dav:/" or "dav:/Movies"). *out is malloc'd. False with why
+// Lists a folder ("dav:/" or "dav:/Movies"), over WebDAV or SMB. *out is malloc'd. False with why
 // (for the person) if it can't be.
 bool davList(const char *location, DavEntry **out, size_t *count, char *why, size_t why_size);
 

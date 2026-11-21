@@ -1293,9 +1293,6 @@ Tu servidor convierte este formato para la consola.
 [ZL][ZR] tabs  [+] menu
 [ZL][ZR] pestañas  [+] menú
 
-A WebDAV folder on your network: a NAS, Nextcloud or a computer. Files shows it first.
-Una carpeta WebDAV de tu red: un NAS, Nextcloud o una computadora. Aparece primero en Archivos.
-
 Address
 Dirección
 
@@ -1329,9 +1326,6 @@ Esa carpeta no está en el servidor.
 That folder's name is too long.
 El nombre de esa carpeta es demasiado largo.
 
-That isn't a WebDAV address (http:// or https://).
-Esa no es una dirección WebDAV (http:// o https://).
-
 The network folder answers. At its top: folders %d, videos %d.
 La carpeta de red responde. En su nivel principal: carpetas %d, videos %d.
 
@@ -1347,11 +1341,29 @@ El certificado del servidor no es de confianza.
 User and password
 Usuario y contraseña
 
-User name (empty: none)
-Usuario (vacío: ninguno)
-
-WebDAV address, like 192.168.0.10:8098/videos
-Dirección WebDAV, por ejemplo 192.168.0.10:8098/videos
-
 Playing: from the network folder
 Reproduciendo: desde la carpeta de red
+
+A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
+Una carpeta compartida (SMB) o WebDAV de tu red. X muestra su biblioteca; aparece primero en Archivos.
+
+Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
+Dirección: \\PC\Videos (carpeta compartida) o 192.168.0.10:8098 (WebDAV)
+
+Nothing answered at that address. Is the computer on, and is the folder shared?
+Nada respondió en esa dirección. ¿Está encendida la computadora y la carpeta está compartida?
+
+That isn't a network folder's address.
+Esa no es la dirección de una carpeta de red.
+
+That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
+Esa no es la dirección de una carpeta de red: \\PC\Videos, smb://, http:// o https://.
+
+That shared folder isn't on the computer. Check the share's name after the computer's.
+Esa carpeta compartida no está en la computadora. Revisa el nombre que va después del de la computadora.
+
+The shared folder couldn't be opened (%d: %s).
+No se pudo abrir la carpeta compartida (%d: %s).
+
+User name (empty: none; DOMAIN\user for a domain)
+Usuario (vacío: ninguno; DOMINIO\usuario para un dominio)

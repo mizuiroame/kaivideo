@@ -8,6 +8,7 @@
 #include "browser.h"
 #include "lang.h"
 #include "net.h"
+#include "smbnet.h"
 
 #define LISTING_MAX_BYTES (8u << 20)
 #define LIST_STALL_S 6L   // Files waits for the list: a server that's gone shouldn't hold it long.
@@ -76,11 +77,30 @@ bool davSaveAccount(const char *path)
     return ok;
 }
 
+bool davIsSmb(void)
+{
+    pthread_mutex_lock(&g_lock);
+    bool smb = davIsSmbAddress(g_account.address);
+    pthread_mutex_unlock(&g_lock);
+    return smb;
+}
+
+SmbFile *davSmbOpen(const char *location, char *why, size_t why_size)
+{
+    DavAccount a;
+    davGetAccount(&a);
+    SmbFile *f = davIsSmbAddress(a.address) ? smbFileOpen(&a, location, why, why_size) : NULL;
+    if (!davIsSmbAddress(a.address))
+        snprintf(why, why_size, "%s", T("Set up the network folder in Settings first."));
+    memset(&a, 0, sizeof(a));
+    return f;
+}
+
 bool davStreamRequest(const char *location, char *url, size_t url_size, char *auth, size_t auth_size)
 {
     DavAccount a;
     davGetAccount(&a);
-    bool ok = a.address[0] && davUrlOf(a.address, location, url, url_size) && davAuthorization(&a, auth, auth_size);
+    bool ok = a.address[0] && !davIsSmbAddress(a.address) && davUrlOf(a.address, location, url, url_size) && davAuthorization(&a, auth, auth_size);
     memset(&a, 0, sizeof(a));
     return ok;
 }
@@ -160,6 +180,14 @@ bool davList(const char *location, DavEntry **out, size_t *count, char *why, siz
 {
     *out = NULL;
     *count = 0;
+    DavAccount a;
+    davGetAccount(&a);
+    if (davIsSmbAddress(a.address)) {
+        bool listed = smbList(&a, location, out, count, why, why_size);
+        memset(&a, 0, sizeof(a));
+        return listed;
+    }
+    memset(&a, 0, sizeof(a));
     NetResponse response;
     char url[URL_MAX];
     if (!propfind(location, &response, url, why, why_size))

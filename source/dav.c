@@ -8,6 +8,7 @@
 
 #define HTTP "http://"
 #define HTTPS "https://"
+#define SMB "smb://"
 #define LISTING_GROWTH 64
 #define HREF_MAX 4096  // A 255-byte name in CJK is ~765 characters percent-encoded, plus its folders.
 
@@ -25,10 +26,44 @@ static size_t schemeLength(const char *s)
     return 0;
 }
 
+bool davIsSmbAddress(const char *address)
+{
+    return !strncasecmp(address, SMB, sizeof(SMB) - 1);
+}
+
+// "smb://PC/Videos", "\\PC\Videos\sub" or "//PC/Videos": "smb://PC/Videos/sub/".
+static bool normalizeSmb(const char *typed, size_t length, char *out, size_t size)
+{
+    char path[DAV_ADDRESS_MAX];
+    size_t skip = davIsSmbAddress(typed) ? sizeof(SMB) - 1 : 2;
+    if (length <= skip || length - skip >= sizeof(path))
+        return false;
+    size_t n = 0;
+    for (size_t i = skip; i < length; i++) {
+        char c = typed[i] == '\\' ? '/' : typed[i];
+        if (c == '/' && n && path[n - 1] == '/')
+            continue;  // "\\PC\\Videos": one slash.
+        path[n++] = c;
+    }
+    while (n && path[n - 1] == '/')
+        n--;
+    path[n] = '\0';
+    const char *slash = strchr(path, '/');
+    if (!slash || slash == path || memchr(path, '@', (size_t)(slash - path)))
+        return false;  // No share, no server, or "user:password@".
+    int written = snprintf(out, size, "%s%s/", SMB, path);
+    return written > 0 && (size_t)written < size;
+}
+
 bool davNormalizeAddress(const char *typed, char *out, size_t size)
 {
     while (*typed == ' ')
         typed++;
+    size_t typed_length = strlen(typed);
+    while (typed_length && typed[typed_length - 1] == ' ')
+        typed_length--;
+    if (davIsSmbAddress(typed) || !strncmp(typed, "\\\\", 2) || !strncmp(typed, "//", 2))
+        return normalizeSmb(typed, typed_length, out, size);  // Spaces are fine in a share's folders.
     size_t length = strlen(typed);
     while (length && typed[length - 1] == ' ')
         length--;
@@ -58,6 +93,54 @@ bool davSameServer(const char *a, const char *b)
 {
     size_t n = serverLength(a);
     return n == serverLength(b) && !strncasecmp(a, b, n);
+}
+
+bool davSmbParts(const char *address, char *server, size_t server_size, char *share, size_t share_size, char *folder,
+                 size_t folder_size)
+{
+    if (!davIsSmbAddress(address))
+        return false;
+    const char *s = address + sizeof(SMB) - 1;
+    size_t server_length = strcspn(s, "/");
+    const char *share_at = s + server_length + (s[server_length] == '/');
+    size_t share_length = strcspn(share_at, "/");
+    const char *folder_at = share_at + share_length + (share_at[share_length] == '/');
+    size_t folder_length = strlen(folder_at);
+    while (folder_length && folder_at[folder_length - 1] == '/')
+        folder_length--;
+    if (!server_length || !share_length || server_length >= server_size || share_length >= share_size ||
+        folder_length >= folder_size)
+        return false;
+    snprintf(server, server_size, "%.*s", (int)server_length, s);
+    snprintf(share, share_size, "%.*s", (int)share_length, share_at);
+    snprintf(folder, folder_size, "%.*s", (int)folder_length, folder_at);
+    return true;
+}
+
+bool davSmbPath(const char *address, const char *location, char *out, size_t size)
+{
+    char server[DAV_ADDRESS_MAX], share[DAV_ADDRESS_MAX], folder[DAV_ADDRESS_MAX];
+    if (!davIsLocation(location) || !davSmbParts(address, server, sizeof(server), share, sizeof(share), folder,
+                                                 sizeof(folder)))
+        return false;
+    const char *rest = location + sizeof(DAV_PREFIX) - 1;
+    size_t rest_length = strlen(rest);
+    while (rest_length && rest[rest_length - 1] == '/')
+        rest_length--;
+    int n = snprintf(out, size, "%s%s%.*s", folder, folder[0] && rest_length ? "/" : "", (int)rest_length, rest);
+    return n >= 0 && (size_t)n < size;
+}
+
+void davSplitUser(const char *user, char *domain, size_t domain_size, char *name, size_t name_size)
+{
+    const char *slash = strchr(user, '\\');
+    if (!slash) {
+        snprintf(domain, domain_size, "%s", "");
+        snprintf(name, name_size, "%s", user);
+        return;
+    }
+    snprintf(domain, domain_size, "%.*s", (int)(slash - user), user);
+    snprintf(name, name_size, "%s", slash + 1);
 }
 
 void davShownAddress(const char *address, char *out, size_t size)

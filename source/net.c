@@ -21,8 +21,14 @@ struct NetClient {
     CURL *curl;
 };
 
+static int g_users;  // netInit calls not yet ended; on the main thread only.
+
 bool netInit(void)
 {
+    if (g_users > 0) {
+        g_users++;
+        return true;
+    }
 #ifdef __SWITCH__
     if (R_FAILED(socketInitializeDefault()))
         return false;
@@ -33,11 +39,14 @@ bool netInit(void)
 #endif
         return false;
     }
+    g_users = 1;
     return true;
 }
 
 void netExit(void)
 {
+    if (g_users <= 0 || --g_users > 0)
+        return;
     curl_global_cleanup();
 #ifdef __SWITCH__
     socketExit();

@@ -198,7 +198,7 @@ const char *settingsPageTitle(SettingsPage page, ServerKind kind)
 const char *settingsPageNote(SettingsPage page, ServerKind kind)
 {
     if (page == SETTINGS_PAGE_NETWORK)
-        return T("A WebDAV folder on your network: a NAS, Nextcloud or a computer. Files shows it first.");
+        return T("A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.");
     return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? T(SERVER_NOTES[kind]) : NULL;
 }
 

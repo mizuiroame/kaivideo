@@ -9,7 +9,9 @@
 #define NET_USER_AGENT "KaiVideo/" KAIVIDEO_VERSION " (+https://github.com/mizuiroame/kaivideo)"
 #define NET_ERROR_MAX 128
 
-// Starts sockets and curl. False if the network can't be used.
+// Starts sockets and curl. False if the network can't be used. Each user
+// (the servers' sync, the network folder) starts it; it stops after the last
+// one's netExit.
 bool netInit(void);
 void netExit(void);
 

@@ -8,6 +8,8 @@
 
 #include "approot.h"
 #include "davnet.h"
+#include "net.h"
+#include "smbnet.h"
 #include "keyboard_system.h"
 #include "lang.h"
 #include "ui_settings.h"
@@ -21,6 +23,21 @@ static char g_test_text[TEST_TEXT_MAX];
 static void accountPath(char *out, size_t size)
 {
     appConfigPath(out, size, DAV_ACCOUNT_FILE);
+}
+
+// The console's network, started for the network folder (the servers' sync
+// starts it for itself too): without it, no socket opens.
+static bool g_network;
+
+static void useNetwork(void)
+{
+    bool wanted = davConfigured();
+    if (wanted && !g_network)
+        g_network = netInit();
+    else if (!wanted && g_network) {
+        netExit();
+        g_network = false;
+    }
 }
 
 // Files' top shows the folder when there is one; Files leaves it when it's gone.
@@ -48,15 +65,18 @@ void appNetworkStart(App *app)
     accountPath(path, sizeof(path));
     davLoadAccount(path);
     refreshFiles(app);
+    useNetwork();
 }
 
 static void save(App *app, const DavAccount *a, uint64_t now)
 {
     davUseAccount(a);
+    smbForget();  // The listing's connection was the old account's.
     char path[APPROOT_PATH_MAX + 32];
     accountPath(path, sizeof(path));
     if (!davSaveAccount(path))
         appShowMessage(app, T("It couldn't be written to the card."), now);
+    useNetwork();
     refreshFiles(app);
     appLibraryNetworkChanged(app);
 }
@@ -68,12 +88,12 @@ static void typeAddress(App *app, uint64_t now)
     char shown[DAV_ADDRESS_MAX], text[DAV_ADDRESS_MAX], address[DAV_ADDRESS_MAX];
     davShownAddress(a.address, shown, sizeof(shown));
     // Room for "https://" and the last '/' that may be added.
-    SystemKeyboardResult result = systemKeyboardInput(T("WebDAV address, like 192.168.0.10:8098/videos"), shown, text,
+    SystemKeyboardResult result = systemKeyboardInput(T("Address: \\\\PC\\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)"), shown, text,
                                                       sizeof(text), sizeof(text) - 10);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
         appShowMessage(app, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK && !davNormalizeAddress(text, address, sizeof(address))) {
-        appShowMessage(app, T("That isn't a WebDAV address (http:// or https://)."), now);
+        appShowMessage(app, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http:// or https://."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         if (!davSameServer(address, a.address)) {  // Another server: the old one's password isn't sent there.
             a.user[0] = '\0';
@@ -97,7 +117,7 @@ static void typeAccount(App *app, uint64_t now)
     }
     char user[DAV_TEXT_MAX], password[DAV_TEXT_MAX] = "";
     SystemKeyboardResult result =
-        systemKeyboardInput(T("User name (empty: none)"), a.user, user, sizeof(user), sizeof(user) - 1);
+        systemKeyboardInput(T("User name (empty: none; DOMAIN\\user for a domain)"), a.user, user, sizeof(user), sizeof(user) - 1);
     if (result == SYSTEM_KEYBOARD_OK && user[0])
         result = systemKeyboardPassword(T("Password"), password, sizeof(password), sizeof(password) - 1);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
@@ -170,9 +190,19 @@ void appNetworkUpdate(App *app, uint64_t now)
     }
     pthread_mutex_unlock(&g_test_lock);
     if (text[0]) {
-        appLog("Network folder test: %s", text);
+        char raw[256];
+        smbLastError(raw, sizeof(raw));
+        appLog("Network folder test: %s%s%s", text, raw[0] ? " | smb: " : "", raw);
         appShowMessage(app, text, now);
     }
+}
+
+void appNetworkExit(void)
+{
+    smbForget();
+    if (g_network)
+        netExit();
+    g_network = false;
 }
 
 void appNetworkFeedSettings(void)
