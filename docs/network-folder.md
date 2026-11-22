@@ -40,7 +40,7 @@ Then:
   browse it folder by folder.
 
 A new address forgets the old user and password, so they're never sent to
-another computer. **Forget this folder** removes the address, user and
+another computer, and the old folder's library. **Forget this folder** removes the address, user and
 password.
 
 ## Sharing a folder on Windows

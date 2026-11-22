@@ -220,11 +220,11 @@ void uiDrawAbout(const char *version)
 {
     static const char *const LINES[] = {
         N_("A video player for Switch 2 homebrew on kaiHEN."),
-        N_("Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or"),
+        N_("Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or"),
         N_("Plex server, with sound tracks, subtitles and a library of your films and series."),
         "",
-        "",
-        N_("Free and open source under the MIT license; FFmpeg under the LGPL."),
+        N_("Free and open source under the MIT license."),
+        N_("FFmpeg, libsmb2 and FriBidi under the LGPL 2.1."),
         N_("Not affiliated with or endorsed by Nintendo."),
     };
     int x = (GFX_WIDTH - ABOUT_W) / 2, y = (GFX_HEIGHT - ABOUT_H) / 2;

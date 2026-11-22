@@ -504,8 +504,11 @@ Images : %.1f par seconde, %.1f%% en retard
 Frames: measuring...
 Images : mesure...
 
-Free and open source under the MIT license; FFmpeg under the LGPL.
-Libre et open source sous licence MIT ; FFmpeg sous licence LGPL.
+FFmpeg, libsmb2 and FriBidi under the LGPL 2.1.
+FFmpeg, libsmb2 et FriBidi sous licence LGPL 2.1.
+
+Free and open source under the MIT license.
+Libre et open source sous licence MIT.
 
 French
 Français
@@ -792,8 +795,8 @@ Lecture : depuis la carte SD
 Playing: the original file from Jellyfin
 Lecture : fichier original de Jellyfin
 
-Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
-Lit les MP4, MKV et WebM depuis votre carte SD, ou depuis votre serveur Jellyfin, Emby ou
+Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or
+Lit vos vidéos depuis la carte SD, un dossier réseau ou votre serveur Jellyfin, Emby ou
 
 Plex
 Plex

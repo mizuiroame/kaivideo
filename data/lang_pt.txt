@@ -504,8 +504,11 @@ Quadros: %.1f por segundo, %.1f%% atrasados
 Frames: measuring...
 Quadros: medindo...
 
-Free and open source under the MIT license; FFmpeg under the LGPL.
-Livre e de código aberto sob a licença MIT; FFmpeg sob a LGPL.
+FFmpeg, libsmb2 and FriBidi under the LGPL 2.1.
+FFmpeg, libsmb2 e FriBidi sob a LGPL 2.1.
+
+Free and open source under the MIT license.
+Livre e de código aberto sob a licença MIT.
 
 French
 Francês
@@ -792,8 +795,8 @@ Reproduzindo: do cartão SD
 Playing: the original file from Jellyfin
 Reproduzindo: o arquivo original do Jellyfin
 
-Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
-Reproduz MP4, MKV e WebM do seu cartão SD, ou do seu servidor Jellyfin, Emby ou
+Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or
+Reproduz seus vídeos do cartão SD, pasta de rede ou do seu servidor Jellyfin, Emby ou
 
 Plex
 Plex

@@ -51,6 +51,8 @@ KaiVideo is released under the [MIT License](../LICENSE). It includes:
 | [FriBidi](https://github.com/fribidi/fribidi) | Right-to-left text | [LGPL 2.1](../third_party/FriBidi-LGPL-2.1.txt) |
 | [stb](https://github.com/nothings/stb) | Images and thumbnails | Public domain |
 | libpng, bzip2, zlib | Compression and images | [libpng](../third_party/libpng-LICENSE.txt), [bzip2](../third_party/bzip2-LICENSE.txt), [zlib](../third_party/zlib-LICENSE.txt) |
+| [libounce](https://github.com/ouncebrew/libounce) (a libnx fork, with mimalloc) | The Switch 2 system library, and the console's video decoder | ISC: [libounce](../third_party/libounce-ISC.txt), [libnx](../third_party/libnx-ISC.txt); [MIT](../third_party/mimalloc-MIT.txt) (mimalloc) |
+| [Mesa](https://mesa3d.org/) (OunceVK) | Drawing on the GPU (OpenGL ES) | [MIT](../third_party/Mesa-MIT.txt) ([its notes](../third_party/Mesa-license.rst)) |
 | Noto Sans | KaiVideo's font | [OFL](../third_party/NotoSans-OFL.txt) |
 | Atkinson Hyperlegible, Fira Sans, Lato, PT Serif, Comic Neue | Fonts for subtitles | OFL: [Atkinson Hyperlegible](../third_party/AtkinsonHyperlegible-OFL.txt), [Fira Sans](../third_party/FiraSans-OFL.txt), [Lato](../third_party/Lato-OFL.txt), [PT Serif](../third_party/PTSerif-OFL.txt), [Comic Neue](../third_party/ComicNeue-OFL.txt) |
 

@@ -504,8 +504,11 @@ Frames: %.1f a second, %.1f%% late
 Frames: measuring...
 帧：正在测量...
 
-Free and open source under the MIT license; FFmpeg under the LGPL.
-基于MIT许可证的免费开源软件；FFmpeg基于LGPL许可证。
+FFmpeg, libsmb2 and FriBidi under the LGPL 2.1.
+FFmpeg、libsmb2和FriBidi基于LGPL 2.1许可证。
+
+Free and open source under the MIT license.
+基于MIT许可证的免费开源软件。
 
 French
 法语
@@ -792,8 +795,8 @@ Playing: from the SD card
 Playing: the original file from Jellyfin
 播放方式：Jellyfin上的原始文件
 
-Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
-可播放SD卡中的MP4、MKV和WebM，也可播放来自Jellyfin、Emby或
+Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or
+可播放SD卡、网络文件夹中的视频，也可播放来自Jellyfin、Emby或
 
 Plex
 Plex

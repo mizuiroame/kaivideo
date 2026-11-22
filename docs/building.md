@@ -30,9 +30,11 @@ docker run --rm -v "$PWD:/build/kaivideo" -w /build/kaivideo kaivideo-host make 
 - **libsmb2**: `smb/Dockerfile` builds libsmb2 6.0.0 from its release tarball
   (checked by SHA-256) with the Switch 2 environment, for network folders
   over SMB.
-- **Previews**: they're drawn in English and in Spanish
-  (`tests/preview/build/es`), to see what no longer fits. They also check
-  that every control answers a tap where it's drawn.
+- **Previews**: they're drawn in English and in every language in `data/`
+  (`tests/preview/build/es`, `build/fr` and so on), to see what no longer
+  fits. For Japanese, Chinese and Korean, `KAIVIDEO_CJK_FONT` names a font
+  with them on the PC; without one, their text draws as boxes. They also
+  check that every control answers a tap where it's drawn.
 - **Live tests**: `tests/host_live/` has tests against real servers (Jellyfin,
   Samba, WebDAV), run on a PC.
 - **Icon**: `tools/make_icon.py` draws `icon.jpg`.

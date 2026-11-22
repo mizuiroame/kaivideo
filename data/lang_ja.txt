@@ -522,8 +522,11 @@ Frames: %.1f a second, %.1f%% late
 Frames: measuring...
 フレーム: 測定中...
 
-Free and open source under the MIT license; FFmpeg under the LGPL.
-MIT ライセンスの無料オープンソースソフトです。FFmpeg は LGPL です。
+FFmpeg, libsmb2 and FriBidi under the LGPL 2.1.
+FFmpeg、libsmb2、FriBidi は LGPL 2.1 です。
+
+Free and open source under the MIT license.
+MIT ライセンスの無料オープンソースソフトです。
 
 French
 フランス語
@@ -828,8 +831,8 @@ Playing: from the SD card
 Playing: the original file from Jellyfin
 再生中: Jellyfin の元のファイル
 
-Plays MP4, MKV and WebM from your SD card, or from your Jellyfin, Emby or
-SDカードや Jellyfin、Emby、Plex サーバーの MP4、MKV、WebM を再生します。
+Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or
+SDカード、ネットワークフォルダー、Jellyfin、Emby、Plex サーバーの動画を再生します。
 
 Plex
 Plex

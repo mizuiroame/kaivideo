@@ -101,6 +101,7 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 
 ## License
 
-KaiVideo is released under the [MIT License](LICENSE). It uses FFmpeg and
-libsmb2 under the LGPL 2.1, and other open-source libraries and fonts. The
+KaiVideo is released under the [MIT License](LICENSE). It uses FFmpeg,
+libsmb2 and FriBidi under the LGPL 2.1, and other open-source libraries and
+fonts. The
 full list is in [docs/legal.md](docs/legal.md#licenses).
