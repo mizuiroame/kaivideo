@@ -29,7 +29,7 @@ int main(int argc, char **argv)
                info.profile, info.fps);
         for (size_t t = 0; t < sizeof(THREADS) / sizeof(THREADS[0]); t++) {
             BenchResult r;
-            if (!benchRun(argv[i], THREADS[t], 3.0, 120, nowNs, NULL, NULL, &r, error, sizeof(error))) {
+            if (!benchRun(argv[i], THREADS[t], false, 3.0, 120, nowNs, NULL, NULL, &r, error, sizeof(error))) {
                 printf("  %d threads: FAILED %s\n", THREADS[t], error);
                 failures++;
                 continue;

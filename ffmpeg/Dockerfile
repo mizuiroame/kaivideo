@@ -10,7 +10,8 @@
 # parts, no network code. The MKV muxer rewraps a server's conversion, downloaded
 # as MPEG-TS parts, into an MKV with an index (cues), so jumps land on keyframes.
 #   docker build -t kaivideo-devkit ffmpeg
-# gives the devkit image with FFmpeg in portlibs/switch2.
+# gives the devkit image with FFmpeg in portlibs/switch2. horizon.patch also
+# lets GCC vectorize FFmpeg's C code (the build checks that it does).
 ARG DEVKIT_IMAGE=ounce-devkit:latest
 FROM ${DEVKIT_IMAGE}
 
@@ -46,6 +47,7 @@ RUN . /opt/devkitpro/switch2vars.sh \
       --enable-muxer=matroska \
       $EXTRA_FFMPEG_OPTIONS \
  && grep -q 'define HAVE_PTHREADS 1' config.h \
+ && ! grep -q -- '-fno-tree-vectorize' ffbuild/config.mak \
  && make -j"$(nproc)" \
  && make install \
  && grep -q 'define CONFIG_GPL 0' config.h \

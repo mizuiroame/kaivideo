@@ -1,9 +1,13 @@
 Lets FFmpeg's configure target Horizon (the Switch's OS), as devkitPro's
 switch-ffmpeg does, without its hardware video decoding changes.
 
+Also lets GCC 13 and later vectorize C code on AArch64, as FFmpeg 8 does
+(7.1 turns it off for every GCC): HEVC's 10-bit motion compensation, among
+others, has no NEON version and runs as plain C.
+
 --- a/configure
 +++ b/configure
-@@ -5970,6 +5970,9 @@ case $target_os in
+@@ -5970,6 +5970,9 @@
          ;;
      minix)
          ;;
@@ -13,7 +17,23 @@ switch-ffmpeg does, without its hardware video decoding changes.
      none)
          ;;
      *)
-@@ -7719,6 +7722,10 @@ haiku)
+@@ -7581,7 +7584,14 @@
+             disable aligned_stack
+     fi
+ elif enabled gcc; then
+-    check_optflags -fno-tree-vectorize
++    # As FFmpeg 8 does: GCC 13 and later may vectorize on AArch64 (C code
++    # without NEON versions, such as HEVC's 10-bit motion compensation).
++    gcc_version=$($cc -dumpversion)
++    major_version=${gcc_version%%[!0-9]*}
++    case $major_version in ''|*[!0-9]*) major_version=0 ;; esac
++    if [ $major_version -lt 13 ] || ! enabled aarch64; then
++        check_optflags -fno-tree-vectorize
++    fi
+     check_cflags -Werror=format-security
+     check_cflags -Werror=implicit-function-declaration
+     check_cflags -Werror=missing-prototypes
+@@ -7719,6 +7729,10 @@
          disable memalign
      fi
      ;;

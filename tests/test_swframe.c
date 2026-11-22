@@ -84,6 +84,53 @@ static void testConvert10(void)
     CHECK(memcmp(out_uv, WANT_UV, 2) == 0);
 }
 
+// Rows long enough for the NEON steps on ARM (16 samples) plus a remainder,
+// against the conversion done by hand. Same results with or without NEON.
+static void testConvertWide(void)
+{
+    enum { W = 38, H = 4, PAD = 10, LINE = W + PAD, CLINE = W / 2 + PAD };
+    static uint16_t y10[H][LINE], cb10[H / 2][CLINE], cr10[H / 2][CLINE];
+    static uint8_t y8[H][LINE], cb8[H / 2][CLINE], cr8[H / 2][CLINE];
+    for (int r = 0; r < H; r++)
+        for (int x = 0; x < LINE; x++) {
+            y10[r][x] = (uint16_t)((r * 251 + x * 37) % 1024);
+            y8[r][x] = (uint8_t)(r * 13 + x * 7);
+        }
+    for (int r = 0; r < H / 2; r++)
+        for (int x = 0; x < CLINE; x++) {
+            cb10[r][x] = (uint16_t)((r * 97 + x * 53) % 1024);
+            cr10[r][x] = (uint16_t)(1023 - cb10[r][x]);
+            cb8[r][x] = (uint8_t)(x * 11 + r);
+            cr8[r][x] = (uint8_t)(255 - x * 3 - r);
+        }
+    enum { PITCH = W + 2 };  // Wider than the picture, as the screen's buffer may be.
+    uint8_t out_y[H * PITCH], out_uv[H / 2 * PITCH];
+
+    const uint8_t *p10[3] = {(const uint8_t *)y10[0], (const uint8_t *)cb10[0], (const uint8_t *)cr10[0]};
+    const ptrdiff_t l10[3] = {LINE * 2, CLINE * 2, CLINE * 2};
+    swframeToNv12(p10, l10, W, H, 10, out_y, out_uv, PITCH);
+    bool ok10 = true;
+    for (int r = 0; r < H; r++)
+        for (int x = 0; x < W; x++)
+            ok10 &= out_y[r * PITCH + x] == (uint8_t)(y10[r][x] >> 2);
+    for (int r = 0; r < H / 2; r++)
+        for (int x = 0; x < W / 2; x++)
+            ok10 &= out_uv[r * PITCH + x * 2] == (uint8_t)(cb10[r][x] >> 2) &&
+                    out_uv[r * PITCH + x * 2 + 1] == (uint8_t)(cr10[r][x] >> 2);
+    CHECK(ok10);
+
+    const uint8_t *p8[3] = {y8[0], cb8[0], cr8[0]};
+    const ptrdiff_t l8[3] = {LINE, CLINE, CLINE};
+    swframeToNv12(p8, l8, W, H, 8, out_y, out_uv, PITCH);
+    bool ok8 = true;
+    for (int r = 0; r < H; r++)
+        ok8 &= memcmp(out_y + r * PITCH, y8[r], W) == 0;
+    for (int r = 0; r < H / 2; r++)
+        for (int x = 0; x < W / 2; x++)
+            ok8 &= out_uv[r * PITCH + x * 2] == cb8[r][x] && out_uv[r * PITCH + x * 2 + 1] == cr8[r][x];
+    CHECK(ok8);
+}
+
 static void testThumbFiles(void)
 {
     CHECK(thumbgenFileKind(0) == THUMB_FILE_RETRY);       // From a version that couldn't decode it.
@@ -98,5 +145,6 @@ void testSwFrame(void)
     testSkipping();
     testConvert8();
     testConvert10();
+    testConvertWide();
     testThumbFiles();
 }

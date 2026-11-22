@@ -1,8 +1,11 @@
 // KaiVideo HEVC test: can the console's CPU decode HEVC fast enough to play it?
 // For the HEVC videos in sdmc:/kaivideo-test/hevc and sdmc:/movies, decodes a
 // stretch with FFmpeg using more and more threads, and reports the speed
-// against the video's own. Uses only the CPU and the card: it doesn't touch
-// the hardware video decoder. Results also go to sdmc:/kaivideo-hevctest.txt.
+// against the video's own; then with more threads than cores, and without
+// deblocking the frames nothing refers to. Uses only the CPU and the card: it
+// doesn't touch the hardware video decoder. Results also go to
+// sdmc:/<this app's name>.txt (the Makefile's TARGET), so two builds, made
+// with two FFmpeg images, keep their own results.
 #include <dirent.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -15,7 +18,11 @@
 #include "bench.h"
 #include "seekbench.h"
 
-#define LOG_PATH "sdmc:/kaivideo-hevctest.txt"
+#ifndef BENCH_NAME
+#define BENCH_NAME "kaivideo-hevctest"
+#endif
+#define LOG_PATH "sdmc:/" BENCH_NAME ".txt"
+#define MAX_STEPS 6
 #define MAX_FILES 5
 #define PATH_MAX_LEN 512
 #define RUN_SECONDS 12.0
@@ -109,16 +116,23 @@ static int coreCount(void)
     return __builtin_popcountll(mask);
 }
 
+typedef struct {
+    int threads;
+    bool skip_nonref_deblock;
+} Step;
+
 // False if the test was stopped.
-static bool testFile(const char *path, const BenchInfo *info, const int *threads, int thread_steps)
+static bool testFile(const char *path, const BenchInfo *info, const Step *steps, int step_count)
 {
     say("\n== %s\n   %dx%d, %d-bit %s, %.2f fps, %.0f min\n", path, info->width, info->height, info->bits,
         info->profile, info->fps, info->duration_s / 60);
-    for (int i = 0; i < thread_steps; i++) {
+    for (int i = 0; i < step_count; i++) {
         BenchResult r;
         char error[96] = "";
-        say("   %d thread%s: ", threads[i], threads[i] == 1 ? "" : "s");
-        bool ok = benchRun(path, threads[i], RUN_SECONDS, RUN_FRAMES, nowNs, plusPressed, NULL, &r, error, sizeof(error));
+        say("   %d thread%s%s: ", steps[i].threads, steps[i].threads == 1 ? "" : "s",
+            steps[i].skip_nonref_deblock ? ", no deblocking on frames nothing refers to" : "");
+        bool ok = benchRun(path, steps[i].threads, steps[i].skip_nonref_deblock, RUN_SECONDS, RUN_FRAMES, nowNs,
+                           plusPressed, NULL, &r, error, sizeof(error));
         if (!ok) {
             say("FAILED: %s\n", error);
             continue;
@@ -198,15 +212,24 @@ int main(int argc, char **argv)
     padInitializeDefault(&g_pad);
     g_log = fopen(LOG_PATH, "w");
     int cores = coreCount();
-    say("KaiVideo HEVC test: software decoding with FFmpeg. %d CPU cores for this app.\n", cores);
+    say("KaiVideo HEVC test (" BENCH_NAME "): software decoding with FFmpeg. %d CPU cores for this app.\n", cores);
     say("OK = at least %.2fx the video's speed, and never below it. + stops.\n", COMFORT_MARGIN);
     bool seek_test = chooseSeekTest();
     say("Looking for HEVC videos...\n");
     for (size_t i = 0; i < sizeof(FOLDERS) / sizeof(FOLDERS[0]); i++)
         scan(FOLDERS[i], 1);
 
-    int threads[4] = {1, 2, 3, cores};
-    int steps = cores > 3 ? 4 : cores;
+    // 1, 2, 3 and all cores; then half as many threads again as cores (frame
+    // threads wait on each other's pictures), and all cores without
+    // deblocking the frames nothing refers to.
+    Step steps[MAX_STEPS];
+    int step_count = 0;
+    for (int t = 1; t <= 3 && t < cores; t++)
+        steps[step_count++] = (Step){t, false};
+    steps[step_count++] = (Step){cores, false};
+    if (cores > 1)
+        steps[step_count++] = (Step){cores + cores / 2, false};
+    steps[step_count++] = (Step){cores, true};
     int seek_threads[2] = {cores < 4 ? cores : 4, cores};
     int seek_steps = cores > 4 ? 2 : 1;
     bool go_on = true;
@@ -214,7 +237,7 @@ int main(int argc, char **argv)
         say("\nNo HEVC videos found.\n");
     for (int i = 0; i < g_file_count && go_on; i++)
         go_on = seek_test ? seekTestFile(g_files[i], &g_infos[i], seek_threads, seek_steps)
-                          : testFile(g_files[i], &g_infos[i], threads, steps);
+                          : testFile(g_files[i], &g_infos[i], steps, step_count);
 
     say("\nDone. Results are in " LOG_PATH ". Press + to exit.\n");
     while (appletMainLoop()) {

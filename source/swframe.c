@@ -41,30 +41,68 @@ bool swframeCanSkip(int64_t pts_ns, int64_t skip_until_ns, int64_t clock_ns)
            (uint64_t)clock_ns - (uint64_t)pts_ns > (uint64_t)SWFRAME_LATE_NS;
 }
 
+// The conversion runs on the decoding thread, once a frame (about 18 ms a 4K
+// frame in plain C on the console), so on ARM it takes 16 samples at a time
+// with NEON. The plain loops do the rest of a row, and everything elsewhere
+// (and everything with SWFRAME_NO_NEON, for measuring the difference).
+#if defined(__aarch64__) && defined(__ARM_NEON) && !defined(SWFRAME_NO_NEON)
+#include <arm_neon.h>
+#define SWFRAME_NEON 1
+#define NEON_STEP 16
+#endif
+
 static void luma8(const uint8_t *src, uint8_t *dst, int width)
 {
     memcpy(dst, src, (size_t)width);
 }
 
-static void luma10(const uint8_t *src, uint8_t *dst, int width)
+static void luma10(const uint8_t *src, uint8_t *restrict dst, int width)
 {
-    const uint16_t *wide = (const uint16_t *)(const void *)src;
-    for (int x = 0; x < width; x++)
+    const uint16_t *restrict wide = (const uint16_t *)(const void *)src;
+    int x = 0;
+#ifdef SWFRAME_NEON
+    for (; x + NEON_STEP <= width; x += NEON_STEP) {
+        uint8x8_t low = vshrn_n_u16(vld1q_u16(wide + x), TEN_TO_EIGHT);
+        uint8x8_t high = vshrn_n_u16(vld1q_u16(wide + x + 8), TEN_TO_EIGHT);
+        vst1q_u8(dst + x, vcombine_u8(low, high));
+    }
+#endif
+    for (; x < width; x++)
         dst[x] = (uint8_t)(wide[x] >> TEN_TO_EIGHT);
 }
 
-static void chroma8(const uint8_t *u, const uint8_t *v, uint8_t *dst, int samples)
+static void chroma8(const uint8_t *restrict u, const uint8_t *restrict v, uint8_t *restrict dst, int samples)
 {
-    for (int x = 0; x < samples; x++) {
+    int x = 0;
+#ifdef SWFRAME_NEON
+    for (; x + NEON_STEP <= samples; x += NEON_STEP) {
+        uint8x16x2_t pair = {{vld1q_u8(u + x), vld1q_u8(v + x)}};
+        vst2q_u8(dst + x * 2, pair);
+    }
+#endif
+    for (; x < samples; x++) {
         dst[x * 2] = u[x];
         dst[x * 2 + 1] = v[x];
     }
 }
 
-static void chroma10(const uint8_t *u, const uint8_t *v, uint8_t *dst, int samples)
+static void chroma10(const uint8_t *u, const uint8_t *v, uint8_t *restrict dst, int samples)
 {
-    const uint16_t *wide_u = (const uint16_t *)(const void *)u, *wide_v = (const uint16_t *)(const void *)v;
-    for (int x = 0; x < samples; x++) {
+    const uint16_t *restrict wide_u = (const uint16_t *)(const void *)u;
+    const uint16_t *restrict wide_v = (const uint16_t *)(const void *)v;
+    int x = 0;
+#ifdef SWFRAME_NEON
+    for (; x + NEON_STEP <= samples; x += NEON_STEP) {
+        uint8x16x2_t pair = {{
+            vcombine_u8(vshrn_n_u16(vld1q_u16(wide_u + x), TEN_TO_EIGHT),
+                        vshrn_n_u16(vld1q_u16(wide_u + x + 8), TEN_TO_EIGHT)),
+            vcombine_u8(vshrn_n_u16(vld1q_u16(wide_v + x), TEN_TO_EIGHT),
+                        vshrn_n_u16(vld1q_u16(wide_v + x + 8), TEN_TO_EIGHT)),
+        }};
+        vst2q_u8(dst + x * 2, pair);
+    }
+#endif
+    for (; x < samples; x++) {
         dst[x * 2] = (uint8_t)(wide_u[x] >> TEN_TO_EIGHT);
         dst[x * 2 + 1] = (uint8_t)(wide_v[x] >> TEN_TO_EIGHT);
     }

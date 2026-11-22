@@ -38,6 +38,10 @@ include $(DEVKITPRO)/libounce/switch2_rules
 #   of a homebrew executable (.nro). This is intended to be used for sysmodules.
 #   NACP building is skipped as well.
 #---------------------------------------------------------------------------------
+# Another TARGET (and BUILD) gives a second build that keeps its own results,
+# e.g. with an older FFmpeg image and the old plain-C conversion:
+#   make TARGET=kaivideo-hevctest-before BUILD=build-before APP_TITLE="KaiVideo HEVC test (before)" \
+#        BENCH_DEFINES="-DSWFRAME_NO_NEON -fno-tree-vectorize"
 TARGET		:=	kaivideo-hevctest
 APP_TITLE	:=	KaiVideo HEVC test
 APP_AUTHOR	:=	Mizuiro
@@ -45,7 +49,10 @@ APP_VERSION	:=	0.1
 BUILD		:=	build
 SOURCES		:=	source
 DATA		:=	data
-INCLUDES	:=	include
+INCLUDES	:=	include ../../source
+# KaiVideo's own conversion to NV12, measured as the app runs it.
+SHARED		:=	../../source
+SHARED_C	:=	swframe.c
 #ROMFS	:=	romfs
 
 #---------------------------------------------------------------------------------
@@ -56,7 +63,8 @@ ARCH	:=	$(SWITCH2_CPU) -mtp=soft -fPIE
 CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
 			$(ARCH) $(DEFINES)
 
-CFLAGS	+=	$(INCLUDE) -D__SWITCH__
+# BENCH_DEFINES: see TARGET above (-DSWFRAME_NO_NEON: the conversion without NEON).
+CFLAGS	+=	$(INCLUDE) -D__SWITCH__ -DBENCH_NAME=\"$(TARGET)\" $(BENCH_DEFINES)
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions
 
@@ -83,11 +91,12 @@ export OUTPUT	:=	$(CURDIR)/$(TARGET)
 export TOPDIR	:=	$(CURDIR)
 
 export VPATH	:=	$(foreach dir,$(SOURCES),$(CURDIR)/$(dir)) \
-			$(foreach dir,$(DATA),$(CURDIR)/$(dir))
+			$(foreach dir,$(DATA),$(CURDIR)/$(dir)) \
+			$(CURDIR)/$(SHARED)
 
 export DEPSDIR	:=	$(CURDIR)/$(BUILD)
 
-CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c)))
+CFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.c))) $(SHARED_C)
 CPPFILES	:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.cpp)))
 SFILES		:=	$(foreach dir,$(SOURCES),$(notdir $(wildcard $(dir)/*.s)))
 BINFILES	:=	$(foreach dir,$(DATA),$(notdir $(wildcard $(dir)/*.*)))

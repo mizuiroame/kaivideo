@@ -34,6 +34,8 @@ typedef struct {
 bool benchProbe(const char *path, BenchInfo *info, char *error, size_t error_size);
 
 // Decodes from a quarter of the way in, for up to max_seconds or max_frames.
-// False, with a reason, if decoding can't go on.
-bool benchRun(const char *path, int threads, double max_seconds, int max_frames, BenchClock clock,
-              BenchCancelled cancelled, void *cancel_data, BenchResult *result, char *error, size_t error_size);
+// skip_nonref_deblock: no deblocking on frames nothing refers to (faster, a
+// little blockier). False, with a reason, if decoding can't go on.
+bool benchRun(const char *path, int threads, bool skip_nonref_deblock, double max_seconds, int max_frames,
+              BenchClock clock, BenchCancelled cancelled, void *cancel_data, BenchResult *result, char *error,
+              size_t error_size);

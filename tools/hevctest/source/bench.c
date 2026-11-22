@@ -8,6 +8,8 @@
 #include <libavformat/avformat.h>
 #include <libavutil/pixdesc.h>
 
+#include "swframe.h"
+
 #define IO_BUFFER (256 * 1024)
 #define WARM_UP_FRAMES 30   // Frame threads hand out nothing at first: not measured.
 #define MIN_SEEK_DURATION_S 60.0
@@ -112,37 +114,21 @@ bool benchProbe(const char *path, BenchInfo *info, char *error, size_t error_siz
     return true;
 }
 
-// The frame as KaiVideo would need it: 8-bit Y, then interleaved UV.
+// The frame as KaiVideo needs it: 8-bit Y, then interleaved UV, with
+// KaiVideo's own conversion (source/swframe.c).
 static bool convertFrame(Bench *b, const AVFrame *f)
 {
     int w = f->width & ~1, h = f->height & ~1;
     bool ten_bit = f->format == AV_PIX_FMT_YUV420P10LE;
     if (!ten_bit && f->format != AV_PIX_FMT_YUV420P && f->format != AV_PIX_FMT_YUVJ420P)
         return false;
-    for (int y = 0; y < h; y++) {
-        const uint8_t *src = f->data[0] + (ptrdiff_t)y * f->linesize[0];
-        uint8_t *dst = b->y + (size_t)y * (size_t)w;
-        if (!ten_bit) {
-            memcpy(dst, src, (size_t)w);
-            continue;
-        }
-        const uint16_t *wide = (const uint16_t *)src;
-        for (int x = 0; x < w; x++)
-            dst[x] = (uint8_t)(wide[x] >> 2);
-    }
-    for (int y = 0; y < h / 2; y++) {
-        const uint8_t *u = f->data[1] + (ptrdiff_t)y * f->linesize[1];
-        const uint8_t *v = f->data[2] + (ptrdiff_t)y * f->linesize[2];
-        uint8_t *dst = b->uv + (size_t)y * (size_t)w;
-        for (int x = 0; x < w / 2; x++) {
-            dst[x * 2] = ten_bit ? (uint8_t)(((const uint16_t *)u)[x] >> 2) : u[x];
-            dst[x * 2 + 1] = ten_bit ? (uint8_t)(((const uint16_t *)v)[x] >> 2) : v[x];
-        }
-    }
+    const uint8_t *const planes[3] = {f->data[0], f->data[1], f->data[2]};
+    const ptrdiff_t lines[3] = {f->linesize[0], f->linesize[1], f->linesize[2]};
+    swframeToNv12(planes, lines, w, h, ten_bit ? 10 : 8, b->y, b->uv, w);
     return true;
 }
 
-static bool openDecoder(Bench *b, int threads, char *error, size_t error_size)
+static bool openDecoder(Bench *b, int threads, bool skip_nonref_deblock, char *error, size_t error_size)
 {
     AVStream *st = b->fmt->streams[b->stream];
     const AVCodec *decoder = avcodec_find_decoder(st->codecpar->codec_id);
@@ -156,6 +142,8 @@ static bool openDecoder(Bench *b, int threads, char *error, size_t error_size)
     b->codec->thread_count = threads;
     b->codec->thread_type = FF_THREAD_FRAME | FF_THREAD_SLICE;
     b->codec->pkt_timebase = st->time_base;
+    if (skip_nonref_deblock)  // Lower quality, as some players offer: frames nothing refers to aren't deblocked.
+        b->codec->skip_loop_filter = AVDISCARD_NONREF;
     if (avcodec_open2(b->codec, decoder, NULL) < 0) {
         snprintf(error, error_size, "the decoder didn't open");
         return false;
@@ -243,14 +231,15 @@ static bool decodeLoop(Bench *b, Meter *m, double max_seconds, int max_frames, B
     return true;
 }
 
-bool benchRun(const char *path, int threads, double max_seconds, int max_frames, BenchClock clock,
-              BenchCancelled cancelled, void *cancel_data, BenchResult *result, char *error, size_t error_size)
+bool benchRun(const char *path, int threads, bool skip_nonref_deblock, double max_seconds, int max_frames,
+              BenchClock clock, BenchCancelled cancelled, void *cancel_data, BenchResult *result, char *error,
+              size_t error_size)
 {
     Bench b;
     memset(result, 0, sizeof(*result));
     if (!benchOpenFile(&b, path, error, error_size))
         return false;
-    bool ok = openDecoder(&b, threads, error, error_size);
+    bool ok = openDecoder(&b, threads, skip_nonref_deblock, error, error_size);
     if (ok) {
         result->thread_count = b.codec->thread_count;
         result->frame_threads = b.codec->active_thread_type == FF_THREAD_FRAME;

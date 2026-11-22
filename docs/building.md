@@ -22,6 +22,8 @@ docker run --rm -v "$PWD:/build/kaivideo" -w /build/kaivideo kaivideo-host make 
   (checked by SHA-256). It includes only the demuxers, parsers, bitstream
   filters, decoders, the `atempo` audio filter and the MKV muxer KaiVideo
   needs, and the build fails if it would include GPL or non-free parts.
+  `ffmpeg/horizon.patch` lets GCC vectorize FFmpeg's C code, as FFmpeg 8
+  does (HEVC's 10-bit motion compensation has no NEON version in 7.1).
 - **Video decoding**: most video is decoded by the console, through
   [libounce](https://github.com/ouncebrew/libounce)'s `VideoDecoder`. FFmpeg
   decodes HEVC, 10-bit H.264 and VP9, and H.264 and VP9 over 1080p.
