@@ -54,3 +54,10 @@
   `folder.jpg` when a folder has one.
 - **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
+- **Experiment: skip deblocking on frames nothing refers to**, for 4K HEVC on
+  the CPU. Measured on the console with `tools/hevctest` (its "no deblocking"
+  row): about 5% faster (a 68 Mb/s 4K remux from 17.7 to 19.0 fps, a 16 Mb/s
+  3840x1600 film from 27.9 to 29.2), at the cost of a slightly blockier
+  picture on those frames. Not used yet: worth a look on a TV first, and only
+  for videos that can't keep up otherwise. It wouldn't bring a 68 Mb/s remux
+  to real time; letting the server convert it still does.
