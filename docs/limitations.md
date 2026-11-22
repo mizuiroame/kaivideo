@@ -11,9 +11,10 @@
 - **HEVC** is decoded on the CPU: the console's decoder service, which
   [libounce](https://github.com/ouncebrew/libounce) uses, doesn't offer it,
   although the chip has it. 10-bit video is shown in 8 bits.
-- **4K HEVC** is too heavy for the CPU: measured on the console, 10-bit 4K
-  decoded at 21 frames per second at 16 Mb/s and at 15 at 68 Mb/s, so frames
-  are skipped to keep up with the sound.
+- **4K HEVC** is at the CPU's limit. Measured on the console, a 10-bit
+  3840x1600 film at 16 Mb/s decodes at 28 frames per second (in real time for
+  24 fps), but a 10-bit 4K remux at 68 Mb/s only at 18, so frames are skipped
+  to keep up with the sound.
 - **HDR** on the SD card or a network folder isn't converted: HDR videos
   play, with washed-out colors. From a server, the server converts them.
 - **Big libraries**: tried with a few dozen videos on the console (and with
