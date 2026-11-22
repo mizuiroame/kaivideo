@@ -192,8 +192,8 @@ language = 한국어
 [A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] 재생  [X] 시청함  [<>] 시즌  [B] 뒤로  [Y] 검색  [ZL][ZR] 탭  [+] 메뉴
 
-[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
-[A] 재생  [X] 시청함  [R] 즐겨찾기  [L] 다운로드  [<>] 시즌  [B] 뒤로  [ZL][ZR] 탭
+[A] play  [X] watched  [R] favorite  [L] download season  [<>] season  [B] back  [ZL][ZR] tabs
+[A] 재생  [X] 시청함  [R] 즐겨찾기  [L] 시즌 다운로드  [<>] 시즌  [B] 뒤로  [ZL][ZR] 탭
 
 [A] play  [Y] from the start  [X] watched  [B] back
 [A] 재생  [Y] 처음부터  [X] 시청함  [B] 뒤로
@@ -518,6 +518,9 @@ From start
 
 German
 독일어
+
+Getting subtitles...
+자막을 가져오는 중...
 
 Greek
 그리스어
@@ -869,6 +872,9 @@ Russian
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saving as MKV · %d%%
+MKV로 저장하는 중 · %d%%
 
 SD card
 SD 카드

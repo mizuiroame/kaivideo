@@ -45,6 +45,8 @@ typedef struct {
     long long max_bitrate;
     int parts_done, part_count;   // part_count 0 until known.
     bool finishing;               // A conversion's parts are being rewrapped into its file (not kept).
+    float finish_fraction;        // How far that rewrap is, 0 to 1 (not kept).
+    bool getting_subtitles;       // Its file is whole; its subtitle is being asked for (not kept).
     bool rewrap_tried;            // A whole one still in MPEG-TS was rewrapped, or tried (not kept).
 } Download;
 
@@ -74,6 +76,10 @@ void dlListRemove(DownloadList *list, int index);
 int dlListNext(const DownloadList *list);
 // How far a download has come, 0 to 1 (by parts for a conversion, else by bytes).
 double dlProgress(const Download *d);
+
+// True for a path a download may be written to or deleted at: a video file on the card, with no
+// "." or ".." folder in it. The list file on the card can't point the worker at other files.
+bool dlPathIsSafe(const char *path);
 
 // A name the card keeps and lists: plain ASCII (the Switch 2 leaves names with
 // other bytes out of its folder lists), accents dropped from Latin letters,

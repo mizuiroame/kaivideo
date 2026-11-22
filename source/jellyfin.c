@@ -792,6 +792,9 @@ bool jfAddressIsLocal(const char *server)
     char name[JF_SERVER_MAX];
     if (n == 0 || n >= sizeof(name))
         return false;
+    // "http://192.168.0.2:1@example.com" goes to example.com: an address with a user part isn't local.
+    if (memchr(host, '@', strcspn(host, "/?#")))
+        return false;
     memcpy(name, host, n);
     name[n] = '\0';
     unsigned a, b, c, d;
@@ -876,6 +879,16 @@ bool jfDiscoveryParse(const char *json, const char *sender_ip, char *server, siz
         size_t n = hostOf(address, &host);
         const char *port = host[n] == ':' ? host + n + 1 : NULL;
         int port_length = port ? (int)strcspn(port, "/") : 0;
+        // Only the port is taken from the answer, and only as a number: anything else in it
+        // ("1@example.com") would send the sign-in to another host.
+        if (port) {
+            int digits = (int)strspn(port, "0123456789");
+            long value = digits == port_length && digits >= 1 && digits <= 5 ? strtol(port, NULL, 10) : 0;
+            if (value < 1 || value > 65535) {
+                json_decref(root);
+                return false;
+            }
+        }
         const char *usual = https ? DEFAULT_HTTPS_PORT : DEFAULT_PORT;  // Jellyfin's own, without a port.
         int written = snprintf(server, server_size, "%s://%s:%.*s", https ? "https" : "http", sender_ip,
                                port ? port_length : (int)strlen(usual), port ? port : usual);

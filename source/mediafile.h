@@ -8,6 +8,9 @@
 
 #include <libavformat/avformat.h>
 
+// The demuxers a video file may be read with (FFmpeg names): no HLS, no playlists.
+#define MEDIA_FILE_FORMATS "mov,matroska,mpegts"
+
 typedef struct MediaFile MediaFile;
 
 // What a video is read through, for picture or sound: a file, or a converted

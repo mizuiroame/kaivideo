@@ -451,7 +451,10 @@ static bool openFileInput(MediaInput *in, AVFormatContext **fmt, const char *loc
     }
     (*fmt)->pb = in->io;
     (*fmt)->flags |= AVFMT_FLAG_CUSTOM_IO;
-    return avformat_open_input(fmt, NULL, NULL, NULL) >= 0;
+    // A file is a video container only: one that starts with "#EXTM3U" isn't read as an HLS
+    // list, which would open other files named in it.
+    (*fmt)->format_whitelist = av_strdup(MEDIA_FILE_FORMATS);
+    return (*fmt)->format_whitelist && avformat_open_input(fmt, NULL, NULL, NULL) >= 0;
 }
 
 // Where a converted stream's time 0 is, in AV_TIME_BASE: its picture's start.

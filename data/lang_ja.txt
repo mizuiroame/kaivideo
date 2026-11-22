@@ -192,8 +192,8 @@ language = 日本語
 [A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] 再生  [X] 視聴済み  [<>] シーズン  [B] 戻る  [Y] 検索  [ZL][ZR] タブ  [+] メニュー
 
-[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
-[A] 再生  [X] 視聴済み  [R] お気に入り  [L] ダウンロード  [<>] シーズン  [B] 戻る  [ZL][ZR] タブ
+[A] play  [X] watched  [R] favorite  [L] download season  [<>] season  [B] back  [ZL][ZR] tabs
+[A] 再生  [X] 視聴済み  [R] お気に入り  [L] シーズンをダウンロード  [<>] シーズン  [B] 戻る  [ZL][ZR] タブ
 
 [A] play  [Y] from the start  [X] watched  [B] back
 [A] 再生  [Y] 最初から  [X] 視聴済み  [B] 戻る
@@ -536,6 +536,9 @@ From start
 
 German
 ドイツ語
+
+Getting subtitles...
+字幕を取得しています...
 
 Greek
 ギリシャ語
@@ -905,6 +908,9 @@ Russian
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saving as MKV · %d%%
+MKVとして保存中 · %d%%
 
 SD card
 SDカード

@@ -192,8 +192,8 @@ Die Videos von %s sind in der Bibliothek.
 [A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] Abspielen  [X] Gesehen  [<>] Staffel  [B] Zurück  [Y] Suche  [ZL][ZR] Tabs  [+] Menü
 
-[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
-[A] Abspielen  [X] Gesehen  [R] Favorit  [L] Download  [<>] Staffel  [B] Zurück  [ZL][ZR] Tabs
+[A] play  [X] watched  [R] favorite  [L] download season  [<>] season  [B] back  [ZL][ZR] tabs
+[A] Abspielen  [X] Gesehen  [R] Favorit  [L] Staffel laden  [<>] Staffel  [B] Zurück  [ZL][ZR] Tabs
 
 [A] play  [Y] from the start  [X] watched  [B] back
 [A] Abspielen  [Y] Von vorn  [X] Gesehen  [B] Zurück
@@ -518,6 +518,9 @@ Von vorn
 
 German
 Deutsch
+
+Getting subtitles...
+Untertitel werden geladen...
 
 Greek
 Griechisch
@@ -869,6 +872,9 @@ Russisch
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saving as MKV · %d%%
+Wird als MKV gespeichert · %d%%
 
 SD card
 SD-Karte

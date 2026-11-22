@@ -85,9 +85,16 @@ static bool srtPathFor(const char *video_path, char *out, size_t size)
 }
 
 // A list of the conversion, at url (with its header).
-static bool fetchList(NetClient *net, const char *url, const char *auth, const volatile bool *cancel, NetResponse *out)
+// auth for a request to url, or NULL when url isn't on the conversion's own server (base).
+static const char *authFor(const char *url, const char *base, const char *auth)
 {
-    NetRequest request = {.url = url, .authorization = auth[0] ? auth : NULL, .cancel = cancel,
+    return auth[0] && hlsSameOrigin(url, base) ? auth : NULL;
+}
+
+static bool fetchList(NetClient *net, const char *url, const char *base, const char *auth,
+                      const volatile bool *cancel, NetResponse *out)
+{
+    NetRequest request = {.url = url, .authorization = authFor(url, base, auth), .cancel = cancel,
                           .stall_s = CONVERSION_STALL_S};
     return netFetchText(net, &request, LIST_MAX_BYTES, out);
 }
@@ -97,7 +104,7 @@ static bool readParts(NetClient *net, const char *url, const char *auth, long lo
                       const volatile bool *cancel, HlsPlaylist *out, char *error, size_t error_size)
 {
     NetResponse master, media;
-    if (!fetchList(net, url, auth, cancel, &master)) {
+    if (!fetchList(net, url, url, auth, cancel, &master)) {
         sayStatus(master.status, master.error, error, error_size);
         return false;
     }
@@ -105,7 +112,7 @@ static bool readParts(NetClient *net, const char *url, const char *auth, long lo
     bool ok;
     if (hlsBestVariant(master.data, max_bitrate, variant, sizeof(variant)) &&
         hlsResolveUrl(url, variant, media_url, sizeof(media_url))) {
-        ok = fetchList(net, media_url, auth, cancel, &media);
+        ok = fetchList(net, media_url, url, auth, cancel, &media);
         if (ok) {
             ok = hlsPlaylistParse(media.data, media_url, 0, out);
             netResponseFree(&media);
@@ -122,11 +129,11 @@ static bool readParts(NetClient *net, const char *url, const char *auth, long lo
 }
 
 // The parts from first on, each whole before the next.
-static bool fetchParts(NetClient *net, const HlsPlaylist *p, const char *auth, int first, NetSink sink,
+static bool fetchParts(NetClient *net, const HlsPlaylist *p, const char *base, const char *auth, int first, NetSink sink,
                        DlPartDone part_done, void *user, const volatile bool *cancel, char *error, size_t error_size)
 {
     for (int i = first; i < p->count; i++) {
-        NetRequest request = {.url = p->urls[i], .authorization = auth[0] ? auth : NULL, .cancel = cancel,
+        NetRequest request = {.url = p->urls[i], .authorization = authFor(p->urls[i], base, auth), .cancel = cancel,
                               .stall_s = CONVERSION_STALL_S};
         long status = 0;
         char why[NET_ERROR_MAX] = "";
@@ -160,7 +167,7 @@ static bool fetchConverted(const char *origin, long long max_bitrate, int first,
         jfSyncConvertedRequest(origin, plan->transcode_url, url, JF_URL_MAX + JF_TRANSCODE_URL_MAX, auth, sizeof(auth));
         HlsPlaylist parts = {0};
         ok = readParts(net, url, auth, max_bitrate, cancel, &parts, error, error_size) &&
-             fetchParts(net, &parts, auth, first, sink, part_done, user, cancel, error, error_size);
+             fetchParts(net, &parts, url, auth, first, sink, part_done, user, cancel, error, error_size);
         hlsPlaylistFree(&parts);
         if (plan->play_session[0])
             jfSyncEndConversionOf(origin, plan->play_session);  // Done, or to begin again later.
@@ -194,7 +201,8 @@ static void extras(const char *origin, const char *video_path, bool converted, c
     if (!plan->direct && plan->play_session[0])
         jfSyncEndConversionOf(origin, plan->play_session);  // Asking how to play it may have begun one.
     NetResponse r;
-    if (pick >= 0 && !*cancel && jfSyncFetchSubtitle(origin, plan->subs[pick].index, cancel, &r)) {
+    if (pick >= 0 && !*cancel &&
+        jfSyncFetchSubtitle(origin, plan->subs[pick].index, JF_SUBTITLE_DOWNLOAD_WAIT_S, cancel, &r)) {
         FILE *f = fopen(srt, "wb");
         if (f) {
             fwrite(r.data, 1, r.size, f);

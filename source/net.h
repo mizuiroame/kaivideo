@@ -31,6 +31,8 @@ typedef struct {
     const volatile bool *cancel;  // Stops the transfer when it becomes true; may be NULL.
     long timeout_s;               // For the whole transfer; 0: as long as data keeps coming.
     long stall_s;                 // Gives up connecting, or with no data, after this; 0: the usual.
+    long quiet_s;                 // With no data, gives up after this instead (a server that works
+                                  // before it answers); connecting still gives up as stall_s says. 0: none.
     bool accept_json;             // Asks for JSON (Plex answers XML otherwise).
 } NetRequest;
 
@@ -68,3 +70,6 @@ void netResponseFree(NetResponse *r);
 uint64_t netBytesReceived(void);
 // Off: https servers' certificates aren't checked (a server with its own). On at start.
 void netSetCheckCertificates(bool check);
+// True for hosts whose certificate is checked even when the setting is off: plex.tv and
+// *.plex.direct always have valid ones, and they carry the Plex account's token.
+bool netAlwaysChecked(const char *url);

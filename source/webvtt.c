@@ -20,7 +20,7 @@ static bool readTime(const char *p, const char **end, int64_t *out)
     char *after;
     while (count < 3) {
         parts[count] = strtol(p, &after, 10);
-        if (after == p || parts[count] < 0)
+        if (after == p || parts[count] < 0 || parts[count] > 99999)  // No overflow below.
             return false;
         count++;
         p = after;
@@ -31,7 +31,7 @@ static bool readTime(const char *p, const char **end, int64_t *out)
     if (*p != '.' || count < 2)
         return false;
     long ms = strtol(p + 1, &after, 10);
-    if (after - (p + 1) != 3)
+    if (after - (p + 1) != 3 || ms < 0)
         return false;
     int64_t hours = count == 3 ? parts[0] : 0, minutes = parts[count - 2], seconds = parts[count - 1];
     *out = ((hours * 60 + minutes) * 60 + seconds) * NS_PER_S + ms * NS_PER_MS;

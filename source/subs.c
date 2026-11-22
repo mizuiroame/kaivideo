@@ -99,6 +99,10 @@ bool subsAdd(SubTrack *t, int64_t start_ns, int64_t end_ns, const char *text)
             free(copy);
             return true;
         }
+    if (t->count >= SUBS_CUES_MAX) {  // A hostile file can't use up memory one line at a time.
+        free(copy);
+        return false;
+    }
     if (t->count == t->capacity) {
         size_t grown = t->capacity ? t->capacity * 2 : 256;
         SubCue *cues = realloc(t->cues, grown * sizeof(SubCue));
@@ -119,7 +123,8 @@ bool subsAdd(SubTrack *t, int64_t start_ns, int64_t end_ns, const char *text)
 static bool parseTime(const char *s, int64_t *out, const char **end)
 {
     int h, m, sec, ms, n = 0;
-    if (sscanf(s, "%d:%d:%d%*[,.]%d%n", &h, &m, &sec, &ms, &n) != 4 || n == 0 || m > 59 || sec > 59 || h < 0)
+    if (sscanf(s, "%d:%d:%d%*[,.]%d%n", &h, &m, &sec, &ms, &n) != 4 || n == 0 || m > 59 || sec > 59 || h < 0 ||
+        h > SUBS_HOURS_MAX || m < 0 || sec < 0 || ms < 0 || ms > 999)
         return false;
     *out = (((int64_t)h * 60 + m) * 60 + sec) * 1000000000 + (int64_t)ms * 1000000;
     *end = s + n;

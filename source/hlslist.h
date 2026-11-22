@@ -13,6 +13,11 @@
 // ref as seen from base: an absolute address, one from the server's root, or
 // one next to base (whose query doesn't count). False if it doesn't fit.
 bool hlsResolveUrl(const char *base, const char *ref, char *out, size_t size);
+// True when a and b have the same scheme, host and port ("https://h:8920"), compared without
+// case. A list may name segments anywhere; the session's Authorization header only goes to
+// addresses with the same origin as the list it came from. False for an address with a
+// user part ("http://x@h") or without "://".
+bool hlsSameOrigin(const char *a, const char *b);
 // The first line of a playlist that isn't a tag: the variant of a master list.
 // False if there's none.
 bool hlsFirstEntry(const char *playlist, char *out, size_t size);

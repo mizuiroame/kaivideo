@@ -20,6 +20,6 @@ void remuxSetLog(RemuxLog log);
 bool remuxToMkv(const char *in_path, const char *out_path, const volatile bool *cancel, RemuxProgress progress,
                 void *user, char *error, size_t error_size);
 // The same on a thread of its own with a 2 MB stack (FFmpeg's demuxers and
-// decoders go deep), waited for.
-bool remuxToMkvOnOwnThread(const char *in_path, const char *out_path, const volatile bool *cancel, char *error,
-                           size_t error_size);
+// decoders go deep), waited for. progress (may be NULL) is called on that thread.
+bool remuxToMkvOnOwnThread(const char *in_path, const char *out_path, const volatile bool *cancel, RemuxProgress progress,
+                           void *user, char *error, size_t error_size);

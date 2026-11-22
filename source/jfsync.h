@@ -104,8 +104,14 @@ void jfSyncEndConversionOf(const char *location, const char *play_session);
 // The address and header for a conversion the server of location gave (url as in the plan).
 void jfSyncConvertedRequest(const char *location, const char *url, char *full, size_t full_size, char *authorization,
                             size_t auth_size);
-// A text subtitle track of a location, as SubRip (free with netResponseFree).
-bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out);
+// How long a subtitle may take: the server may have to read it out of the
+// whole file first, which for a 21 GB film took it 3.5 minutes.
+#define JF_SUBTITLE_PLAY_WAIT_S 120L       // While the video plays.
+#define JF_SUBTITLE_DOWNLOAD_WAIT_S 900L   // For a download (stopped by cancel when KaiVideo ends).
+// A text subtitle track of a location, as SubRip (free with netResponseFree),
+// waiting at most wait_s for it (a Plex server: its own wait).
+bool jfSyncFetchSubtitle(const char *location, int stream_index, long wait_s, const volatile bool *cancel,
+                         NetResponse *out);
 // What the reports about the video playing say about how it plays, and the
 // channel's stream the server opened (NULL or "" for none).
 void jfSyncSetPlayback(const char *play_session, bool converted, const char *live_stream);

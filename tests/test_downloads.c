@@ -44,9 +44,23 @@ static void testSafeNames(void)
     CHECK(strcmp(tiny, "Paper") == 0);  // Cut, with no space at the end.
 }
 
+static void testSafePaths(void)
+{
+    // The list file can't point the worker at the menu, a config file or out of a folder.
+    CHECK(dlPathIsSafe("sdmc:/V/" DL_FOLDER "/Films/P (1998)/P (1998).mkv"));
+    CHECK(!dlPathIsSafe("sdmc:/hbmenu.nro") && !dlPathIsSafe("sdmc:/switch/kaivideo/config/settings.txt"));
+    CHECK(!dlPathIsSafe("sdmc:/V/../../x.mkv") && !dlPathIsSafe("sdmc:/V/./x.mkv"));
+    CHECK(!dlPathIsSafe("/etc/x.mkv") && !dlPathIsSafe("x.mkv"));
+    DownloadList list = {0};
+    VideoName n = film("Paper Lanterns", 1998);
+    CHECK(dlListAdd(&list, "jf:1", "a", &n, 0, "sdmc:/hbmenu.nro", 0) < 0 && list.count == 0);
+    dlListFree(&list);
+}
+
 static void testPaths(void)
 {
     char out[LIBRARY_PATH_MAX];
+    testSafePaths();
     VideoName f = film("Paper Lanterns", 1998);
     CHECK(dlPathFor(&f, "mkv", "Video 41", "sdmc:/V/" DL_FOLDER, out, sizeof(out)));
     CHECK(strcmp(out, "sdmc:/V/" DL_FOLDER "/Films/Paper Lanterns (1998)/Paper Lanterns (1998).mkv") == 0);

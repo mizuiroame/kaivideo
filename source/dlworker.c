@@ -392,7 +392,34 @@ static void setFinishing(const char *path, bool finishing)
     Download *d = findPath(path);
     if (d) {
         d->finishing = finishing;
+        d->finish_fraction = 0.0f;
         g.changes++;
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+static void setGettingSubtitles(const char *path, bool getting)
+{
+    pthread_mutex_lock(&g.lock);
+    Download *d = findPath(path);
+    if (d) {
+        d->getting_subtitles = getting;
+        g.changes++;
+    }
+    pthread_mutex_unlock(&g.lock);
+}
+
+// The rewrap's progress, from its thread (user: the download's path). A 6 GB
+// film takes minutes on the card, so the list shows how far it is.
+static void finishProgress(void *user, double fraction)
+{
+    pthread_mutex_lock(&g.lock);
+    Download *d = findPath(user);
+    if (d && d->finishing) {
+        float now = (float)(fraction < 0.0 ? 0.0 : fraction > 1.0 ? 1.0 : fraction);
+        if ((int)(now * 100) != (int)(d->finish_fraction * 100))
+            g.changes++;
+        d->finish_fraction = now;
     }
     pthread_mutex_unlock(&g.lock);
 }
@@ -405,7 +432,8 @@ static bool finishConverted(const char *path, const char *part, char *error, siz
     char wrapped[FILE_PATH_MAX], why[DL_ERROR_MAX];
     snprintf(wrapped, sizeof(wrapped), "%s.mkv-new", path);
     setFinishing(path, true);
-    bool ok = REWRAP_ON && remuxToMkvOnOwnThread(part, wrapped, &g.abort, why, sizeof(why));
+    bool ok = REWRAP_ON && remuxToMkvOnOwnThread(part, wrapped, &g.abort, finishProgress, (void *)path, why,
+                                                 sizeof(why));
     setFinishing(path, false);
     if (REWRAP_ON && !ok && !g.abort)
         say("kept as MPEG-TS", path, why);
@@ -525,7 +553,9 @@ static void runDownload(const Download *d)
             }
         }
         if (whole && src->extras) {
+            setGettingSubtitles(d->path, true);  // The server may take minutes to read it out of the file.
             src->extras(d->origin, d->path, f.converted, &g.abort);
+            setGettingSubtitles(d->path, false);
         }
     }
     if (whole && f.converted) {
@@ -597,11 +627,12 @@ static bool rewrapOne(void)
         snprintf(g.current, sizeof(g.current), "%s", path);
         g.abort = false;
         d->finishing = true;
+        d->finish_fraction = 0.0f;
         g.changes++;
         pthread_mutex_unlock(&g.lock);
         if (g.log)
             g.log("Download rewrap begins: %s", path);
-        bool ok = remuxToMkvOnOwnThread(path, wrapped, &g.abort, why, sizeof(why));
+        bool ok = remuxToMkvOnOwnThread(path, wrapped, &g.abort, finishProgress, path, why, sizeof(why));
         pthread_mutex_lock(&g.lock);
         g.current[0] = '\0';
         Download *now = findPath(path);

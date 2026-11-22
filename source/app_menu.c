@@ -171,7 +171,7 @@ const char *appFooterHelp(const App *app)
                       : T("[A] play  [Y] from the start  [X] watched  [B] back");
     if (app->view.show >= 0)
         return server
-                   ? T("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs")
+                   ? T("[A] play  [X] watched  [R] favorite  [L] download season  [<>] season  [B] back  [ZL][ZR] tabs")
                    : T("[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu");
     switch (app->view.tab) {
     case TAB_DOWNLOADS: return appDownloadsHelp(app);

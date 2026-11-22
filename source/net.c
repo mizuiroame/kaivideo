@@ -163,22 +163,51 @@ static NetProblem problemOf(CURLcode rc, long status)
     }
 }
 
+bool netAlwaysChecked(const char *url)
+{
+    const char *scheme = strstr(url, "://");
+    const char *host = scheme ? scheme + 3 : url;
+    size_t n = strcspn(host, ":/?#");
+    static const char *const NAMES[] = {"plex.tv", "plex.direct"};
+    for (size_t i = 0; i < sizeof(NAMES) / sizeof(NAMES[0]); i++) {
+        size_t m = strlen(NAMES[i]);
+        if (n == m && !strncasecmp(host, NAMES[i], m))
+            return true;
+        if (n > m && host[n - m - 1] == '.' && !strncasecmp(host + n - m, NAMES[i], m))
+            return true;
+    }
+    return false;
+}
+
+// Only http and https may be fetched. An https address may not be redirected to plain http.
+static void limitProtocols(CURL *curl, const char *url)
+{
+    long redirects = strncasecmp(url, "https://", 8) == 0 ? CURLPROTO_HTTPS : CURLPROTO_HTTP | CURLPROTO_HTTPS;
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, redirects);
+}
+
 static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *headers, Transfer *t, char *error)
 {
     curl_easy_reset(curl);  // Keeps the connection.
-    if (!__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED)) {
+    if (!__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED) && !netAlwaysChecked(r->url)) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
     }
     curl_easy_setopt(curl, CURLOPT_URL, r->url);
+    limitProtocols(curl, r->url);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, NET_USER_AGENT);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    // A sign-in body (password) is never re-sent to wherever a redirect points.
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, r->post_json ? 0L : 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, MAX_REDIRECTS);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, r->stall_s ? r->stall_s : CONNECT_TIMEOUT_S);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, r->timeout_s);
     curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, STALL_BYTES_PER_S);
-    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, r->stall_s ? r->stall_s : STALL_TIMEOUT_S);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, r->quiet_s ? r->quiet_s : r->stall_s ? r->stall_s : STALL_TIMEOUT_S);
     curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, onData);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, t);

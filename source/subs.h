@@ -7,6 +7,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define SUBS_CUES_MAX 200000  // Lines kept per track; a film has a few thousand.
+#define SUBS_HOURS_MAX 99999
+
 typedef struct {
     int64_t start_ns, end_ns;
     char *text;  // UTF-8, lines separated by '\n'.

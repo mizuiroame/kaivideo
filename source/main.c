@@ -1267,6 +1267,14 @@ int main(int argc, char **argv)
         }
         gfxEnd();
     }
+    // Each step's time goes in the log, to find what makes the exit slow.
+    uint64_t step_at = nowNs();
+#define EXIT_STEP(name)                                                                     \
+    do {                                                                                    \
+        uint64_t t_now = nowNs();                                                           \
+        appLog("Exit: %s %.2f s", (name), (double)(t_now - step_at) / 1e9);                 \
+        step_at = t_now;                                                                    \
+    } while (0)
     if (app.opening) {
         app.open_cancelled = true;
         mediaFileInterruptAll();
@@ -1274,16 +1282,24 @@ int main(int argc, char **argv)
     }
     if (app.player)
         stopVideo(&app, NULL, false);
+    EXIT_STEP("video stopped");
     appletSetMediaPlaybackState(false);
     appSaveSettings(&app);
     appLiveExit(&app);
+    EXIT_STEP("live TV");
     appLibraryExit(&app);
+    EXIT_STEP("library");
     watchedFree(&app.watched);
     trackPrefsFree(&app.tracks);
     thumbsExit();
+    EXIT_STEP("thumbnails");
     appDownloadsExit(&app);  // Before the servers' thread: it may be telling one what was watched.
+    EXIT_STEP("downloads");
     jfSyncStop();
+    EXIT_STEP("servers");
     appNetworkExit();  // After the scan and the players: they used its connections.
+    EXIT_STEP("network");
+#undef EXIT_STEP
     sysinfoExit();
     browserFree(&app.browser);
     appLog("Done.");

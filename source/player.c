@@ -232,7 +232,7 @@ static void *fetchExternal(void *arg)
     ExtSub *e = &p->ext[p->ext_loading];
     NetResponse answer;
     SubTrack track = {0};
-    bool ok = jfSyncFetchSubtitle(p->location, e->stream_index, &p->ext_cancel, &answer);
+    bool ok = jfSyncFetchSubtitle(p->location, e->stream_index, JF_SUBTITLE_PLAY_WAIT_S, &p->ext_cancel, &answer);
     if (ok) {
         ok = subsParseSrt(&track, answer.data, answer.size);
         netResponseFree(&answer);

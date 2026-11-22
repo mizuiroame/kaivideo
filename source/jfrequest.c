@@ -18,7 +18,6 @@
 #define PLAN_MAX_BYTES (4u * 1024 * 1024)
 #define PLAN_BODY_MAX 4096
 #define SUBTITLE_MAX_BYTES (16u * 1024 * 1024)
-#define SUBTITLE_TIMEOUT_S 120L  // The server may have to read them out of the file first.
 #define PAGE_MAX_BYTES (32u * 1024 * 1024)
 #define SMALL_MAX_BYTES (256u * 1024)
 #define LIVE_GUIDE_AHEAD_S (4 * 3600)  // Programs read for the guide: now and the next hours.
@@ -221,7 +220,8 @@ void jfSyncConvertedRequest(const char *location, const char *url, char *full, s
     jfAuthHeader(&s, jfSyncVersionText(), authorization, auth_size);
 }
 
-bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile bool *cancel, NetResponse *out)
+bool jfSyncFetchSubtitle(const char *location, int stream_index, long wait_s, const volatile bool *cancel,
+                         NetResponse *out)
 {
     memset(out, 0, sizeof(*out));
     if (plexIsLocation(location)) {
@@ -238,7 +238,8 @@ bool jfSyncFetchSubtitle(const char *location, int stream_index, const volatile 
     JfSession s = sessionOf(location);
     snprintf(url, sizeof(url), "%s/Videos/%s/%s/Subtitles/%d/0/Stream.srt", s.server, item, source, stream_index);
     jfAuthHeader(&s, jfSyncVersionText(), auth, sizeof(auth));
-    NetRequest request = {.url = url, .authorization = auth, .cancel = cancel, .timeout_s = SUBTITLE_TIMEOUT_S};
+    // Nothing comes while the server reads the subtitle out of the file.
+    NetRequest request = {.url = url, .authorization = auth, .cancel = cancel, .timeout_s = wait_s, .quiet_s = wait_s};
     bool ok = netFetchText(net, &request, SUBTITLE_MAX_BYTES, out);
     netClientClose(net);
     return ok;

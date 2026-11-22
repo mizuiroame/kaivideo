@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "browser.h"
 #include "util.h"
 
 #define LINE_MAX_BYTES 4096
@@ -210,11 +211,21 @@ int dlListFindPath(const DownloadList *list, const char *path)
     return -1;
 }
 
+bool dlPathIsSafe(const char *path)
+{
+    if (strncmp(path, "sdmc:/", 6) != 0 || !browserIsVideo(path))
+        return false;
+    for (const char *p = path + 5; p; p = strchr(p + 1, '/'))
+        if (!strncmp(p, "/../", 4) || !strncmp(p, "/./", 3) || !strcmp(p, "/..") || !strcmp(p, "/."))
+            return false;
+    return true;
+}
+
 int dlListAdd(DownloadList *list, const char *origin, const char *account, const VideoName *name,
               int64_t runtime_ns, const char *path, int64_t added)
 {
     if (!fitsLine(origin, LIBRARY_PATH_MAX) || !fitsLine(account, DL_ACCOUNT_MAX) ||
-        !fitsLine(path, LIBRARY_PATH_MAX - strlen(DL_PART_SUFFIX)))
+        !fitsLine(path, LIBRARY_PATH_MAX - strlen(DL_PART_SUFFIX)) || !dlPathIsSafe(path))
         return -1;
     int there = dlListFindOrigin(list, origin, account);
     if (there >= 0)

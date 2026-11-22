@@ -285,6 +285,15 @@ static void sizeText(int64_t bytes, char *out, size_t size)
         snprintf(out, size, "%.0f MB", bytes / MIB);
 }
 
+// "Saving as MKV · 42%" while a conversion is rewrapped ("Finishing..." until it says how far).
+static void finishingText(const Download *d, char *out, size_t size)
+{
+    if (d->finish_fraction > 0.0f)
+        snprintf(out, size, T("Saving as MKV \xC2\xB7 %d%%"), (int)(d->finish_fraction * 100));
+    else
+        snprintf(out, size, "%s", T("Finishing..."));
+}
+
 static void stateText(const Download *d, char *out, size_t size)
 {
     char done[32], total[32];
@@ -295,7 +304,9 @@ static void stateText(const Download *d, char *out, size_t size)
     case DL_QUEUED: snprintf(out, size, "%s", d->error[0] ? d->error : T("Waiting")); break;
     case DL_ACTIVE:
         if (d->finishing)
-            snprintf(out, size, "%s", T("Finishing..."));
+            finishingText(d, out, size);
+        else if (d->getting_subtitles)
+            snprintf(out, size, "%s", T("Getting subtitles..."));
         else if (d->max_bitrate > 0 && d->part_count > 0)
             snprintf(out, size, T("Converting \xC2\xB7 %d%% \xC2\xB7 %s"), percent, done);
         else if (d->size > 0)
@@ -306,7 +317,12 @@ static void stateText(const Download *d, char *out, size_t size)
     case DL_PAUSED: snprintf(out, size, T("Paused \xC2\xB7 %d%%"), percent); break;
     case DL_FAILED: snprintf(out, size, "%s", d->error[0] ? d->error : T("It stopped.")); break;
     case DL_DELETED: snprintf(out, size, "%s", T("Deleted from the card")); break;
-    default: snprintf(out, size, "%s", d->finishing ? T("Finishing...") : total); break;
+    default:
+        if (d->finishing)
+            finishingText(d, out, size);
+        else
+            snprintf(out, size, "%s", total);
+        break;
     }
 }
 

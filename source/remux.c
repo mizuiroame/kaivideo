@@ -6,7 +6,10 @@
 #include <stdlib.h>
 
 #include <libavformat/avformat.h>
+#include <libavutil/dict.h>
 #include <libavutil/mathematics.h>
+
+#include "mediafile.h"
 
 #define PROGRESS_EVERY 500  // Packets between reports.
 #define STEP_EVERY 20000    // Packets between steps in the log.
@@ -211,7 +214,11 @@ bool remuxToMkv(const char *in_path, const char *out_path, const volatile bool *
     snprintf(in_url, sizeof(in_url), "file:%s", in_path);
     snprintf(out_url, sizeof(out_url), "file:%s", out_path);
     STEP("  remux: opening %s", in_url);
-    int opened = avformat_open_input(&r.in, in_url, NULL, NULL);
+    // Only a container (a download is MPEG-TS or MKV), never an HLS list naming other files.
+    AVDictionary *options = NULL;
+    av_dict_set(&options, "format_whitelist", MEDIA_FILE_FORMATS, 0);
+    int opened = avformat_open_input(&r.in, in_url, NULL, &options);
+    av_dict_free(&options);
     STEP("  remux: opened (%d), reading its tracks", opened);
     bool ok = opened == 0 && avformat_find_stream_info(r.in, NULL) >= 0;
     STEP("  remux: tracks read (%d), making the MKV", ok);
@@ -250,6 +257,8 @@ bool remuxToMkv(const char *in_path, const char *out_path, const volatile bool *
 typedef struct {
     const char *in, *out;
     const volatile bool *cancel;
+    RemuxProgress progress;
+    void *user;
     char *error;
     size_t error_size;
     bool ok;
@@ -258,14 +267,14 @@ typedef struct {
 static void *runJob(void *arg)
 {
     Job *job = arg;
-    job->ok = remuxToMkv(job->in, job->out, job->cancel, NULL, NULL, job->error, job->error_size);
+    job->ok = remuxToMkv(job->in, job->out, job->cancel, job->progress, job->user, job->error, job->error_size);
     return NULL;
 }
 
-bool remuxToMkvOnOwnThread(const char *in_path, const char *out_path, const volatile bool *cancel, char *error,
-                           size_t error_size)
+bool remuxToMkvOnOwnThread(const char *in_path, const char *out_path, const volatile bool *cancel, RemuxProgress progress,
+                           void *user, char *error, size_t error_size)
 {
-    Job job = {in_path, out_path, cancel, error, error_size, false};
+    Job job = {in_path, out_path, cancel, progress, user, error, error_size, false};
     pthread_attr_t attr;
     pthread_t thread;
     pthread_attr_init(&attr);

@@ -192,8 +192,8 @@ Os vídeos de %s já estão na biblioteca.
 [A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] reproduzir  [X] assistido  [<>] temporada  [B] voltar  [Y] buscar  [ZL][ZR] abas  [+] menu
 
-[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs
-[A] reproduzir  [X] assistido  [R] favorito  [L] baixar  [<>] temporada  [B] voltar  [ZL][ZR] abas
+[A] play  [X] watched  [R] favorite  [L] download season  [<>] season  [B] back  [ZL][ZR] tabs
+[A] reproduzir  [X] assistido  [R] favorito  [L] baixar temporada  [<>] temporada  [B] voltar  [ZL][ZR] abas
 
 [A] play  [Y] from the start  [X] watched  [B] back
 [A] reproduzir  [Y] do início  [X] assistido  [B] voltar
@@ -518,6 +518,9 @@ Do início
 
 German
 Alemão
+
+Getting subtitles...
+Baixando legendas...
 
 Greek
 Grego
@@ -869,6 +872,9 @@ Russo
 
 S%02dE%02d · %s
 T%02dE%02d · %s
+
+Saving as MKV · %d%%
+Salvando como MKV · %d%%
 
 SD card
 Cartão SD

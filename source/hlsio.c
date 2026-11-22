@@ -73,6 +73,7 @@ typedef struct {
     pthread_cond_t wake;
     NetClient *net;
     char authorization[512];
+    char origin_url[HLS_URL_MAX];  // The first list's address; the header only goes to its origin.
     MediaList lists[HLS_LISTS_MAX];
     int list_count;
     char *master_text;            // What FFmpeg opens first when there are several lists, else NULL.
@@ -176,14 +177,15 @@ static int freeSlot(HlsSession *ses)
 // --- The thread ---
 
 // The server's sign-in, or none: a channel's own source never gets it.
-static const char *authorization(HlsSession *ses)
+static const char *authorization(const HlsSession *ses, const char *url)
 {
-    return ses->authorization[0] ? ses->authorization : NULL;
+    return ses->authorization[0] && hlsSameOrigin(url, ses->origin_url) ? ses->authorization : NULL;
 }
 
 static bool fetchSegment(HlsSession *ses, int list, int index, NetResponse *r)
 {
-    NetRequest request = {.url = ses->lists[list].list.urls[index], .authorization = authorization(ses),
+    NetRequest request = {.url = ses->lists[list].list.urls[index],
+                          .authorization = authorization(ses, ses->lists[list].list.urls[index]),
                           .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S};
     for (int attempt = 0; attempt < FETCH_TRIES && !ses->abort_fetch; attempt++) {
         if (netFetchText(ses->net, &request, SEGMENT_MAX, r))
@@ -363,7 +365,7 @@ static bool subtitleWork(HlsSession *ses)
     ses->abort_fetch = false;
     pthread_mutex_unlock(&ses->lock);
     NetResponse r;
-    NetRequest request = {.url = url, .authorization = authorization(ses), .cancel = &ses->abort_fetch,
+    NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = &ses->abort_fetch,
                           .timeout_s = PLAYLIST_TIMEOUT_S};
     bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, &r);
     pthread_mutex_lock(&ses->lock);
@@ -518,7 +520,7 @@ static bool getText(HlsSession *ses, const char *url, NetResponse *r)
 {
     // While starting, the caller's cancel cuts it short; afterwards, stopping does.
     const volatile bool *cancel = !ses->running && ses->start_cancel ? ses->start_cancel : &ses->abort_fetch;
-    NetRequest request = {.url = url, .authorization = authorization(ses), .cancel = cancel,
+    NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = cancel,
                           .timeout_s = ses->playlist_timeout_s};
     return netFetchText(ses->net, &request, PLAYLIST_MAX, r);
 }
@@ -625,6 +627,7 @@ static bool start(HlsSession *ses, const char *master_url, const char *auth, lon
     pthread_cond_init(&ses->wake, NULL);
     ses->start_cancel = cancel;
     snprintf(ses->authorization, sizeof(ses->authorization), "%s", auth ? auth : "");
+    snprintf(ses->origin_url, sizeof(ses->origin_url), "%s", master_url);
     ses->max_bitrate = max_bitrate;
     ses->playlist_timeout_s = timeout_s;
     ses->fetch_index = -1;

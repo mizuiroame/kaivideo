@@ -343,6 +343,15 @@ static void testHlsLists(void)
     CHECK(hlsResolveUrl("http://h:1/videos/a/m.m3u8", "/other/b.ts", out, sizeof(out)) &&
           !strcmp(out, "http://h:1/other/b.ts"));
     CHECK(hlsResolveUrl("http://h:1/a", "http://x/y", out, sizeof(out)) && !strcmp(out, "http://x/y"));
+    // The session header only goes back to the list's own scheme, host and port.
+    CHECK(hlsSameOrigin("http://h:1/videos/a/master.m3u8?x=1", "http://h:1/other/b.ts"));
+    CHECK(hlsSameOrigin("HTTPS://Host:8920/a", "https://host:8920"));
+    CHECK(!hlsSameOrigin("http://h:1/a", "http://x/y"));
+    CHECK(!hlsSameOrigin("http://h:1/a", "http://h:2/a"));
+    CHECK(!hlsSameOrigin("http://h:1/a", "https://h:1/a"));
+    CHECK(!hlsSameOrigin("http://h:1/a", "http://h:1.evil.example/a"));
+    CHECK(!hlsSameOrigin("http://h:1@evil/a", "http://h:1@evil/a"));
+    CHECK(!hlsSameOrigin("file:kaivideo/1.ts", "file:kaivideo/1.ts"));
     CHECK(hlsFirstEntry("#EXTM3U\r\n#TAG\r\nmain.m3u8?a=1\r\n", out, sizeof(out)) && !strcmp(out, "main.m3u8?a=1"));
     CHECK(!hlsFirstEntry("#EXTM3U\n", out, sizeof(out)));
 
@@ -486,6 +495,7 @@ static void testConnectionVerdict(void)
     CHECK(jfAddressIsLocal("http://172.20.1.1:8096") && !jfAddressIsLocal("http://172.40.1.1:8096"));
     CHECK(jfAddressIsLocal("http://den.local:8096") && jfAddressIsLocal("http://den:8096"));
     CHECK(!jfAddressIsLocal("http://media.example.org") && !jfAddressIsLocal("https://8.8.8.8"));
+    CHECK(!jfAddressIsLocal("http://192.168.0.2:1@evil.example") && !jfAddressIsLocal("http://den@evil.example"));
 }
 
 // A server's answer to the network-wide question: its port and scheme, at the
@@ -505,6 +515,14 @@ static void testDiscovery(void)
     CHECK(!jfDiscoveryParse("not json", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
     CHECK(!jfDiscoveryParse("{\"Name\":\"x\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
     CHECK(!jfDiscoveryParse("{\"Address\":\"ftp://x:1\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    // A reply can't smuggle another host in through the port.
+    CHECK(!jfDiscoveryParse("{\"Address\":\"http://x:1@evil.example\"}", "10.0.0.9", server, sizeof(server), name,
+                            sizeof(name)));
+    CHECK(!jfDiscoveryParse("{\"Address\":\"http://x:99999\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    CHECK(!jfDiscoveryParse("{\"Address\":\"http://x:0\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    CHECK(!jfDiscoveryParse("{\"Address\":\"http://x:\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)));
+    CHECK(jfDiscoveryParse("{\"Address\":\"http://x:8096/\"}", "10.0.0.9", server, sizeof(server), name, sizeof(name)) &&
+          !strcmp(server, "http://10.0.0.9:8096"));
 }
 
 void testJellyfin(void)

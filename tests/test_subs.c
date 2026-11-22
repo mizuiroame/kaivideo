@@ -35,6 +35,11 @@ static void testSrt(void)
     CHECK(textAt(&t, 0, NULL) && textAt(&t, 7 * S, NULL));
     subsFree(&t);
     CHECK(!subsParseSrt(&t, "nothing here", 12) && t.count == 0);
+    // Times that would overflow, or are negative, aren't times.
+    const char *odd = "1\n99999999999:00:00,000 --> 99999999999:00:01,000\nx\n\n"
+                      "2\n00:-1:00,000 --> 00:00:01,000\ny\n\n";
+    CHECK(!subsParseSrt(&t, odd, strlen(odd)) && t.count == 0);
+    subsFree(&t);
 }
 
 static void testAdd(void)

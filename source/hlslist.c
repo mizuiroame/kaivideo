@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define LOCAL_NAME_MAX 48
 #define EXTINF "#EXTINF:"
@@ -33,6 +34,25 @@ bool hlsResolveUrl(const char *base, const char *ref, char *out, size_t size)
         n = snprintf(out, size, "%.*s%s%s", (int)end, base, base[end ? end - 1 : 0] == '/' ? "" : "/", ref);
     }
     return n > 0 && (size_t)n < size;
+}
+
+// The length of url's "scheme://host:port", or 0 if it has no "://" or has a user part.
+static size_t originLength(const char *url)
+{
+    const char *scheme = strstr(url, "://");
+    if (!scheme)
+        return 0;
+    const char *host = scheme + 3;
+    size_t n = strcspn(host, "/?#");
+    if (n == 0 || memchr(host, '@', n))
+        return 0;
+    return (size_t)(host - url) + n;
+}
+
+bool hlsSameOrigin(const char *a, const char *b)
+{
+    size_t n = originLength(a);
+    return n > 0 && n == originLength(b) && strncasecmp(a, b, n) == 0;
 }
 
 // The line starting at p: where it ends, without its line break.
