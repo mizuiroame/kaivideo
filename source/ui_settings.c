@@ -69,6 +69,12 @@ void uiSettingsSetNetwork(const char *address, const char *user, bool remember, 
     g_net_smb = smb;
 }
 static const char *g_users[SERVER_KIND_COUNT] = {"", "", ""};
+static const char *g_update_now = "";
+
+void uiSettingsSetUpdate(const char *now)
+{
+    g_update_now = now;
+}
 
 void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT])
 {
@@ -107,6 +113,8 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", g_net_remember ? T("On") : T("Off: asked when the folder is used"));
     } else if (row == SETTING_NET_UNSIGNED) {
         snprintf(out, size, "%s", !g_net_smb ? T("Only for shared folders (SMB)") : g_net_unsigned ? T("On: not signed") : T("Off"));
+    } else if (row == SETTING_UPDATE_NOW) {
+        snprintf(out, size, "%s", g_update_now);
     } else if (row == SETTING_JF_SIGN_OUT) {
         snprintf(out, size, "%s", g_jf_user);
     } else if (row == SETTING_OPEN_JELLYFIN || row == SETTING_OPEN_EMBY || row == SETTING_OPEN_PLEX) {

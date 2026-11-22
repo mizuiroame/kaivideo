@@ -69,6 +69,21 @@ language = 日本語
 %s can't be read (JPEG or PNG, up to 50 megapixels).
 %s を読み込めません（JPEG または PNG、5000万画素まで）。
 
+%s installed: open KaiVideo again
+%s をインストールしました：KaiVideoを開き直してください
+
+%s is out
+%s が出ました
+
+%s is out, in Brewstore
+%s が出ました（Brewstore）
+
+%s is out: A installs it
+%s が出ました：Aでインストール
+
+%s is out: A looks again
+%s が出ました：Aでもう一度確認
+
 %s of %s
 %s / %s
 
@@ -270,6 +285,9 @@ Allow without signing (old NAS)
 Already looking for videos.
 すでに動画を探しています。
 
+Already on it.
+すでに実行中です。
+
 AM
 午前
 
@@ -330,6 +348,9 @@ Changing the sound track
 Chapter %d
 チャプター%d
 
+Check once a day
+1日1回確認
+
 Chinese
 中国語
 
@@ -351,6 +372,9 @@ Cleared %d deleted downloads from the list.
 Clock
 時計
 
+Close KaiVideo and open it again to use the new version.
+新しいバージョンを使うには、KaiVideoを閉じてもう一度開いてください。
+
 Color
 色
 
@@ -371,6 +395,12 @@ Converting
 
 Converting · %d%% · %s
 変換中 · %d%% · %s
+
+Couldn't look: A tries again
+確認できませんでした：Aで再試行
+
+Credits and licenses
+クレジットとライセンス
 
 Cyan
 シアン
@@ -422,6 +452,9 @@ DOWNLOADING
 
 Downloading
 ダウンロード中
+
+Downloading %s... %d%%
+%s をダウンロード中... %d%%
 
 Downloading it again.
 もう一度ダウンロードします。
@@ -543,6 +576,12 @@ German
 Getting subtitles...
 字幕を取得しています...
 
+GitHub couldn't be reached.
+GitHubに接続できませんでした。
+
+GitHub's answer about the latest version couldn't be used.
+最新バージョンについてのGitHubの応答を使えませんでした。
+
 Greek
 ギリシャ語
 
@@ -603,11 +642,26 @@ Japanese
 Jellyfin
 Jellyfin
 
+KaiVideo %s is installed: it runs from the next start.
+KaiVideo %s をインストールしました：次回の起動から使われます。
+
+KaiVideo %s is out, on its GitHub page.
+KaiVideo %s が出ました（GitHubのページ）。
+
+KaiVideo %s is out: Settings > About installs it.
+KaiVideo %s が出ました：設定 > このアプリについて でインストールできます。
+
+KaiVideo %s is out: update it in Brewstore.
+KaiVideo %s が出ました：Brewstoreでアップデートしてください。
+
 KaiVideo can't download from there.
 KaiVideo はそこからダウンロードできません。
 
 KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
 KaiVideo はその中とサブフォルダーの映画とシリーズを見つけます。変更は - か「設定 > SDカードのフォルダー」で行えます。
+
+KaiVideo is up to date.
+KaiVideoは最新です。
 
 KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
 KaiVideo は MP4、MKV、WebM ファイル（H.264、HEVC、VP9、AV1、VP8）を再生できます。
@@ -642,6 +696,9 @@ Live TV comes from your Jellyfin server's tuners and guide.
 Loading...
 読み込み中...
 
+Look for an update
+アップデートを確認
+
 Looking for %s servers on this network...
 このネットワークで%sサーバーを探しています...
 
@@ -650,6 +707,9 @@ Looking for videos...
 
 Looking for videos... %zu
 動画を探しています... %zu
+
+Looking...
+確認中...
 
 Low
 低
@@ -722,6 +782,9 @@ Not chosen
 
 Not enough memory for this video's frames.
 この動画のフレームに必要なメモリーが足りません。
+
+Not installed: A tries again
+インストールできませんでした：Aで再試行
 
 Not set
 未設定
@@ -1164,6 +1227,9 @@ The console's decoder can't play this %s video (%dx%d, 0x%x).
 The decoding thread can't start.
 デコード用スレッドを開始できません。
 
+The download didn't match GitHub's checksum: nothing was changed.
+ダウンロードがGitHubのチェックサムと一致しませんでした：何も変更していません。
+
 The download goes on.
 ダウンロードを続けます。
 
@@ -1196,6 +1262,12 @@ The network folder is forgotten.
 
 The network folder's password isn't remembered: it's asked for when the folder is used.
 ネットワークフォルダーのパスワードは保存されていません。フォルダーを使うときに入力を求めます。
+
+The new version couldn't be downloaded.
+新しいバージョンをダウンロードできませんでした。
+
+The new version couldn't be written to the card: nothing was changed.
+新しいバージョンをSDカードに書き込めませんでした：何も変更していません。
 
 The password is kept on the card.
 パスワードはカードに保存されます。
@@ -1305,6 +1377,9 @@ Theme
 This %s video can't be decoded.
 この%s動画はデコードできません。
 
+This is %s: A looks now
+現在は %s：Aで今すぐ確認
+
 This isn't a video KaiVideo can read (MP4, MKV or WebM).
 KaiVideo で読み込める動画（MP4、MKV、WebM）ではありません。
 
@@ -1355,6 +1430,12 @@ UP NEXT
 
 UP NEXT  ·  %d s
 次のエピソード  ·  %d秒
+
+Up to date
+最新です
+
+Update it in Brewstore.
+Brewstoreでアップデートしてください。
 
 Update the library
 ライブラリーを更新

@@ -185,7 +185,7 @@ void appDownloadsUpdate(App *app, uint64_t now)
     if (finished == app->dl_finished)
         return;
     app->dl_finished = finished;
-    appShowMessage(app, T("A download is on the card."), now);
+    appNotify(app, NOTICE_DONE, T("A download is on the card."), now);
     if (!app->config.use_jellyfin && !app->player && !app->opening)
         appLibraryRescan(app, now);  // The card's library shows it.
 }
@@ -329,13 +329,13 @@ void appDownloadItem(App *app, int item, uint64_t now)
     char why[128];
     if (!d) {
         if (!enqueue(app, item, why, sizeof(why)))
-            appShowMessage(app, why, now);
+            appNotify(app, NOTICE_ERROR, why, now);
         else if (it->blocked) {
             snprintf(why, sizeof(why), T("Added to Downloads: the server converts it first, at %.0f Mb/s."),
                      convertedBitrate(app) / 1e6);
             appShowMessage(app, why, now);
         } else {
-            appShowMessage(app, T("Added to Downloads (+ menu)."), now);
+            appNotify(app, NOTICE_DONE, T("Added to Downloads (+ menu)."), now);
         }
         return;
     }
@@ -422,7 +422,7 @@ void appDownloadSeason(App *app, int show, int season, uint64_t now)
         snprintf(message, sizeof(message), "%s", why);
     else
         snprintf(message, sizeof(message), "%s", T("This season is in Downloads already (+ menu)."));
-    appShowMessage(app, message, now);
+    appNotify(app, NOTICE_DONE, message, now);
 }
 
 // --- What was watched of a download ---

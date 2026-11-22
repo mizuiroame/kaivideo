@@ -19,3 +19,5 @@ void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT]);
 // What the network folder's rows say: its address and user ("" for none).
 // What the network folder's rows show: its address, user, and its two switches.
 void uiSettingsSetNetwork(const char *address, const char *user, bool remember, bool allow_unsigned, bool smb);
+// What Look for an update says: the version found, the download's progress...
+void uiSettingsSetUpdate(const char *now);

@@ -44,3 +44,6 @@ void testHlsMaster(void);
 void testDownloads(void);
 void testLang(void);
 void testDav(void);
+void testUpdate(void);
+void testUpdateRelease(void);
+void testNotice(void);

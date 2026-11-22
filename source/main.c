@@ -37,13 +37,13 @@
 #include "thumbs.h"
 #include "tpfetch.h"
 #include "ui_library.h"
+#include "ui_notice.h"
 #include "touch.h"
 #include "ui.h"
 #include "util.h"
 
 #define OLD_CONFIG_FOLDER "sdmc:/config/kaivideo"  // Before files went next to the NRO.
 #define OVERLAY_NS 3000000000ull     // How long the player's bar stays after a press.
-#define MESSAGE_NS 5000000000ull     // How long an error shows in the list.
 #define NOTE_NS 3000000000ull        // How long "Subtitles: English" shows.
 #define SUBTITLE_UNSAID (-2)         // Opening: no picture subtitle said; the one chosen before, if any.
 #define LOOP_SETTLE_NS 500000000ull  // After going back to A, the next look at B waits this long.
@@ -156,10 +156,14 @@ static TouchEvent readTouch(TouchTracker *tracker, uint64_t now)
 
 // --- Playing ---
 
+void appNotify(App *app, NoticeKind kind, const char *message, uint64_t now)
+{
+    noticePush(&app->notices, kind, message, now);
+}
+
 void appShowMessage(App *app, const char *message, uint64_t now)
 {
-    snprintf(app->message, sizeof(app->message), "%s", message);
-    app->message_until = now + MESSAGE_NS;
+    appNotify(app, NOTICE_INFO, message, now);
 }
 
 // The series of the video playing, or NULL.
@@ -371,7 +375,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     app->opening = pthread_create(&app->open_thread, NULL, openThread, app) == 0;
     if (!app->opening) {
         thumbsPause(false);
-        appShowMessage(app, T("The video can't be opened now."), now);
+        appNotify(app, NOTICE_ERROR, T("The video can't be opened now."), now);
     }
     return app->opening;
 }
@@ -466,7 +470,7 @@ static void finishOpening(App *app, uint64_t now)
         thumbsPause(false);
         appLog("%s: %s", app->playing_path, app->open_error);
         if (!app->open_cancelled)
-            appShowMessage(app, app->open_error[0] ? app->open_error : T("The video couldn't be loaded."), now);
+            appNotify(app, NOTICE_ERROR, app->open_error[0] ? app->open_error : T("The video couldn't be loaded."), now);
     }
 }
 
@@ -1172,6 +1176,7 @@ int main(int argc, char **argv)
     appNetworkStart(&app);  // After the language: Files names the folder in it.
     appDownloadsStart(&app);  // Before the library: the card's downloads take their servers' names.
     appLibraryStart(&app);
+    appStartUpdates(&app, argc > 0 ? argv[0] : NULL);  // Once a day, asks GitHub for a new version.
     InputRepeat repeat;
     inputRepeatInit(&repeat, BUTTONS_REPEATING);
     TouchTracker touch;
@@ -1193,6 +1198,12 @@ int main(int argc, char **argv)
         sysinfoGet(&sys, now);
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
+        appUpdatesTick(&app, now);
+        app.notice = noticeShown(&app.notices, now, &app.notice_slide);
+        if (t.type == TOUCH_TAP && uiNoticeAt(t.x, t.y)) {  // On the bubble: it goes, and nothing under it is tapped.
+            noticeDismiss(&app.notices, now);
+            t.type = TOUCH_NONE;
+        }
         if (app.player && !app.opening && app.live_switch)
             switchChannel(&app, now);
         if (app.player && !app.opening)
@@ -1250,7 +1261,7 @@ int main(int argc, char **argv)
                 bool play_next = app.play_next || (ended && app.config.autoplay && !app.next_dismissed);
                 stopVideo(&app, error, ended);
                 if (error[0])
-                    appShowMessage(&app, error, now);
+                    appNotify(&app, NOTICE_ERROR, error, now);
                 else if (play_next && next >= 0)
                     appLibraryPlay(&app, next, now);
                 appMenuAfterVideo(&app, now);
@@ -1267,6 +1278,7 @@ int main(int argc, char **argv)
             else
                 appLibraryDraw(&app, now);
         }
+        uiDrawNotice(app.notice, app.notice_slide);  // Last: over every screen, the video's too.
         gfxEnd();
     }
     // Each step's time goes in the log, to find what makes the exit slow.
@@ -1299,6 +1311,8 @@ int main(int argc, char **argv)
     EXIT_STEP("downloads");
     jfSyncStop();
     EXIT_STEP("servers");
+    appStopUpdates();  // A download under way stops; the .nro in use is left as it was.
+    EXIT_STEP("updates");
     appNetworkExit();  // After the scan and the players: they used its connections.
     EXIT_STEP("network");
     sysinfoExit();

@@ -221,7 +221,7 @@ static void stepBackground(App *app, int delta, uint64_t now)
         char message[BACKGROUND_NAME_MAX + 80];
         snprintf(message, sizeof(message), T("%s can't be read (JPEG or PNG, up to 50 megapixels)."),
                  app->config.background);
-        appShowMessage(app, message, now);
+        appNotify(app, NOTICE_ERROR, message, now);
         app->config.background[0] = '\0';
     }
 }
@@ -229,7 +229,7 @@ static void stepBackground(App *app, int delta, uint64_t now)
 static void openJellyfin(App *app, uint64_t now)
 {
     if (!appJellyfinEnsure(app)) {
-        appShowMessage(app, T("The network can't be used."), now);
+        appNotify(app, NOTICE_ERROR, T("The network can't be used."), now);
         return;
     }
     jfSyncGetStatus(&app->jf);
@@ -259,9 +259,9 @@ static void typeServer(App *app, uint64_t now)
              serverKindName((ServerKind)app->config.server_kind));
     SystemKeyboardResult result = systemKeyboardInput(prompt, initial, text, sizeof(text), JF_SERVER_MAX - 1);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE)
-        appShowMessage(app, T("The keyboard couldn't open."), now);
+        appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     else if (result == SYSTEM_KEYBOARD_OK && !jfSyncSetServer(text))
-        appShowMessage(app, T("That isn't a server's address."), now);
+        appNotify(app, NOTICE_ERROR, T("That isn't a server's address."), now);
 }
 
 // The library keeps the other servers signed in; with none left, it's the card's.
@@ -300,7 +300,7 @@ static void passwordSignIn(App *app, uint64_t now)
     else if (result == SYSTEM_KEYBOARD_OK)
         return;
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
-        appShowMessage(app, T("The keyboard couldn't open."), now);
+        appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         app->jf_signing = true;
         jfSyncSignInWithPassword(user, password);
@@ -395,7 +395,9 @@ static void activate(App *app, SettingRow row, uint64_t now)
         else
             askNetwork(app, row, now);
         break;
-    case SETTING_ABOUT: app->about_open = true; break;
+    case SETTING_ABOUT: openPage(app, SETTINGS_PAGE_ABOUT); break;
+    case SETTING_CREDITS: app->about_open = true; break;
+    case SETTING_UPDATE_NOW: appUpdatesActivate(app, now); break;
     case SETTING_OPEN_NETWORK: openPage(app, SETTINGS_PAGE_NETWORK); break;
     default:
         if (!appNetworkActivate(app, row, now))
@@ -509,6 +511,9 @@ void appSettingsDraw(const App *app)
     }
     uiSettingsSetServers(names);
     appNetworkFeedSettings();
+    static char update_now[96];
+    appUpdatesValue(app, SETTING_UPDATE_NOW, update_now, sizeof(update_now));
+    uiSettingsSetUpdate(update_now);
     if (app->jf_signing)
         uiDrawSignInCode(app->config.server_kind == SERVER_PLEX, app->jf.code, server, app->jf.linked);
     else if (app->about_open)

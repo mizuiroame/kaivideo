@@ -43,7 +43,7 @@ static void finishSignIn(App *app, uint64_t now)
     app->jf_arriving = app->config.server_kind + 1;
     app->settings_open = false;
     appLibraryShowServer(app, (ServerKind)app->config.server_kind);  // The one just signed in.
-    appShowMessage(app, message, now);
+    appNotify(app, NOTICE_DONE, message, now);
 }
 
 static void sayNewError(App *app, uint64_t now)
@@ -52,7 +52,7 @@ static void sayNewError(App *app, uint64_t now)
         return;
     snprintf(app->jf_last_error, sizeof(app->jf_last_error), "%s", app->jf.error);
     if (app->jf.error[0])
-        appShowMessage(app, app->jf.error, now);
+        appNotify(app, NOTICE_ERROR, app->jf.error, now);
 }
 
 // A test or search from Settings finished: say what it found, and use a server found.
@@ -67,7 +67,7 @@ static void takeProbe(App *app, uint64_t now)
                  T("The server found can't be used: type its address under Server."));
     if (!r.finding && r.ok)
         appLiveReadSoon(app);  // A test that worked also looks for Live TV channels again.
-    appShowMessage(app, r.message, now);
+    appNotify(app, r.ok ? NOTICE_DONE : NOTICE_ERROR, r.message, now);
 }
 
 void appJellyfinUpdate(App *app, uint64_t now)
@@ -99,7 +99,7 @@ void appJellyfinUpdate(App *app, uint64_t now)
             char message[96];
             snprintf(message, sizeof(message), T("%s's videos are in the library."),
                      serverKindName((ServerKind)(app->jf_arriving - 1)));
-            appShowMessage(app, message, now);
+            appNotify(app, NOTICE_DONE, message, now);
             app->jf_arriving = 0;
         }
     }

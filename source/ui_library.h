@@ -103,7 +103,7 @@ void uiDrawMenu(const char *title, const char *version, const char *const *items
 // The current tab (not Files) or a series' page, under the tab bar, which
 // it draws too. folder_set: false before a library folder is chosen.
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
-                   bool folder_set, const char *status, const char *message);
+                   bool folder_set, const char *status);
 
 // A film or episode's details over the screen: picture, title, summary, and
 // its buttons. note: something to say about how it plays, or "". favorites:
@@ -128,8 +128,6 @@ void uiDrawPreviewBehind(const uint32_t *pixels, int w, int h);
 // time, seconds_left), ZR to play it now, and a close button (LIBHIT_CLOSE).
 // Above the bar when it's shown.
 void uiDrawUpNextCard(const Library *lib, int item, double fraction_left, int seconds_left, bool bar_shown);
-// A message for a while at the bottom (an error), over everything.
-void uiDrawToast(const char *message);
 // Where a tap lands on what was drawn last.
 LibHit uiLibraryTap(int x, int y);
 // Adds a touch target to what was drawn last (ui_settings.c's).

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #include "jellyfin.h"
@@ -46,6 +47,9 @@ typedef enum {
     SETTING_NET_FORGET,     // Forgets it: address, user and password.
     SETTING_NET_REMEMBER,   // Whether its password is kept on the card.
     SETTING_NET_UNSIGNED,   // Whether an SMB server that doesn't sign is used (an old NAS).
+    SETTING_CREDITS,        // About: shows the credits and licenses.
+    SETTING_UPDATE_AUTO,    // About: whether GitHub is asked once a day for a new version.
+    SETTING_UPDATE_NOW,     // About: looks for one now, or installs the one found.
     SETTING_COUNT,
 } SettingRow;
 
@@ -58,6 +62,7 @@ typedef enum {
     SETTINGS_PAGE_LIBRARY,
     SETTINGS_PAGE_PLAYBACK,
     SETTINGS_PAGE_NETWORK,
+    SETTINGS_PAGE_ABOUT,
     SETTINGS_PAGE_COUNT
 } SettingsPage;
 
@@ -89,6 +94,9 @@ typedef struct {
     int server_color[SERVER_KIND_COUNT];  // 0: the server's own color; else the accent number + 1.
     char language[SETTINGS_NAME_MAX];     // Its id: "en", "es", or a file in config/lang; "" is English.
     char language_name[SETTINGS_NAME_MAX];  // Its name, as Settings shows it (not kept: the app sets it).
+    bool update_check;                    // Asks GitHub once a day for a new version.
+    int64_t update_checked;               // When it last asked (seconds since 1970); 0: never.
+    char update_tag[32];                  // The newer version it found then, or "".
 } Config;
 
 void configDefaults(Config *c);

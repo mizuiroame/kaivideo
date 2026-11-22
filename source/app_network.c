@@ -19,6 +19,7 @@
 static pthread_mutex_t g_test_lock = PTHREAD_MUTEX_INITIALIZER;
 static bool g_testing, g_tested;
 static char g_test_text[TEST_TEXT_MAX];
+static bool g_test_ok;  // The last test reached the folder.
 
 static void accountPath(char *out, size_t size)
 {
@@ -83,7 +84,7 @@ static void save(App *app, const DavAccount *a, uint64_t now)
     char path[APPROOT_PATH_MAX + 32];
     accountPath(path, sizeof(path));
     if (!davSaveAccount(path))
-        appShowMessage(app, T("It couldn't be written to the card."), now);
+        appNotify(app, NOTICE_ERROR, T("It couldn't be written to the card."), now);
     useNetwork();
     refreshFiles(app);
     appLibraryNetworkChanged(app);
@@ -99,9 +100,9 @@ static void typeAddress(App *app, uint64_t now)
     SystemKeyboardResult result = systemKeyboardInput(T("Address: \\\\PC\\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)"), shown, text,
                                                       sizeof(text), sizeof(text) - 10);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
-        appShowMessage(app, T("The keyboard couldn't open."), now);
+        appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK && !davNormalizeAddress(text, address, sizeof(address))) {
-        appShowMessage(app, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http:// or https://."), now);
+        appNotify(app, NOTICE_ERROR, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http:// or https://."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         if (!davSameServer(address, a.address)) {  // Another server: the old one's password isn't sent there.
             a.user[0] = '\0';
@@ -109,7 +110,7 @@ static void typeAddress(App *app, uint64_t now)
         }
         memcpy(a.address, address, sizeof(a.address));
         save(app, &a, now);
-        appShowMessage(app, T("Network folder set: test the connection, or open it in Files."), now);
+        appNotify(app, NOTICE_DONE, T("Network folder set: test the connection, or open it in Files."), now);
     }
     memset(&a, 0, sizeof(a));
 }
@@ -120,11 +121,11 @@ static void sayHowKept(App *app, const DavAccount *a, uint64_t now)
     if (!a->user[0] || !a->password[0])
         return;
     if (a->forget_password)
-        appShowMessage(app, T("Saved until KaiVideo closes: the password isn't kept on the card."), now);
+        appNotify(app, NOTICE_DONE, T("Saved until KaiVideo closes: the password isn't kept on the card."), now);
     else if (davIsSmbAddress(a->address))
-        appShowMessage(app, T("Saved: the card keeps the password's hash, not the password."), now);
+        appNotify(app, NOTICE_DONE, T("Saved: the card keeps the password's hash, not the password."), now);
     else
-        appShowMessage(app, T("Saved: the password is only encoded on the card. Use a user that can only read the videos."), now);
+        appNotify(app, NOTICE_DONE, T("Saved: the password is only encoded on the card. Use a user that can only read the videos."), now);
 }
 
 static void typeAccount(App *app, uint64_t now)
@@ -142,14 +143,14 @@ static void typeAccount(App *app, uint64_t now)
     if (result == SYSTEM_KEYBOARD_OK && user[0])
         result = systemKeyboardPassword(T("Password"), password, sizeof(password), sizeof(password) - 1);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
-        appShowMessage(app, T("The keyboard couldn't open."), now);
+        appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         snprintf(a.user, sizeof(a.user), "%s", user);
         if (davSetPassword(&a, password)) {
             save(app, &a, now);
             sayHowKept(app, &a, now);
         } else {
-            appShowMessage(app, T("That password can't be used."), now);
+            appNotify(app, NOTICE_ERROR, T("That password can't be used."), now);
         }
     }
     memset(password, 0, sizeof(password));
@@ -173,9 +174,9 @@ bool appNetworkEnsurePassword(App *app, uint64_t now)
         if (app->config.use_network && !app->config.use_jellyfin)
             appLibraryShowNetwork(app);  // Read until now without it: read again.
     } else if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
-        appShowMessage(app, T("The keyboard couldn't open."), now);
+        appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     } else {
-        appShowMessage(app, T("Without the password the network folder can't be read."), now);
+        appNotify(app, NOTICE_ERROR, T("Without the password the network folder can't be read."), now);
     }
     memset(password, 0, sizeof(password));
     memset(&a, 0, sizeof(a));
@@ -213,9 +214,10 @@ static void *testThread(void *arg)
 {
     (void)arg;
     char text[TEST_TEXT_MAX];
-    davTest(text, sizeof(text));
+    bool ok = davTest(text, sizeof(text));
     pthread_mutex_lock(&g_test_lock);
     snprintf(g_test_text, sizeof(g_test_text), "%s", text);
+    g_test_ok = ok;
     g_testing = false;
     g_tested = true;
     pthread_mutex_unlock(&g_test_lock);
@@ -246,7 +248,7 @@ static void forget(App *app, uint64_t now)
 {
     DavAccount none = {0};
     save(app, &none, now);
-    appShowMessage(app, T("The network folder is forgotten."), now);
+    appNotify(app, NOTICE_DONE, T("The network folder is forgotten."), now);
 }
 
 bool appNetworkActivate(App *app, SettingRow row, uint64_t now)
@@ -265,8 +267,10 @@ bool appNetworkActivate(App *app, SettingRow row, uint64_t now)
 void appNetworkUpdate(App *app, uint64_t now)
 {
     char text[TEST_TEXT_MAX] = "";
+    bool ok = false;
     pthread_mutex_lock(&g_test_lock);
     if (g_tested) {
+        ok = g_test_ok;
         snprintf(text, sizeof(text), "%s", g_test_text);
         g_tested = false;
     }
@@ -275,7 +279,7 @@ void appNetworkUpdate(App *app, uint64_t now)
         char raw[256];
         smbLastError(raw, sizeof(raw));
         appLog("Network folder test: %s%s%s", text, raw[0] ? " | smb: " : "", raw);
-        appShowMessage(app, text, now);
+        appNotify(app, ok ? NOTICE_DONE : NOTICE_ERROR, text, now);
     }
 }
 

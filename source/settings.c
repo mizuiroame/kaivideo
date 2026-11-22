@@ -15,7 +15,8 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Certificate check"), N_("Sign in at plex.tv/link"), N_("Server"), N_("Emby"), N_("Plex"), N_("Library"),
     N_("Playback"), N_("Color"), N_("Language"), N_("Network folder"), N_("Address"), N_("User and password"),
     N_("Test the connection"), N_("Forget this folder"), N_("Remember the password"),
-    N_("Allow without signing (old NAS)"),
+    N_("Allow without signing (old NAS)"), N_("Credits and licenses"), N_("Check once a day"),
+    N_("Look for an update"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -29,6 +30,7 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
     {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_TEST,
      SETTING_NET_FORGET, SETTING_COUNT},
+    {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -39,7 +41,7 @@ static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
                                        SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
-                                                              N_("Playback"), N_("Network folder")};
+                                                              N_("Playback"), N_("Network folder"), N_("About")};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
     N_("Your Jellyfin server: sign in with Quick Connect or a password."),
     N_("Your Emby server: sign in with its user name and password."),
@@ -78,6 +80,7 @@ void configDefaults(Config *c)
     c->autoplay = true;
     c->jf_check_certificate = true;
     c->subtitles = SUBTITLES_MEDIUM;
+    c->update_check = true;
 }
 
 // A number in 0..count-1, or fallback.
@@ -144,6 +147,12 @@ bool configReadLine(Config *c, const char *line)
         c->subtitle_style = readChoice(value, SUBTITLE_STYLE_COUNT, SUBTITLE_OUTLINE);
     else if (isKey(line, length, "subtitle_font"))  // A name in the fonts folder, never a path.
         snprintf(c->subtitle_font, sizeof(c->subtitle_font), "%s", strpbrk(value, "/\\") ? "" : value);
+    else if (isKey(line, length, "update_check"))
+        c->update_check = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "update_checked"))
+        c->update_checked = strtoll(value, NULL, 10);
+    else if (isKey(line, length, "update_tag"))  // A version, as GitHub names it.
+        snprintf(c->update_tag, sizeof(c->update_tag), "%s", strlen(value) < sizeof(c->update_tag) ? value : "");
     else if (isKey(line, length, "language"))  // An id, or a name in the lang folder: never a path.
         snprintf(c->language, sizeof(c->language), "%s", strpbrk(value, "/\\") ? "" : value);
     else
@@ -169,6 +178,9 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "%s=%d\n", SERVER_COLOR_KEYS[k], c->server_color[k]);
     if (c->language[0] && !strpbrk(c->language, "\r\n"))
         fprintf(f, "language=%s\n", c->language);
+    fprintf(f, "update_check=%d\nupdate_checked=%lld\n", c->update_check ? 1 : 0, (long long)c->update_checked);
+    if (c->update_tag[0] && !strpbrk(c->update_tag, "\r\n"))
+        fprintf(f, "update_tag=%s\n", c->update_tag);
 }
 
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
@@ -212,6 +224,7 @@ bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind)
     case SETTING_OPEN_LIBRARY: *page = SETTINGS_PAGE_LIBRARY; return true;
     case SETTING_OPEN_PLAYBACK: *page = SETTINGS_PAGE_PLAYBACK; return true;
     case SETTING_OPEN_NETWORK: *page = SETTINGS_PAGE_NETWORK; return true;
+    case SETTING_ABOUT: *page = SETTINGS_PAGE_ABOUT; return true;
     case SETTING_OPEN_JELLYFIN: *page = SETTINGS_PAGE_JELLYFIN; return true;
     case SETTING_OPEN_EMBY: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_EMBY; return true;
     case SETTING_OPEN_PLEX: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_PLEX; return true;
@@ -226,6 +239,7 @@ SettingRow settingPageOpener(SettingsPage page, ServerKind kind)
     case SETTINGS_PAGE_LIBRARY: return SETTING_OPEN_LIBRARY;
     case SETTINGS_PAGE_PLAYBACK: return SETTING_OPEN_PLAYBACK;
     case SETTINGS_PAGE_NETWORK: return SETTING_OPEN_NETWORK;
+    case SETTINGS_PAGE_ABOUT: return SETTING_ABOUT;
     case SETTINGS_PAGE_JELLYFIN:
         return kind == SERVER_PLEX ? SETTING_OPEN_PLEX : kind == SERVER_EMBY ? SETTING_OPEN_EMBY : SETTING_OPEN_JELLYFIN;
     default: return SETTING_OPEN_LIBRARY;
@@ -242,7 +256,7 @@ bool settingIsChoice(SettingRow row)
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
            row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
-           row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED;
+           row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO;
 }
 
 static int wrap(int value, int delta, int count)
@@ -259,6 +273,7 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_THUMBNAILS: c->thumbnails = !c->thumbnails; break;
     case SETTING_CLOCK: c->clock_24h = !c->clock_24h; break;
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
+    case SETTING_UPDATE_AUTO: c->update_check = !c->update_check; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
     case SETTING_SERVER_COLOR: {  // For the server Settings shows.
@@ -280,6 +295,7 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? T("On") : T("Off")); break;
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? T("24-hour") : T("12-hour")); break;
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? T("On") : T("Off")); break;
+    case SETTING_UPDATE_AUTO: snprintf(out, size, "%s", c->update_check ? T("On") : T("Off")); break;
     case SETTING_JF_QUALITY:
         snprintf(out, size, "%s", T(QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name));
         break;

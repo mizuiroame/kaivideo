@@ -69,6 +69,21 @@ language = 한국어
 %s can't be read (JPEG or PNG, up to 50 megapixels).
 %s: 읽을 수 없습니다 (JPEG 또는 PNG, 최대 5000만 화소).
 
+%s installed: open KaiVideo again
+%s 설치됨: KaiVideo를 다시 여세요
+
+%s is out
+%s 출시됨
+
+%s is out, in Brewstore
+%s 출시됨, Brewstore에서
+
+%s is out: A installs it
+%s 출시됨: A로 설치
+
+%s is out: A looks again
+%s 출시됨: A로 다시 확인
+
 %s of %s
 %s / %s
 
@@ -258,6 +273,9 @@ Allow without signing (old NAS)
 Already looking for videos.
 이미 동영상을 찾고 있습니다.
 
+Already on it.
+이미 진행 중입니다.
+
 AM
 오전
 
@@ -318,6 +336,9 @@ Changing the sound track
 Chapter %d
 챕터 %d
 
+Check once a day
+하루에 한 번 확인
+
 Chinese
 중국어
 
@@ -339,6 +360,9 @@ Cleared %d deleted downloads from the list.
 Clock
 시계
 
+Close KaiVideo and open it again to use the new version.
+새 버전을 쓰려면 KaiVideo를 닫고 다시 여세요.
+
 Color
 색상
 
@@ -359,6 +383,12 @@ Converting
 
 Converting · %d%% · %s
 변환 중 · %d%% · %s
+
+Couldn't look: A tries again
+확인하지 못했습니다: A로 다시 시도
+
+Credits and licenses
+크레딧과 라이선스
 
 Cyan
 청록색
@@ -410,6 +440,9 @@ DOWNLOADING
 
 Downloading
 다운로드 중
+
+Downloading %s... %d%%
+%s 내려받는 중... %d%%
 
 Downloading it again.
 다시 다운로드합니다.
@@ -525,6 +558,12 @@ German
 Getting subtitles...
 자막을 가져오는 중...
 
+GitHub couldn't be reached.
+GitHub에 연결할 수 없었습니다.
+
+GitHub's answer about the latest version couldn't be used.
+최신 버전에 대한 GitHub의 응답을 쓸 수 없었습니다.
+
 Greek
 그리스어
 
@@ -585,11 +624,26 @@ Japanese
 Jellyfin
 Jellyfin
 
+KaiVideo %s is installed: it runs from the next start.
+KaiVideo %s 설치됨: 다음 실행부터 쓰입니다.
+
+KaiVideo %s is out, on its GitHub page.
+KaiVideo %s 출시됨, GitHub 페이지에서.
+
+KaiVideo %s is out: Settings > About installs it.
+KaiVideo %s 출시됨: 설정 > 정보에서 설치합니다.
+
+KaiVideo %s is out: update it in Brewstore.
+KaiVideo %s 출시됨: Brewstore에서 업데이트하세요.
+
 KaiVideo can't download from there.
 KaiVideo는 그곳에서 다운로드할 수 없습니다.
 
 KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
 KaiVideo가 이 폴더와 하위 폴더에서 영화와 시리즈를 찾습니다: - 또는 설정 > SD 카드 폴더.
+
+KaiVideo is up to date.
+KaiVideo는 최신입니다.
 
 KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
 KaiVideo는 MP4, MKV, WebM 파일을 재생합니다 (H.264, HEVC, VP9, AV1, VP8).
@@ -624,6 +678,9 @@ Live TV comes from your Jellyfin server's tuners and guide.
 Loading...
 불러오는 중...
 
+Look for an update
+업데이트 확인
+
 Looking for %s servers on this network...
 이 네트워크에서 %s 서버를 찾는 중...
 
@@ -632,6 +689,9 @@ Looking for videos...
 
 Looking for videos... %zu
 동영상을 찾는 중... %zu
+
+Looking...
+확인 중...
 
 Low
 낮음
@@ -695,6 +755,9 @@ Not chosen
 
 Not enough memory for this video's frames.
 이 동영상의 프레임을 처리할 메모리가 부족합니다.
+
+Not installed: A tries again
+설치하지 못했습니다: A로 다시 시도
 
 Not set
 설정 안 함
@@ -1107,6 +1170,9 @@ The console's decoder can't play this %s video (%dx%d, 0x%x).
 The decoding thread can't start.
 디코딩 스레드를 시작할 수 없습니다.
 
+The download didn't match GitHub's checksum: nothing was changed.
+내려받은 파일이 GitHub의 체크섬과 맞지 않습니다: 아무것도 바꾸지 않았습니다.
+
 The download goes on.
 다운로드를 계속합니다.
 
@@ -1133,6 +1199,12 @@ The network couldn't be asked. Type the server's address under Server.
 
 The network folder's password isn't remembered: it's asked for when the folder is used.
 네트워크 폴더의 비밀번호는 저장되지 않습니다. 폴더를 사용할 때 물어봅니다.
+
+The new version couldn't be downloaded.
+새 버전을 내려받을 수 없었습니다.
+
+The new version couldn't be written to the card: nothing was changed.
+새 버전을 SD 카드에 쓸 수 없었습니다: 아무것도 바꾸지 않았습니다.
 
 The password is kept on the card.
 비밀번호를 카드에 저장합니다.
@@ -1233,6 +1305,9 @@ Theme
 This %s video can't be decoded.
 이 %s 동영상은 디코딩할 수 없습니다.
 
+This is %s: A looks now
+현재 %s: A로 지금 확인
+
 This isn't a video KaiVideo can read (MP4, MKV or WebM).
 KaiVideo가 읽을 수 있는 동영상(MP4, MKV, WebM)이 아닙니다.
 
@@ -1283,6 +1358,12 @@ UP NEXT
 
 UP NEXT  ·  %d s
 다음 에피소드  ·  %d초
+
+Up to date
+최신
+
+Update it in Brewstore.
+Brewstore에서 업데이트하세요.
 
 Update the library
 라이브러리 업데이트

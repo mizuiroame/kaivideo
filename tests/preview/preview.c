@@ -24,6 +24,7 @@
 #include "thumbs.h"
 #include "ui_settings.h"
 #include "ui_live.h"
+#include "ui_notice.h"
 #include "ui_stats.h"
 #include "ui_style.h"
 #include "sample_paths.h"
@@ -171,7 +172,7 @@ static void liveScene(Player *p)
     libviewLiveMove(&view, 4, 1);
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
-    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_tab");
@@ -189,7 +190,7 @@ static void liveScene(Player *p)
     view.live_at = liveStep(&channels[1], liveStep(&channels[1], 0, now, 1), now, 1);
     view.live_at = liveStep(&channels[1], view.live_at, now, 1);
     begin();
-    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
     uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_guide_later");
@@ -371,17 +372,34 @@ static void buildSampleLibrary(void)
 static void libraryHelpScene(const char *name, const char *help)
 {
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawFooterHelp(T(help));
     save(name);
+}
+
+// A notice fully in, as main.c draws it last: over everything.
+static void drawNotice(NoticeKind kind, const char *message)
+{
+    Notices notices = {0};
+    float slide;
+    noticePush(&notices, kind, message, 1);
+    noticeShown(&notices, 1000000000ull, &slide);  // The first look starts it,
+    const Notice *shown = noticeShown(&notices, 2000000000ull, &slide);  // and a second later it's in.
+    uiDrawNotice(shown, slide);
 }
 
 static void libraryScene(const char *name, bool folder_set, const char *status, const char *message)
 {
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, folder_set, status, message);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, folder_set, status);
     uiDrawFooterHelp(T(HOME_HELP));
+    if (message)
+        drawNotice(NOTICE_ERROR, message);
     save(name);
+    if (message && !uiNoticeAt(GFX_WIDTH / 2, 64 + 10 + 20)) {
+        printf("TOUCH: %s: the notice doesn't answer a tap\n", name);
+        g_problems++;
+    }
 }
 
 // Every tab and the Folder button answer a tap on the tab bar.
@@ -445,12 +463,12 @@ static void collectionScene(void)
     libviewSetTabs(&view, &lib, true, false, false);
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
-    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL);
     uiDrawFooterHelp(T(HOME_HELP));
     save("server_home");
     libviewNextTab(&view, 1);
     begin();
-    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&view, &lib, &home, &g_resume, true, NULL);
     uiDrawFooterHelp(T(HOME_HELP));
     save("server_films");
     int found = 0;
@@ -510,7 +528,7 @@ static void downloadsScene(void)
     for (int pass = 0; pass < 2; pass++) {
         Scroll s = pass ? (Scroll){.cursor = 9, .first = count - UI_DOWNLOAD_ROWS} : (Scroll){.cursor = 1};
         begin();
-        uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+        uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL);
         uiDrawDownloadsTab(ROWS, count, &s, pass ? -1 : 4,
                            "4 downloading \xC2\xB7 2 on the card (5.5 GB) \xC2\xB7 1 deleted \xC2\xB7 2 watched offline, "
                            "told to the server when it's back",
@@ -539,7 +557,7 @@ static void downloadsScene(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawDownloadsTab(ROWS, 0, &(Scroll){0}, -1, "0 downloading \xC2\xB7 0 on the card (0 MB) \xC2\xB7 0 deleted",
                        "Nothing yet: open a film or episode from a server and press L to download it.");
     uiDrawFooterHelp(T("[ZL][ZR] tabs  [-] settings  [+] menu"));
@@ -586,7 +604,7 @@ static void libraryScenes(void)
     uiLibrarySetDownloads(fakeDownload, NULL);
     uiLibrarySetDownloadsPill("2 \xC2\xB7 42%", 0.42);
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawShowFavorite(false);
     uiDrawShowDownload("Download season", false, true, false);
     uiDrawFooterHelp(T("[A] play  [X] watched  [R] favorite  [L] download  [<>] season  [B] back  [ZL][ZR] tabs"));
@@ -682,14 +700,14 @@ static void libraryScenes(void)
     g_colors.accent = uiServerColor(SERVER_PLEX);
     uiLibrarySetSource("Plex", uiServerColor(SERVER_PLEX));
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("library_plex");
     g_colors.accent = chosen_accent;
     // The network folder as the library's source (its color is app_library.c's NETWORK_COLOR).
     uiLibrarySetSource(T("Network folder"), GFX_RGB(0x2E, 0xC4, 0xB6));
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("library_network");
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
@@ -701,7 +719,7 @@ static void libraryScenes(void)
     config.accent = 1;
     themeApply(config.theme, config.accent);
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     static const char *const USERS[SERVER_KIND_COUNT] = {"mizu", "", "mizu"};
     uiSettingsSetServers(USERS);
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
@@ -718,7 +736,7 @@ static void libraryScenes(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_LIBRARY, SETTING_THUMBNAILS, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_library");
@@ -729,7 +747,7 @@ static void libraryScenes(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_display");
@@ -738,8 +756,23 @@ static void libraryScenes(void)
         printf("TOUCH: settings_display: Back doesn't answer a tap\n");
         g_problems++;
     }
+    begin();  // About: the credits, and updates, with a newer version found.
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    char found[64];
+    snprintf(found, sizeof(found), T("%s is out: A installs it"), "1.14.0");
+    uiSettingsSetUpdate(found);
+    uiDrawSettings(&config, SETTINGS_PAGE_ABOUT, SETTING_UPDATE_NOW, "sdmc:/Media/Videos", "1.9.0");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
+    save("settings_about");
+    begin();  // A notice over Settings.
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawSettings(&config, SETTINGS_PAGE_ABOUT, SETTING_UPDATE_NOW, "sdmc:/Media/Videos", "1.9.0");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
+    snprintf(found, sizeof(found), T("KaiVideo %s is installed: it runs from the next start."), "1.14.0");
+    drawNotice(NOTICE_DONE, found);
+    save("notice_settings");
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiSettingsSetJellyfin("192.168.0.10:8096", "");
     uiDrawSettings(&config, SETTINGS_PAGE_JELLYFIN, SETTING_JF_CODE, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
@@ -751,7 +784,7 @@ static void libraryScenes(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     Config plex_config = config;
     plex_config.server_kind = SERVER_PLEX;
     uiSettingsSetJellyfin("", "");
@@ -765,12 +798,12 @@ static void libraryScenes(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSignInCode(true, "K7QX", "", false);
     uiDrawFooterHelp(T("[B] cancel"));
     save("plex_code");
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSignInCode(false, "482913", "192.168.0.10:8096", false);
     uiDrawFooterHelp(T("[B] cancel"));
     save("jellyfin_code");
@@ -780,7 +813,7 @@ static void libraryScenes(void)
     save("loading");
     begin();
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     bool source = false;
     for (int x = 0; x < GFX_WIDTH / 2; x += 4)
         source = source || uiLibraryTap(x, 30).kind == LIBHIT_SOURCE;
@@ -813,7 +846,7 @@ static void libraryScenes(void)
         g_problems++;
     }
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawAbout("1.0.0");
     uiDrawFooterHelp(T("[A][B] back"));
     save("about");
@@ -822,7 +855,7 @@ static void libraryScenes(void)
     // The + menu, and its question.
     static const char *const MENU[] = {"Downloads", "Update the library", "Settings", "Exit KaiVideo"};
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawMenu("KaiVideo", "1.0.0", MENU, 4, 0, 2);
     uiDrawFooterHelp(T("[A] choose  [B] close  [+] exit"));
     save("menu");
@@ -831,14 +864,14 @@ static void libraryScenes(void)
     static const char *const VIDEO_MENU[] = {"Back to the library", "Downloads", "Update the library", "Settings",
                                              "Exit KaiVideo"};
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawMenu("KaiVideo", "1.0.0", VIDEO_MENU, 5, 1, 3);
     uiDrawFooterHelp(T("[A] choose  [B] close  [+] exit"));
     save("menu_video");
     checkPlusMenu("menu_video", 5, 1);
     static const char *const EXIT[] = {"Exit", "Cancel"};
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0, 0);
     uiDrawFooterHelp(T("[A] choose  [B] cancel  [+] exit"));
     save("menu_exit");
@@ -848,9 +881,9 @@ static void libraryScenes(void)
     libraryScene("lib_message", true, NULL, "The keyboard couldn't open.");
 
     // The network folder's page.
-    uiSettingsSetNetwork("192.168.0.10:8098/videos", "kai");
+    uiSettingsSetNetwork("192.168.0.10:8098/videos", "kai", true, false, false);
     begin();
-    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL, NULL);
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_NETWORK, SETTING_NET_ACCOUNT, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
     save("settings_network");
@@ -950,7 +983,7 @@ static void serversScene(void)
         view.collection = pass ? 4 : -1;
         uiLibraryResetHits();
         begin();
-        uiDrawLibrary(&view, &lib, &home, &resume, true, NULL, NULL);
+        uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
         uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
         save(pass ? "tabs_servers_last" : "tabs_servers");
         if (uiLibraryTap(MARGIN_PREVIEW_SOURCE_X, 30).kind != LIBHIT_SOURCE) {

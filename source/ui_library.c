@@ -978,22 +978,10 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
                   v->result_count);
 }
 
-void uiDrawToast(const char *message)
-{
-    if (!message || !message[0])
-        return;
-    int w = fontTextWidth(FONT_BOLD, 18, message) + 48;
-    if (w > GFX_WIDTH - 2 * MARGIN)
-        w = GFX_WIDTH - 2 * MARGIN;
-    int x = (GFX_WIDTH - w) / 2, y = UI_FOOTER_Y - 58;
-    gfxFillRoundRect(x, y, w, 46, 23, COLOR_SURFACE_HI);
-    fontDrawClipped(FONT_BOLD, 18, x + 24, y + 10, w - 48, message, COLOR_ERROR);
-}
-
 // --- The screen ---
 
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
-                   bool folder_set, const char *status, const char *message)
+                   bool folder_set, const char *status)
 {
     uiDrawBackground();
     uiDrawTabBar(v, lib, status);
@@ -1023,5 +1011,4 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     }
     gfxResetClip();
     uiDrawFooterStrip();
-    uiDrawToast(message);
 }

@@ -177,15 +177,15 @@ static void pressX(App *app, int row, const Download *found, uint64_t now)
     app->downloads_confirm = -1;
     if (section == SECTION_CARD) {
         dlWorkerDeleteFile(d.path);
-        appShowMessage(app, T("Deleted from the card. It stays under Deleted, to download again."), now);
+        appNotify(app, NOTICE_DONE, T("Deleted from the card. It stays under Deleted, to download again."), now);
         if (!app->config.use_jellyfin)
             appLibraryRescan(app, now);  // The card's library lets it go.
     } else if (section == SECTION_DELETED) {
         dlWorkerForget(d.path);
-        appShowMessage(app, T("Taken off the list."), now);
+        appNotify(app, NOTICE_DONE, T("Taken off the list."), now);
     } else {
         dlWorkerRemove(d.path);
-        appShowMessage(app, T("Download cancelled."), now);
+        appNotify(app, NOTICE_DONE, T("Download cancelled."), now);
     }
     appDownloadsRefresh(app);
 }
@@ -202,7 +202,7 @@ static void clearDeleted(App *app, uint64_t now)
              n == 1 ? T("Cleared %d deleted download from the list.")
                     : T("Cleared %d deleted downloads from the list."),
              n);
-    appShowMessage(app, message, now);
+    appNotify(app, NOTICE_DONE, message, now);
     appDownloadsRefresh(app);
 }
 

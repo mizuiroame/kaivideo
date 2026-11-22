@@ -69,6 +69,21 @@ language = 简体中文
 %s can't be read (JPEG or PNG, up to 50 megapixels).
 无法读取%s（JPEG或PNG，最多5000万像素）。
 
+%s installed: open KaiVideo again
+%s 已安装：请重新打开 KaiVideo
+
+%s is out
+%s 已发布
+
+%s is out, in Brewstore
+%s 已发布，在 Brewstore 中
+
+%s is out: A installs it
+%s 已发布：按 A 安装
+
+%s is out: A looks again
+%s 已发布：按 A 重新检查
+
 %s of %s
 %s / %s
 
@@ -258,6 +273,9 @@ Allow without signing (old NAS)
 Already looking for videos.
 正在查找视频。
 
+Already on it.
+已在进行中。
+
 AM
 上午
 
@@ -318,6 +336,9 @@ Changing the sound track
 Chapter %d
 第%d章
 
+Check once a day
+每天检查一次
+
 Chinese
 中文
 
@@ -339,6 +360,9 @@ Cleared %d deleted downloads from the list.
 Clock
 时钟
 
+Close KaiVideo and open it again to use the new version.
+关闭 KaiVideo 后重新打开即可使用新版本。
+
 Color
 颜色
 
@@ -359,6 +383,12 @@ Converting
 
 Converting · %d%% · %s
 转码中 · %d%% · %s
+
+Couldn't look: A tries again
+无法检查：按 A 重试
+
+Credits and licenses
+致谢和许可证
 
 Cyan
 青色
@@ -410,6 +440,9 @@ DOWNLOADING
 
 Downloading
 下载中
+
+Downloading %s... %d%%
+正在下载 %s... %d%%
 
 Downloading it again.
 正在重新下载。
@@ -525,6 +558,12 @@ German
 Getting subtitles...
 正在获取字幕...
 
+GitHub couldn't be reached.
+无法连接到 GitHub。
+
+GitHub's answer about the latest version couldn't be used.
+无法使用 GitHub 关于最新版本的回复。
+
 Greek
 希腊语
 
@@ -585,11 +624,26 @@ Japanese
 Jellyfin
 Jellyfin
 
+KaiVideo %s is installed: it runs from the next start.
+KaiVideo %s 已安装：下次启动时生效。
+
+KaiVideo %s is out, on its GitHub page.
+KaiVideo %s 已发布，见其 GitHub 页面。
+
+KaiVideo %s is out: Settings > About installs it.
+KaiVideo %s 已发布：在“设置 > 关于”中安装。
+
+KaiVideo %s is out: update it in Brewstore.
+KaiVideo %s 已发布：请在 Brewstore 中更新。
+
 KaiVideo can't download from there.
 KaiVideo无法从该位置下载。
 
 KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
 KaiVideo会在其中及子文件夹中查找电影和剧集：按-或进入设置 > SD卡文件夹。
+
+KaiVideo is up to date.
+KaiVideo 已是最新版本。
 
 KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
 KaiVideo支持播放MP4、MKV和WebM文件（H.264、HEVC、VP9、AV1、VP8）。
@@ -624,6 +678,9 @@ Live TV comes from your Jellyfin server's tuners and guide.
 Loading...
 正在载入...
 
+Look for an update
+检查更新
+
 Looking for %s servers on this network...
 正在此网络中查找%s服务器...
 
@@ -632,6 +689,9 @@ Looking for videos...
 
 Looking for videos... %zu
 正在查找视频... %zu
+
+Looking...
+正在检查...
 
 Low
 低
@@ -695,6 +755,9 @@ Not chosen
 
 Not enough memory for this video's frames.
 内存不足，无法处理此视频的画面帧。
+
+Not installed: A tries again
+未安装：按 A 重试
 
 Not set
 未设置
@@ -1107,6 +1170,9 @@ The console's decoder can't play this %s video (%dx%d, 0x%x).
 The decoding thread can't start.
 无法启动解码线程。
 
+The download didn't match GitHub's checksum: nothing was changed.
+下载内容与 GitHub 的校验和不符：未做任何更改。
+
 The download goes on.
 下载继续进行。
 
@@ -1133,6 +1199,12 @@ The network couldn't be asked. Type the server's address under Server.
 
 The network folder's password isn't remembered: it's asked for when the folder is used.
 网络文件夹的密码未保存：使用该文件夹时会询问。
+
+The new version couldn't be downloaded.
+无法下载新版本。
+
+The new version couldn't be written to the card: nothing was changed.
+无法将新版本写入SD卡：未做任何更改。
 
 The password is kept on the card.
 密码会存在卡上。
@@ -1233,6 +1305,9 @@ Theme
 This %s video can't be decoded.
 无法解码此%s视频。
 
+This is %s: A looks now
+当前为 %s：按 A 立即检查
+
 This isn't a video KaiVideo can read (MP4, MKV or WebM).
 这不是KaiVideo可读取的视频（MP4、MKV或WebM）。
 
@@ -1283,6 +1358,12 @@ UP NEXT
 
 UP NEXT  ·  %d s
 接下来  ·  %d秒
+
+Up to date
+已是最新
+
+Update it in Brewstore.
+请在 Brewstore 中更新。
 
 Update the library
 更新媒体库

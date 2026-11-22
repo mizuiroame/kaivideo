@@ -420,7 +420,7 @@ static void toggleFavorite(App *app, LibraryRef ref, uint64_t now)
     jfSyncSetFavorite(location, favorite);
     rememberFavoriteChange(app, location, favorite);
     appLibraryRefreshHome(app);
-    appShowMessage(app, favorite ? T("Added to Favorites.") : T("Removed from Favorites."), now);
+    appNotify(app, NOTICE_DONE, favorite ? T("Added to Favorites.") : T("Removed from Favorites."), now);
 }
 
 // True if a film or series can be a favorite: it comes from the server.
@@ -491,7 +491,7 @@ static void search(App *app, uint64_t now)
     switch (systemKeyboardInput(T("Search films and series"),app->view.query, text, sizeof(text),
                                 LIBVIEW_QUERY_MAX - 1)) {
     case SYSTEM_KEYBOARD_OK: libviewSearch(&app->view, &app->library, text); break;
-    case SYSTEM_KEYBOARD_UNAVAILABLE: appShowMessage(app, T("The keyboard couldn't open."), now); break;
+    case SYSTEM_KEYBOARD_UNAVAILABLE: appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now); break;
     default: break;
     }
 }
@@ -517,7 +517,7 @@ static void openEntry(App *app, Browser *b, bool picking, uint64_t now)
         return;
     if (b->items[b->cursor].is_dir) {
         if (!browserEnter(b))
-            appShowMessage(app, b->problem[0] ? b->problem : T("That folder can't be opened."), now);
+            appNotify(app, NOTICE_ERROR, b->problem[0] ? b->problem : T("That folder can't be opened."), now);
     } else if (!picking) {
         char path[BROWSER_PATH_MAX];
         if (browserSelectedPath(b, path, sizeof(path)) && appStartVideo(app, path, b->items[b->cursor].name, now))
@@ -768,9 +768,7 @@ static void drawShowButtons(const App *app)
 void appLibraryDraw(App *app, uint64_t now)
 {
     appApplyViewAccent(app);
-    const char *message = now < app->message_until ? app->message : NULL;
-    bool overlay = app->settings_open || app->app_menu != APP_MENU_NONE;
-    const char *under = overlay ? NULL : message;  // With an overlay open, said over it.
+    // Messages are said in the notice bubble (main.c draws it over everything).
     uiLibraryResetHits();
     uiLibrarySetWatched(&app->watched);
     ServerKind view = (ServerKind)app->config.server_view;
@@ -784,11 +782,8 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawBackground();
         uiDrawBrowser(&app->picker, &app->resume, pickMode(app));
         uiDrawFooterStrip();
-        uiDrawToast(under);
         appSettingsDraw(app);
         appMenuDraw(app);
-        if (overlay)
-            uiDrawToast(message);
         uiDrawFooterHelp(appFooterHelp(app));
         return;
     }
@@ -803,10 +798,9 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawTabBar(&app->view, &app->library, status);
         uiDrawBrowser(&app->browser, &app->resume, BROWSE_FILES);
         uiDrawFooterStrip();
-        uiDrawToast(under);
     } else {
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
-                      app->library_root[0] != '\0' || app->config.use_jellyfin, status, under);
+                      app->library_root[0] != '\0' || app->config.use_jellyfin, status);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
             appLiveDraw(app);
         if (app->view.tab == TAB_DOWNLOADS && app->view.show < 0)
@@ -822,7 +816,5 @@ void appLibraryDraw(App *app, uint64_t now)
     }
     appSettingsDraw(app);
     appMenuDraw(app);
-    if (overlay)
-        uiDrawToast(message);
     uiDrawFooterHelp(appFooterHelp(app));
 }

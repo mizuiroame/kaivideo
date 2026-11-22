@@ -15,6 +15,7 @@
 #include "library.h"
 #include "libview.h"
 #include "menu.h"
+#include "notice.h"
 #include "player.h"
 #include "resume.h"
 #include "scroll.h"
@@ -83,8 +84,11 @@ struct App {
     uint64_t loop_jumped_at;    // When the A-B loop last went back to A.
     unsigned seeks;
     uint64_t started;
-    char message[200];
-    uint64_t message_until;
+    Notices notices;            // Messages, shown one at a time in a bubble at the top.
+    const Notice *notice;       // The one to draw this frame (NULL for none),
+    float notice_slide;         // and how far it has slid in (0 to 1).
+    unsigned update_seen;       // The update status's serial already said on screen.
+    bool update_manual;         // Settings asked: say "up to date" and failures too.
     Kinetic kinetic;            // A list following a finger, or gliding on after it.
     int scroll_target, scroll_row;  // Which list (app_library.c's ScrollTarget), and Home's row across.
     int scroll_view;            // The view it was in: another one stops it.
@@ -156,7 +160,20 @@ struct App {
 };
 
 // main.c
+// A short message in the notice bubble at the top: something to know, done, or failed.
+void appNotify(App *app, NoticeKind kind, const char *message, uint64_t now);
+// The same, as something to know.
 void appShowMessage(App *app, const char *message, uint64_t now);
+
+// app_update.c: About's update rows. nro_path: argv[0] (where KaiVideo runs from).
+void appStartUpdates(App *app, const char *nro_path);
+void appStopUpdates(void);
+// Each frame: says on screen what the update check or install has come to.
+void appUpdatesTick(App *app, uint64_t now_ns);
+// Look for an update: looks now, or installs the version found.
+void appUpdatesActivate(App *app, uint64_t now_ns);
+// What a row of About's says on its right (SETTING_UPDATE_AUTO or SETTING_UPDATE_NOW).
+void appUpdatesValue(const App *app, int row, char *out, size_t size);
 // Starts opening path, named name in the player's bar; the loading screen
 // shows until it plays. False (with a message) if it can't even start.
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now);

@@ -69,6 +69,21 @@ Não é possível reproduzir vídeo %d bits %s.
 %s can't be read (JPEG or PNG, up to 50 megapixels).
 Não é possível ler %s (JPEG ou PNG, até 50 megapixels).
 
+%s installed: open KaiVideo again
+%s instalada: abra o KaiVideo de novo
+
+%s is out
+Saiu a %s
+
+%s is out, in Brewstore
+Saiu a %s, no Brewstore
+
+%s is out: A installs it
+Saiu a %s: A instala
+
+%s is out: A looks again
+Saiu a %s: A procura de novo
+
 %s of %s
 %s de %s
 
@@ -258,6 +273,9 @@ Permitir sem assinatura (NAS antigo)
 Already looking for videos.
 Já está procurando vídeos.
 
+Already on it.
+Já está em andamento.
+
 AM
 AM
 
@@ -318,6 +336,9 @@ Mudando a faixa de áudio
 Chapter %d
 Capítulo %d
 
+Check once a day
+Procurar uma vez por dia
+
 Chinese
 Chinês
 
@@ -339,6 +360,9 @@ Cleared %d deleted downloads from the list.
 Clock
 Relógio
 
+Close KaiVideo and open it again to use the new version.
+Feche o KaiVideo e abra de novo para usar a versão nova.
+
 Color
 Cor
 
@@ -359,6 +383,12 @@ Convertendo
 
 Converting · %d%% · %s
 Convertendo · %d%% · %s
+
+Couldn't look: A tries again
+Não foi possível procurar: A tenta de novo
+
+Credits and licenses
+Créditos e licenças
 
 Cyan
 Ciano
@@ -410,6 +440,9 @@ BAIXANDO
 
 Downloading
 Baixando
+
+Downloading %s... %d%%
+Baixando a %s... %d%%
 
 Downloading it again.
 Baixando de novo.
@@ -525,6 +558,12 @@ Alemão
 Getting subtitles...
 Baixando legendas...
 
+GitHub couldn't be reached.
+Não foi possível acessar o GitHub.
+
+GitHub's answer about the latest version couldn't be used.
+Não foi possível usar a resposta do GitHub sobre a versão mais recente.
+
 Greek
 Grego
 
@@ -585,11 +624,26 @@ Japonês
 Jellyfin
 Jellyfin
 
+KaiVideo %s is installed: it runs from the next start.
+KaiVideo %s está instalada: vale a partir da próxima abertura.
+
+KaiVideo %s is out, on its GitHub page.
+Saiu o KaiVideo %s, na página do GitHub.
+
+KaiVideo %s is out: Settings > About installs it.
+Saiu o KaiVideo %s: Configurações > Sobre instala.
+
+KaiVideo %s is out: update it in Brewstore.
+Saiu o KaiVideo %s: atualize no Brewstore.
+
 KaiVideo can't download from there.
 O KaiVideo não pode baixar de lá.
 
 KaiVideo finds the films and series in it and its folders: - or Settings > Library folder.
 O KaiVideo encontra os filmes e séries nela e nas suas pastas: - ou Configurações > Pasta do cartão SD.
+
+KaiVideo is up to date.
+O KaiVideo está atualizado.
 
 KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8).
 O KaiVideo reproduz arquivos MP4, MKV e WebM (H.264, HEVC, VP9, AV1, VP8).
@@ -624,6 +678,9 @@ A TV ao vivo vem dos sintonizadores e do guia do seu servidor Jellyfin.
 Loading...
 Carregando...
 
+Look for an update
+Procurar atualização
+
 Looking for %s servers on this network...
 Procurando servidores %s nesta rede...
 
@@ -632,6 +689,9 @@ Procurando vídeos...
 
 Looking for videos... %zu
 Procurando vídeos... %zu
+
+Looking...
+Procurando...
 
 Low
 Baixa
@@ -695,6 +755,9 @@ Não escolhida
 
 Not enough memory for this video's frames.
 Não há memória suficiente para os quadros deste vídeo.
+
+Not installed: A tries again
+Não instalada: A tenta de novo
 
 Not set
 Não configurado
@@ -1107,6 +1170,9 @@ O decodificador do console não pode reproduzir este vídeo %s (%dx%d, 0x%x).
 The decoding thread can't start.
 A thread de decodificação não pode iniciar.
 
+The download didn't match GitHub's checksum: nothing was changed.
+O download não bateu com o checksum do GitHub: nada foi alterado.
+
 The download goes on.
 O download continua.
 
@@ -1133,6 +1199,12 @@ Não foi possível consultar a rede. Digite o endereço do servidor em Servidor.
 
 The network folder's password isn't remembered: it's asked for when the folder is used.
 A senha da pasta de rede não é lembrada: ela é pedida quando a pasta é usada.
+
+The new version couldn't be downloaded.
+Não foi possível baixar a versão nova.
+
+The new version couldn't be written to the card: nothing was changed.
+Não foi possível gravar a versão nova no cartão: nada foi alterado.
 
 The password is kept on the card.
 A senha fica guardada no cartão.
@@ -1233,6 +1305,9 @@ Tema
 This %s video can't be decoded.
 Não é possível decodificar este vídeo %s.
 
+This is %s: A looks now
+Esta é a %s: A procura agora
+
 This isn't a video KaiVideo can read (MP4, MKV or WebM).
 Este não é um vídeo que o KaiVideo consegue ler (MP4, MKV ou WebM).
 
@@ -1283,6 +1358,12 @@ A SEGUIR
 
 UP NEXT  ·  %d s
 A SEGUIR  ·  %d s
+
+Up to date
+Atualizado
+
+Update it in Brewstore.
+Atualize no Brewstore.
 
 Update the library
 Atualizar a biblioteca

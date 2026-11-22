@@ -46,6 +46,14 @@ void testSettings(void)
     CHECK(settingOpensPage(SETTING_OPEN_NETWORK, &page, &opens) && page == SETTINGS_PAGE_NETWORK &&
           settingPageOpener(SETTINGS_PAGE_NETWORK, SERVER_JELLYFIN) == SETTING_OPEN_NETWORK);
     CHECK(!settingOpensPage(SETTING_THUMBNAILS, &page, &opens));
+    // About opens a page: the credits, and updates (no page of their own).
+    CHECK(settingOpensPage(SETTING_ABOUT, &page, &opens) && page == SETTINGS_PAGE_ABOUT &&
+          settingPageOpener(SETTINGS_PAGE_ABOUT, SERVER_JELLYFIN) == SETTING_ABOUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_ABOUT, false, SERVER_JELLYFIN, rows) == 3 && rows[0] == SETTING_CREDITS &&
+          rows[1] == SETTING_UPDATE_AUTO && rows[2] == SETTING_UPDATE_NOW);
+    CHECK(settingIsChoice(SETTING_UPDATE_AUTO) && !settingIsChoice(SETTING_UPDATE_NOW) &&
+          !settingIsChoice(SETTING_CREDITS) && !strcmp(settingsPageTitle(SETTINGS_PAGE_ABOUT, SERVER_JELLYFIN), "About"));
+    CHECK(!strcmp(settingLabel(SETTING_UPDATE_NOW), "Look for an update"));
     CHECK(settingPageOpener(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) == SETTING_OPEN_PLEX &&
           settingPageOpener(SETTINGS_PAGE_PLAYBACK, SERVER_JELLYFIN) == SETTING_OPEN_PLAYBACK);
     // A server's page is its own: its name, a line about it, and only its rows.
@@ -169,6 +177,10 @@ void testSettings(void)
     CHECK(!strcmp(value, "Atkinson Hyperlegible"));
 
     // Written and read back; other keys and broken values are left alone.
+    CHECK(c.update_check);  // On by default.
+    settingStep(&c, SETTING_UPDATE_AUTO, 1);
+    c.update_checked = 1795000000;
+    snprintf(c.update_tag, sizeof(c.update_tag), "%s", "v1.14.0");
     const char *file = TMP_ROOT "/settings_test.txt";
     FILE *f = fopen(file, "w");
     CHECK(f != NULL);
@@ -189,6 +201,8 @@ void testSettings(void)
     CHECK(back.theme == c.theme && back.accent == c.accent && !back.thumbnails && back.subtitles == SUBTITLES_LARGE &&
           back.clock_24h && !back.autoplay && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
           strcmp(back.background, "beach.jpg") == 0 && !strcmp(back.subtitle_font, "Atkinson Hyperlegible.ttf"));
+    CHECK(!back.update_check && back.update_checked == 1795000000 && !strcmp(back.update_tag, "v1.14.0"));
+    CHECK(configReadLine(&back, "update_tag=v123456789012345678901234567890123") && back.update_tag[0] == '\0');
     CHECK(configReadLine(&back, "subtitle_font=../x.ttf") && back.subtitle_font[0] == '\0');  // A name, never a path.
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));
     CHECK(configReadLine(&back, "theme=99") && back.theme == 0);
