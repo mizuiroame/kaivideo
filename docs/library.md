@@ -54,7 +54,13 @@ Press **−** (or tap **Settings**). Settings has pages:
     library folder and pick one. It's blurred (**Background blur**) and
     darkened, so text stays readable.
   - **Clock**: 12 or 24 hours.
-- **About**.
+- **About**:
+  - **Credits and licenses**.
+  - **Check once a day**: on by default, KaiVideo asks GitHub once a day for
+    a new version and says when there is one.
+  - **Look for an update**: looks now. With a new version found, if KaiVideo
+    runs from `sdmc:/switch/`, **A** downloads it, checks its SHA-256 and puts
+    it in place for the next start. From brewstore, update it there.
 
 ## Where KaiVideo keeps its files
 

@@ -71,5 +71,6 @@ uint64_t netBytesReceived(void);
 // Off: https servers' certificates aren't checked (a server with its own). On at start.
 void netSetCheckCertificates(bool check);
 // True for hosts whose certificate is checked even when the setting is off: plex.tv and
-// *.plex.direct always have valid ones, and they carry the Plex account's token.
+// *.plex.direct always have valid ones, and they carry the Plex account's token; github.com
+// and githubusercontent.com, so an update and its checksum can't both be forged.
 bool netAlwaysChecked(const char *url);

@@ -168,7 +168,8 @@ bool netAlwaysChecked(const char *url)
     const char *scheme = strstr(url, "://");
     const char *host = scheme ? scheme + 3 : url;
     size_t n = strcspn(host, ":/?#");
-    static const char *const NAMES[] = {"plex.tv", "plex.direct"};
+    // Plex's sign-in, and GitHub's (updates: their answer carries the checksum the download is checked by).
+    static const char *const NAMES[] = {"plex.tv", "plex.direct", "github.com", "githubusercontent.com"};
     for (size_t i = 0; i < sizeof(NAMES) / sizeof(NAMES[0]); i++) {
         size_t m = strlen(NAMES[i]);
         if (n == m && !strncasecmp(host, NAMES[i], m))

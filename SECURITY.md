@@ -36,7 +36,8 @@ Under kaiHEN, homebrew runs with broad system access, so a bug in an app that
 reads untrusted files could affect the whole console. KaiVideo keeps what it
 touches small:
 
-- **What it connects to.** Nothing, unless you set something up. With a
+- **What it connects to.** Only GitHub, for updates (below), unless you set
+  something up. With a
   server, it talks to that server (Jellyfin, Emby or Plex, at the address you
   gave), and for Plex to plex.tv for the sign-in and to find your server; it
   tells the server what you watched and where you stopped, as the server's own
@@ -44,6 +45,13 @@ touches small:
   broadcast on your network (UDP 7359). With a
   [network folder](docs/network-folder.md), it talks to that folder's server.
   Live TV channels may be read from the address the server gives for them.
+  Once a day (Settings > About > Check once a day turns it off) and when you
+  choose **Look for an update**, it asks GitHub for this repository's latest
+  release. Installing one downloads `KaiVideo.nro` only from this repository's
+  release, checks its size and SHA-256 against what GitHub lists for it, and
+  only then puts it in place, keeping the old one until the swap is done.
+  GitHub's certificates are always checked, even with **Certificate check**
+  off. From brewstore, KaiVideo only says a new version is out.
   Requests say they're from KaiVideo (its version and this repository), and
   nothing else about you.
 - **Only http and https.** Every web request is limited to `http://` and
