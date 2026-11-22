@@ -252,6 +252,9 @@ Adicionado aos Downloads: o servidor converte primeiro, a %.0f Mb/s.
 Added to Favorites.
 Adicionado aos Favoritos.
 
+Allow without signing (old NAS)
+Permitir sem assinatura (NAS antigo)
+
 Already looking for videos.
 Já está procurando vídeos.
 
@@ -699,6 +702,9 @@ Não configurado
 Not signed in
 Não conectado
 
+Not signed: someone on your network could change what's read. Use it only for an old NAS.
+Sem assinatura: alguém na sua rede poderia alterar o que é lido. Use só com um NAS antigo.
+
 Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
 Nada respondeu nesse endereço e porta. O servidor está ligado e a porta está certa (geralmente 8096)?
 
@@ -723,6 +729,9 @@ Não
 Off: any certificate
 Não: qualquer certificado
 
+Off: asked when the folder is used
+Não: pedida ao usar a pasta
+
 On
 Sim
 
@@ -737,6 +746,12 @@ No cartão
 
 On your phone or computer, go to plex.tv/link
 No seu celular ou computador, acesse plex.tv/link
+
+On: not signed
+Sim: sem assinatura
+
+Only for shared folders (SMB)
+Só para pastas compartilhadas (SMB)
 
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
 Código aberto (MIT)  ·  github.com/mizuiroame/kaivideo
@@ -755,6 +770,9 @@ Contorno
 
 Password
 Senha
+
+Password for %s (%s)
+Senha de %s (%s)
 
 Paused
 Pausado
@@ -855,6 +873,9 @@ Adicionados recentemente
 Red
 Vermelho
 
+Remember the password
+Lembrar a senha
+
 Removed from Favorites.
 Removido dos Favoritos.
 
@@ -872,6 +893,15 @@ Russo
 
 S%02dE%02d · %s
 T%02dE%02d · %s
+
+Saved until KaiVideo closes: the password isn't kept on the card.
+Guardada até o KaiVideo fechar: a senha não fica no cartão.
+
+Saved: the card keeps the password's hash, not the password.
+Salva: o cartão guarda o hash da senha, não a senha.
+
+Saved: the password is only encoded on the card. Use a user that can only read the videos.
+Salva: no cartão a senha só está codificada. Use um usuário que só possa ler os vídeos.
 
 Saving as MKV · %d%%
 Salvando como MKV · %d%%
@@ -944,6 +974,9 @@ Sair da conta
 
 Sign out first to change the server.
 Primeiro saia da conta para mudar o servidor.
+
+Signing is only for shared folders (SMB).
+A assinatura é só para pastas compartilhadas (SMB).
 
 Size
 Tamanho
@@ -1038,6 +1071,9 @@ Não é possível abrir essa pasta.
 That isn't a server's address.
 Esse não é o endereço de um servidor.
 
+That password can't be used.
+Essa senha não pode ser usada.
+
 That place can't convert videos.
 Esse local não pode converter vídeos.
 
@@ -1058,6 +1094,9 @@ Não é possível ler a transmissão própria do canal.
 
 The connection failed. Check the address and the network.
 A conexão falhou. Verifique o endereço e a rede.
+
+The connection is signed again.
+A conexão volta a ser assinada.
 
 The connection to the server was lost.
 A conexão com o servidor foi perdida.
@@ -1091,6 +1130,15 @@ Não é possível usar a rede.
 
 The network couldn't be asked. Type the server's address under Server.
 Não foi possível consultar a rede. Digite o endereço do servidor em Servidor.
+
+The network folder's password isn't remembered: it's asked for when the folder is used.
+A senha da pasta de rede não é lembrada: ela é pedida quando a pasta é usada.
+
+The password is kept on the card.
+A senha fica guardada no cartão.
+
+The password won't be kept on the card: KaiVideo asks for it when the folder is used.
+A senha não ficará no cartão: o KaiVideo vai pedi-la quando a pasta for usada.
 
 The secure connection failed. Does the server use https on that port?
 A conexão segura falhou. O servidor usa https nessa porta?
@@ -1130,6 +1178,9 @@ O servidor não começou a converter este vídeo.
 
 The server doesn't have this video any more.
 O servidor não tem mais este vídeo.
+
+The server doesn't sign the connection (an old NAS, or a folder open to guests). If you trust your home network, turn on Allow without signing on this page.
+O servidor não assina a conexão (um NAS antigo, ou uma pasta aberta a convidados). Se você confia na sua rede de casa, ative Permitir sem assinatura nesta página.
 
 The server found can't be used: type its address under Server.
 Não é possível usar o servidor encontrado: digite o endereço em Servidor.
@@ -1274,6 +1325,9 @@ Assistido
 
 White
 Branco
+
+Without the password the network folder can't be read.
+Sem a senha, a pasta de rede não pode ser lida.
 
 Wrong user name or password.
 Usuário ou senha incorretos.

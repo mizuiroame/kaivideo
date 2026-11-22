@@ -166,6 +166,7 @@ void appLibraryToggleSource(App *app, uint64_t now)
         jfSyncGetStatus(&app->jf);
     bool on_card = !app->config.use_jellyfin && !app->config.use_network;
     if (on_card && davConfigured()) {
+        appNetworkEnsurePassword(app, now);  // Without it, what was found before shows.
         appLibraryShowNetwork(app);
         return;
     }
@@ -511,6 +512,9 @@ static void openEntry(App *app, Browser *b, bool picking, uint64_t now)
 {
     if (b->cursor >= b->count)
         return;
+    char target[BROWSER_PATH_MAX];
+    if (browserSelectedPath(b, target, sizeof(target)) && davIsLocation(target) && !appNetworkEnsurePassword(app, now))
+        return;
     if (b->items[b->cursor].is_dir) {
         if (!browserEnter(b))
             appShowMessage(app, b->problem[0] ? b->problem : T("That folder can't be opened."), now);
@@ -739,6 +743,8 @@ void appLibraryRescan(App *app, uint64_t now)
         appShowMessage(app, T("Choose the library folder first."), now);
     } else if (libscanBusy(NULL)) {
         appShowMessage(app, T("Already looking for videos."), now);
+    } else if (app->config.use_network && !appNetworkEnsurePassword(app, now)) {
+        return;
     } else {
         startScan(app);
     }

@@ -17,4 +17,5 @@ void uiDrawSignInCode(bool plex, const char *code, const char *server, bool link
 // Who's signed in to each server ("" for none), shown on the main page's rows.
 void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT]);
 // What the network folder's rows say: its address and user ("" for none).
-void uiSettingsSetNetwork(const char *address, const char *user);
+// What the network folder's rows show: its address, user, and its two switches.
+void uiSettingsSetNetwork(const char *address, const char *user, bool remember, bool allow_unsigned, bool smb);

@@ -218,6 +218,9 @@ void appJellyfinPlaybackStopped(App *app, int64_t position_ns, bool watched);
 void appNetworkStart(App *app);
 // A Settings row of its page: true if it was one.
 bool appNetworkActivate(App *app, SettingRow row, uint64_t now);
+// Before using the network folder: its password, when it isn't remembered and hasn't been
+// typed since KaiVideo started, is asked for now. False if it wasn't given.
+bool appNetworkEnsurePassword(App *app, uint64_t now);
 // Once a frame: a test's answer.
 void appNetworkUpdate(App *app, uint64_t now);
 // Closes its connections and lets the console's network go.

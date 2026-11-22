@@ -56,10 +56,12 @@ void davLoadAccount(const char *path)
         text[n] = '\0';
         fclose(f);
     }
-    davAccountRead(&a, text);
+    bool older = davAccountRead(&a, text);
     davUseAccount(&a);
     memset(text, 0, sizeof(text));
     memset(&a, 0, sizeof(a));
+    if (older)
+        davSaveAccount(path);  // A password kept as typed: now as its hash, or encoded.
 }
 
 bool davSaveAccount(const char *path)
@@ -77,6 +79,23 @@ bool davSaveAccount(const char *path)
     return ok;
 }
 
+bool davPasswordMissing(void)
+{
+    pthread_mutex_lock(&g_lock);
+    bool missing = g_account.user[0] && g_account.forget_password && !g_account.password[0];
+    pthread_mutex_unlock(&g_lock);
+    return missing;
+}
+
+// Not asked for yet (not remembered): nothing is sent, and why says so.
+static bool sayMissing(char *why, size_t why_size)
+{
+    if (!davPasswordMissing())
+        return false;
+    snprintf(why, why_size, "%s", T("The network folder's password isn't remembered: it's asked for when the folder is used."));
+    return true;
+}
+
 bool davIsSmb(void)
 {
     pthread_mutex_lock(&g_lock);
@@ -87,6 +106,8 @@ bool davIsSmb(void)
 
 SmbFile *davSmbOpen(const char *location, char *why, size_t why_size)
 {
+    if (sayMissing(why, why_size))
+        return NULL;
     DavAccount a;
     davGetAccount(&a);
     SmbFile *f = davIsSmbAddress(a.address) ? smbFileOpen(&a, location, why, why_size) : NULL;
@@ -98,6 +119,8 @@ SmbFile *davSmbOpen(const char *location, char *why, size_t why_size)
 
 bool davStreamRequest(const char *location, char *url, size_t url_size, char *auth, size_t auth_size)
 {
+    if (davPasswordMissing())
+        return false;
     DavAccount a;
     davGetAccount(&a);
     bool ok = a.address[0] && !davIsSmbAddress(a.address) && davUrlOf(a.address, location, url, url_size) && davAuthorization(&a, auth, auth_size);
@@ -178,6 +201,8 @@ static bool propfind(const char *location, NetResponse *response, char url[URL_M
 
 bool davList(const char *location, DavEntry **out, size_t *count, char *why, size_t why_size)
 {
+    if (sayMissing(why, why_size))
+        return false;
     *out = NULL;
     *count = 0;
     DavAccount a;
@@ -201,9 +226,17 @@ bool davList(const char *location, DavEntry **out, size_t *count, char *why, siz
 
 bool davTest(char *out, size_t size)
 {
+    if (sayMissing(out, size))
+        return false;
     DavEntry *entries;
     size_t count;
-    if (!davList(DAV_ROOT, &entries, &count, out, size))
+    DavAccount a;
+    davGetAccount(&a);
+    // SMB on a connection of its own: an answer even while the library waits on the server.
+    bool listed = davIsSmbAddress(a.address) ? smbListFresh(&a, DAV_ROOT, &entries, &count, out, size)
+                                             : davList(DAV_ROOT, &entries, &count, out, size);
+    memset(&a, 0, sizeof(a));
+    if (!listed)
         return false;
     int folders = 0, videos = 0;
     for (size_t i = 0; i < count; i++) {

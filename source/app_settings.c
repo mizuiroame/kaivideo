@@ -322,7 +322,10 @@ static void openServer(App *app, ServerKind kind, uint64_t now)
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_BACKGROUND) {
+    if (row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED) {  // The network folder's account: its file.
+        appNetworkActivate(app, row, now);
+        return;
+    } else if (row == SETTING_BACKGROUND) {
         stepBackground(app, delta, now);
     } else if (row == SETTING_LANGUAGE) {  // Through the languages found (English, Spanish, files).
         int count = languagesCount();

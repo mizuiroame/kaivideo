@@ -264,6 +264,9 @@ Address
 Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
 アドレス: \\PC\Videos（共有フォルダー）または 192.168.0.10:8098（WebDAV）
 
+Allow without signing (old NAS)
+署名なしを許可（古いNAS）
+
 Already looking for videos.
 すでに動画を探しています。
 
@@ -726,6 +729,9 @@ Not set
 Not signed in
 未ログイン
 
+Not signed: someone on your network could change what's read. Use it only for an old NAS.
+署名なし：ネットワーク上の誰かが読み込む内容を書き換えられます。古いNASの場合だけ使ってください。
+
 Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
 そのアドレスとポートから応答がありません。サーバーは起動していますか？ポートは正しいですか（通常は8096）？
 
@@ -756,6 +762,9 @@ Off
 Off: any certificate
 オフ：どの証明書も許可
 
+Off: asked when the folder is used
+オフ：フォルダーを使うときに入力
+
 On
 オン
 
@@ -770,6 +779,12 @@ SDカード内
 
 On your phone or computer, go to plex.tv/link
 スマートフォンかパソコンで plex.tv/link を開き、
+
+On: not signed
+オン：署名なし
+
+Only for shared folders (SMB)
+共有フォルダー（SMB）のみ
 
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
 オープンソース（MIT）  ·  github.com/mizuiroame/kaivideo
@@ -788,6 +803,9 @@ Outline
 
 Password
 パスワード
+
+Password for %s (%s)
+%s のパスワード（%s）
 
 Paused
 一時停止中
@@ -891,6 +909,9 @@ Recently added
 Red
 レッド
 
+Remember the password
+パスワードを保存
+
 Removed from Favorites.
 お気に入りから外しました。
 
@@ -908,6 +929,15 @@ Russian
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saved until KaiVideo closes: the password isn't kept on the card.
+KaiVideoを閉じるまで保持します。パスワードはカードに保存されません。
+
+Saved: the card keeps the password's hash, not the password.
+保存しました。カードにはパスワードではなく、そのハッシュが保存されます。
+
+Saved: the password is only encoded on the card. Use a user that can only read the videos.
+保存しました。カード上のパスワードはエンコードされているだけです。動画を読むことしかできないユーザーを使ってください。
 
 Saving as MKV · %d%%
 MKVとして保存中 · %d%%
@@ -983,6 +1013,9 @@ Sign out
 
 Sign out first to change the server.
 サーバーを変更するには、先にログアウトしてください。
+
+Signing is only for shared folders (SMB).
+署名は共有フォルダー（SMB）だけのものです。
 
 Size
 サイズ
@@ -1092,6 +1125,9 @@ That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
 That isn't a server's address.
 サーバーのアドレスではありません。
 
+That password can't be used.
+そのパスワードは使えません。
+
 That place can't convert videos.
 そこでは動画を変換できません。
 
@@ -1115,6 +1151,9 @@ The channel's own stream can't be read.
 
 The connection failed. Check the address and the network.
 接続できませんでした。アドレスとネットワークを確認してください。
+
+The connection is signed again.
+接続は再び署名されます。
 
 The connection to the server was lost.
 サーバーとの接続が切れました。
@@ -1154,6 +1193,15 @@ The network folder answers. At its top: folders %d, videos %d.
 
 The network folder is forgotten.
 ネットワークフォルダーの登録を解除しました。
+
+The network folder's password isn't remembered: it's asked for when the folder is used.
+ネットワークフォルダーのパスワードは保存されていません。フォルダーを使うときに入力を求めます。
+
+The password is kept on the card.
+パスワードはカードに保存されます。
+
+The password won't be kept on the card: KaiVideo asks for it when the folder is used.
+パスワードはカードに保存されません。フォルダーを使うときに入力を求めます。
 
 The secure connection failed. Does the server use https on that port?
 安全な接続ができませんでした。サーバーはそのポートで https を使っていますか？
@@ -1196,6 +1244,9 @@ The server doesn't have this video any more.
 
 The server doesn't let this user see that folder.
 このユーザーはサーバーでそのフォルダーを見る権限がありません。
+
+The server doesn't sign the connection (an old NAS, or a folder open to guests). If you trust your home network, turn on Allow without signing on this page.
+サーバーが接続に署名しません（古いNAS、またはゲストに公開されたフォルダー）。家のネットワークを信頼できるなら、このページで「署名なしを許可」をオンにしてください。
 
 The server found can't be used: type its address under Server.
 見つかったサーバーは使用できません。「サーバー」にアドレスを入力してください。
@@ -1352,6 +1403,9 @@ Watched
 
 White
 ホワイト
+
+Without the password the network folder can't be read.
+パスワードがないとネットワークフォルダーを読めません。
 
 Wrong user name or password.
 ユーザー名またはパスワードが違います。

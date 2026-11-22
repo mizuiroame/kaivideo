@@ -252,6 +252,9 @@ Ajouté aux Téléchargements : le serveur le convertit d'abord, à %.0f Mb/s.
 Added to Favorites.
 Ajouté aux favoris.
 
+Allow without signing (old NAS)
+Autoriser sans signature (ancien NAS)
+
 Already looking for videos.
 Recherche de vidéos déjà en cours.
 
@@ -699,6 +702,9 @@ Non défini
 Not signed in
 Non connecté
 
+Not signed: someone on your network could change what's read. Use it only for an old NAS.
+Sans signature : quelqu'un sur votre réseau pourrait modifier ce qui est lu. À utiliser seulement pour un ancien NAS.
+
 Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
 Rien n'a répondu à cette adresse et ce port. Le serveur est-il allumé, et le port est-il correct (souvent 8096) ?
 
@@ -723,6 +729,9 @@ Non
 Off: any certificate
 Non : tout certificat
 
+Off: asked when the folder is used
+Non : demandé à l'utilisation du dossier
+
 On
 Oui
 
@@ -737,6 +746,12 @@ Sur la carte
 
 On your phone or computer, go to plex.tv/link
 Sur votre téléphone ou ordinateur, allez sur plex.tv/link
+
+On: not signed
+Oui : sans signature
+
+Only for shared folders (SMB)
+Uniquement pour les dossiers partagés (SMB)
 
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
@@ -755,6 +770,9 @@ Contour
 
 Password
 Mot de passe
+
+Password for %s (%s)
+Mot de passe de %s (%s)
 
 Paused
 En pause
@@ -855,6 +873,9 @@ Ajouts récents
 Red
 Rouge
 
+Remember the password
+Mémoriser le mot de passe
+
 Removed from Favorites.
 Retiré des favoris.
 
@@ -872,6 +893,15 @@ Russe
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saved until KaiVideo closes: the password isn't kept on the card.
+Enregistré jusqu'à la fermeture de KaiVideo : le mot de passe n'est pas gardé sur la carte.
+
+Saved: the card keeps the password's hash, not the password.
+Enregistré : la carte garde l'empreinte (hash) du mot de passe, pas le mot de passe.
+
+Saved: the password is only encoded on the card. Use a user that can only read the videos.
+Enregistré : sur la carte, le mot de passe est seulement encodé. Utilisez un utilisateur qui peut seulement lire les vidéos.
 
 Saving as MKV · %d%%
 Enregistrement en MKV · %d%%
@@ -944,6 +974,9 @@ Se déconnecter
 
 Sign out first to change the server.
 Déconnectez-vous d'abord pour changer de serveur.
+
+Signing is only for shared folders (SMB).
+La signature ne concerne que les dossiers partagés (SMB).
 
 Size
 Taille
@@ -1038,6 +1071,9 @@ Impossible d'ouvrir ce dossier.
 That isn't a server's address.
 Ce n'est pas l'adresse d'un serveur.
 
+That password can't be used.
+Ce mot de passe ne peut pas être utilisé.
+
 That place can't convert videos.
 Cet emplacement ne peut pas convertir de vidéos.
 
@@ -1058,6 +1094,9 @@ Impossible de lire le flux propre à la chaîne.
 
 The connection failed. Check the address and the network.
 La connexion a échoué. Vérifiez l'adresse et le réseau.
+
+The connection is signed again.
+La connexion est de nouveau signée.
 
 The connection to the server was lost.
 La connexion au serveur a été perdue.
@@ -1091,6 +1130,15 @@ Impossible d'utiliser le réseau.
 
 The network couldn't be asked. Type the server's address under Server.
 Impossible d'interroger le réseau. Saisissez l'adresse du serveur dans Serveur.
+
+The network folder's password isn't remembered: it's asked for when the folder is used.
+Le mot de passe du dossier réseau n'est pas mémorisé : il est demandé à l'utilisation du dossier.
+
+The password is kept on the card.
+Le mot de passe est gardé sur la carte.
+
+The password won't be kept on the card: KaiVideo asks for it when the folder is used.
+Le mot de passe ne sera pas gardé sur la carte : KaiVideo le demandera quand le dossier sera utilisé.
 
 The secure connection failed. Does the server use https on that port?
 La connexion sécurisée a échoué. Le serveur utilise-t-il https sur ce port ?
@@ -1130,6 +1178,9 @@ Le serveur n'a pas commencé à convertir cette vidéo.
 
 The server doesn't have this video any more.
 Le serveur n'a plus cette vidéo.
+
+The server doesn't sign the connection (an old NAS, or a folder open to guests). If you trust your home network, turn on Allow without signing on this page.
+Le serveur ne signe pas la connexion (un ancien NAS, ou un dossier ouvert aux invités). Si vous faites confiance à votre réseau domestique, activez Autoriser sans signature sur cette page.
 
 The server found can't be used: type its address under Server.
 Le serveur trouvé est inutilisable : saisissez son adresse dans Serveur.
@@ -1274,6 +1325,9 @@ Vu
 
 White
 Blanc
+
+Without the password the network folder can't be read.
+Sans le mot de passe, le dossier réseau ne peut pas être lu.
 
 Wrong user name or password.
 Nom d'utilisateur ou mot de passe incorrect.

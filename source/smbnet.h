@@ -14,6 +14,10 @@
 // Lists a folder of the share ("dav:/" or "dav:/Movies"). *out is malloc'd.
 // False with why (for the person) if it can't be.
 bool smbList(const DavAccount *a, const char *location, DavEntry **out, size_t *count, char *why, size_t why_size);
+// The same on a new connection of its own, closed after: for a test, which
+// then never waits behind a library scan stuck on a server that doesn't answer.
+bool smbListFresh(const DavAccount *a, const char *location, DavEntry **out, size_t *count, char *why,
+                  size_t why_size);
 
 typedef struct SmbFile SmbFile;
 

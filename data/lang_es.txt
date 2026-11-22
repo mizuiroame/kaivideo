@@ -252,6 +252,9 @@ Se agregó a Descargas: el servidor lo convierte primero, a %.0f Mb/s.
 Added to Favorites.
 Se agregó a Favoritos.
 
+Allow without signing (old NAS)
+Permitir sin firma (NAS antiguo)
+
 Already looking for videos.
 Ya se están buscando videos.
 
@@ -699,6 +702,9 @@ Sin configurar
 Not signed in
 Sin sesión
 
+Not signed: someone on your network could change what's read. Use it only for an old NAS.
+Sin firma: alguien en tu red podría cambiar lo que se lee. Úsalo solo con un NAS antiguo.
+
 Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
 Nada respondió en esa dirección y puerto. ¿Está encendido el servidor y es el puerto correcto (normalmente 8096)?
 
@@ -723,6 +729,9 @@ No
 Off: any certificate
 No: cualquier certificado
 
+Off: asked when the folder is used
+No: se pide al usar la carpeta
+
 On
 Sí
 
@@ -737,6 +746,12 @@ En la tarjeta
 
 On your phone or computer, go to plex.tv/link
 En tu teléfono o computadora, ve a plex.tv/link
+
+On: not signed
+Sí: sin firma
+
+Only for shared folders (SMB)
+Solo para carpetas compartidas (SMB)
 
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
 Código abierto (MIT)  ·  github.com/mizuiroame/kaivideo
@@ -755,6 +770,9 @@ Contorno
 
 Password
 Contraseña
+
+Password for %s (%s)
+Contraseña de %s (%s)
 
 Paused
 En pausa
@@ -855,6 +873,9 @@ Agregados recientemente
 Red
 Rojo
 
+Remember the password
+Recordar la contraseña
+
 Removed from Favorites.
 Se quitó de Favoritos.
 
@@ -872,6 +893,15 @@ Ruso
 
 S%02dE%02d · %s
 T%02dE%02d · %s
+
+Saved until KaiVideo closes: the password isn't kept on the card.
+Guardada hasta que KaiVideo se cierre: la contraseña no se guarda en la tarjeta.
+
+Saved: the card keeps the password's hash, not the password.
+Guardada: la tarjeta tiene el hash de la contraseña, no la contraseña.
+
+Saved: the password is only encoded on the card. Use a user that can only read the videos.
+Guardada: en la tarjeta la contraseña solo está codificada. Usa un usuario que solo pueda leer los videos.
 
 Saving as MKV · %d%%
 Guardando como MKV · %d%%
@@ -944,6 +974,9 @@ Cerrar sesión
 
 Sign out first to change the server.
 Primero cierra sesión para cambiar el servidor.
+
+Signing is only for shared folders (SMB).
+La firma es solo para carpetas compartidas (SMB).
 
 Size
 Tamaño
@@ -1038,6 +1071,9 @@ No se puede abrir esa carpeta.
 That isn't a server's address.
 Esa no es la dirección de un servidor.
 
+That password can't be used.
+Esa contraseña no se puede usar.
+
 That place can't convert videos.
 Ese lugar no puede convertir videos.
 
@@ -1058,6 +1094,9 @@ No se puede leer la transmisión propia del canal.
 
 The connection failed. Check the address and the network.
 Falló la conexión. Revisa la dirección y la red.
+
+The connection is signed again.
+La conexión vuelve a ir firmada.
 
 The connection to the server was lost.
 Se perdió la conexión con el servidor.
@@ -1091,6 +1130,15 @@ No se puede usar la red.
 
 The network couldn't be asked. Type the server's address under Server.
 No se pudo preguntar en la red. Escribe la dirección del servidor en Servidor.
+
+The network folder's password isn't remembered: it's asked for when the folder is used.
+La contraseña de la carpeta de red no se recuerda: se pide al usar la carpeta.
+
+The password is kept on the card.
+La contraseña se guarda en la tarjeta.
+
+The password won't be kept on the card: KaiVideo asks for it when the folder is used.
+La contraseña no se guardará en la tarjeta: KaiVideo la pedirá cuando se use la carpeta.
 
 The secure connection failed. Does the server use https on that port?
 Falló la conexión segura. ¿El servidor usa https en ese puerto?
@@ -1130,6 +1178,9 @@ El servidor no empezó a convertir este video.
 
 The server doesn't have this video any more.
 El servidor ya no tiene este video.
+
+The server doesn't sign the connection (an old NAS, or a folder open to guests). If you trust your home network, turn on Allow without signing on this page.
+El servidor no firma la conexión (un NAS antiguo, o una carpeta abierta a invitados). Si confías en tu red de casa, activa Permitir sin firma en esta página.
 
 The server found can't be used: type its address under Server.
 No se puede usar el servidor encontrado: escribe su dirección en Servidor.
@@ -1274,6 +1325,9 @@ Visto
 
 White
 Blanco
+
+Without the password the network folder can't be read.
+Sin la contraseña no se puede leer la carpeta de red.
 
 Wrong user name or password.
 Usuario o contraseña incorrectos.

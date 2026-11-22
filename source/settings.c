@@ -14,7 +14,8 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Server video quality"), N_("Find servers on this network"), N_("Test the connection"),
     N_("Certificate check"), N_("Sign in at plex.tv/link"), N_("Server"), N_("Emby"), N_("Plex"), N_("Library"),
     N_("Playback"), N_("Color"), N_("Language"), N_("Network folder"), N_("Address"), N_("User and password"),
-    N_("Test the connection"), N_("Forget this folder"),
+    N_("Test the connection"), N_("Forget this folder"), N_("Remember the password"),
+    N_("Allow without signing (old NAS)"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -26,7 +27,8 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
      SETTING_SERVER_COLOR, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
-    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
+    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_TEST,
+     SETTING_NET_FORGET, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -239,7 +241,8 @@ bool settingIsChoice(SettingRow row)
 {
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
-           row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE;
+           row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
+           row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED;
 }
 
 static int wrap(int value, int delta, int count)

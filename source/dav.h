@@ -19,12 +19,18 @@
 #define DAV_NAME_MAX 256
 #define DAV_ACCOUNT_FILE "network.txt"
 #define DAV_LISTING_MAX 5000      // Entries a folder shows at most.
+#define DAV_NT_HASH_PREFIX "ntlm:"  // libsmb2 takes "ntlm:<32 hex digits>" as the password's NT hash.
+#define DAV_NT_HASH_SIZE (sizeof(DAV_NT_HASH_PREFIX) - 1 + 32 + 1)
 
 typedef struct {
     // "http://192.168.0.10:8098/dav/" or "smb://PC/Videos/sub/", always ending in '/'; "" for none.
     char address[DAV_ADDRESS_MAX];
     char user[DAV_TEXT_MAX];        // "" for none: the server asks for nothing.
+    // WebDAV: as typed (Basic sends it). SMB: its NT hash ("ntlm:..."), never as
+    // typed: NTLM signs in with the hash, so the password itself is never kept.
     char password[DAV_TEXT_MAX];
+    bool forget_password;           // Not kept on the card: only until KaiVideo closes.
+    bool allow_unsigned;            // SMB: a server that doesn't sign is used too (an old NAS, guests).
 } DavAccount;
 
 typedef struct {
@@ -67,8 +73,19 @@ bool davSameServer(const char *a, const char *b);
 // "Basic <base64 of user:password>", or "" without a user. False if too long.
 bool davAuthorization(const DavAccount *a, char *out, size_t size);
 
-// The account's file: "address=", "user=", "password=" lines.
-void davAccountRead(DavAccount *a, const char *text);
+// A password's NT hash, "ntlm:" and 32 hex digits: MD4 of its UTF-16. False
+// if it isn't UTF-8.
+bool davNtHash(const char *password, char out[DAV_NT_HASH_SIZE]);
+// Puts a typed password in a's (an SMB address: its NT hash). False if it can't be used.
+bool davSetPassword(DavAccount *a, const char *typed);
+
+// The account's file: "address=", "user=", "password=", and "forget_password=1",
+// "allow_unsigned=1" when set. On the card the password is never as typed: an SMB
+// folder's is its NT hash, a WebDAV folder's is encoded ("b64:"; Basic needs the
+// password itself, so anyone with the card can still decode it); a password not
+// to remember isn't written. Returns true when text was an older form (a
+// password as typed): the file is to be written again.
+bool davAccountRead(DavAccount *a, const char *text);
 // Writes the account as the file's text. False if it doesn't fit.
 bool davAccountWrite(const DavAccount *a, char *out, size_t size);
 

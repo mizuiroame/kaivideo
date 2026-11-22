@@ -3,6 +3,7 @@
 
 #include "check.h"
 #include "dav.h"
+#include "md4.h"
 
 #define CHECK_STR(a, b) CHECK(strcmp((a), (b)) == 0)
 
@@ -85,31 +86,109 @@ static void testUrls(void)
     CHECK(!davUrlOf("http://pc/", "sdmc:/a.mkv", out, sizeof(out)));
     CHECK(!davUrlOf("http://pc/", "dav:/abcdef", out, 18));
 
-    DavAccount a = {"http://pc/", "kai", "pass:word"};
+    DavAccount a = {.address = "http://pc/", .user = "kai", .password = "pass:word"};
     CHECK(davAuthorization(&a, out, sizeof(out)));
     CHECK_STR(out, "Basic a2FpOnBhc3M6d29yZA==");
-    DavAccount none = {"http://pc/", "", ""};
+    DavAccount none = {.address = "http://pc/", .user = "", .password = ""};
     CHECK(davAuthorization(&none, out, sizeof(out)));
     CHECK_STR(out, "");
 }
 
+static void testMd4(void)
+{
+    // RFC 1320's test suite.
+    static const struct {
+        const char *text, *hex;
+    } CASES[] = {
+        {"", "31d6cfe0d16ae931b73c59d7e0c089c0"},
+        {"abc", "a448017aaf21d8525fc10ae87aa6729d"},
+        {"message digest", "d9130a8164549fe818874806e1c7014b"},
+        {"12345678901234567890123456789012345678901234567890123456789012345678901234567890",
+         "e33b4ddc9c38f2199c3e7b164fcc0536"},
+    };
+    for (size_t i = 0; i < sizeof(CASES) / sizeof(CASES[0]); i++) {
+        uint8_t digest[MD4_DIGEST_SIZE];
+        char hex[2 * MD4_DIGEST_SIZE + 1];
+        md4(CASES[i].text, strlen(CASES[i].text), digest);
+        for (int k = 0; k < MD4_DIGEST_SIZE; k++)
+            snprintf(hex + 2 * k, 3, "%02x", digest[k]);
+        CHECK_STR(hex, CASES[i].hex);
+    }
+}
+
+static void testNtHash(void)
+{
+    char hash[DAV_NT_HASH_SIZE];
+    CHECK(davNtHash("password", hash) && strcmp(hash, "ntlm:8846F7EAEE8FB117AD06BDD830B7586C") == 0);
+    // Outside ASCII it hashes the UTF-16 the server does: "contraseña", and a character past U+FFFF.
+    CHECK(davNtHash("contrase\xC3\xB1" "a", hash) && strcmp(hash, "ntlm:305A42A96D4DF77C1F0434F63A28239A") == 0);
+    CHECK(davNtHash("\xF0\x9F\x8E\xB5", hash) && strcmp(hash, "ntlm:F76B2FD531F187BC8854CB2045241955") == 0);
+    CHECK(!davNtHash("bad \xC3", hash) && !davNtHash("\xED\xA0\x80", hash));  // Cut short; a lone surrogate.
+}
+
 static void testAccountFile(void)
 {
-    DavAccount a = {"http://pc:8098/", "kai", "se=cret"}, b;
+    DavAccount a = {.address = "http://pc:8098/", .user = "kai", .password = "se=cret"}, b;
     char text[1024];
     CHECK(davAccountWrite(&a, text, sizeof(text)));
-    davAccountRead(&b, text);
+    CHECK(strstr(text, "se=cret") == NULL);  // Not as typed.
+    CHECK(!davAccountRead(&b, text));        // Nothing to write again.
     CHECK_STR(b.address, a.address);
     CHECK_STR(b.user, a.user);
     CHECK_STR(b.password, a.password);
-    davAccountRead(&b, "address=http://x/\r\nuser=u\r\nnonsense\r\n");
+    CHECK(!b.forget_password && !b.allow_unsigned);
+    CHECK(!davAccountRead(&b, "address=http://x/\r\nuser=u\r\nnonsense\r\n"));
     CHECK_STR(b.address, "http://x/");
     CHECK_STR(b.user, "u");
     CHECK_STR(b.password, "");
     davAccountRead(&b, "address=not an address\n");
     CHECK_STR(b.address, "");
-    DavAccount bad = {"http://pc/", "line\nbreak", ""};
+    DavAccount bad = {.address = "http://pc/", .user = "line\nbreak", .password = ""};
     CHECK(!davAccountWrite(&bad, text, sizeof(text)));
+}
+
+// A file from before: its password as typed is read, and the file is to be written again.
+static void testOldAccountFiles(void)
+{
+    DavAccount a;
+    char text[1024];
+    CHECK(davAccountRead(&a, "address=http://pc/\nuser=kai\npassword=plain\n"));
+    CHECK_STR(a.password, "plain");
+    CHECK(davAccountWrite(&a, text, sizeof(text)) && !strstr(text, "plain"));
+
+    // SMB: the password becomes its NT hash at once.
+    CHECK(davAccountRead(&a, "address=smb://PC/Music/\nuser=kai\npassword=password\n"));
+    CHECK_STR(a.password, "ntlm:8846F7EAEE8FB117AD06BDD830B7586C");
+    CHECK(davAccountWrite(&a, text, sizeof(text)) && !strstr(text, "=password"));
+    CHECK(!davAccountRead(&a, text));
+    CHECK_STR(a.password, "ntlm:8846F7EAEE8FB117AD06BDD830B7586C");
+
+    // A WebDAV address can't use a hash: dropped.
+    CHECK(davAccountRead(&a, "address=http://pc/\nuser=kai\npassword=ntlm:8846F7EAEE8FB117AD06BDD830B7586C\n"));
+    CHECK_STR(a.password, "");
+    // A damaged encoding: no password, rather than a wrong one.
+    CHECK(davAccountRead(&a, "address=http://pc/\nuser=kai\npassword=b64:%%%\n"));
+    CHECK_STR(a.password, "");
+}
+
+static void testAccountChoices(void)
+{
+    DavAccount a = {.address = "smb://NAS/Music/", .user = "kai", .forget_password = true, .allow_unsigned = true}, b;
+    CHECK(davSetPassword(&a, "password"));
+    CHECK_STR(a.password, "ntlm:8846F7EAEE8FB117AD06BDD830B7586C");
+    char text[1024];
+    CHECK(davAccountWrite(&a, text, sizeof(text)));
+    CHECK(!strstr(text, "ntlm:"));  // Not remembered: not on the card in any form.
+    CHECK(!davAccountRead(&b, text));
+    CHECK(b.forget_password && b.allow_unsigned && b.password[0] == '\0');
+    CHECK_STR(b.user, "kai");
+    // A file not to remember that still has one: dropped, and written again.
+    CHECK(davAccountRead(&b, "address=http://pc/\nuser=u\npassword=b64:cA==\nforget_password=1\n"));
+    CHECK_STR(b.password, "");
+
+    DavAccount web = {.address = "http://pc/", .user = "kai"};
+    CHECK(davSetPassword(&web, "as typed") && strcmp(web.password, "as typed") == 0);  // Basic needs it.
+    CHECK(!davSetPassword(&a, "bad \xC3"));
 }
 
 // What rclone answers, prefix D:, folder hrefs with '/', one file.
@@ -217,6 +296,10 @@ void testDav(void)
     testDates();
     testAddresses();
     testUrls();
+    testMd4();
+    testNtHash();
     testAccountFile();
+    testOldAccountFiles();
+    testAccountChoices();
     testListing();
 }

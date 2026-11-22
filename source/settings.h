@@ -44,6 +44,8 @@ typedef enum {
     SETTING_NET_ACCOUNT,    // Types its user name and password.
     SETTING_NET_TEST,       // Asks it for its top folder.
     SETTING_NET_FORGET,     // Forgets it: address, user and password.
+    SETTING_NET_REMEMBER,   // Whether its password is kept on the card.
+    SETTING_NET_UNSIGNED,   // Whether an SMB server that doesn't sign is used (an old NAS).
     SETTING_COUNT,
 } SettingRow;
 

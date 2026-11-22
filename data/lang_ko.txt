@@ -252,6 +252,9 @@ Added to Downloads: the server converts it first, at %.0f Mb/s.
 Added to Favorites.
 즐겨찾기에 추가했습니다.
 
+Allow without signing (old NAS)
+서명 없이 허용 (오래된 NAS)
+
 Already looking for videos.
 이미 동영상을 찾고 있습니다.
 
@@ -699,6 +702,9 @@ Not set
 Not signed in
 로그인 안 함
 
+Not signed: someone on your network could change what's read. Use it only for an old NAS.
+서명 없음: 네트워크의 누군가가 읽는 내용을 바꿀 수 있습니다. 오래된 NAS에만 사용하세요.
+
 Nothing answered at that address and port. Is the server on, and is the port right (usually 8096)?
 해당 주소와 포트에서 응답이 없습니다. 서버가 켜져 있고 포트(보통 8096)가 맞는지 확인하세요.
 
@@ -723,6 +729,9 @@ Off
 Off: any certificate
 끔: 모든 인증서 허용
 
+Off: asked when the folder is used
+끔: 폴더를 사용할 때 입력
+
 On
 켬
 
@@ -737,6 +746,12 @@ SD 카드에 있음
 
 On your phone or computer, go to plex.tv/link
 스마트폰이나 컴퓨터에서 plex.tv/link에 접속한 다음
+
+On: not signed
+켬: 서명 없음
+
+Only for shared folders (SMB)
+공유 폴더(SMB) 전용
 
 Open source (MIT)  ·  github.com/mizuiroame/kaivideo
 오픈 소스 (MIT)  ·  github.com/mizuiroame/kaivideo
@@ -755,6 +770,9 @@ Outline
 
 Password
 비밀번호
+
+Password for %s (%s)
+%s의 비밀번호 (%s)
 
 Paused
 일시정지
@@ -855,6 +873,9 @@ Recently added
 Red
 빨간색
 
+Remember the password
+비밀번호 기억
+
 Removed from Favorites.
 즐겨찾기에서 제거했습니다.
 
@@ -872,6 +893,15 @@ Russian
 
 S%02dE%02d · %s
 S%02dE%02d · %s
+
+Saved until KaiVideo closes: the password isn't kept on the card.
+KaiVideo를 닫을 때까지 보관합니다. 비밀번호는 카드에 저장되지 않습니다.
+
+Saved: the card keeps the password's hash, not the password.
+저장했습니다. 카드에는 비밀번호가 아니라 그 해시가 저장됩니다.
+
+Saved: the password is only encoded on the card. Use a user that can only read the videos.
+저장했습니다. 카드의 비밀번호는 인코딩만 되어 있습니다. 동영상을 읽기만 할 수 있는 사용자를 쓰세요.
 
 Saving as MKV · %d%%
 MKV로 저장하는 중 · %d%%
@@ -944,6 +974,9 @@ Sign out
 
 Sign out first to change the server.
 서버를 변경하려면 먼저 로그아웃하세요.
+
+Signing is only for shared folders (SMB).
+서명은 공유 폴더(SMB)에만 해당합니다.
 
 Size
 크기
@@ -1038,6 +1071,9 @@ That folder can't be opened.
 That isn't a server's address.
 서버 주소가 아닙니다.
 
+That password can't be used.
+그 비밀번호는 사용할 수 없습니다.
+
 That place can't convert videos.
 이곳에서는 동영상을 변환할 수 없습니다.
 
@@ -1058,6 +1094,9 @@ The channel's own stream can't be read.
 
 The connection failed. Check the address and the network.
 연결에 실패했습니다. 주소와 네트워크를 확인하세요.
+
+The connection is signed again.
+연결이 다시 서명됩니다.
 
 The connection to the server was lost.
 서버와의 연결이 끊어졌습니다.
@@ -1091,6 +1130,15 @@ The network can't be used.
 
 The network couldn't be asked. Type the server's address under Server.
 네트워크에서 찾을 수 없었습니다. 서버 항목에 서버 주소를 입력하세요.
+
+The network folder's password isn't remembered: it's asked for when the folder is used.
+네트워크 폴더의 비밀번호는 저장되지 않습니다. 폴더를 사용할 때 물어봅니다.
+
+The password is kept on the card.
+비밀번호를 카드에 저장합니다.
+
+The password won't be kept on the card: KaiVideo asks for it when the folder is used.
+비밀번호를 카드에 저장하지 않습니다. 폴더를 사용할 때 물어봅니다.
 
 The secure connection failed. Does the server use https on that port?
 보안 연결에 실패했습니다. 서버가 이 포트에서 https를 사용하는지 확인하세요.
@@ -1130,6 +1178,9 @@ The server didn't start converting this video.
 
 The server doesn't have this video any more.
 서버에 이 동영상이 더 이상 없습니다.
+
+The server doesn't sign the connection (an old NAS, or a folder open to guests). If you trust your home network, turn on Allow without signing on this page.
+서버가 연결에 서명하지 않습니다(오래된 NAS 또는 게스트에게 열린 폴더). 집 네트워크를 신뢰한다면 이 페이지에서 서명 없이 허용을 켜세요.
 
 The server found can't be used: type its address under Server.
 찾은 서버를 사용할 수 없습니다. 서버 항목에 주소를 입력하세요.
@@ -1274,6 +1325,9 @@ Watched
 
 White
 흰색
+
+Without the password the network folder can't be read.
+비밀번호가 없으면 네트워크 폴더를 읽을 수 없습니다.
 
 Wrong user name or password.
 사용자 이름 또는 비밀번호가 올바르지 않습니다.

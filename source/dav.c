@@ -6,6 +6,8 @@
 #include <string.h>
 #include <strings.h>
 
+#include "md4.h"
+
 #define HTTP "http://"
 #define HTTPS "https://"
 #define SMB "smb://"
@@ -217,27 +219,186 @@ bool davAuthorization(const DavAccount *a, char *out, size_t size)
     return ok;
 }
 
+static int base64Value(char c)
+{
+    const char *at = c ? strchr(BASE64, c) : NULL;
+    return at ? (int)(at - BASE64) : -1;
+}
+
+// Decodes base64 into out (NUL-terminated). False if it isn't base64 or doesn't fit.
+static bool unbase64(const char *in, char *out, size_t size)
+{
+    size_t length = strlen(in), o = 0;
+    if (length % 4)
+        return false;
+    for (size_t i = 0; i < length; i += 4) {
+        int v[4];
+        for (int k = 0; k < 4; k++) {
+            bool pad = in[i + k] == '=' && i + 4 == length && k >= 2;
+            v[k] = pad ? 0 : base64Value(in[i + k]);
+            if (v[k] < 0 || (pad && k == 2 && in[i + 3] != '='))
+                return false;
+        }
+        unsigned bits = (unsigned)v[0] << 18 | (unsigned)v[1] << 12 | (unsigned)v[2] << 6 | (unsigned)v[3];
+        int bytes = in[i + 2] == '=' ? 1 : in[i + 3] == '=' ? 2 : 3;
+        if (o + (size_t)bytes >= size)
+            return false;
+        for (int k = 0; k < bytes; k++)
+            out[o++] = (char)(bits >> (16 - 8 * k) & 0xFF);
+    }
+    out[o] = '\0';
+    return strlen(out) == o;  // No NUL inside.
+}
+
+// --- The password's NT hash ---
+
+// The next code point of UTF-8 text at *p, moving past it; -1 if it isn't UTF-8
+// (cut short, overlong, a surrogate, past U+10FFFF).
+static long nextCodePoint(const unsigned char **p)
+{
+    const unsigned char *s = *p;
+    long c;
+    int more;
+    if (s[0] < 0x80)
+        c = s[0], more = 0;
+    else if (s[0] >= 0xC2 && s[0] <= 0xDF)
+        c = s[0] & 0x1F, more = 1;
+    else if (s[0] >= 0xE0 && s[0] <= 0xEF)
+        c = s[0] & 0x0F, more = 2;
+    else if (s[0] >= 0xF0 && s[0] <= 0xF4)
+        c = s[0] & 0x07, more = 3;
+    else
+        return -1;
+    for (int i = 1; i <= more; i++) {
+        if ((s[i] & 0xC0) != 0x80)
+            return -1;
+        c = c << 6 | (s[i] & 0x3F);
+    }
+    static const long LEAST[4] = {0, 0x80, 0x800, 0x10000};
+    if (c < LEAST[more] || (c >= 0xD800 && c <= 0xDFFF) || c > 0x10FFFF)
+        return -1;
+    *p = s + 1 + more;
+    return c;
+}
+
+bool davNtHash(const char *password, char out[DAV_NT_HASH_SIZE])
+{
+    uint8_t utf16[DAV_TEXT_MAX * 4];  // Each byte of UTF-8 is at most two of UTF-16.
+    size_t n = 0;
+    const unsigned char *p = (const unsigned char *)password;
+    bool ok = strlen(password) < DAV_TEXT_MAX;
+    while (ok && *p) {
+        long c = nextCodePoint(&p);
+        ok = c >= 0;
+        if (ok && c >= 0x10000) {  // A surrogate pair.
+            c -= 0x10000;
+            long high = 0xD800 + (c >> 10), low = 0xDC00 + (c & 0x3FF);
+            utf16[n++] = (uint8_t)high, utf16[n++] = (uint8_t)(high >> 8);
+            utf16[n++] = (uint8_t)low, utf16[n++] = (uint8_t)(low >> 8);
+        } else if (ok) {
+            utf16[n++] = (uint8_t)c, utf16[n++] = (uint8_t)(c >> 8);
+        }
+    }
+    if (ok) {
+        uint8_t digest[MD4_DIGEST_SIZE];
+        md4(utf16, n, digest);
+        int length = snprintf(out, DAV_NT_HASH_SIZE, "%s", DAV_NT_HASH_PREFIX);
+        for (int i = 0; i < MD4_DIGEST_SIZE; i++)
+            length += snprintf(out + length, DAV_NT_HASH_SIZE - (size_t)length, "%02X", digest[i]);
+        memset(digest, 0, sizeof(digest));
+    }
+    memset(utf16, 0, sizeof(utf16));
+    return ok;
+}
+
+static bool isNtHash(const char *password)
+{
+    size_t prefix = sizeof(DAV_NT_HASH_PREFIX) - 1;
+    if (strlen(password) != DAV_NT_HASH_SIZE - 1 || strncmp(password, DAV_NT_HASH_PREFIX, prefix))
+        return false;
+    for (const char *p = password + prefix; *p; p++)
+        if (!isxdigit((unsigned char)*p))
+            return false;
+    return true;
+}
+
+bool davSetPassword(DavAccount *a, const char *typed)
+{
+    if (strlen(typed) >= sizeof(a->password) || strpbrk(typed, "\r\n"))
+        return false;
+    if (!davIsSmbAddress(a->address) || !typed[0]) {
+        snprintf(a->password, sizeof(a->password), "%s", typed);
+        return true;
+    }
+    char hash[DAV_NT_HASH_SIZE];
+    bool ok = davNtHash(typed, hash);
+    if (ok)
+        snprintf(a->password, sizeof(a->password), "%s", hash);
+    memset(hash, 0, sizeof(hash));
+    return ok;
+}
+
 // --- The account's file ---
+
+#define ENCODED_PREFIX "b64:"
 
 static void readValue(char *out, size_t size, const char *value, size_t length)
 {
     snprintf(out, size, "%.*s", (int)(length < size ? length : size - 1), value);
 }
 
-void davAccountRead(DavAccount *a, const char *text)
+static bool isKey(const char *line, size_t key, const char *name)
+{
+    return key == strlen(name) && !strncmp(line, name, key);
+}
+
+// The password as kept (a hash, encoded, or an older file's as typed) into a's
+// form. True if it was an older form.
+static bool readPassword(DavAccount *a, const char *kept)
+{
+    char typed[DAV_TEXT_MAX] = "";
+    bool older = false;
+    if (!strncmp(kept, ENCODED_PREFIX, sizeof(ENCODED_PREFIX) - 1)) {
+        if (!unbase64(kept + sizeof(ENCODED_PREFIX) - 1, typed, sizeof(typed)))
+            older = true;  // Damaged: none, rather than a wrong one.
+    } else if (isNtHash(kept)) {
+        if (davIsSmbAddress(a->address))
+            snprintf(a->password, sizeof(a->password), "%.*s", (int)(DAV_NT_HASH_SIZE - 1), kept);  // isNtHash: that long.
+        return !davIsSmbAddress(a->address);  // A WebDAV folder can't use it: dropped.
+    } else {
+        size_t length = strlen(kept);
+        if (length < sizeof(typed))  // Longer can't have been typed: none, rather than a cut one.
+            memcpy(typed, kept, length + 1);
+        older = true;
+    }
+    if (!davSetPassword(a, typed)) {
+        a->password[0] = '\0';
+        older = true;
+    }
+    older = older || (davIsSmbAddress(a->address) && typed[0]);  // Encoded, but SMB keeps the hash.
+    memset(typed, 0, sizeof(typed));
+    return older;
+}
+
+bool davAccountRead(DavAccount *a, const char *text)
 {
     memset(a, 0, sizeof(*a));
+    char kept[DAV_TEXT_MAX * 2] = "";
     for (const char *line = text; *line;) {
         size_t length = strcspn(line, "\r\n");
         const char *eq = memchr(line, '=', length);
         if (eq) {
             size_t key = (size_t)(eq - line), value = length - key - 1;
-            if (key == 7 && !strncmp(line, "address", 7))
+            if (isKey(line, key, "address"))
                 readValue(a->address, sizeof(a->address), eq + 1, value);
-            else if (key == 4 && !strncmp(line, "user", 4))
+            else if (isKey(line, key, "user"))
                 readValue(a->user, sizeof(a->user), eq + 1, value);
-            else if (key == 8 && !strncmp(line, "password", 8))
-                readValue(a->password, sizeof(a->password), eq + 1, value);
+            else if (isKey(line, key, "password"))
+                readValue(kept, sizeof(kept), eq + 1, value);
+            else if (isKey(line, key, "forget_password"))
+                a->forget_password = value == 1 && eq[1] == '1';
+            else if (isKey(line, key, "allow_unsigned"))
+                a->allow_unsigned = value == 1 && eq[1] == '1';
         }
         line += length;
         line += strspn(line, "\r\n");
@@ -247,13 +408,32 @@ void davAccountRead(DavAccount *a, const char *text)
         memcpy(a->address, address, sizeof(address));
     else
         a->address[0] = '\0';
+    bool older = false;
+    if (a->forget_password)
+        older = kept[0] != '\0';  // Kept by mistake: dropped.
+    else if (kept[0])
+        older = readPassword(a, kept);
+    memset(kept, 0, sizeof(kept));
+    return older;
 }
 
 bool davAccountWrite(const DavAccount *a, char *out, size_t size)
 {
     if (strpbrk(a->address, "\r\n") || strpbrk(a->user, "\r\n") || strpbrk(a->password, "\r\n"))
         return false;
-    int n = snprintf(out, size, "address=%s\nuser=%s\npassword=%s\n", a->address, a->user, a->password);
+    char kept[DAV_TEXT_MAX * 2] = "";
+    if (a->forget_password || !a->password[0])
+        kept[0] = '\0';
+    else if (isNtHash(a->password))
+        snprintf(kept, sizeof(kept), "%s", a->password);
+    else if (!base64((const unsigned char *)a->password, strlen(a->password), kept + sizeof(ENCODED_PREFIX) - 1,
+                     sizeof(kept) - (sizeof(ENCODED_PREFIX) - 1)))
+        return false;
+    else
+        memcpy(kept, ENCODED_PREFIX, sizeof(ENCODED_PREFIX) - 1);
+    int n = snprintf(out, size, "address=%s\nuser=%s\npassword=%s\n%s%s", a->address, a->user, kept,
+                     a->forget_password ? "forget_password=1\n" : "", a->allow_unsigned ? "allow_unsigned=1\n" : "");
+    memset(kept, 0, sizeof(kept));
     return n > 0 && (size_t)n < size;
 }
 

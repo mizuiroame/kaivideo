@@ -16,8 +16,11 @@ void testSettings(void)
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
     // The main page opens the others: the library, each server, playback, display.
-    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 4 && rows[0] == SETTING_NET_ADDRESS &&
-          rows[3] == SETTING_NET_FORGET);
+    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_NET_ADDRESS &&
+          rows[2] == SETTING_NET_REMEMBER && rows[3] == SETTING_NET_UNSIGNED && rows[5] == SETTING_NET_FORGET);
+    // The two switches change with the arrows, as Certificate check.
+    CHECK(settingIsChoice(SETTING_NET_REMEMBER) && settingIsChoice(SETTING_NET_UNSIGNED) &&
+          !settingIsChoice(SETTING_NET_FORGET));
     CHECK(settingsPageNote(SETTINGS_PAGE_NETWORK, SERVER_JELLYFIN) != NULL);
     CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_OPEN_LIBRARY &&
           rows[1] == SETTING_OPEN_NETWORK && rows[2] == SETTING_OPEN_JELLYFIN && rows[3] == SETTING_OPEN_EMBY &&

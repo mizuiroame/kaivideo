@@ -114,6 +114,19 @@ static void typeAddress(App *app, uint64_t now)
     memset(&a, 0, sizeof(a));
 }
 
+// After a password is typed: how the card keeps it.
+static void sayHowKept(App *app, const DavAccount *a, uint64_t now)
+{
+    if (!a->user[0] || !a->password[0])
+        return;
+    if (a->forget_password)
+        appShowMessage(app, T("Saved until KaiVideo closes: the password isn't kept on the card."), now);
+    else if (davIsSmbAddress(a->address))
+        appShowMessage(app, T("Saved: the card keeps the password's hash, not the password."), now);
+    else
+        appShowMessage(app, T("Saved: the password is only encoded on the card. Use a user that can only read the videos."), now);
+}
+
 static void typeAccount(App *app, uint64_t now)
 {
     DavAccount a;
@@ -132,10 +145,67 @@ static void typeAccount(App *app, uint64_t now)
         appShowMessage(app, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         snprintf(a.user, sizeof(a.user), "%s", user);
-        snprintf(a.password, sizeof(a.password), "%s", password);
-        save(app, &a, now);
+        if (davSetPassword(&a, password)) {
+            save(app, &a, now);
+            sayHowKept(app, &a, now);
+        } else {
+            appShowMessage(app, T("That password can't be used."), now);
+        }
     }
     memset(password, 0, sizeof(password));
+    memset(&a, 0, sizeof(a));
+}
+
+bool appNetworkEnsurePassword(App *app, uint64_t now)
+{
+    if (!davPasswordMissing())
+        return true;
+    DavAccount a;
+    davGetAccount(&a);
+    char password[DAV_TEXT_MAX] = "", prompt[DAV_ADDRESS_MAX + 64], shown[DAV_ADDRESS_MAX];
+    davShownAddress(a.address, shown, sizeof(shown));
+    snprintf(prompt, sizeof(prompt), T("Password for %s (%s)"), a.user, shown);
+    SystemKeyboardResult result = systemKeyboardPassword(prompt, password, sizeof(password), sizeof(password) - 1);
+    bool ok = result == SYSTEM_KEYBOARD_OK && password[0] && davSetPassword(&a, password);
+    if (ok) {
+        davUseAccount(&a);  // Kept until KaiVideo closes; the card's file stays without it.
+        smbForget();
+        if (app->config.use_network && !app->config.use_jellyfin)
+            appLibraryShowNetwork(app);  // Read until now without it: read again.
+    } else if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
+        appShowMessage(app, T("The keyboard couldn't open."), now);
+    } else {
+        appShowMessage(app, T("Without the password the network folder can't be read."), now);
+    }
+    memset(password, 0, sizeof(password));
+    memset(&a, 0, sizeof(a));
+    return ok;
+}
+
+static void toggleRemember(App *app, uint64_t now)
+{
+    DavAccount a;
+    davGetAccount(&a);
+    a.forget_password = !a.forget_password;
+    save(app, &a, now);  // Not remembered: the password leaves the card's file now.
+    appShowMessage(app, a.forget_password ? T("The password won't be kept on the card: KaiVideo asks for it when the folder is used.")
+                                          : T("The password is kept on the card."), now);
+    memset(&a, 0, sizeof(a));
+}
+
+static void toggleUnsigned(App *app, uint64_t now)
+{
+    DavAccount a;
+    davGetAccount(&a);
+    if (!davIsSmbAddress(a.address)) {
+        appShowMessage(app, T("Signing is only for shared folders (SMB)."), now);
+    } else {
+        a.allow_unsigned = !a.allow_unsigned;
+        save(app, &a, now);
+        appShowMessage(app, a.allow_unsigned ? T("Not signed: someone on your network could change what's read. Use it "
+                                                 "only for an old NAS.")
+                                             : T("The connection is signed again."), now);
+    }
     memset(&a, 0, sizeof(a));
 }
 
@@ -158,6 +228,8 @@ static void test(App *app, uint64_t now)
         appShowMessage(app, T("Enter the folder's address first."), now);
         return;
     }
+    if (!appNetworkEnsurePassword(app, now))
+        return;
     pthread_mutex_lock(&g_test_lock);
     bool busy = g_testing;
     pthread_t thread;
@@ -184,6 +256,8 @@ bool appNetworkActivate(App *app, SettingRow row, uint64_t now)
     case SETTING_NET_ACCOUNT: typeAccount(app, now); return true;
     case SETTING_NET_TEST: test(app, now); return true;
     case SETTING_NET_FORGET: forget(app, now); return true;
+    case SETTING_NET_REMEMBER: toggleRemember(app, now); return true;
+    case SETTING_NET_UNSIGNED: toggleUnsigned(app, now); return true;
     default: return false;
     }
 }
@@ -220,6 +294,7 @@ void appNetworkFeedSettings(void)
     davGetAccount(&a);
     davShownAddress(a.address, shown, sizeof(shown));
     snprintf(user, sizeof(user), "%s", a.user);
+    bool remember = !a.forget_password, allow_unsigned = a.allow_unsigned, smb = davIsSmbAddress(a.address);
     memset(&a, 0, sizeof(a));
-    uiSettingsSetNetwork(shown, user);
+    uiSettingsSetNetwork(shown, user, remember, allow_unsigned, smb);
 }

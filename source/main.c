@@ -326,6 +326,8 @@ static void *openThread(void *arg)
 
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
+    if (davIsLocation(path) && !appNetworkEnsurePassword(app, now))
+        return false;  // A network folder's video: its password first, if it's asked for.
     if (app->opening && app->open_dismissed) {  // The one let go still ends: this one opens after it.
         app->queued = true;
         app->queued_from_start = app->open_from_start;
@@ -1299,13 +1301,17 @@ int main(int argc, char **argv)
     EXIT_STEP("servers");
     appNetworkExit();  // After the scan and the players: they used its connections.
     EXIT_STEP("network");
-#undef EXIT_STEP
     sysinfoExit();
     browserFree(&app.browser);
-    appLog("Done.");
+    EXIT_STEP("system info");
     audioSystemExit();
+    EXIT_STEP("audio");
     fontExit();
+    EXIT_STEP("fonts");
     gfxExit();
+    EXIT_STEP("screen");
+#undef EXIT_STEP
+    appLog("Done.");
     if (g_log)
         fclose(g_log);
     return 0;
