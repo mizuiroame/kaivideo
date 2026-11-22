@@ -97,6 +97,8 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 - [Languages](docs/languages.md): choosing one, and translating KaiVideo
 - [Limitations and plans](docs/limitations.md)
 - [Building](docs/building.md)
+- [Security](SECURITY.md): what KaiVideo connects to and keeps, and how to
+  report a problem
 - [Legal notice and licenses](docs/legal.md)
 
 ## License
