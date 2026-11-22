@@ -70,6 +70,14 @@ void appNetworkStart(App *app)
 
 static void save(App *app, const DavAccount *a, uint64_t now)
 {
+    DavAccount before;
+    davGetAccount(&before);
+    if (strcmp(before.address, a->address) != 0) {  // Another folder: what was found in the old one goes.
+        char cache[APPROOT_PATH_MAX + 32];
+        appConfigPath(cache, sizeof(cache), "library-network.txt");
+        remove(cache);
+    }
+    memset(&before, 0, sizeof(before));
     davUseAccount(a);
     smbForget();  // The listing's connection was the old account's.
     char path[APPROOT_PATH_MAX + 32];
