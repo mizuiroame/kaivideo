@@ -47,3 +47,4 @@ void testDav(void);
 void testUpdate(void);
 void testUpdateRelease(void);
 void testNotice(void);
+void testIptv(void);
