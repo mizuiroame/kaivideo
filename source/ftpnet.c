@@ -20,6 +20,9 @@
 #define STALL_S 20L           // A slow server (a NAS that looks names up) may take this long to answer.
 #define FTPES "ftpes://"
 #define FTP_SCHEME "ftp://"
+// A jump ahead this short is read through, not a new transfer: on some servers (pure-ftpd) ending one
+// takes seconds, and the picture and the sound read a little apart, jumping back and forth.
+#define SKIP_MAX (8 << 20)
 
 // A video is read as one transfer (RETR from where it's read), kept open while it's read in order: a new
 // one only after a jump. Each block's own transfer would wait for a new data connection every 1 MB.
@@ -35,6 +38,8 @@ struct FtpFile {
     size_t stash_len, stash_cap;
     uint8_t *to;       // The read under way: its buffer, how much it wants and has.
     size_t want, got;
+    int64_t skip;      // Bytes of the transfer to pass over first (a short jump ahead).
+    uint64_t received; // Every byte the transfer gave: it's moving.
 };
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -271,7 +276,14 @@ int64_t ftpFileSize(const FtpFile *f)
 static size_t takeBytes(char *data, size_t one, size_t count, void *user)
 {
     FtpFile *f = user;
-    size_t n = one * count, into = 0;
+    size_t total = one * count, n = total, into = 0;
+    f->received += total;
+    if (f->skip > 0) {
+        size_t pass = (int64_t)n < f->skip ? n : (size_t)f->skip;
+        f->skip -= (int64_t)pass;
+        data += pass;
+        n -= pass;
+    }
     if (f->to && f->got < f->want) {
         into = f->want - f->got < n ? f->want - f->got : n;
         memcpy(f->to + f->got, data, into);
@@ -292,7 +304,7 @@ static size_t takeBytes(char *data, size_t one, size_t count, void *user)
         memcpy(f->stash + f->stash_len, data + into, rest);
         f->stash_len += rest;
     }
-    return n;
+    return total;
 }
 
 static void stopTransfer(FtpFile *f)
@@ -301,6 +313,7 @@ static void stopTransfer(FtpFile *f)
         curl_multi_remove_handle(f->multi, f->curl);
     f->running = false;
     f->stash_len = 0;
+    f->skip = 0;
 }
 
 // A transfer from offset to the file's end.
@@ -326,7 +339,7 @@ static bool startTransfer(FtpFile *f, int64_t offset)
 static bool pump(FtpFile *f, const volatile bool *cancel)
 {
     time_t last = time(NULL);
-    size_t had = f->got;
+    uint64_t had = f->received;
     while (f->got < f->want && !f->ended) {
         if (cancel && *cancel)
             return false;
@@ -337,8 +350,8 @@ static bool pump(FtpFile *f, const volatile bool *cancel)
         for (CURLMsg *m; (m = curl_multi_info_read(f->multi, &left)) != NULL;)
             if (m->msg == CURLMSG_DONE)
                 f->ended = true;
-        if (f->got != had) {
-            had = f->got;
+        if (f->received != had) {
+            had = f->received;
             last = time(NULL);
         } else if (time(NULL) - last > STALL_S) {
             return false;  // Nothing came for a while: the server or the network is gone.
@@ -358,6 +371,17 @@ int64_t ftpFileRead(FtpFile *f, int64_t offset, uint8_t *to, size_t size, const 
     f->to = to;
     f->want = size;
     f->got = 0;
+    if (f->running && !f->ended && offset > f->next && offset - f->next <= SKIP_MAX) {  // A short jump ahead.
+        int64_t gap = offset - f->next;
+        if (gap <= (int64_t)f->stash_len) {
+            memmove(f->stash, f->stash + gap, f->stash_len - (size_t)gap);
+            f->stash_len -= (size_t)gap;
+        } else {
+            f->skip = gap - (int64_t)f->stash_len;
+            f->stash_len = 0;
+        }
+        f->next = offset;
+    }
     if (f->running && offset == f->next) {  // In order: what was kept first.
         size_t k = f->stash_len < size ? f->stash_len : size;
         memcpy(to, f->stash, k);
