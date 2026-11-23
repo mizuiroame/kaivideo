@@ -50,6 +50,7 @@ typedef struct {
     int users;
     int64_t total;         // The file's length; -1 until known.
     int64_t fetching;      // The block on its way, or -1.
+    int64_t fetched;       // The last block fetched, or -1: the next is chosen after it where it can.
     volatile bool abort_fetch;  // The reader went elsewhere, or stop.
     bool stop, failed;
     unsigned interrupts;   // g_interrupts when it was opened.
@@ -166,7 +167,8 @@ static bool nextJob(Remote *r, int64_t *index, int *slot)
     while (!r->stop) {
         int64_t blocks[REMOTE_READERS];
         int count = readerBlocks(r, blocks);
-        *index = r->failed ? -1 : blockNextWanted(r->slots, BLOCK_SLOTS, blocks, count, totalBlocks(r));
+        *index = r->failed ? -1
+                           : blockNextInOrder(r->slots, BLOCK_SLOTS, blocks, count, totalBlocks(r), r->fetched);
         *slot = *index >= 0 ? blockVictim(r->slots, BLOCK_SLOTS, blocks, count) : -1;
         if (*slot >= 0)
             return true;
@@ -194,6 +196,8 @@ static void *fetchThread(void *arg)
         if (total >= 0)
             r->total = total;
         r->slots[slot].state = size ? BLOCK_READY : BLOCK_EMPTY;
+        if (size)
+            r->fetched = index;
         r->slots[slot].size = size;
         if (!size && !aborted)
             r->failed = true;
@@ -304,6 +308,7 @@ static Remote *remoteOpen(const char *location)
     snprintf(r->location, sizeof(r->location), "%s", location);
     r->total = -1;
     r->fetching = -1;
+    r->fetched = -1;
     r->users = 1;
     r->reader_used[0] = true;
     r->interrupts = __atomic_load_n(&g_interrupts, __ATOMIC_RELAXED);

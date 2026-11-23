@@ -239,6 +239,28 @@ static void testBlocks(void)
 {
     BlockSlot s[BLOCK_SLOTS] = {{0}};
     int64_t at = 0;
+    {
+        // In order: the picture at block 0, the sound ahead at 5; 0 and 1 are here.
+        BlockSlot o[BLOCK_SLOTS];
+        memset(o, 0, sizeof(o));
+        for (int i = 0; i < BLOCK_SLOTS; i++)
+            o[i].index = -1;
+        o[0] = (BlockSlot){.index = 0, .state = BLOCK_READY};
+        o[1] = (BlockSlot){.index = 1, .state = BLOCK_READY};
+        int64_t two[2] = {0, 5};
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, two, 2, 100, 1) == 5);  // The sound's own block: needed now.
+        o[2] = (BlockSlot){.index = 5, .state = BLOCK_READY};
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, two, 2, 100, 5) == 6);  // Then on from there.
+        o[3] = (BlockSlot){.index = 6, .state = BLOCK_READY};
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, two, 2, 100, 6) == 7);  // On again, not back to 2,
+        CHECK(blockNextWanted(o, BLOCK_SLOTS, two, 2, 100) == 2);      // as nearest-to-a-reader would.
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, two, 2, 100, 12) == 2); // 13 isn't wanted: the nearest.
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, two, 2, 6, 5) == 2);    // The file ends at 6 blocks.
+        int64_t both[2] = {3, 8};  // Two readers both need their block: the one after the last fetched first.
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, both, 2, 100, 6) == 8);
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, both, 2, 100, 1) == 3);
+        CHECK(blockNextInOrder(o, BLOCK_SLOTS, both, 2, 100, 9) == 8);  // Both behind: the nearest one back.
+    }
     CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, -1) == 0);   // Length unknown: the first.
     s[0] = (BlockSlot){.index = 0, .state = BLOCK_READY};
     CHECK(blockNextWanted(s, BLOCK_SLOTS, &at, 1, -1) == -1);  // Only that until the length is known.

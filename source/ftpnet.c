@@ -20,8 +20,8 @@
 #define STALL_S 20L           // A slow server (a NAS that looks names up) may take this long to answer.
 #define FTPES "ftpes://"
 #define FTP_SCHEME "ftp://"
-// A jump ahead this short is read through, not a new transfer: on some servers (pure-ftpd) ending one
-// takes seconds, and the picture and the sound read a little apart, jumping back and forth.
+// A jump ahead this short is read through, not a new transfer: curl closes the connection a transfer
+// was cut short on, and signing in again takes seconds on some servers (pure-ftpd checks a password slowly).
 #define SKIP_MAX (8 << 20)
 
 // A video is read as one transfer (RETR from where it's read), kept open while it's read in order: a new
@@ -29,6 +29,10 @@
 struct FtpFile {
     CURL *curl;
     CURLM *multi;
+    // A second handle that only asks the file's size: run beside the transfer, it leaves a signed-in
+    // connection in multi's cache, which the transfer after a jump takes instead of signing in again.
+    CURL *spare;
+    bool spare_running;
     char url[URL_MAX];
     int64_t size;
     bool running;      // A transfer is under way (in multi).
@@ -239,6 +243,44 @@ bool ftpList(const DavAccount *a, const char *location, DavEntry **out, size_t *
     return ok;
 }
 
+// Runs a handle in f's multi until it's done (its connection stays in multi's cache). Its result.
+static CURLcode runInMulti(FtpFile *f, CURL *c)
+{
+    if (curl_multi_add_handle(f->multi, c) != CURLM_OK)
+        return CURLE_FAILED_INIT;
+    CURLcode rc = CURLE_OPERATION_TIMEDOUT;
+    for (bool done = false; !done;) {
+        int still = 0;
+        if (curl_multi_perform(f->multi, &still) != CURLM_OK)
+            break;
+        int left;
+        for (CURLMsg *m; (m = curl_multi_info_read(f->multi, &left)) != NULL;) {
+            if (m->msg != CURLMSG_DONE)
+                continue;
+            if (m->easy_handle == c) {
+                rc = m->data.result;
+                done = true;
+            } else if (m->easy_handle == f->spare && c != f->spare) {
+                curl_multi_remove_handle(f->multi, f->spare);
+                f->spare_running = false;
+            }
+        }
+        if (!done)
+            curl_multi_poll(f->multi, NULL, 0, 100, NULL);
+    }
+    curl_multi_remove_handle(f->multi, c);
+    if (c == f->spare)
+        f->spare_running = false;
+    return rc;
+}
+
+// The spare signs in beside the transfer, if it isn't doing so already.
+static void warmSpare(FtpFile *f)
+{
+    if (f->spare && !f->spare_running)
+        f->spare_running = curl_multi_add_handle(f->multi, f->spare) == CURLM_OK;
+}
+
 FtpFile *ftpFileOpen(const DavAccount *a, const char *location, char *why, size_t why_size)
 {
     FtpFile *f = calloc(1, sizeof(*f));
@@ -248,12 +290,21 @@ FtpFile *ftpFileOpen(const DavAccount *a, const char *location, char *why, size_
         ftpFileClose(f);
         return NULL;
     }
-    // Its size, with SIZE; the account is kept in the handle for the reads.
+    // Its size, with SIZE; the account is kept in the handle for the reads. The spare signs in at the
+    // same time (opening reads the start, then the end: a jump at once).
     setup(f->curl, a, f->url);
     curl_easy_setopt(f->curl, CURLOPT_NOBODY, 1L);
     curl_easy_setopt(f->curl, CURLOPT_WRITEFUNCTION, dropHeader);  // SIZE's answer comes this way too.
     curl_easy_setopt(f->curl, CURLOPT_TIMEOUT, LIST_TIMEOUT_S);
-    CURLcode rc = curl_easy_perform(f->curl);
+    f->spare = curl_easy_init();  // Without it, a jump only signs in again.
+    if (f->spare) {
+        setup(f->spare, a, f->url);
+        curl_easy_setopt(f->spare, CURLOPT_NOBODY, 1L);
+        curl_easy_setopt(f->spare, CURLOPT_WRITEFUNCTION, dropHeader);
+        curl_easy_setopt(f->spare, CURLOPT_TIMEOUT, LIST_TIMEOUT_S);
+        warmSpare(f);
+    }
+    CURLcode rc = runInMulti(f, f->curl);
     curl_off_t length = -1;
     long reply = 0;
     curl_easy_getinfo(f->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &length);
@@ -316,10 +367,30 @@ static void stopTransfer(FtpFile *f)
     f->skip = 0;
 }
 
+// Lets a spare that's signing in finish (it isn't removed: that would drop its connection), up to STALL_S.
+static void waitForSpare(FtpFile *f)
+{
+    time_t started = time(NULL);
+    while (f->spare_running && time(NULL) - started <= STALL_S) {
+        int still = 0;
+        if (curl_multi_perform(f->multi, &still) != CURLM_OK)
+            break;
+        int left;
+        for (CURLMsg *m; (m = curl_multi_info_read(f->multi, &left)) != NULL;)
+            if (m->msg == CURLMSG_DONE && m->easy_handle == f->spare) {
+                curl_multi_remove_handle(f->multi, f->spare);
+                f->spare_running = false;
+            }
+        if (f->spare_running)
+            curl_multi_poll(f->multi, NULL, 0, 50, NULL);
+    }
+}
+
 // A transfer from offset to the file's end.
 static bool startTransfer(FtpFile *f, int64_t offset)
 {
     stopTransfer(f);
+    waitForSpare(f);  // Signing in already: sooner than signing in anew.
     char range[32];
     snprintf(range, sizeof(range), "%lld-", (long long)offset);
     curl_easy_setopt(f->curl, CURLOPT_NOBODY, 0L);
@@ -332,6 +403,7 @@ static bool startTransfer(FtpFile *f, int64_t offset)
     f->running = curl_multi_add_handle(f->multi, f->curl) == CURLM_OK;
     f->ended = false;
     f->next = offset;
+    warmSpare(f);  // Signs in now, while this one reads: the next jump finds it ready.
     return f->running;
 }
 
@@ -347,9 +419,16 @@ static bool pump(FtpFile *f, const volatile bool *cancel)
         if (curl_multi_perform(f->multi, &still) != CURLM_OK)
             f->ended = true;
         int left;
-        for (CURLMsg *m; (m = curl_multi_info_read(f->multi, &left)) != NULL;)
-            if (m->msg == CURLMSG_DONE)
+        for (CURLMsg *m; (m = curl_multi_info_read(f->multi, &left)) != NULL;) {
+            if (m->msg != CURLMSG_DONE)
+                continue;
+            if (m->easy_handle == f->spare) {  // Signed in and idle: its connection waits in the cache.
+                curl_multi_remove_handle(f->multi, f->spare);
+                f->spare_running = false;
+            } else {
                 f->ended = true;
+            }
+        }
         if (f->received != had) {
             had = f->received;
             last = time(NULL);
@@ -415,10 +494,14 @@ void ftpFileClose(FtpFile *f)
         return;
     if (f->running)
         curl_multi_remove_handle(f->multi, f->curl);
-    if (f->multi)
-        curl_multi_cleanup(f->multi);
+    if (f->spare_running)
+        curl_multi_remove_handle(f->multi, f->spare);
     if (f->curl)
         curl_easy_cleanup(f->curl);
+    if (f->spare)
+        curl_easy_cleanup(f->spare);
+    if (f->multi)
+        curl_multi_cleanup(f->multi);
     free(f->stash);
     free(f);
 }

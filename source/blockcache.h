@@ -27,6 +27,12 @@ bool blockIsWanted(int64_t index, const int64_t *readers, int reader_count);
 // are complete. total_blocks < 0: the file's length isn't known yet.
 int64_t blockNextWanted(const BlockSlot *slots, int count, const int64_t *readers, int reader_count,
                         int64_t total_blocks);
+// The same, but keeping to the order of the file where it can: a block a reader is at (needed now) still
+// comes first, nearest to after's; else the block after `after` (the last fetched) if a reader will want
+// it; else blockNextWanted's. For a server that reads a file as one stream (FTP), going back and forth
+// between two readers would start a new transfer each time.
+int64_t blockNextInOrder(const BlockSlot *slots, int count, const int64_t *readers, int reader_count,
+                         int64_t total_blocks, int64_t after);
 // The slot to put a new block in: an empty one, else the block furthest behind
 // the readers, else the one furthest past them. -1 if none can go.
 int blockVictim(const BlockSlot *slots, int count, const int64_t *readers, int reader_count);
