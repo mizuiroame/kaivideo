@@ -8,7 +8,11 @@ it:
 - a **Windows shared folder**;
 - a **NAS** (Synology, QNAP and the like);
 - **Samba** on Linux or macOS;
-- a **WebDAV** server (Nextcloud, rclone, a NAS's WebDAV).
+- a **WebDAV** server (Nextcloud, rclone, a NAS's WebDAV);
+- an **FTP** server, plain or secure (FTPS);
+- an **SFTP** server (SSH: most NAS, Linux and macOS have one);
+- a **web server's folder list** (Apache, nginx, Caddy and the like with
+  directory listing on).
 
 | As a library | Its Settings page |
 |--------------|-------------------|
@@ -24,7 +28,12 @@ In **Settings > Network folder**:
      (`\\192.168.0.10\Videos`) if its name isn't found. For another port:
      `smb://PC:4450/Videos`.
    - `192.168.0.10:8098/videos`, or a full `http://` or `https://` address,
-     for WebDAV.
+     for WebDAV, or a web server's folder list: KaiVideo tries WebDAV first,
+     then the list.
+   - `ftp://nas/Videos` for FTP. `ftpes://nas/Videos` asks the server for an
+     encrypted connection and won't go on without one; `ftps://nas/Videos` is
+     encrypted from the start (port 990). Another port: `ftp://nas:2121/Videos`.
+   - `sftp://nas/Videos` for SFTP (port 22; another one: `sftp://nas:2222/Videos`).
 2. **User and password**: the account that can read the folder. For a domain,
    type `DOMAIN\user`. With no user, the folder's guest access is used. Use
    [a user that can only read the folder](#a-user-of-its-own), not your own.
@@ -32,7 +41,7 @@ In **Settings > Network folder**:
    Off, nothing of it is kept, and KaiVideo asks for it the first time the folder
    is used after it starts (playing from it, opening it, updating its
    library).
-4. **Allow without signing (old NAS)** (off): shared folders are always
+4. **Allow without signing (old NAS)** (off, SMB only): shared folders are always
    signed, so nobody on the network can change what's read. Some old NAS and
    folders open to guests can't sign; KaiVideo then says so, and this lets it
    connect anyway. Turn it on only for such a folder on your home network.
@@ -49,7 +58,7 @@ Then:
   browse it folder by folder.
 
 A new address forgets the old user and password, so they're never sent to
-another computer, and the old folder's library. **Forget this folder** removes the address, user and
+another computer, the old folder's library, and an SFTP server's key. **Forget this folder** removes the address, user and
 password.
 
 ## Sharing a folder on Windows
@@ -93,17 +102,30 @@ only.
   shared folder (SMB) the card keeps its hash, what Windows signs in with: the
   password itself can't be read from it, but the hash still opens that share,
   so use [a user of its own](#a-user-of-its-own). For WebDAV it's only encoded
-  (WebDAV sends the password itself each time), so anyone with the card can
+  (WebDAV, FTP and SFTP send the password itself), so anyone with the card can
   read it. With **Remember the password** off, none of it is on the card. A
   file from an older KaiVideo is changed to this the first time it's read.
-- **WebDAV over plain `http://`** sends the password without encryption.
-  Use it only on your home network, or use `https://`.
+- **WebDAV over plain `http://` and plain `ftp://`** send the password
+  without encryption. Use them only on your home network, or use `https://`,
+  `ftpes://`, `ftps://` or `sftp://`.
+- **SFTP checks the server's key.** The first time, KaiVideo keeps the key's
+  fingerprint (`host_key=` in `config/network.txt`). If the server shows
+  another key later, KaiVideo refuses to connect and sends no password: it may
+  be another computer pretending to be your server. If you changed the server
+  on purpose, type its address again in Settings.
+- **Pictures from the folder**: a `poster.jpg`, `folder.jpg` or `cover.jpg`
+  (or `.png`) in a film's own folder is its card's picture; in a series'
+  folder, the series'. A folder of several films keeps its picture to itself.
+  This works on the SD card too.
 - **Pictures** for the cards are made by reading each video over the network
   the first time, so they come more slowly than from the card. Once made,
   they're kept.
 - Opening a folder in Files waits for the server's answer. That's usually a
   moment, but it can take several seconds when the server doesn't answer.
-- `.srt` files next to a video in a network folder aren't loaded yet.
-  Subtitles inside the video are.
-- Tried with a Windows 11 shared folder, a Samba server and an rclone WebDAV
-  server, all on a home network.
+- `.srt` files next to a video load as on the SD card: `name.srt`, or
+  `name.es.srt` and the like.
+- A web server's folder list has no sizes or dates, so "Recently added"
+  can't order its videos.
+- Tried with a Windows 11 shared folder, a Samba server, an rclone WebDAV
+  server, pure-ftpd, vsftpd, an OpenSSH SFTP server and nginx's folder list,
+  all on a home network.

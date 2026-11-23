@@ -92,6 +92,28 @@ static void testFind(void)
     CHECK(!subsFindFor(TMP_ROOT "/subs/Mov.mkv", out, sizeof(out)));  // "Movie.srt" isn't for "Mov".
 }
 
+static void testSrtChoice(void)
+{
+    char base[64], best[64] = "";
+    int rank = -1;
+    subsVideoBase("dav:/Films/Paper.Boats.2024.mkv", base, sizeof(base));
+    CHECK(!strcmp(base, "Paper.Boats.2024"));
+    subsConsiderSrt(base, "Paper.Boats.2024.mkv", best, sizeof(best), &rank);
+    subsConsiderSrt(base, "Paper.Boats.2024.fr.srt", best, sizeof(best), &rank);
+    CHECK(rank == 1 && !strcmp(best, "Paper.Boats.2024.fr.srt"));
+    subsConsiderSrt(base, "Paper.Boats.2024.es.SRT", best, sizeof(best), &rank);
+    CHECK(rank == 1 && !strcmp(best, "Paper.Boats.2024.es.SRT"));  // The first by name.
+    subsConsiderSrt(base, "Paper.Boats.2024.srt", best, sizeof(best), &rank);
+    CHECK(rank == 0 && !strcmp(best, "Paper.Boats.2024.srt"));
+    subsConsiderSrt(base, "Paper.Boats.2024.de.srt", best, sizeof(best), &rank);
+    CHECK(!strcmp(best, "Paper.Boats.2024.srt"));  // The exact one stays.
+    char other[64] = "";
+    int none = -1;
+    subsConsiderSrt(base, "Paper.Boats.2024x.srt", other, sizeof(other), &none);
+    subsConsiderSrt(base, "Kites.srt", other, sizeof(other), &none);
+    CHECK(none == -1 && !other[0]);
+}
+
 static void testLanguages(void)
 {
     CHECK(strcmp(subsLanguageName("spa"), "Spanish") == 0);
@@ -115,6 +137,7 @@ static void testLanguages(void)
 
 void testSubs(void)
 {
+    testSrtChoice();
     testLanguages();
     testSrt();
     testAdd();

@@ -35,6 +35,10 @@ void davFileClose(DavFile *f);
 // Drops the connections kept for listing (the account changed, or KaiVideo ends).
 void davForget(void);
 
+// A small file of the folder (a poster, an .srt) read whole, up to max_bytes (more fails), NUL-terminated
+// (free *data). False with why if it can't be.
+bool davReadWhole(const char *location, size_t max_bytes, char **data, size_t *size, char *why, size_t why_size);
+
 // A WebDAV (or web index) location's URL and Authorization header, for reading it with ranges. False if
 // there's no folder, or it's read with davFileOpen.
 bool davStreamRequest(const char *location, char *url, size_t url_size, char *auth, size_t auth_size);

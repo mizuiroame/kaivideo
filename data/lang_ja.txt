@@ -1835,3 +1835,6 @@ The server's folder listing couldn't be read.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 サーバーの鍵が以前のものと違います。別のサーバーがなりすましている可能性があります。サーバーを変えた場合は、設定でアドレスを入力し直してください。
+
+The file couldn't be read.
+ファイルを読み取れませんでした。

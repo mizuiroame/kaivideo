@@ -76,7 +76,8 @@ static bool fakeList(const char *path, DavEntry **out, size_t *count, char *why,
     } else if (!strcmp(path, "dav:/TV/Rook")) {
         fakeEntry(&e[0], "Season 1", true, -1, 0);
         fakeEntry(&e[1], "Rook S02E01.mp4", false, 700, 1795221535);
-        *count = 2;
+        fakeEntry(&e[2], "poster.jpg", false, 70, 0);
+        *count = 3;
     } else if (!strcmp(path, "dav:/TV/Rook/Season 1")) {
         fakeEntry(&e[0], "Rook S01E01.mkv", false, 800, 1600000000);
         fakeEntry(&e[1], "Rook S01E02.mkv", false, 800, 1600000001);
@@ -179,6 +180,48 @@ void testLibrary(void)
     snprintf(harbor, sizeof(harbor), "%s/Movies/Quiet Harbor (2017)/harbor.mp4", LIB_ROOT);
     CHECK(libraryFind(&lib, harbor) >= 0 && libraryFind(&lib, "sdmc:/nothing.mkv") == -1);
 
+    // Folders' pictures: a film's own folder's, a series' folder's (for its season folders too); a
+    // folder of several films, or one above the series, gives none.
+    touchFile("Movies/Quiet Harbor (2017)/Poster.JPG", 1000);
+    touchFile("Movies/Quiet Harbor (2017)/folder.jpg", 1000);  // Poster is preferred.
+    touchFile("Movies/cover.png", 1000);
+    touchFile("TV/Rook/folder.jpg", 1000);
+    touchFile("TV/folder.jpg", 1000);
+    touchFile("Downloads/poster.jpg", 1000);
+    static Library pics;
+    libraryInit(&pics, LIB_ROOT);
+    CHECK(libraryScan(&pics, NULL) && pics.count == 6);
+    char want[600];
+    int quiet = libraryFind(&pics, harbor);
+    snprintf(want, sizeof(want), "%s%s/Movies/Quiet Harbor (2017)/Poster.JPG", LIBRARY_PICTURE_PREFIX, LIB_ROOT);
+    CHECK(quiet >= 0 && pics.items[quiet].art && !strcmp(pics.items[quiet].art, want));
+    snprintf(want, sizeof(want), "%s/Movies/Paper.Lanterns.1998.1080p.BluRay.mkv", LIB_ROOT);
+    int lanterns = libraryFind(&pics, want);
+    CHECK(lanterns >= 0 && !pics.items[lanterns].art);  // Movies/cover.png is the folder's.
+    snprintf(want, sizeof(want), "%s%s/TV/Rook/folder.jpg", LIBRARY_PICTURE_PREFIX, LIB_ROOT);
+    const LibraryShow *pic_rook = findShow(&pics, "Rook");
+    int with_series_picture = 0;
+    for (int i = 0; pic_rook && i < pic_rook->count; i++) {
+        const LibraryItem *it = &pics.items[pic_rook->episodes[i]];
+        with_series_picture += it->series_art && !strcmp(it->series_art, want);
+    }
+    CHECK(with_series_picture == 3);  // S01E01, S01E02 and Season 2's; not Downloads' episode.
+    snprintf(want, sizeof(want), "%s/Downloads/rook.s01e03.720p.webm", LIB_ROOT);
+    int loose = libraryFind(&pics, want);
+    snprintf(harbor, sizeof(harbor), "%s%s/Downloads/poster.jpg", LIBRARY_PICTURE_PREFIX, LIB_ROOT);
+    CHECK(loose >= 0 && pics.items[loose].series_art && !strcmp(pics.items[loose].series_art, harbor));
+    // Kept in the cache, read back with the videos.
+    CHECK(librarySave(&pics, cache));
+    static Library pics_back;
+    CHECK(libraryLoad(&pics_back, cache) && pics_back.count == 6);
+    quiet = libraryFind(&pics_back, pics.items[libraryFind(&pics, pics.items[quiet].path)].path);
+    CHECK(quiet >= 0 && pics_back.items[quiet].art && strstr(pics_back.items[quiet].art, "Poster.JPG"));
+    CHECK(libraryIsFolderPicture("folder.jpeg", NULL) && !libraryIsFolderPicture("posters.jpg", NULL) &&
+          !libraryIsFolderPicture("poster.gif", NULL) && !libraryIsFolderPicture("poster", NULL));
+    libraryFree(&pics);
+    libraryFree(&pics_back);
+    snprintf(harbor, sizeof(harbor), "%s/Movies/Quiet Harbor (2017)/harbor.mp4", LIB_ROOT);
+
     // Search: the series, then films; by key, so accents and case don't matter.
     LibraryRef found[8];
     CHECK(librarySearch(&lib, "ROOK", found, 8) == 1 && found[0].is_show);
@@ -195,6 +238,9 @@ void testLibrary(void)
     CHECK(net_rook && net_rook->count == 3 && net_rook->added == 1795221535);
     CHECK(libraryFind(&net, "dav:/TV/Rook/Season 1/Rook S01E02.mkv") >= 0);
     CHECK(strcmp(net.items[net.films[0]].name.title, "Kite Hill") == 0);
+    int net_episode = libraryFind(&net, "dav:/TV/Rook/Season 1/Rook S01E02.mkv");
+    CHECK(net_episode >= 0 && net.items[net_episode].series_art &&
+          !strcmp(net.items[net_episode].series_art, LIBRARY_PICTURE_PREFIX "dav:/TV/Rook/poster.jpg"));
     libraryFree(&net);
     libraryInit(&net, DAV_ROOT);
     g_fake_down = true;

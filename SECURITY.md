@@ -79,7 +79,9 @@ touches small:
   - The network folder's password is never kept as typed. For a shared
     folder (SMB), `network.txt` holds its NT hash, what Windows signs in with:
     the password can't be read from it, but the hash still opens that share.
-    For WebDAV it's only encoded, since WebDAV sends the password itself. With
+    For WebDAV, FTP and SFTP it's only encoded, since they send the password
+    itself. An SFTP server's key fingerprint is kept the first time, and a
+    server with another key is refused before any password is sent. With
     **Remember the password** off, nothing of it is written. Give KaiVideo
     [a user of its own](docs/network-folder.md#a-user-of-its-own) that can
     only read the folder.

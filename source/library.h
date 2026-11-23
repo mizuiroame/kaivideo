@@ -15,6 +15,9 @@
 #define LIBRARY_DEPTH 8  // Folders deeper than this aren't looked in.
 // An item's art "poster:<address>": a poster from the web, cropped to fill a card (thumbgen.c).
 #define LIBRARY_POSTER_PREFIX "poster:"
+// An item's art "picture:<location>": a picture file in its folder (poster.jpg, folder.jpg, cover.jpg),
+// on the card or the network folder, filling a card like a poster.
+#define LIBRARY_PICTURE_PREFIX "picture:"
 
 typedef struct {
     char *path;
@@ -89,6 +92,9 @@ void libraryFree(Library *lib);
 
 // Adds a video (not yet sorted or grouped). False if out of memory.
 bool libraryAdd(Library *lib, const char *path, int64_t size, int64_t added);
+// Whether a file's name is a folder's picture: "poster", "folder" or "cover", in .jpg, .jpeg or .png (any
+// case). rank: lower is preferred (poster first). False for any other name.
+bool libraryIsFolderPicture(const char *name, int *rank);
 // Adds a video that comes with its name.
 bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int64_t size, int64_t added,
                       const LibraryRemote *remote);

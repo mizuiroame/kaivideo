@@ -36,8 +36,9 @@ The screenshots show made-up films, series and channels.
   each with a picture from the video. [More](docs/library.md)
 - **Your videos can come from:**
   - **The microSD card.**
-  - **A network folder:** a Windows shared folder, a NAS, Samba or WebDAV,
-    browsed and played with nothing to install. [More](docs/network-folder.md)
+  - **A network folder:** a Windows shared folder, a NAS, Samba, WebDAV,
+    FTP, SFTP or a web server's folder list, browsed and played with nothing
+    to install. [More](docs/network-folder.md)
   - **Jellyfin, Emby and Plex**, one or all three: **X** goes through them.
     It can skip intros and credits, keeps what you watch in sync, and has
     Live TV with a guide. [More](docs/media-servers.md)
@@ -93,8 +94,8 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 
 - [The library](docs/library.md): how films and series are found, Settings,
   where KaiVideo keeps its files
-- [Network folders](docs/network-folder.md): Windows shared folders, NAS, Samba
-  and WebDAV
+- [Network folders](docs/network-folder.md): Windows shared folders, NAS, Samba,
+  WebDAV, FTP, SFTP and web folder lists
 - [Media servers](docs/media-servers.md): Jellyfin, Emby, Plex and Live TV
 - [IPTV lists and Stremio addons](docs/iptv-and-addons.md)
 - [Downloads](docs/downloads.md)

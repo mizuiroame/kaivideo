@@ -281,6 +281,30 @@ void subsTrackName(char *out, size_t size, const char *title, const char *langua
         snprintf(out, size, T("Track %d"), number);
 }
 
+void subsVideoBase(const char *video_path, char *out, size_t size)
+{
+    const char *slash = strrchr(video_path, '/');
+    snprintf(out, size, "%s", slash ? slash + 1 : video_path);
+    char *dot = strrchr(out, '.');
+    if (dot)
+        *dot = '\0';
+}
+
+void subsConsiderSrt(const char *base, const char *name, char *best, size_t size, int *best_rank)
+{
+    size_t base_len = strlen(base);
+    const char *ext = strrchr(name, '.');
+    if (!ext || strcasecmp(ext, ".srt") != 0 || strncmp(name, base, base_len) != 0 || *best_rank == 0)
+        return;
+    if ((size_t)(ext - name) == base_len) {  // "name.srt": the one.
+        snprintf(best, size, "%s", name);
+        *best_rank = 0;
+    } else if (name[base_len] == '.' && (*best_rank < 0 || strcmp(name, best) < 0)) {
+        snprintf(best, size, "%s", name);  // "name.es.srt": the first by name.
+        *best_rank = 1;
+    }
+}
+
 bool subsFindFor(const char *video_path, char *out, size_t size)
 {
     char folder[512], base[256];
@@ -293,7 +317,6 @@ bool subsFindFor(const char *video_path, char *out, size_t size)
     char *dot = strrchr(base, '.');
     if (dot)
         *dot = '\0';
-    size_t base_len = strlen(base);
     // A video at the root leaves "sdmc:": the folder to open is "sdmc:/".
     char dir_path[520];
     snprintf(dir_path, sizeof(dir_path), "%s%s", folder, folder[0] && folder[strlen(folder) - 1] == ':' ? "/" : "");
@@ -301,18 +324,10 @@ bool subsFindFor(const char *video_path, char *out, size_t size)
     if (!dir)
         return false;
     char best[256] = "";
+    int best_rank = -1;
     struct dirent *e;
-    while ((e = readdir(dir)) != NULL) {
-        const char *name = e->d_name, *ext = strrchr(name, '.');
-        if (!ext || strcasecmp(ext, ".srt") != 0 || strncmp(name, base, base_len) != 0)
-            continue;
-        if ((size_t)(ext - name) == base_len) {  // "name.srt": the one.
-            snprintf(best, sizeof(best), "%s", name);
-            break;
-        }
-        if (name[base_len] == '.' && (!best[0] || strcmp(name, best) < 0))
-            snprintf(best, sizeof(best), "%s", name);  // "name.es.srt": the first by name.
-    }
+    while ((e = readdir(dir)) != NULL)
+        subsConsiderSrt(base, e->d_name, best, sizeof(best), &best_rank);
     closedir(dir);
     if (!best[0])
         return false;

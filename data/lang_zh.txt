@@ -1835,3 +1835,6 @@ The server's folder listing couldn't be read.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 服务器的密钥与之前的不同：可能是另一台服务器在冒充它。如果你更换了服务器，请在设置中重新输入地址。
+
+The file couldn't be read.
+无法读取该文件。

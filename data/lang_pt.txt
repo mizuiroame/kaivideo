@@ -1835,3 +1835,6 @@ Não foi possível ler a lista da pasta do servidor.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 A chave do servidor não é a de antes: pode ser outro servidor se passando por ele. Se você trocou o servidor, coloque o endereço de novo em Configurações.
+
+The file couldn't be read.
+Não foi possível ler o arquivo.

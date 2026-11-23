@@ -1835,3 +1835,6 @@ La liste du dossier du serveur n'a pas pu être lue.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 La clé du serveur n'est pas celle d'avant : un autre serveur se fait peut-être passer pour lui. Si vous avez changé de serveur, saisissez de nouveau l'adresse dans Paramètres.
+
+The file couldn't be read.
+Le fichier n'a pas pu être lu.

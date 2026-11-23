@@ -8,7 +8,9 @@
 #include <switch.h>
 
 #include "image_config.h"
+#include "davnet.h"
 #include "jfsync.h"
+#include "library.h"
 #include "net.h"
 #include "stb_image.h"
 #include "stb_image_write.h"
@@ -219,9 +221,59 @@ static void makeUrl(const Request *r)
         stbi_image_free(rgba);
 }
 
+// A folder's picture file (poster.jpg and the like) read whole, from the card or the network folder.
+static char *readPictureFile(const char *location, size_t *size)
+{
+    if (davIsLocation(location)) {
+        char *data, why[160];
+        return davReadWhole(location, IMAGE_MAX_BYTES, &data, size, why, sizeof(why)) ? data : NULL;
+    }
+    FILE *f = fopen(location, "rb");
+    if (!f)
+        return NULL;
+    char *data = NULL;
+    long length = fseek(f, 0, SEEK_END) == 0 ? ftell(f) : -1;
+    if (length > 0 && (unsigned long)length <= IMAGE_MAX_BYTES && fseek(f, 0, SEEK_SET) == 0 &&
+        (data = malloc((size_t)length)) != NULL && fread(data, 1, (size_t)length, f) != (size_t)length) {
+        free(data);
+        data = NULL;
+    }
+    fclose(f);
+    *size = data ? (size_t)length : 0;
+    return data;
+}
+
+// A folder's picture ("picture:<location>"), filling the card as a poster does.
+static void makePicture(const Request *r)
+{
+    size_t size = 0;
+    char *bytes = readPictureFile(r->path + sizeof(LIBRARY_PICTURE_PREFIX) - 1, &size);
+    int w = 0, h = 0, channels;
+    const stbi_uc *data = (const stbi_uc *)bytes;
+    bool fits = bytes && stbi_info_from_memory(data, (int)size, &w, &h, &channels) && w > 0 && h > 0 &&
+                (long long)w * h <= IMAGE_MAX_PIXELS;
+    uint8_t *rgba = fits ? stbi_load_from_memory(data, (int)size, &w, &h, &channels, 4) : NULL;
+    free(bytes);
+    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    uint8_t *out = rgba ? malloc((size_t)out_w * out_h * 3) : NULL;
+    if (out && drawPoster(rgba, w, h, out, out_w, out_h)) {
+        if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, out, JPEG_QUALITY))
+            remove(r->jpg);
+    } else if (!g_stop && !g_paused) {
+        markNone(r->jpg);  // Gone, or not a picture it can read.
+    }
+    free(out);
+    if (rgba)
+        stbi_image_free(rgba);
+}
+
 // Makes one picture. False only when paused or stopped meanwhile (asked again later).
 static bool make(const Request *r)
 {
+    if (!strncmp(r->path, LIBRARY_PICTURE_PREFIX, sizeof(LIBRARY_PICTURE_PREFIX) - 1)) {
+        makePicture(r);
+        return !g_stop && !g_paused;
+    }
     if (!strncmp(r->path, "http://", 7) || !strncmp(r->path, "https://", 8) ||
         !strncmp(r->path, XTREAM_POSTER_PREFIX, sizeof(XTREAM_POSTER_PREFIX) - 1)) {
         makeUrl(r);

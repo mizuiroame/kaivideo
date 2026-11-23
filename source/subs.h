@@ -52,3 +52,8 @@ void subsTrackName(char *out, size_t size, const char *title, const char *langua
 // The .srt file for a video: "name.srt", else "name.<anything>.srt" (by
 // name), in its folder. False if there's none.
 bool subsFindFor(const char *video_path, char *out, size_t size);
+// A video's name without its folder and extension ("dav:/A/b.c.mkv" -> "b.c").
+void subsVideoBase(const char *video_path, char *out, size_t size);
+// One name of the video's folder, for its .srt: kept in best when it's a better one than before.
+// *best_rank starts at -1 (none yet); 0 once "base.srt" is found, 1 for "base.<anything>.srt".
+void subsConsiderSrt(const char *base, const char *name, char *best, size_t size, int *best_rank);

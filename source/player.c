@@ -8,6 +8,7 @@
 
 #include "audio.h"
 #include "dav.h"
+#include "davnet.h"
 #include "hlsio.h"
 #include "jellyfin.h"
 #include "jfsync.h"
@@ -28,6 +29,7 @@
 #define LIVE_CUSHION_WAIT_NS 30000000000ull  // Live TV waits longer: its next segments are still being made.
 #define MS_NS 1000000ll
 #define EXTERNAL_MAX (JF_PLAN_SUBS + 1)
+#define SRT_MAX_BYTES (4u << 20)       // An .srt bigger than this from a network folder isn't read.
 #define REOPEN_SETTLE_NS 600000000ull  // Jumps closer together than this count as one.
 #define PREFETCH_AFTER_FRAMES 1200   // About 20 s in, the other subtitle tracks are got ready.
 // Subtitles that aren't inside what's being read: an .srt next to the video,
@@ -140,10 +142,42 @@ static void labelExternal(Player *p, const char *srt_path)
              T(" (.srt file)"));
 }
 
+// A network folder's video: the .srt next to it, found in its folder's listing and read over the network.
+static bool loadNetworkSrt(SubTrack *t, const char *path, char *srt, size_t size)
+{
+    char folder[512], base[256], best[256] = "", why[160];
+    const char *slash = strrchr(path, '/');
+    if (!slash || (size_t)(slash - path) >= sizeof(folder))
+        return false;
+    snprintf(folder, sizeof(folder), "%.*s", (int)(slash - path), path);
+    if (!strcmp(folder, "dav:"))
+        snprintf(folder, sizeof(folder), "%s", DAV_ROOT);
+    subsVideoBase(path, base, sizeof(base));
+    DavEntry *entries;
+    size_t count;
+    if (!davList(folder, &entries, &count, why, sizeof(why)))
+        return false;
+    int rank = -1;
+    for (size_t i = 0; i < count; i++)
+        if (!entries[i].is_dir)
+            subsConsiderSrt(base, entries[i].name, best, sizeof(best), &rank);
+    free(entries);
+    size_t len = strlen(folder);
+    if (!best[0] || snprintf(srt, size, "%s%s%s", folder, folder[len - 1] == '/' ? "" : "/", best) >= (int)size)
+        return false;
+    char *data;
+    size_t bytes;
+    bool ok = davReadWhole(srt, SRT_MAX_BYTES, &data, &bytes, why, sizeof(why)) && subsParseSrt(t, data, bytes);
+    free(data);
+    return ok;
+}
+
 static void openSubtitles(Player *p, const char *path)
 {
     char srt[512];
-    if (subsFindFor(path, srt, sizeof(srt)) && subsLoadSrtFile(&p->ext[0].track, srt)) {
+    bool network = davIsLocation(path);
+    if (network ? loadNetworkSrt(&p->ext[0].track, path, srt, sizeof(srt))
+                : subsFindFor(path, srt, sizeof(srt)) && subsLoadSrtFile(&p->ext[0].track, srt)) {
         p->ext_count = 1;
         p->ext[0].state = EXT_READY;
         labelExternal(p, srt);

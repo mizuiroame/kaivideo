@@ -1835,3 +1835,6 @@ Non è stato possibile leggere l'elenco della cartella del server.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 La chiave del server non è quella di prima: potrebbe essere un altro server che si spaccia per lui. Se hai cambiato server, reinserisci l'indirizzo in Impostazioni.
+
+The file couldn't be read.
+Non è stato possibile leggere il file.

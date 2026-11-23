@@ -1835,3 +1835,6 @@ Die Ordnerliste des Servers konnte nicht gelesen werden.
 
 The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
 Der Schlüssel des Servers ist nicht der von vorher: Vielleicht gibt sich ein anderer Server als er aus. Wenn du den Server gewechselt hast, gib die Adresse in den Einstellungen erneut ein.
+
+The file couldn't be read.
+Die Datei konnte nicht gelesen werden.

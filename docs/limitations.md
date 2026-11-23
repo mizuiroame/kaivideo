@@ -32,7 +32,6 @@
 - **Network folders**:
   - pictures for the cards come slowly the first time;
   - opening a folder waits for the server;
-  - `.srt` files next to a video aren't loaded yet;
   - tried on a home network only. See [Network folders](network-folder.md).
 - **Downloads**:
   - keep one subtitle file a video (the one its server shows first, else the
@@ -62,8 +61,8 @@
 
 ## Plans
 
-- `.srt` files from network folders, and pictures from `poster.jpg` or
-  `folder.jpg` when a folder has one.
+- Plex Home profiles, Xtream categories, and more than the first page of an
+  addon's catalog.
 - **Picture subtitles** (PGS, VobSub) from the SD card.
 - Smoother jumps, and checks with big libraries on the console.
 - **Experiment: skip deblocking on frames nothing refers to**, for 4K HEVC on

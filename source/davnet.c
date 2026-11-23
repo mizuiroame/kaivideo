@@ -221,6 +221,48 @@ bool davStreamRequest(const char *location, char *url, size_t url_size, char *au
     return ok;
 }
 
+bool davReadWhole(const char *location, size_t max_bytes, char **data, size_t *size, char *why, size_t why_size)
+{
+    *data = NULL;
+    *size = 0;
+    if (!davReadsFiles()) {  // WebDAV or a web index: one GET.
+        char url[URL_MAX], auth[AUTH_MAX];
+        if (!davStreamRequest(location, url, sizeof(url), auth, sizeof(auth))) {
+            snprintf(why, why_size, "%s", T("Set up the network folder in Settings first."));
+            return false;
+        }
+        NetClient *c = netClientOpen();
+        NetRequest request = {.url = url, .authorization = auth, .stall_s = LIST_STALL_S, .timeout_s = LIST_TIMEOUT_S};
+        NetResponse r;
+        bool ok = c && netFetchText(c, &request, max_bytes, &r);
+        netClientClose(c);
+        memset(auth, 0, sizeof(auth));
+        if (!ok) {
+            snprintf(why, why_size, "%s", r.error);
+            return false;
+        }
+        *data = r.data;
+        *size = r.size;
+        return true;
+    }
+    DavFile *f = davFileOpen(location, why, why_size);
+    if (!f)
+        return false;
+    int64_t length = davFileSize(f);
+    char *buffer = length >= 0 && (uint64_t)length <= max_bytes ? malloc((size_t)length + 1) : NULL;
+    int64_t got = buffer ? davFileRead(f, 0, (uint8_t *)buffer, (size_t)length, NULL) : -1;
+    davFileClose(f);
+    if (got != length) {
+        free(buffer);
+        snprintf(why, why_size, "%s", T("The file couldn't be read."));
+        return false;
+    }
+    buffer[length] = '\0';
+    *data = buffer;
+    *size = (size_t)length;
+    return true;
+}
+
 // What a failed answer means, for the person.
 static void explain(const NetResponse *r, char *why, size_t size)
 {
