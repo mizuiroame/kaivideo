@@ -47,6 +47,17 @@
 - **Live TV** has been tried with test channels a server made from video
   files and with free channels' own streams, not with a TV tuner. A channel
   the server converts keeps one sound track. Programs can't be recorded.
+- **IPTV lists** have been tried with free channels from a public M3U list
+  and with an Xtream test server on a PC, not with a paid provider. Channels
+  that work only in their country, or that need headers of their own, don't
+  play. An Xtream account's film and series categories aren't used yet: its
+  Films and Series list everything by title. IPTV films and series can't be
+  downloaded.
+- **Stremio addons** have been tried with a test addon on a PC. Only web
+  streams play: torrents, magnet links, YouTube and outside links are always
+  left out, and so are streams that need headers sent along. Each catalog
+  shows its first page. Addons that need setting up do it on their own page
+  first. Addon videos can't be downloaded.
 
 ## Plans
 
