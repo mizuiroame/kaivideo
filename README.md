@@ -34,13 +34,19 @@ The screenshots show made-up films, series and channels.
 - **A library of your films and series**, found by their file and folder names:
   Home shows what you were watching, what's new, your series and your films,
   each with a picture from the video. [More](docs/library.md)
-- **Three places your videos can come from:**
+- **Your videos can come from:**
   - **The microSD card.**
   - **A network folder:** a Windows shared folder, a NAS, Samba or WebDAV,
     browsed and played with nothing to install. [More](docs/network-folder.md)
   - **Jellyfin, Emby and Plex**, one or all three: **X** goes through them.
     It can skip intros and credits, keeps what you watch in sync, and has
     Live TV with a guide. [More](docs/media-servers.md)
+  - **Your own IPTV list**, M3U or Xtream: channels with logos, favorites
+    and a guide, and an Xtream account's films and series.
+    [More](docs/iptv-and-addons.md#iptv)
+  - **Stremio and Nuvio addons** you add by address: their catalogs, and the
+    web streams they give, to choose from. No torrents.
+    [More](docs/iptv-and-addons.md#stremio-and-nuvio-addons)
 - **Downloads** from your server to the card, to watch without the network,
   synced back when the network returns. [More](docs/downloads.md)
 - **Hardware decoding** of H.264, VP9, AV1 (up to 4K) and VP8. HEVC and 10-bit
@@ -90,6 +96,7 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
 - [Network folders](docs/network-folder.md): Windows shared folders, NAS, Samba
   and WebDAV
 - [Media servers](docs/media-servers.md): Jellyfin, Emby, Plex and Live TV
+- [IPTV lists and Stremio addons](docs/iptv-and-addons.md)
 - [Downloads](docs/downloads.md)
 - [Playback](docs/playback.md): formats, sound tracks, subtitles, the Playback
   list

@@ -78,7 +78,7 @@ bool xtreamParseLocation(const char *location, char *kind, size_t kind_size, lon
 long long xtreamStandInShow(const char *location);
 
 // A picture's thumbnail key: "poster:<address>" (cropped to fill a card, not shown whole as a logo).
-#define XTREAM_POSTER_PREFIX "poster:"
+#define XTREAM_POSTER_PREFIX LIBRARY_POSTER_PREFIX
 
 // Adds the catalog's films and series to lib (not built). unread and failed: the stand-in's title for
 // a series whose episodes weren't read yet, or couldn't be.

@@ -29,6 +29,7 @@
 #include "input.h"
 #include "dlworker.h"
 #include "hlsio.h"
+#include "stremioload.h"
 #include "tsstream.h"
 #include "lang.h"
 #include "mediafile.h"
@@ -312,7 +313,8 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
 static bool openIptv(App *app, char *path, size_t size)
 {
     int index = iptvLocationIndex(app->playing_path);
-    appLog("IPTV: opening %d, %s", index, app->playing_name);  // Not its address: an Xtream one holds the password.
+    if (index >= 0)
+        appLog("IPTV: opening %d, %s", index, app->playing_name);  // Not its address: an Xtream one holds the password.
     if (!app->open_url[0]) {
         snprintf(app->open_error, sizeof(app->open_error), "%s", T("That channel isn't in the list any more."));
         return false;
@@ -367,9 +369,14 @@ static void *openThread(void *arg)
     int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
     app->next_audio_plus1 = 0;
     app->next_subtitle_set = false;
-    bool iptv = iptvIsLocation(app->playing_path);
-    if (iptv && !openIptv(app, path, sizeof(path)))
-        ;  // The reason is in open_error.
+    bool iptv = iptvIsLocation(app->playing_path) || (stremioIsLocation(app->playing_path) && app->open_url[0]);
+    if (iptv && !openIptv(app, path, sizeof(path))) {
+        if (stremioIsLocation(app->playing_path) && !app->open_cancelled) {  // Not a channel: the addon's stream.
+            appLog("  the addon's stream: %s", app->open_error);
+            snprintf(app->open_error, sizeof(app->open_error), "%s",
+                     T("The addon's stream couldn't be played: it may be gone, or not work here."));
+        }
+    }
     else if (!remote || prepareRemote(app, audio_index, subtitle_index, true, path, sizeof(path)))
         app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
     if (!app->open_result && app->open_plan.source_url[0] && !app->open_cancelled) {
@@ -397,6 +404,8 @@ static void *openThread(void *arg)
 
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
+    if (stremioIsLocation(path) && !appStremioMayOpen(app, path, name, now))
+        return false;  // Its streams are asked for, to choose one; then it opens.
     if (xtreamStandInShow(path) > 0) {  // A series whose episodes are still being read: nothing to play yet.
         appNotify(app, NOTICE_INFO, T("The episodes are still being read."), now);
         return false;
@@ -423,6 +432,8 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     const char *copy = jfIsRemoteLocation(path) ? appPlayableCopy(app, path) : NULL;
     int iptv = iptvLocationIndex(path);  // An IPTV channel: its stream, for the opening thread.
     snprintf(app->open_url, sizeof(app->open_url), "%s", iptv >= 0 && iptv < app->iptv.count ? app->iptv.channels[iptv].url : "");
+    if (stremioIsLocation(path) && stremioChosenIsHls(path))  // An addon's HLS stream opens as a channel's does.
+        stremioChosenUrl(path, app->open_url, sizeof(app->open_url));
     app->open_any_certificate = iptv >= 0 && appIptvAnyCertificate();
     snprintf(app->open_copy, sizeof(app->open_copy), "%s", copy ? copy : "");
     app->open_done = false;
@@ -613,6 +624,8 @@ static void reopenVideo(App *app, int audio_index, int subtitle_index, int64_t p
     snprintf(name, sizeof(name), "%s", app->playing_name);
     bool live = appPlayingLive(app);  // A channel opens anew at what's on now, not at a position.
     stopVideo(app, NULL, false);
+    if (stremioIsLocation(path))
+        snprintf(app->stremio_go, sizeof(app->stremio_go), "%s", path);  // Its stream, again.
     app->open_at_ns = live ? 0 : position;
     app->open_from_start = live || position <= 0;
     app->next_audio_plus1 = audio_index + 1;
@@ -691,6 +704,8 @@ static void openQueued(App *app, uint64_t now)
     app->queued = false;
     app->open_from_start = app->queued_from_start;
     app->open_at_ns = app->queued_at_ns;
+    if (stremioIsLocation(app->queued_path))  // Its stream was chosen before it was queued.
+        snprintf(app->stremio_go, sizeof(app->stremio_go), "%s", app->queued_path);
     if (!appStartVideo(app, app->queued_path, app->queued_name, now)) {
         app->open_from_start = false;
         app->open_at_ns = 0;
@@ -1253,6 +1268,7 @@ int main(int argc, char **argv)
     appSettingsStart(&app);
     appNetworkStart(&app);  // After the language: Files names the folder in it.
     appIptvStart(&app);  // Its channels for Live, loaded in the background.
+    appStremioStart(&app);  // The addons' catalogs, loaded in the background.
     appDownloadsStart(&app);  // Before the library: the card's downloads take their servers' names.
     appLibraryStart(&app);
     appStartUpdates(&app, argc > 0 ? argv[0] : NULL);  // Once a day, asks GitHub for a new version.
@@ -1271,6 +1287,7 @@ int main(int argc, char **argv)
         appNetworkUpdate(&app, now);
         appIptvUpdate(&app, now);
         appXtreamUpdate(&app);
+        appStremioUpdate(&app, now);
         appDownloadsUpdate(&app, now);
         appLiveUpdate(&app, now);
         updateScreenKeeping(&app);
@@ -1381,6 +1398,7 @@ int main(int argc, char **argv)
     appletSetMediaPlaybackState(false);
     appSaveSettings(&app);
     appIptvExit(&app);  // A load under way stops.
+    appStremioExit(&app);
     appLiveExit(&app);
     EXIT_STEP("live TV");
     appLibraryExit(&app);

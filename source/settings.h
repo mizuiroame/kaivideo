@@ -9,7 +9,7 @@
 #include "jellyfin.h"
 
 #define SETTINGS_NAME_MAX 128
-#define SETTINGS_PAGE_MAX_ROWS 9
+#define SETTINGS_PAGE_MAX_ROWS 10
 
 typedef enum {
     SETTING_LIBRARY,       // Opens the folder picker.
@@ -58,6 +58,11 @@ typedef enum {
     SETTING_IPTV_CERTIFICATE,  // Whether the list's https certificates must be trusted.
     SETTING_IPTV_LOAD,      // Loads the channels and their guide.
     SETTING_IPTV_FORGET,    // Forgets the list.
+    SETTING_OPEN_ADDONS,    // Opens the Stremio addons' page.
+    SETTING_ADDONS_ADD,     // Types an addon's address.
+    SETTING_ADDON_FIRST,    // An addon added (A twice removes it); one row each, SETTINGS_ADDONS_MAX.
+    SETTING_ADDON_LAST = SETTING_ADDON_FIRST + 5,
+    SETTING_ADDONS_LOAD,    // Loads their catalogs again.
     SETTING_COUNT,
 } SettingRow;
 
@@ -72,6 +77,7 @@ typedef enum {
     SETTINGS_PAGE_NETWORK,
     SETTINGS_PAGE_ABOUT,
     SETTINGS_PAGE_IPTV,
+    SETTINGS_PAGE_ADDONS,
     SETTINGS_PAGE_COUNT
 } SettingsPage;
 
@@ -93,6 +99,7 @@ typedef struct {
     bool use_jellyfin;                   // The library comes from the media server.
     bool use_network;                    // Not a server's: the network folder's (dav.h), not the card's.
     bool use_iptv;                       // The IPTV list's view (iptv.h): its Live TV.
+    bool use_addons;                     // The Stremio addons' view (stremio.h).
     int server_kind;                     // ServerKind: the one Settings' Media server page is for.
     int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.
@@ -117,6 +124,9 @@ void configWrite(const Config *c, FILE *f);
 // The rows of a page, in order. Returns how many. signed_in: to the media
 // server, and kind: which one it is, decide what its page offers.
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS]);
+// How many addons the Addons page lists (a row each).
+#define SETTINGS_ADDONS_MAX (SETTING_ADDON_LAST - SETTING_ADDON_FIRST + 1)
+void settingsSetAddonCount(int count);
 // A page's title (a server's page: its name).
 const char *settingsPageTitle(SettingsPage page, ServerKind kind);
 // What a server's page says under its title, or NULL.

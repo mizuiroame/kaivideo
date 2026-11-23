@@ -105,6 +105,7 @@ int main(void)
     testIptv();
     testIptvHome();
     testXtreamVod();
+    testStremio();
     printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

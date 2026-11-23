@@ -13,6 +13,7 @@
 #include "iptv.h"
 #include "iptvhome.h"
 #include "iptvload.h"
+#include "stremio.h"
 #include "jfsync.h"
 #include "kinetic.h"
 #include "library.h"
@@ -120,12 +121,23 @@ struct App {
     unsigned iptv_seen;         // The load whose result was taken.
     int iptv_group;             // An index of its groups, -1 for all its channels.
     XtreamCatalog xtream;       // An Xtream account's films and series (app_xtream.c).
+    // Stremio addons (app_stremio.c): what they gave, and the streams to choose from.
+    StremioStore stremio;
+    bool streams_open;          // The list of streams shows over the library.
+    bool streams_loading;       // The addons are being asked.
+    bool streams_from_start;    // The video was asked from its start.
+    StremioStream *streams;
+    int stream_count, stream_cursor, stream_first;
+    char streams_note[512];     // Addons that failed.
+    char streams_path[LIBRARY_PATH_MAX];  // The video they're for.
+    char streams_name[APP_NAME_MAX];
+    char stremio_go[LIBRARY_PATH_MAX];    // Its stream chosen: appStartVideo opens it this once.
     IptvMarks iptv_marks;       // Its channels watched last and favorites (app_iptvhome.c),
     IptvHome iptv_home;         // the rows of its view's Home,
     IptvHomeView iptv_home_view;  // and where the cursor is on them.
     bool live_groups_open;      // The list of groups shows over the guide (X).
     int live_group_cursor;      // Its row: 0 is "All channels", then each group.
-    char open_url[IPTV_URL_MAX];  // The IPTV channel opening: its stream (copied for the opening thread),
+    char open_url[STREMIO_URL_MAX * 2];  // The IPTV channel (or addon's HLS stream) opening: copied for the thread,
     bool open_any_certificate;    // and whether its certificate is checked.
     pthread_t live_thread;
     bool live_reading;
@@ -295,8 +307,27 @@ void appXtreamInstall(App *app);
 // Once a frame: a series' episodes read when its page opens.
 void appXtreamUpdate(App *app);
 void appXtreamExit(App *app);
-// app_library.c: a library made for the IPTV view replaces the app's (taken).
-void appLibraryInstallIptv(App *app, Library *built);
+// app_library.c: a library made for the IPTV or Addons view replaces the app's (taken).
+void appLibraryInstallBuilt(App *app, Library *built);
+// The Stremio addons' view.
+void appLibraryShowAddons(App *app);
+
+// app_stremio.c: Stremio addons.
+void appStremioStart(App *app);
+void appStremioExit(App *app);
+bool appStremioConfigured(void);
+// Once a frame: what the addons answered.
+void appStremioUpdate(App *app, uint64_t now);
+// The Addons view's library made again.
+void appStremioInstall(App *app);
+// Searches the addons too.
+void appStremioSearch(App *app, const char *query);
+// appStartVideo asks: false (and the streams are asked for, to choose one) until one is chosen.
+bool appStremioMayOpen(App *app, const char *path, const char *name, uint64_t now);
+void appStremioStreamsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appStremioStreamsDraw(const App *app);
+bool appStremioActivate(App *app, SettingRow row, uint64_t now);
+void appStremioFeedSettings(const App *app);
 
 // app_iptvhome.c: the IPTV view's Home, its recents and favorites.
 void appIptvHomeStart(App *app);

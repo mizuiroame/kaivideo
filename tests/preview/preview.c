@@ -24,6 +24,8 @@
 #include "thumbs.h"
 #include "ui_settings.h"
 #include "ui_iptvhome.h"
+#include "stremio.h"
+#include "ui_streams.h"
 #include "xtreamvod.h"
 #include "ui_live.h"
 #include "ui_notice.h"
@@ -339,6 +341,74 @@ static void liveScene(Player *p)
     save("iptv_show_reading");
     libraryFree(&vod_lib);
     xtreamCatalogFree(&vod);
+    // Stremio addons (made-up ones): their catalogs as tabs, and the streams to choose from.
+    static StremioStore addons;
+    memset(&addons, 0, sizeof(addons));
+    addons.list_count = 2;
+    snprintf(addons.lists[0].title, sizeof(addons.lists[0].title), "Popular \xC2\xB7 %s", T("Films"));
+    snprintf(addons.lists[0].type, sizeof(addons.lists[0].type), "movie");
+    stremioParseMetas("{\"metas\":[{\"id\":\"kt1\",\"type\":\"movie\",\"name\":\"Paper Boats\",\"releaseInfo\":\"2019\","
+                      "\"poster\":\"https://img.example/1.jpg\"},{\"id\":\"kt2\",\"type\":\"movie\",\"name\":\"Night Desk\","
+                      "\"poster\":\"https://img.example/2.jpg\"},{\"id\":\"kt3\",\"type\":\"movie\",\"name\":\"Harbor Lights\"},"
+                      "{\"id\":\"kt4\",\"type\":\"movie\",\"name\":\"Morning Lanterns\",\"poster\":\"https://img.example/4.jpg\"}]}",
+                      &addons.lists[0].metas, &addons.lists[0].count);
+    snprintf(addons.lists[1].title, sizeof(addons.lists[1].title), "Popular \xC2\xB7 %s", T("Series"));
+    snprintf(addons.lists[1].type, sizeof(addons.lists[1].type), "series");
+    stremioParseMetas("{\"metas\":[{\"id\":\"kts9\",\"type\":\"series\",\"name\":\"Kite Hill\","
+                      "\"poster\":\"https://img.example/9.jpg\"}]}",
+                      &addons.lists[1].metas, &addons.lists[1].count);
+    static Library addon_lib;
+    libraryInit(&addon_lib, STREMIO_PREFIX);
+    stremioFillLibrary(&addon_lib, &addons, T("Reading the episodes..."), T("The episodes couldn't be read."));
+    libraryBuild(&addon_lib);
+    libviewInit(&view);
+    libviewSetTabs(&view, &addon_lib, true, false, false);
+    view.tab = TAB_COLLECTION;
+    view.collection = 0;
+    uiLibrarySetSource(T("Addons"), UI_ADDONS_COLOR);
+    begin();
+    uiDrawLibrary(&view, &addon_lib, &home, &resume, true, NULL);
+    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("addons_catalog");
+    bool catalog_tabs = false;
+    for (int x = 0; x < GFX_WIDTH && !catalog_tabs; x += 4) {
+        LibHit hit = uiLibraryTap(x, 34);
+        catalog_tabs = hit.kind == LIBHIT_TAB && hit.a >= 0 && hit.a < view.tab_count &&
+                       view.tabs[hit.a].kind == TAB_COLLECTION && view.tabs[hit.a].collection == 1;
+    }
+    if (!catalog_tabs) {
+        printf("TOUCH: addons_catalog: the series catalog's tab doesn't answer a tap\n");
+        g_problems++;
+    }
+    static StremioStream streams[] = {
+        {"https://cdn.example/a.mp4", "1080p", "Paper Boats 2019 1080p WEB 2.1 GB", "Kites"},
+        {"https://cdn.example/b.mkv", "720p", "Paper Boats 2019 720p 1.2 GB", "Kites"},
+        {"https://other.example/c.m3u8", NULL, "Adaptive (HLS)", "Harbor Streams"},
+    };
+    begin();
+    uiDrawLibrary(&view, &addon_lib, &home, &resume, true, NULL);
+    uiDrawStreams("Paper Boats", streams, 3, 1, 0, false, NULL);
+    uiDrawFooterHelp(T("[A] play  [^v] stream  [B] back"));
+    save("addons_streams");
+    // The panel: 532 high, centered between the header and the help line; rows 64 from 64 below its top.
+    int streams_top = (UI_TAB_BAR_H + UI_FOOTER_Y - 532) / 2;
+    LibHit row = uiLibraryTap(GFX_WIDTH / 2, streams_top + 64 + 2 * 64 + 30);
+    LibHit back = uiLibraryTap((GFX_WIDTH - 900) / 2 + 40, streams_top + 30);
+    LibHit out = uiLibraryTap(GFX_WIDTH / 2, 690);
+    if (row.kind != LIBHIT_STREAM_ROW || row.a != 2 || back.kind != LIBHIT_CLOSE || out.kind != LIBHIT_CLOSE) {
+        printf("TOUCH: addons_streams: a stream, the back arrow or the outside doesn't answer a tap\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&view, &addon_lib, &home, &resume, true, NULL);
+    uiDrawStreams("Paper Boats", NULL, 0, 0, 0, true, NULL);
+    save("addons_streams_asking");
+    begin();
+    uiDrawLibrary(&view, &addon_lib, &home, &resume, true, NULL);
+    uiDrawStreams("Kite Hill \xC2\xB7 S01E02", NULL, 0, 0, 0, false, "Harbor Streams: it didn't answer");
+    save("addons_streams_none");
+    libraryFree(&addon_lib);
+    stremioStoreFree(&addons);
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     p->live = true;
@@ -870,9 +940,9 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
     save("settings");
-    // The main page's rows: 48 high from 76 below the panel's top (9 rows, a 60 footer).
-    int top = (GFX_HEIGHT - (76 + 9 * 48 + 60)) / 2 + 76;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 8 * 48 + 20), outside = uiLibraryTap(20, 400);
+    // The main page's rows: 48 high from 76 below the panel's top (10 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 10 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 9 * 48 + 20), outside = uiLibraryTap(20, 400);
     LibHit plex_row = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
         plex_row.kind != LIBHIT_SETTING || plex_row.a != SETTING_OPEN_PLEX) {
@@ -891,6 +961,22 @@ static void libraryScenes(void)
         printf("TOUCH: settings_library: Thumbnails' arrow doesn't answer a tap\n");
         g_problems++;
     }
+    // The addons' page: two added, the second asked to be removed.
+    static const char *const ADDON_NAMES[] = {"Kites", "Harbor Streams"};
+    uiSettingsSetAddons(ADDON_NAMES, 2, 1, "Addons: 2, catalogs: 3");
+    settingsSetAddonCount(2);
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawSettings(&config, SETTINGS_PAGE_ADDONS, SETTING_ADDON_FIRST + 1, "sdmc:/Media/Videos", "1.9.0");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
+    save("settings_addons");
+    int addons_top = (GFX_HEIGHT - (76 + 30 + 4 * 48 + 60)) / 2 + 76 + 30;
+    LibHit second = uiLibraryTap(GFX_WIDTH / 2 - 200, addons_top + 2 * 48 + 20);
+    if (second.kind != LIBHIT_SETTING || second.a != SETTING_ADDON_FIRST + 1) {
+        printf("TOUCH: settings_addons: an addon's row doesn't answer a tap (%d %d)\n", second.kind, second.a);
+        g_problems++;
+    }
+    settingsSetAddonCount(0);
     begin();
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.9.0");

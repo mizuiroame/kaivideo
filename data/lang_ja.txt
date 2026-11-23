@@ -1712,3 +1712,99 @@ The episodes couldn't be read.
 
 The episodes are still being read.
 エピソードをまだ読み込んでいます。
+
+Addons: %d, catalogs: %d
+アドオン: %d、カタログ: %d
+
+[A] play  [^v] stream  [B] back
+[A] 再生  [^v] ストリーム  [B] 戻る
+
+A again: remove
+もう一度 A: 削除
+
+a catalog couldn't be read
+カタログを読み込めませんでした
+
+A: remove
+A: 削除
+
+Add an addon
+アドオンを追加
+
+Add an addon first.
+先にアドオンを追加してください。
+
+Addon
+アドオン
+
+Addon added: its catalogs load.
+アドオンを追加しました。カタログを読み込みます。
+
+Addons
+アドオン
+
+Asking the addons for streams...
+アドオンにストリームを問い合わせています...
+
+Choose a stream
+ストリームを選択
+
+it didn't answer
+応答がありません
+
+it must be set up on its own page first
+先にアドオン自身のページで設定する必要があります
+
+its streams couldn't be read
+ストリームを読み込めませんでした
+
+Load the catalogs
+カタログを読み込む
+
+No addon answered.
+どのアドオンも応答しませんでした。
+
+No stream KaiVideo can play: torrents and outside links are left out.
+KaiVideo で再生できるストリームがありません。トレントと外部リンクは除外されます。
+
+None added
+未追加
+
+Press A again to remove this addon.
+このアドオンを削除するにはもう一度 A を押してください。
+
+Stream
+ストリーム
+
+Stremio addons
+Stremio アドオン
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+アドレスで追加する Stremio / Nuvio のアドオン。再生するのは Web ストリームのみで、トレントは扱いません。
+
+That isn't an addon's address, or it's added already.
+アドオンのアドレスではないか、すでに追加されています。
+
+that isn't an addon's manifest
+アドオンのマニフェストではありません
+
+The addon is removed.
+アドオンを削除しました。
+
+The addon's address (its manifest.json)
+アドオンのアドレス（manifest.json）
+
+the series couldn't be read
+シリーズを読み込めませんでした
+
+There are as many addons as KaiVideo keeps: remove one first.
+KaiVideo が保持できる数のアドオンがあります。先に 1 つ削除してください。
+
+Playing: a stream from an addon
+再生中: アドオンのストリーム
+
+Playing: from the IPTV list
+再生中: IPTV リストから
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+アドオンのストリームを再生できませんでした。削除されたか、ここでは動作しない可能性があります。

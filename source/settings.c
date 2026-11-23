@@ -18,12 +18,14 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Allow without signing (old NAS)"), N_("Credits and licenses"), N_("Check once a day"),
     N_("Look for an update"), N_("IPTV"), N_("List type"), N_("Address"), N_("User and password"),
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
+    N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
+    N_("Addon"), N_("Load the catalogs"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_NETWORK, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX,
-     SETTING_OPEN_IPTV, SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
+     SETTING_OPEN_IPTV, SETTING_OPEN_ADDONS, SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
     {SETTING_LANGUAGE, SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
      SETTING_SERVER_COLOR, SETTING_COUNT},
@@ -34,6 +36,7 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
     {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_CERTIFICATE,
      SETTING_IPTV_LOAD, SETTING_IPTV_FORGET, SETTING_COUNT},
+    {SETTING_COUNT},  // The addons': settingsPageRows makes them.
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -44,7 +47,8 @@ static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
                                        SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
-                                                              N_("Playback"), N_("Network folder"), N_("About"), N_("IPTV")};
+                                                              N_("Playback"), N_("Network folder"), N_("About"), N_("IPTV"),
+                                                              N_("Stremio addons")};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
     N_("Your Jellyfin server: sign in with Quick Connect or a password."),
     N_("Your Emby server: sign in with its user name and password."),
@@ -136,6 +140,8 @@ bool configReadLine(Config *c, const char *line)
         c->use_network = strcmp(value, "1") == 0;
     else if (isKey(line, length, "iptv_view"))
         c->use_iptv = strcmp(value, "1") == 0;
+    else if (isKey(line, length, "addons_view"))
+        c->use_addons = strcmp(value, "1") == 0;
     else if (isKey(line, length, "server"))
         c->server_kind = !strcmp(value, "plex") ? SERVER_PLEX : !strcmp(value, "emby") ? SERVER_EMBY : SERVER_JELLYFIN;
     else if (isKey(line, length, "view"))
@@ -174,8 +180,8 @@ void configWrite(const Config *c, FILE *f)
             c->use_jellyfin ? 1 : 0, c->jf_quality);
     fprintf(f, "jellyfin_check_certificate=%d\nserver=%s\n", c->jf_check_certificate ? 1 : 0,
             c->server_kind == SERVER_PLEX ? "plex" : c->server_kind == SERVER_EMBY ? "emby" : "jellyfin");
-    fprintf(f, "view=%d\nnetwork_view=%d\niptv_view=%d\n", c->server_view, c->use_network ? 1 : 0,
-            c->use_iptv ? 1 : 0);
+    fprintf(f, "view=%d\nnetwork_view=%d\niptv_view=%d\naddons_view=%d\n", c->server_view,
+            c->use_network ? 1 : 0, c->use_iptv ? 1 : 0, c->use_addons ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
@@ -189,11 +195,25 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "update_tag=%s\n", c->update_tag);
 }
 
+static int g_addon_count;
+
+void settingsSetAddonCount(int count)
+{
+    g_addon_count = count < 0 ? 0 : count > SETTINGS_ADDONS_MAX ? SETTINGS_ADDONS_MAX : count;
+}
+
 int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, SettingRow rows[SETTINGS_PAGE_MAX_ROWS])
 {
     int n = 0;
     if (page < 0 || page >= SETTINGS_PAGE_COUNT)
         return 0;
+    if (page == SETTINGS_PAGE_ADDONS) {  // Add, each addon, then load them.
+        rows[n++] = SETTING_ADDONS_ADD;
+        for (int i = 0; i < g_addon_count; i++)
+            rows[n++] = (SettingRow)(SETTING_ADDON_FIRST + i);
+        rows[n++] = SETTING_ADDONS_LOAD;
+        return n;
+    }
     const SettingRow *list = PAGE_ROWS[page];
     if (page == SETTINGS_PAGE_JELLYFIN && kind == SERVER_PLEX)
         list = signed_in ? PLEX_SIGNED_IN_ROWS : PLEX_ROWS;
@@ -219,6 +239,8 @@ const char *settingsPageNote(SettingsPage page, ServerKind kind)
 {
     if (page == SETTINGS_PAGE_IPTV)
         return T("Your own M3U list or Xtream account: its channels show in Live, with their guide.");
+    if (page == SETTINGS_PAGE_ADDONS)
+        return T("Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.");
     if (page == SETTINGS_PAGE_NETWORK)
         return T("A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.");
     return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? T(SERVER_NOTES[kind]) : NULL;
@@ -234,6 +256,7 @@ bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind)
     case SETTING_OPEN_NETWORK: *page = SETTINGS_PAGE_NETWORK; return true;
     case SETTING_ABOUT: *page = SETTINGS_PAGE_ABOUT; return true;
     case SETTING_OPEN_IPTV: *page = SETTINGS_PAGE_IPTV; return true;
+    case SETTING_OPEN_ADDONS: *page = SETTINGS_PAGE_ADDONS; return true;
     case SETTING_OPEN_JELLYFIN: *page = SETTINGS_PAGE_JELLYFIN; return true;
     case SETTING_OPEN_EMBY: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_EMBY; return true;
     case SETTING_OPEN_PLEX: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_PLEX; return true;
@@ -250,6 +273,7 @@ SettingRow settingPageOpener(SettingsPage page, ServerKind kind)
     case SETTINGS_PAGE_NETWORK: return SETTING_OPEN_NETWORK;
     case SETTINGS_PAGE_ABOUT: return SETTING_ABOUT;
     case SETTINGS_PAGE_IPTV: return SETTING_OPEN_IPTV;
+    case SETTINGS_PAGE_ADDONS: return SETTING_OPEN_ADDONS;
     case SETTINGS_PAGE_JELLYFIN:
         return kind == SERVER_PLEX ? SETTING_OPEN_PLEX : kind == SERVER_EMBY ? SETTING_OPEN_EMBY : SETTING_OPEN_JELLYFIN;
     default: return SETTING_OPEN_LIBRARY;

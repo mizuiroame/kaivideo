@@ -1712,3 +1712,99 @@ Die Folgen konnten nicht gelesen werden.
 
 The episodes are still being read.
 Die Folgen werden noch gelesen.
+
+Addons: %d, catalogs: %d
+Addons: %d, Kataloge: %d
+
+[A] play  [^v] stream  [B] back
+[A] Abspielen  [^v] Stream  [B] Zurück
+
+A again: remove
+Nochmal A: entfernen
+
+a catalog couldn't be read
+ein Katalog konnte nicht gelesen werden
+
+A: remove
+A: entfernen
+
+Add an addon
+Addon hinzufügen
+
+Add an addon first.
+Füge zuerst ein Addon hinzu.
+
+Addon
+Addon
+
+Addon added: its catalogs load.
+Addon hinzugefügt: seine Kataloge werden geladen.
+
+Addons
+Addons
+
+Asking the addons for streams...
+Die Addons werden nach Streams gefragt...
+
+Choose a stream
+Stream wählen
+
+it didn't answer
+es hat nicht geantwortet
+
+it must be set up on its own page first
+es muss zuerst auf seiner eigenen Seite eingerichtet werden
+
+its streams couldn't be read
+seine Streams konnten nicht gelesen werden
+
+Load the catalogs
+Kataloge laden
+
+No addon answered.
+Kein Addon hat geantwortet.
+
+No stream KaiVideo can play: torrents and outside links are left out.
+Kein Stream, den KaiVideo abspielen kann: Torrents und externe Links werden ausgelassen.
+
+None added
+Keine hinzugefügt
+
+Press A again to remove this addon.
+Drücke nochmal A, um dieses Addon zu entfernen.
+
+Stream
+Stream
+
+Stremio addons
+Stremio-Addons
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+Stremio- oder Nuvio-Addons, die du per Adresse hinzufügst. Nur ihre Web-Streams laufen: keine Torrents.
+
+That isn't an addon's address, or it's added already.
+Das ist keine Addon-Adresse, oder es ist schon hinzugefügt.
+
+that isn't an addon's manifest
+das ist kein Addon-Manifest
+
+The addon is removed.
+Das Addon ist entfernt.
+
+The addon's address (its manifest.json)
+Die Adresse des Addons (sein manifest.json)
+
+the series couldn't be read
+die Serie konnte nicht gelesen werden
+
+There are as many addons as KaiVideo keeps: remove one first.
+Es sind so viele Addons wie KaiVideo speichert: entferne zuerst eines.
+
+Playing: a stream from an addon
+Wiedergabe: ein Stream eines Addons
+
+Playing: from the IPTV list
+Wiedergabe: aus der IPTV-Liste
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+Der Stream des Addons konnte nicht abgespielt werden: er ist vielleicht weg oder funktioniert hier nicht.

@@ -171,7 +171,7 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     p->loop = PLAYBACK_LOOP_OFF;
     pthread_mutex_init(&p->ext_lock, NULL);
     p->join_lead_ns = jfIsRemoteLocation(path) || davIsLocation(path) || !strncmp(path, "jellyfin-", 9) ||
-                              !strncmp(path, "xtream:", 7)
+                              !strncmp(path, "xtream:", 7) || !strncmp(path, "stremio:", 8)
                           ? REMOTE_LEAD_NS
                           : SWITCH_LEAD_NS;
     pthread_mutex_init(&p->swap_lock, NULL);

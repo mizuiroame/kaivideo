@@ -7,8 +7,8 @@
 - **Independent project.** KaiVideo is not affiliated with, endorsed by or
   sponsored by Nintendo Co., Ltd. or its subsidiaries.
 - **Trademarks.** "Nintendo", "Nintendo Switch" and "Switch 2" are
-  trademarks of their owners, as are "Jellyfin", "Emby", "Plex" and
-  "Windows". They are used here only to say which hardware, servers and
+  trademarks of their owners, as are "Jellyfin", "Emby", "Plex", "Stremio",
+  "Nuvio" and "Windows". They are used here only to say which hardware, servers and
   systems this program works with. KaiVideo is not affiliated with or
   endorsed by any of them. Format names are used only to name the files
   KaiVideo plays.
@@ -19,8 +19,10 @@
   protection measure. It doesn't play DRM-protected video, and it doesn't
   download from streaming sites. It plays the files users put on their own
   card, in their own network folders or on their own Jellyfin, Emby or Plex
-  server, and the Live TV channels their own server lists. It comes with no
-  channels or channel lists of its own.
+  server, the Live TV channels their own server lists, and the IPTV list and
+  Stremio addons they add themselves. It comes with no channels, channel
+  lists or addons of its own, and recommends none. It never plays torrents
+  or magnet links: from an addon, only `http` and `https` streams.
 - **FFmpeg, libsmb2 and FriBidi.** KaiVideo uses FFmpeg, built under the LGPL
   2.1 (no GPL or non-free parts), libsmb2's client library, under the LGPL
   2.1, and FriBidi, under the same license. The scripts that build FFmpeg and

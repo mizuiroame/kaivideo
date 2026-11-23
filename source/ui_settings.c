@@ -73,6 +73,26 @@ static const char *g_update_now = "";
 static const char *g_iptv_kind = "", *g_iptv_address = "", *g_iptv_user, *g_iptv_guide = "", *g_iptv_state = "";
 static bool g_iptv_certificates = true;
 
+static const char *g_addon_names[SETTINGS_ADDONS_MAX];
+static int g_addon_count, g_addon_armed = -1;
+static const char *g_addons_state = "";
+
+void uiSettingsSetAddons(const char *const *names, int count, int armed, const char *state)
+{
+    g_addon_count = count < SETTINGS_ADDONS_MAX ? count : SETTINGS_ADDONS_MAX;
+    for (int i = 0; i < g_addon_count; i++)
+        g_addon_names[i] = names[i];
+    g_addon_armed = armed;
+    g_addons_state = state;
+}
+
+// An addon's row: its name, not "Addon".
+static const char *rowLabel(SettingRow row)
+{
+    int i = (int)row - SETTING_ADDON_FIRST;
+    return i >= 0 && i < g_addon_count && g_addon_names[i] ? g_addon_names[i] : settingLabel(row);
+}
+
 void uiSettingsSetIptv(const char *kind, const char *address, const char *user, const char *guide, const char *state,
                        bool check_certificates)
 {
@@ -102,6 +122,7 @@ static bool sourceColor(SettingsPage page, ServerKind kind, Color *out)
     case SETTINGS_PAGE_JELLYFIN: *out = uiServerColor(kind); return true;
     case SETTINGS_PAGE_NETWORK: *out = UI_NETWORK_COLOR; return true;
     case SETTINGS_PAGE_IPTV: *out = UI_IPTV_COLOR; return true;
+    case SETTINGS_PAGE_ADDONS: *out = UI_ADDONS_COLOR; return true;
     default: return false;
     }
 }
@@ -149,6 +170,10 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", g_iptv_certificates ? T("On") : T("Off: any certificate"));
     } else if (row == SETTING_IPTV_LOAD) {
         snprintf(out, size, "%s", g_iptv_state);
+    } else if (row == SETTING_OPEN_ADDONS || row == SETTING_ADDONS_LOAD) {
+        snprintf(out, size, "%s", g_addons_state);
+    } else if (row >= SETTING_ADDON_FIRST && row <= SETTING_ADDON_LAST) {
+        snprintf(out, size, "%s", (int)row - SETTING_ADDON_FIRST == g_addon_armed ? T("A again: remove") : T("A: remove"));
     } else if (row == SETTING_UPDATE_NOW) {
         snprintf(out, size, "%s", g_update_now);
     } else if (row == SETTING_JF_SIGN_OUT) {
@@ -207,7 +232,7 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
             colorDot(label_x, row_y + 21, row_color);
             label_x += SERVER_DOT + 10;
         }
-        fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, label_x, row_y + 8, settingLabel(row), COLOR_TEXT);
+        fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, label_x, row_y + 8, rowLabel(row), COLOR_TEXT);
         rowValue(row, c, library_root, version, value, sizeof(value));
         int value_w = fontTextWidth(FONT_BOLD, 20, value);
         if (value_w > 300)

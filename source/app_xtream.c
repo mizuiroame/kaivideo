@@ -87,7 +87,7 @@ void appXtreamInstall(App *app)
     libraryInit(&built, IPTV_PREFIX);
     xtreamFillLibrary(&built, &app->xtream, T("Reading the episodes..."), T("The episodes couldn't be read."));
     libraryBuild(&built);
-    appLibraryInstallIptv(app, &built);
+    appLibraryInstallBuilt(app, &built);
 }
 
 void appXtreamTake(App *app, XtreamCatalog *c)

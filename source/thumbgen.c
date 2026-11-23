@@ -227,7 +227,7 @@ static bool make(const Request *r)
         makeUrl(r);
         return !g_stop && !g_paused;
     }
-    if (xtreamIsLocation(r->path)) {  // An Xtream video: its poster is its picture, not a frame from it.
+    if (xtreamIsLocation(r->path) || !strncmp(r->path, "stremio:", 8)) {  // Its poster is its picture, not a frame.
         markNone(r->jpg);
         return true;
     }

@@ -38,6 +38,8 @@ typedef enum {
     STATS_DIRECT,     // The original file from Jellyfin.
     STATS_CONVERTED,  // Converted by the server.
     STATS_NETWORK,    // A file in the network folder (dav.h).
+    STATS_IPTV,       // An IPTV channel, or an Xtream account's film or episode.
+    STATS_ADDON,      // A stream a Stremio addon gave.
 } StatsSource;
 
 typedef struct {

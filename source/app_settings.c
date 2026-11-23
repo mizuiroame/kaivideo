@@ -404,8 +404,10 @@ static void activate(App *app, SettingRow row, uint64_t now)
     case SETTING_UPDATE_NOW: appUpdatesActivate(app, now); break;
     case SETTING_OPEN_NETWORK: openPage(app, SETTINGS_PAGE_NETWORK); break;
     case SETTING_OPEN_IPTV: openPage(app, SETTINGS_PAGE_IPTV); break;
+    case SETTING_OPEN_ADDONS: openPage(app, SETTINGS_PAGE_ADDONS); break;
     default:
-        if (!appIptvActivate(app, row, now) && !appNetworkActivate(app, row, now))
+        if (!appIptvActivate(app, row, now) && !appNetworkActivate(app, row, now) &&
+            !appStremioActivate(app, row, now))
             change(app, row, 1, now);
         break;
     }
@@ -517,6 +519,7 @@ void appSettingsDraw(const App *app)
     uiSettingsSetServers(names);
     appNetworkFeedSettings();
     appIptvFeedSettings(app);
+    appStremioFeedSettings(app);
     static char update_now[96];
     appUpdatesValue(app, SETTING_UPDATE_NOW, update_now, sizeof(update_now));
     uiSettingsSetUpdate(update_now);

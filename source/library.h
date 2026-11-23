@@ -13,6 +13,8 @@
 
 #define LIBRARY_PATH_MAX 512
 #define LIBRARY_DEPTH 8  // Folders deeper than this aren't looked in.
+// An item's art "poster:<address>": a poster from the web, cropped to fill a card (thumbgen.c).
+#define LIBRARY_POSTER_PREFIX "poster:"
 
 typedef struct {
     char *path;

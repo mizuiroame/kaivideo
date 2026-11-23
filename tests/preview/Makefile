@@ -5,7 +5,7 @@ CC      ?= gcc
 SRC     := ../../source
 OUT     := build
 CFLAGS  := -std=gnu11 -O1 -g -Wall -Wextra -I$(SRC) -I../../third_party -I$(OUT)
-UI_SRC  := scroll.c gfx.c font.c ui.c ui_buttons.c ui_library.c ui_settings.c settings.c theme.c background.c menu.c browser.c resume.c util.c image_impl.c library.c naming.c home.c libview.c watched.c playback.c stats.c ui_stats.c ui_details.c ui_live.c ui_iptvhome.c iptvhome.c iptv.c xtreamvod.c livetv.c jellyfin.c ui_downloads.c lang.c dav.c md4.c notice.c ui_notice.c
+UI_SRC  := scroll.c gfx.c font.c ui.c ui_buttons.c ui_library.c ui_settings.c settings.c theme.c background.c menu.c browser.c resume.c util.c image_impl.c library.c naming.c home.c libview.c watched.c playback.c stats.c ui_stats.c ui_details.c ui_live.c ui_iptvhome.c iptvhome.c iptv.c xtreamvod.c stremio.c ui_streams.c livetv.c jellyfin.c ui_downloads.c lang.c dav.c md4.c notice.c ui_notice.c
 
 .PHONY: run clean
 

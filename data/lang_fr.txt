@@ -1712,3 +1712,99 @@ Les épisodes n'ont pas pu être lus.
 
 The episodes are still being read.
 Les épisodes sont encore en cours de lecture.
+
+Addons: %d, catalogs: %d
+Addons : %d, catalogues : %d
+
+[A] play  [^v] stream  [B] back
+[A] lire  [^v] flux  [B] retour
+
+A again: remove
+A encore : retirer
+
+a catalog couldn't be read
+un catalogue n'a pas pu être lu
+
+A: remove
+A : retirer
+
+Add an addon
+Ajouter un addon
+
+Add an addon first.
+Ajoute d'abord un addon.
+
+Addon
+Addon
+
+Addon added: its catalogs load.
+Addon ajouté : ses catalogues se chargent.
+
+Addons
+Addons
+
+Asking the addons for streams...
+Demande des flux aux addons...
+
+Choose a stream
+Choisis un flux
+
+it didn't answer
+il n'a pas répondu
+
+it must be set up on its own page first
+il doit d'abord être configuré sur sa propre page
+
+its streams couldn't be read
+ses flux n'ont pas pu être lus
+
+Load the catalogs
+Charger les catalogues
+
+No addon answered.
+Aucun addon n'a répondu.
+
+No stream KaiVideo can play: torrents and outside links are left out.
+Aucun flux que KaiVideo puisse lire : les torrents et liens externes sont écartés.
+
+None added
+Aucun ajouté
+
+Press A again to remove this addon.
+Appuie encore sur A pour retirer cet addon.
+
+Stream
+Flux
+
+Stremio addons
+Addons Stremio
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+Des addons Stremio ou Nuvio ajoutés par leur adresse. Seuls leurs flux web sont lus : pas de torrents.
+
+That isn't an addon's address, or it's added already.
+Ce n'est pas l'adresse d'un addon, ou il est déjà ajouté.
+
+that isn't an addon's manifest
+ce n'est pas le manifeste d'un addon
+
+The addon is removed.
+L'addon est retiré.
+
+The addon's address (its manifest.json)
+L'adresse de l'addon (son manifest.json)
+
+the series couldn't be read
+la série n'a pas pu être lue
+
+There are as many addons as KaiVideo keeps: remove one first.
+Il y a déjà autant d'addons que KaiVideo en garde : retires-en un d'abord.
+
+Playing: a stream from an addon
+Lecture : un flux d'un addon
+
+Playing: from the IPTV list
+Lecture : depuis la liste IPTV
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+Le flux de l'addon n'a pas pu être lu : il a peut-être disparu, ou ne marche pas ici.

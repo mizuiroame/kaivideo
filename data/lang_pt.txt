@@ -1712,3 +1712,99 @@ Não foi possível ler os episódios.
 
 The episodes are still being read.
 Os episódios ainda estão sendo lidos.
+
+Addons: %d, catalogs: %d
+Addons: %d, catálogos: %d
+
+[A] play  [^v] stream  [B] back
+[A] reproduzir  [^v] fonte  [B] voltar
+
+A again: remove
+A de novo: remover
+
+a catalog couldn't be read
+não foi possível ler um catálogo
+
+A: remove
+A: remover
+
+Add an addon
+Adicionar um addon
+
+Add an addon first.
+Adicione um addon primeiro.
+
+Addon
+Addon
+
+Addon added: its catalogs load.
+Addon adicionado: seus catálogos carregam.
+
+Addons
+Addons
+
+Asking the addons for streams...
+Pedindo fontes aos addons...
+
+Choose a stream
+Escolha uma fonte
+
+it didn't answer
+não respondeu
+
+it must be set up on its own page first
+ele precisa ser configurado na própria página primeiro
+
+its streams couldn't be read
+não foi possível ler suas fontes
+
+Load the catalogs
+Carregar os catálogos
+
+No addon answered.
+Nenhum addon respondeu.
+
+No stream KaiVideo can play: torrents and outside links are left out.
+Nenhuma fonte que o KaiVideo consiga tocar: torrents e links externos ficam de fora.
+
+None added
+Nenhum adicionado
+
+Press A again to remove this addon.
+Pressione A de novo para remover este addon.
+
+Stream
+Fonte
+
+Stremio addons
+Addons do Stremio
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+Addons do Stremio ou Nuvio que você adiciona pelo endereço. Só as fontes web tocam: nada de torrents.
+
+That isn't an addon's address, or it's added already.
+Esse não é o endereço de um addon, ou ele já foi adicionado.
+
+that isn't an addon's manifest
+isso não é o manifesto de um addon
+
+The addon is removed.
+O addon foi removido.
+
+The addon's address (its manifest.json)
+O endereço do addon (seu manifest.json)
+
+the series couldn't be read
+não foi possível ler a série
+
+There are as many addons as KaiVideo keeps: remove one first.
+Já há tantos addons quanto o KaiVideo guarda: remova um primeiro.
+
+Playing: a stream from an addon
+Reproduzindo: uma fonte de um addon
+
+Playing: from the IPTV list
+Reproduzindo: da lista IPTV
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+Não foi possível tocar a fonte do addon: ela pode ter sumido ou não funcionar aqui.

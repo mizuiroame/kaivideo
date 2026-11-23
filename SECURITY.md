@@ -45,6 +45,12 @@ touches small:
   broadcast on your network (UDP 7359). With a
   [network folder](docs/network-folder.md), it talks to that folder's server.
   Live TV channels may be read from the address the server gives for them.
+  With an [IPTV list](docs/iptv-and-addons.md#iptv), it talks to that list's
+  server and to the addresses it gives for channels, logos, posters and the
+  guide. With [Stremio addons](docs/iptv-and-addons.md#stremio-and-nuvio-addons),
+  it asks the addons you added for their catalogs and streams, and plays a
+  stream from the address the one you choose gives. Addons aren't told what
+  you watched.
   Once a day (Settings > About > Check once a day turns it off) and when you
   choose **Look for an update**, it asks GitHub for this repository's latest
   release. Installing one downloads `KaiVideo.nro` only from this repository's
@@ -74,8 +80,13 @@ touches small:
     **Remember the password** off, nothing of it is written. Give KaiVideo
     [a user of its own](docs/network-folder.md#a-user-of-its-own) that can
     only read the folder.
+  - The IPTV account (`iptv.txt`) keeps an Xtream password only encoded, not
+    as typed. It can still be read back from that file, so use an account
+    only for this. Addons' addresses (`addons.txt`) are kept as added: some
+    addons put a key in their address.
   - `kaivideo.log` lists what was played and how (paths and server item ids),
-    to find problems. It never holds tokens or passwords.
+    to find problems. It never holds tokens or passwords, nor the addresses of
+    IPTV channels or addon streams.
 - **Shared folders are signed.** SMB connections require signing, so nobody
   on the network can change what's read. **Allow without signing (old NAS)**
   turns that off for a folder whose server can't sign.

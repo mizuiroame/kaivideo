@@ -35,6 +35,7 @@ static const char *libraryRoot(const App *app)
 
 #define NETWORK_COLOR UI_NETWORK_COLOR
 #define IPTV_COLOR UI_IPTV_COLOR
+#define ADDONS_COLOR UI_ADDONS_COLOR
 
 // --- The library and its scan ---
 
@@ -45,7 +46,7 @@ void appLibraryRefreshHome(App *app)
     if (app->config.use_iptv)
         libviewSetIptvTabs(&app->view, &app->library);
     else
-        libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
+        libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin || app->config.use_addons,  // Libraries are tabs.
                        app->live.count > 0, appDownloadsTabShown(app));
     libviewClamp(&app->view, &app->library, &app->home);
 }
@@ -90,6 +91,11 @@ void appLibraryStart(App *app)
         return;
     }
     app->config.use_iptv = false;
+    if (app->config.use_addons && !app->config.use_jellyfin && appStremioConfigured()) {
+        appLibraryShowAddons(app);
+        return;
+    }
+    app->config.use_addons = false;
     if (app->config.use_jellyfin && appJellyfinEnsure(app)) {
         libraryInit(&app->library, JF_ROOT);
         appLibraryRefreshHome(app);
@@ -116,7 +122,7 @@ void appLibrarySetSource(App *app, bool jellyfin)
         return;
     }
     libscanStop();
-    app->config.use_jellyfin = app->config.use_network = app->config.use_iptv = false;
+    app->config.use_jellyfin = app->config.use_network = app->config.use_iptv = app->config.use_addons = false;
     appSaveSettings(app);
     libraryFree(&app->library);
     libviewInit(&app->view);
@@ -126,7 +132,7 @@ void appLibrarySetSource(App *app, bool jellyfin)
 void appLibraryShowNetwork(App *app)
 {
     libscanStop();
-    app->config.use_jellyfin = app->config.use_iptv = false;
+    app->config.use_jellyfin = app->config.use_iptv = app->config.use_addons = false;
     app->config.use_network = true;
     appSaveSettings(app);
     libraryFree(&app->library);
@@ -137,7 +143,7 @@ void appLibraryShowNetwork(App *app)
 void appLibraryShowIptv(App *app)
 {
     libscanStop();
-    app->config.use_jellyfin = app->config.use_network = false;
+    app->config.use_jellyfin = app->config.use_network = app->config.use_addons = false;
     app->config.use_iptv = true;
     appSaveSettings(app);
     libraryFree(&app->library);
@@ -147,6 +153,18 @@ void appLibraryShowIptv(App *app)
     appIptvHomeReset(app);
     appXtreamInstall(app);
     appLibraryRefreshHome(app);
+}
+
+void appLibraryShowAddons(App *app)
+{
+    libscanStop();
+    app->config.use_jellyfin = app->config.use_network = app->config.use_iptv = false;
+    app->config.use_addons = true;
+    appSaveSettings(app);
+    libraryFree(&app->library);
+    libraryInit(&app->library, STREMIO_PREFIX);
+    libviewInit(&app->view);
+    appStremioInstall(app);  // Their catalogs (what's come so far).
 }
 
 void appLibraryNetworkChanged(App *app)
@@ -166,7 +184,7 @@ void appLibraryShowServer(App *app, ServerKind kind)
     libscanStop();
     bool changed = !app->config.use_jellyfin || app->config.server_view != (int)kind;
     app->config.use_jellyfin = true;
-    app->config.use_network = app->config.use_iptv = false;
+    app->config.use_network = app->config.use_iptv = app->config.use_addons = false;
     app->config.server_view = kind;
     appSaveSettings(app);
     if (changed)
@@ -186,8 +204,15 @@ void appLibraryShowServer(App *app, ServerKind kind)
 // X goes through the card, the network folder (if there's one) and each server signed in, in turn.
 void appLibraryToggleSource(App *app, uint64_t now)
 {
-    if (app->config.use_iptv) {  // The last: back to the card.
+    if (app->config.use_addons) {  // The last: back to the card.
         appLibrarySetSource(app, false);
+        return;
+    }
+    if (app->config.use_iptv) {
+        if (appStremioConfigured())
+            appLibraryShowAddons(app);
+        else
+            appLibrarySetSource(app, false);
         return;
     }
     if (appJellyfinEnsure(app))
@@ -203,6 +228,8 @@ void appLibraryToggleSource(App *app, uint64_t now)
         appLibraryShowServer(app, (ServerKind)next);
     else if (appIptvConfigured())
         appLibraryShowIptv(app);
+    else if (appStremioConfigured())
+        appLibraryShowAddons(app);
     else if (!on_card)
         appLibrarySetSource(app, false);
     else
@@ -238,7 +265,7 @@ static void afterNewLibrary(App *app, const char *details_path)
     appLibraryRefreshHome(app);
 }
 
-void appLibraryInstallIptv(App *app, Library *built)
+void appLibraryInstallBuilt(App *app, Library *built)
 {
     char details[LIBRARY_PATH_MAX] = "";
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
@@ -531,7 +558,10 @@ static void search(App *app, uint64_t now)
     char text[LIBVIEW_QUERY_MAX];
     switch (systemKeyboardInput(T("Search films and series"),app->view.query, text, sizeof(text),
                                 LIBVIEW_QUERY_MAX - 1)) {
-    case SYSTEM_KEYBOARD_OK: libviewSearch(&app->view, &app->library, text); break;
+    case SYSTEM_KEYBOARD_OK:
+        libviewSearch(&app->view, &app->library, text);
+        appStremioSearch(app, text);  // In the Addons view, they're searched too.
+        break;
     case SYSTEM_KEYBOARD_UNAVAILABLE: appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now); break;
     default: break;
     }
@@ -705,6 +735,10 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     LibView *v = &app->view;
+    if (app->streams_open) {  // The streams to choose from take the buttons.
+        appStremioStreamsInput(app, pressed, touch, now);
+        return;
+    }
     if (v->details >= 0) {
         detailsInput(app, pressed, touch, now);
         return;
@@ -846,6 +880,8 @@ void appLibraryDraw(App *app, uint64_t now)
         uiLibrarySetSource(T("Network folder"), NETWORK_COLOR);
     else if (app->config.use_iptv)
         uiLibrarySetSource(T("IPTV"), IPTV_COLOR);
+    else if (app->config.use_addons)
+        uiLibrarySetSource(T("Addons"), ADDONS_COLOR);
     else
         uiLibrarySetSource(T("SD card"), COLOR_ACCENT);
     if (app->picking) {
@@ -886,6 +922,8 @@ void appLibraryDraw(App *app, uint64_t now)
                       canBeFavorite(app, (LibraryRef){false, item}),
                       appDownloadLabel(app, item, download, sizeof(download)));
     }
+    if (app->streams_open)
+        appStremioStreamsDraw(app);
     appSettingsDraw(app);
     appMenuDraw(app);
     uiDrawFooterHelp(appFooterHelp(app));

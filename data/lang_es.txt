@@ -1712,3 +1712,99 @@ No se pudieron leer los episodios.
 
 The episodes are still being read.
 Todavía se están leyendo los episodios.
+
+Addons: %d, catalogs: %d
+Addons: %d, catálogos: %d
+
+[A] play  [^v] stream  [B] back
+[A] reproducir  [^v] fuente  [B] atrás
+
+A again: remove
+A otra vez: quitar
+
+a catalog couldn't be read
+no se pudo leer un catálogo
+
+A: remove
+A: quitar
+
+Add an addon
+Agregar un addon
+
+Add an addon first.
+Agrega un addon primero.
+
+Addon
+Addon
+
+Addon added: its catalogs load.
+Addon agregado: se cargan sus catálogos.
+
+Addons
+Addons
+
+Asking the addons for streams...
+Pidiendo fuentes a los addons...
+
+Choose a stream
+Elige una fuente
+
+it didn't answer
+no respondió
+
+it must be set up on its own page first
+primero hay que configurarlo en su propia página
+
+its streams couldn't be read
+no se pudieron leer sus fuentes
+
+Load the catalogs
+Cargar los catálogos
+
+No addon answered.
+Ningún addon respondió.
+
+No stream KaiVideo can play: torrents and outside links are left out.
+Ninguna fuente que KaiVideo pueda reproducir: se omiten torrents y enlaces externos.
+
+None added
+Ninguno agregado
+
+Press A again to remove this addon.
+Pulsa A otra vez para quitar este addon.
+
+Stream
+Fuente
+
+Stremio addons
+Addons de Stremio
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+Addons de Stremio o Nuvio que agregas por su dirección. Solo se reproducen sus fuentes web: nada de torrents.
+
+That isn't an addon's address, or it's added already.
+Esa no es la dirección de un addon, o ya está agregado.
+
+that isn't an addon's manifest
+eso no es el manifiesto de un addon
+
+The addon is removed.
+Se quitó el addon.
+
+The addon's address (its manifest.json)
+La dirección del addon (su manifest.json)
+
+the series couldn't be read
+no se pudo leer la serie
+
+There are as many addons as KaiVideo keeps: remove one first.
+Ya hay tantos addons como KaiVideo guarda: quita uno primero.
+
+Playing: a stream from an addon
+Reproduciendo: una fuente de un addon
+
+Playing: from the IPTV list
+Reproduciendo: de la lista IPTV
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+No se pudo reproducir la fuente del addon: puede que ya no exista o que no funcione aquí.

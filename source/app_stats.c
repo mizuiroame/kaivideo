@@ -28,6 +28,8 @@ void appStatsDraw(const App *app)
     StatsInfo info = {
         .source = converted                                                    ? STATS_CONVERTED
                   : davIsLocation(app->playing_path)                           ? STATS_NETWORK
+                  : iptvIsLocation(app->playing_path) || xtreamIsLocation(app->playing_path) ? STATS_IPTV
+                  : stremioIsLocation(app->playing_path)                       ? STATS_ADDON
                   : jfIsRemoteLocation(app->playing_path) && !app->open_copy[0] ? STATS_DIRECT
                                                                                : STATS_CARD,
         .quality = app->config.jf_quality == 0 ? "" : quality,  // Auto says nothing (in any language).

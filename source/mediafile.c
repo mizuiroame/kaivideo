@@ -18,6 +18,7 @@
 #include "tsstream.h"
 #include "jfsync.h"
 #include "net.h"
+#include "stremioload.h"
 #include "xtreamvod.h"
 
 #define FETCH_TRIES 3         // With the stall below: about 16 s without the server, then it's lost.
@@ -311,6 +312,7 @@ static Remote *remoteOpen(const char *location)
     bool (*request)(const char *, char *, size_t, char *, size_t) =
         davIsLocation(location)      ? davStreamRequest
         : xtreamIsLocation(location) ? xtreamVodStreamRequest
+        : stremioIsLocation(location) ? stremioStreamRequest
                                      : jfSyncStreamRequest;
     r->any_certificate = xtreamIsLocation(location) && xtreamVodAnyCertificate();
     char why[160];
@@ -396,7 +398,8 @@ MediaFile *mediaFileOpen(const char *location)
     MediaFile *f = calloc(1, sizeof(*f));
     if (!f)
         return NULL;
-    if (jfIsRemoteLocation(location) || davIsLocation(location) || xtreamIsLocation(location))
+    if (jfIsRemoteLocation(location) || davIsLocation(location) || xtreamIsLocation(location) ||
+        stremioIsLocation(location))
         remoteAttach(f, location);
     else
         f->file = fopen(location, "rb");

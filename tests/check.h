@@ -50,3 +50,4 @@ void testNotice(void);
 void testIptv(void);
 void testIptvHome(void);
 void testXtreamVod(void);
+void testStremio(void);

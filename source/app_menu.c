@@ -162,6 +162,8 @@ const char *appFooterHelp(const App *app)
     if (app->settings_open)
         return app->settings_page == 0 ? T("[^v] choose  [>][A] open  [B] close")
                                        : T("[^v] choose  [<>][A] change  [B] back");
+    if (app->streams_open)
+        return T("[A] play  [^v] stream  [B] back");
     if (app->picking)
         return app->library_root[0] ? T("[A] open  [B] folder above  [X] use this folder  [-] cancel")
                                     : T("[A] open  [B] folder above  [X] use this folder  [+] menu");

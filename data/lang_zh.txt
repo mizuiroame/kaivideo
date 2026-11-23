@@ -1712,3 +1712,99 @@ The episodes couldn't be read.
 
 The episodes are still being read.
 仍在读取剧集。
+
+Addons: %d, catalogs: %d
+插件：%d，目录：%d
+
+[A] play  [^v] stream  [B] back
+[A] 播放  [^v] 流  [B] 返回
+
+A again: remove
+再按 A：移除
+
+a catalog couldn't be read
+无法读取某个目录
+
+A: remove
+A：移除
+
+Add an addon
+添加插件
+
+Add an addon first.
+请先添加一个插件。
+
+Addon
+插件
+
+Addon added: its catalogs load.
+已添加插件：正在加载其目录。
+
+Addons
+插件
+
+Asking the addons for streams...
+正在向插件请求流...
+
+Choose a stream
+选择一个流
+
+it didn't answer
+没有响应
+
+it must be set up on its own page first
+需要先在其自己的页面上配置
+
+its streams couldn't be read
+无法读取其流
+
+Load the catalogs
+加载目录
+
+No addon answered.
+没有插件响应。
+
+No stream KaiVideo can play: torrents and outside links are left out.
+没有 KaiVideo 能播放的流：种子和外部链接已排除。
+
+None added
+尚未添加
+
+Press A again to remove this addon.
+再按一次 A 以移除此插件。
+
+Stream
+流
+
+Stremio addons
+Stremio 插件
+
+Stremio or Nuvio addons you add by address. Only their web streams play: no torrents.
+按地址添加的 Stremio 或 Nuvio 插件。只播放其网络流，不支持种子。
+
+That isn't an addon's address, or it's added already.
+这不是插件地址，或已经添加过了。
+
+that isn't an addon's manifest
+这不是插件的清单
+
+The addon is removed.
+已移除插件。
+
+The addon's address (its manifest.json)
+插件地址（其 manifest.json）
+
+the series couldn't be read
+无法读取该剧集
+
+There are as many addons as KaiVideo keeps: remove one first.
+插件数量已达 KaiVideo 上限：请先移除一个。
+
+Playing: a stream from an addon
+正在播放：来自插件的流
+
+Playing: from the IPTV list
+正在播放：来自 IPTV 列表
+
+The addon's stream couldn't be played: it may be gone, or not work here.
+无法播放插件的流：它可能已不存在，或在此无法使用。
