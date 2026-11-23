@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "streamheaders.h"
+
 #define NET_USER_AGENT "KaiVideo/" KAIVIDEO_VERSION " (+https://github.com/mizuiroame/kaivideo)"
 #define NET_ERROR_MAX 128
 
@@ -35,6 +37,7 @@ typedef struct {
                                   // before it answers); connecting still gives up as stall_s says. 0: none.
     bool accept_json;             // Asks for JSON (Plex answers XML otherwise).
     bool any_certificate;         // Takes any https certificate (an IPTV list with Certificate check off).
+    const StreamHeaders *stream;  // The Referer, User-Agent and Origin a stream asks for; may be NULL.
 } NetRequest;
 
 // Takes a piece of the answer. False stops the transfer, which then counts as fine.

@@ -240,7 +240,7 @@ static void chooseStream(App *app, int index, uint64_t now)
     char path[LIBRARY_PATH_MAX], name[APP_NAME_MAX];
     snprintf(path, sizeof(path), "%s", app->streams_path);
     snprintf(name, sizeof(name), "%s", app->streams_name);
-    stremioChoose(path, app->streams[index].url);
+    stremioChoose(path, app->streams[index].url, &app->streams[index].headers);
     appLog("Addons: %s plays a stream of %s", path, app->streams[index].addon);  // Not its address: it may hold a key.
     bool from_start = app->streams_from_start;
     closeStreams(app);

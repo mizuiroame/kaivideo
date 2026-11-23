@@ -81,6 +81,7 @@ typedef struct {
     long status;                  // the server's status then,
     bool not_hls;                 // or the first answer wasn't an HLS list at all.
     bool any_certificate;         // Its addresses' certificates aren't checked (an IPTV list's choice).
+    StreamHeaders stream;         // The headers its list or addon asks for, sent with every request.
     MediaList lists[HLS_LISTS_MAX];
     int list_count;
     char *master_text;            // What FFmpeg opens first when there are several lists, else NULL.
@@ -194,7 +195,8 @@ static bool fetchSegment(HlsSession *ses, int list, int index, NetResponse *r)
     NetRequest request = {.url = ses->lists[list].list.urls[index],
                           .authorization = authorization(ses, ses->lists[list].list.urls[index]),
                           .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S,
-                          .any_certificate = ses->any_certificate};
+                          .any_certificate = ses->any_certificate,
+                          .stream = &ses->stream};
     for (int attempt = 0; attempt < FETCH_TRIES && !ses->abort_fetch; attempt++) {
         if (netFetchText(ses->net, &request, SEGMENT_MAX, r))
             return true;
@@ -374,7 +376,8 @@ static bool subtitleWork(HlsSession *ses)
     pthread_mutex_unlock(&ses->lock);
     NetResponse r;
     NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = &ses->abort_fetch,
-                          .timeout_s = PLAYLIST_TIMEOUT_S, .any_certificate = ses->any_certificate};
+                          .timeout_s = PLAYLIST_TIMEOUT_S, .any_certificate = ses->any_certificate,
+                          .stream = &ses->stream};
     bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, &r);
     pthread_mutex_lock(&ses->lock);
     if (choice != ses->subtitle_choice) {
@@ -529,7 +532,8 @@ static bool getText(HlsSession *ses, const char *url, NetResponse *r)
     // While starting, the caller's cancel cuts it short; afterwards, stopping does.
     const volatile bool *cancel = !ses->running && ses->start_cancel ? ses->start_cancel : &ses->abort_fetch;
     NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = cancel,
-                          .timeout_s = ses->playlist_timeout_s, .any_certificate = ses->any_certificate};
+                          .timeout_s = ses->playlist_timeout_s, .any_certificate = ses->any_certificate,
+                          .stream = &ses->stream};
     bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, r);
     if (!ok && !ses->running) {  // Starting: why, for the message.
         ses->problem = r->problem;
@@ -636,6 +640,7 @@ static void freeLists(HlsSession *ses)
 static void stopSession(HlsSession *ses);
 
 static bool g_next_any_certificate;  // For the session start() makes (it clears the session first).
+static StreamHeaders g_next_stream;   // The same.
 static bool g_last_not_hls;         // The last direct start found something that isn't HLS.
 
 bool hlsDirectWasNotHls(void)
@@ -654,6 +659,7 @@ static bool start(HlsSession *ses, const char *master_url, const char *auth, lon
     snprintf(ses->authorization, sizeof(ses->authorization), "%s", auth ? auth : "");
     snprintf(ses->origin_url, sizeof(ses->origin_url), "%s", master_url);
     ses->any_certificate = g_next_any_certificate;
+    ses->stream = g_next_stream;
     ses->max_bitrate = max_bitrate;
     ses->playlist_timeout_s = timeout_s;
     ses->fetch_index = -1;
@@ -676,17 +682,20 @@ static bool start(HlsSession *ses, const char *master_url, const char *auth, lon
 bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool *cancel, char *error,
                     size_t error_size)
 {
-    return hlsStartDirectAny(url, max_bitrate, false, cancel, error, error_size);
+    return hlsStartDirectAny(url, max_bitrate, false, NULL, cancel, error, error_size);
 }
 
-bool hlsStartDirectAny(const char *url, long long max_bitrate, bool any_certificate, const volatile bool *cancel,
-                       char *error, size_t error_size)
+bool hlsStartDirectAny(const char *url, long long max_bitrate, bool any_certificate, const StreamHeaders *stream,
+                       const volatile bool *cancel, char *error, size_t error_size)
 {
     HlsSession *ses = &g_main;
     g_last_not_hls = false;
     g_next_any_certificate = any_certificate;
+    if (stream)
+        g_next_stream = *stream;
     bool ok = start(ses, url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
     g_next_any_certificate = false;
+    memset(&g_next_stream, 0, sizeof(g_next_stream));
     if (ok)
         return true;
     long status = ses->status;
@@ -965,7 +974,8 @@ static char *initSection(HlsSession *ses, int list, size_t *size)
         snprintf(url, sizeof(url), "%s", m->list.map_url);
         pthread_mutex_unlock(&ses->lock);
         NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = &ses->abort_fetch,
-                              .stall_s = SEGMENT_STALL_S, .any_certificate = ses->any_certificate};
+                              .stall_s = SEGMENT_STALL_S, .any_certificate = ses->any_certificate,
+                          .stream = &ses->stream};
         NetResponse r;
         memset(&r, 0, sizeof(r));
         NetClient *client = netClientOpen();  // Its own: the fetching thread uses the session's meanwhile.

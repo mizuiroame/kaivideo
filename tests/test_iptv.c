@@ -47,6 +47,36 @@ static void testM3u(void)
     CHECK(iptvParseM3u("#EXTM3U\n", 8, &list) && list.count == 0);  // An empty list is still one.
     iptvListFree(&list);
 
+    // Headers a channel asks for: #EXTVLCOPT before or after #EXTINF, or Kodi's "|" form; each channel its own.
+    const char *with_headers = "#EXTM3U\n"
+                               "#EXTVLCOPT:http-referrer=https://site.example/\n"
+                               "#EXTINF:-1 group-title=\"News\",Referred\n"
+                               "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Test)\n"
+                               "#EXTVLCOPT:http-origin=https://site.example\n"
+                               "#EXTVLCOPT:network-caching=1000\n"
+                               "https://stream.example/a.m3u8\n"
+                               "#EXTINF:-1,Plain\n"
+                               "https://stream.example/b.m3u8\n"
+                               "#EXTINF:-1,Kodi\n"
+                               "https://stream.example/c.m3u8|User-Agent=Agent%20Two&Referer=https%3A%2F%2Fk.example%2F"
+                               "&Cookie=x\n"
+                               "#EXTINF:-1,Broken\n"
+                               "#EXTVLCOPT:http-referrer=https://a.example/\r\n"
+                               "https://stream.example/d.ts|Referer=https%3A%2F%2Fa.example%2F%0D%0AX-Evil:%201\n";
+    CHECK(iptvParseM3u(with_headers, strlen(with_headers), &list) && list.count == 4);
+    if (list.count == 4) {
+        const IptvChannel *c = list.channels;
+        CHECK(!strcmp(c[0].headers.referer, "https://site.example/") &&
+              !strcmp(c[0].headers.user_agent, "Mozilla/5.0 (Test)") &&
+              !strcmp(c[0].headers.origin, "https://site.example") && !strcmp(c[0].name, "Referred"));
+        CHECK(!streamHeadersAny(&c[1].headers));  // Not carried over to the next channel.
+        CHECK(!strcmp(c[2].url, "https://stream.example/c.m3u8") && !strcmp(c[2].headers.user_agent, "Agent Two") &&
+              !strcmp(c[2].headers.referer, "https://k.example/") && !c[2].headers.origin[0]);
+        // A line break decoded from %0D%0A isn't taken; the #EXTVLCOPT one before stays.
+        CHECK(!strcmp(c[3].url, "https://stream.example/d.ts") && !strcmp(c[3].headers.referer, "https://a.example/"));
+    }
+    iptvListFree(&list);
+
     // A list longer than kept.
     size_t size = (IPTV_CHANNELS_MAX + 50) * 80 + 16, n = 0;
     char *big = malloc(size);
@@ -248,8 +278,59 @@ static void testAccount(void)
     CHECK(!iptvAccountWrite(&bad, text, sizeof(text)));
 }
 
+static void testStreamHeaders(void)
+{
+    StreamHeaders h;
+    memset(&h, 0, sizeof(h));
+    CHECK(!streamHeadersAny(&h) && !streamHeadersAny(NULL));
+    CHECK(streamHeadersSet(&h, "REFERRER", "https://a.example/") && !strcmp(h.referer, "https://a.example/"));
+    CHECK(!streamHeadersSet(&h, "Cookie", "x=1") && !streamHeadersSet(&h, "Authorization", "Bearer x"));
+    CHECK(!streamHeadersSet(&h, "User-Agent", "") && !streamHeadersSet(&h, "User-Agent", NULL));
+    CHECK(!streamHeadersSet(&h, "User-Agent", "a\nb") && !streamHeadersSet(&h, "Origin", "a\rb"));
+    CHECK(!streamHeadersSet(&h, "Origin", "caf\xC3\xA9") && !h.origin[0]);  // Not ASCII.
+    char longest[STREAM_HEADER_MAX + 1];
+    memset(longest, 'a', sizeof(longest) - 1);
+    longest[sizeof(longest) - 1] = '\0';
+    CHECK(!streamHeadersSet(&h, "User-Agent", longest));
+    longest[STREAM_HEADER_MAX - 1] = '\0';
+    CHECK(streamHeadersSet(&h, "User-Agent", longest));
+
+    char names[64];
+    memset(&h, 0, sizeof(h));
+    streamHeadersNames(&h, names, sizeof(names));
+    CHECK(!strcmp(names, ""));
+    CHECK(streamHeadersSet(&h, "Origin", "https://o.example"));
+    streamHeadersNames(&h, names, sizeof(names));
+    CHECK(!strcmp(names, "Origin"));
+    CHECK(streamHeadersSet(&h, "Referer", "https://r.example/"));
+    streamHeadersNames(&h, names, sizeof(names));
+    CHECK(!strcmp(names, "Referer, Origin"));
+    CHECK(streamHeadersSet(&h, "user-agent", "UA+1"));
+    streamHeadersNames(&h, names, sizeof(names));
+    CHECK(!strcmp(names, "Referer, User-Agent, Origin") && !strstr(names, "r.example"));
+
+    memset(&h, 0, sizeof(h));
+    const char *opt = "#extvlcopt: http-user-agent = Thing/1.0 ";
+    CHECK(streamHeadersFromVlcOpt(&h, opt, strlen(opt)) && !strcmp(h.user_agent, "Thing/1.0"));
+    opt = "#EXTVLCOPT:http-referer=https://r.example/";  // One "r", as VLC also takes.
+    CHECK(streamHeadersFromVlcOpt(&h, opt, strlen(opt)) && !strcmp(h.referer, "https://r.example/"));
+    opt = "#EXTVLCOPT:network-caching=1000";
+    CHECK(!streamHeadersFromVlcOpt(&h, opt, strlen(opt)));
+    CHECK(!streamHeadersFromVlcOpt(&h, "#EXTVLCOPT:", 11) && !streamHeadersFromVlcOpt(&h, "#EXTINF:-1", 10));
+
+    memset(&h, 0, sizeof(h));
+    char url[256] = "https://s.example/x.m3u8";
+    CHECK(!streamHeadersFromPipe(&h, url) && !strcmp(url, "https://s.example/x.m3u8"));
+    snprintf(url, sizeof(url), "https://s.example/x.m3u8 |User-Agent=A+B%%2FC&&=x&Origin&Referer=");
+    CHECK(streamHeadersFromPipe(&h, url) && !strcmp(url, "https://s.example/x.m3u8"));
+    CHECK(!strcmp(h.user_agent, "A+B/C") && !h.origin[0] && !h.referer[0]);
+    snprintf(url, sizeof(url), "https://s.example/y|Referer=%%zz%%4");  // Bad escapes stay as they are.
+    CHECK(streamHeadersFromPipe(&h, url) && !strcmp(h.referer, "%zz%4"));
+}
+
 void testIptv(void)
 {
+    testStreamHeaders();
     testAccount();
     testM3u();
     testXtream();

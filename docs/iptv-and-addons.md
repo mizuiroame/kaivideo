@@ -32,6 +32,22 @@ KaiVideo plays channels in HLS (including fMP4) and plain MPEG-TS. A channel
 that won't open says why: it moved, it refuses to play outside its country,
 its server doesn't answer, or its certificate can't be trusted.
 
+Some channels play only when the app sends a **Referer**, **User-Agent** or
+**Origin** of their choice. KaiVideo sends them when the list says so, in
+either form lists use:
+
+```
+#EXTINF:-1,A channel
+#EXTVLCOPT:http-referrer=https://example.com/
+#EXTVLCOPT:http-user-agent=Mozilla/5.0
+https://example.com/live.m3u8
+```
+
+or after the address, as Kodi takes them:
+`https://example.com/live.m3u8|Referer=https%3A%2F%2Fexample.com%2F&User-Agent=Mozilla%2F5.0`.
+Only these three are sent; others (a cookie, say) are left out. KaiVideo
+doesn't get around channels that play only in their country.
+
 Recently watched and Favorites are kept by the channel's name in
 `config/iptv_marks.txt`. The account is in `config/iptv.txt`, with the
 password encoded, not as typed.
@@ -51,7 +67,9 @@ When you play a film or an episode, KaiVideo asks every addon for its streams
 and lists them with each addon's name and details, so you can choose one. It
 plays only **web streams** (`http` and `https`, MP4, MKV, WebM or HLS).
 **Torrents, magnet links, YouTube ids and links to outside apps are always
-left out**, and so are streams that need extra headers.
+left out.** A stream that asks for a **Referer**, **User-Agent** or **Origin**
+(`proxyHeaders` in its addon's answer) gets them; one that asks for any other
+header is left out, since it wouldn't play.
 
 Addons that need to be set up on their own page first say so. Set them up
 there, then add the address the page gives you.

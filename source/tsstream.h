@@ -8,6 +8,8 @@
 
 #include <libavformat/avformat.h>
 
+#include "streamheaders.h"
+
 #define TS_LOCATION "kaivideo-stream:"  // What the player opens for it.
 #define TS_WINDOW (8u << 20)            // Kept from the slowest reader on.
 
@@ -17,9 +19,10 @@ typedef enum {
     TS_FAILED,     // See error.
 } TsStart;
 
-// Connects to url and waits for its first bytes (cancel cuts it short).
-TsStart tsStreamStart(const char *url, bool any_certificate, const volatile bool *cancel, char *error,
-                      size_t error_size);
+// Connects to url and waits for its first bytes (cancel cuts it short), sending the
+// headers its list or addon asks for (stream may be NULL).
+TsStart tsStreamStart(const char *url, bool any_certificate, const StreamHeaders *stream,
+                      const volatile bool *cancel, char *error, size_t error_size);
 void tsStreamStop(void);
 bool tsStreamIsLocation(const char *location);
 // A reader of the stream for FFmpeg (fmt comes allocated). False if it isn't running.

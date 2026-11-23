@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "streamheaders.h"
+
 #define IPTV_NAME_MAX 128
 #define IPTV_URL_MAX 512
 #define IPTV_ID_MAX 64         // A guide id (tvg-id, epg_channel_id).
@@ -22,6 +24,7 @@ typedef struct {
     char epg_id[IPTV_ID_MAX];    // Its id in the guide; may be empty.
     char number[IPTV_NUMBER_MAX];
     int group;                   // An index in groups, -1 for none.
+    StreamHeaders headers;       // What the list says to send along (#EXTVLCOPT, or "|" after the address).
 } IptvChannel;
 
 typedef struct {
@@ -49,8 +52,10 @@ bool iptvIsLocation(const char *location);
 int iptvLocationIndex(const char *location);
 
 // An M3U playlist (#EXTM3U, #EXTINF with tvg-id, tvg-name, tvg-logo,
-// tvg-chno and group-title, #EXTGRP). Entries that aren't http(s) are left
-// out. False if it isn't an M3U playlist, or memory runs out.
+// tvg-chno and group-title, #EXTGRP), with the headers a channel asks for
+// (#EXTVLCOPT:http-referrer, http-user-agent, http-origin, or Kodi's
+// "address|Referer=..."). Entries that aren't http(s) are left out. False if
+// it isn't an M3U playlist, or memory runs out.
 bool iptvParseM3u(const char *text, size_t length, IptvList *out);
 
 // An Xtream account: its server ("http://host:8080"), user and password.

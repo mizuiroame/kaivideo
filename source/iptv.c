@@ -149,8 +149,10 @@ bool iptvParseM3u(const char *text, size_t length, IptvList *out)
     size_t capacity = 0;
     bool header = false, pending = false;
     IptvChannel next;
+    StreamHeaders headers;  // Kept apart: #EXTVLCOPT may come before #EXTINF too.
     char group[IPTV_GROUP_MAX] = "";
     memset(&next, 0, sizeof(next));
+    memset(&headers, 0, sizeof(headers));
     for (const char *line = text; line < end;) {
         const char *stop = memchr(line, '\n', (size_t)(end - line));
         const char *after = stop ? stop + 1 : end;
@@ -186,8 +188,17 @@ bool iptvParseM3u(const char *text, size_t length, IptvList *out)
                 next.logo[0] = '\0';
         } else if (n >= 8 && !strncasecmp(line, "#EXTGRP:", 8)) {
             copyTrimmed(group, sizeof(group), line + 8, n - 8);
+        } else if (n >= 11 && !strncasecmp(line, "#EXTVLCOPT:", 11)) {
+            streamHeadersFromVlcOpt(&headers, line, n);
         } else if (n > 0 && line[0] != '#') {
-            if (isWebUrl(line) && n < sizeof(next.url)) {
+            char url[IPTV_URL_MAX + STREAM_HEADER_MAX * 3];
+            bool fits = isWebUrl(line) && n < sizeof(url);
+            if (fits) {
+                copyTrimmed(url, sizeof(url), line, n);
+                streamHeadersFromPipe(&headers, url);
+                fits = strlen(url) < sizeof(next.url);
+            }
+            if (fits) {
                 IptvChannel *c = addChannel(out, &capacity);
                 if (!c && !out->truncated) {
                     iptvListFree(out);
@@ -195,9 +206,10 @@ bool iptvParseM3u(const char *text, size_t length, IptvList *out)
                 }
                 if (c) {
                     *c = next;
-                    copyTrimmed(c->url, sizeof(c->url), line, n);
+                    c->headers = headers;
+                    memcpy(c->url, url, strlen(url) + 1);  // It fits: checked above.
                     if (!pending || !c->name[0])
-                        copyTrimmed(c->name, sizeof(c->name), line, n);
+                        copyTrimmed(c->name, sizeof(c->name), url, strlen(url));
                     c->group = pending ? groupOf(out, group, NULL) : -1;
                     if (c->group >= 0)
                         out->groups[c->group].count++;
@@ -207,6 +219,7 @@ bool iptvParseM3u(const char *text, size_t length, IptvList *out)
             pending = false;
             group[0] = '\0';
             memset(&next, 0, sizeof(next));
+            memset(&headers, 0, sizeof(headers));
         }
         line = after;
     }

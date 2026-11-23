@@ -367,10 +367,11 @@ static pthread_mutex_t g_chosen_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct {
     char location[LIBRARY_PATH_MAX];
     char url[STREMIO_URL_MAX * 2];
+    StreamHeaders headers;
 } g_chosen[CHOSEN_MAX];
 static int g_chosen_next;
 
-void stremioChoose(const char *location, const char *url)
+void stremioChoose(const char *location, const char *url, const StreamHeaders *headers)
 {
     pthread_mutex_lock(&g_chosen_lock);
     int at = -1;
@@ -383,7 +384,25 @@ void stremioChoose(const char *location, const char *url)
     }
     snprintf(g_chosen[at].location, sizeof(g_chosen[at].location), "%s", location);
     snprintf(g_chosen[at].url, sizeof(g_chosen[at].url), "%s", url);
+    if (headers)
+        g_chosen[at].headers = *headers;
+    else
+        memset(&g_chosen[at].headers, 0, sizeof(g_chosen[at].headers));
     pthread_mutex_unlock(&g_chosen_lock);
+}
+
+bool stremioChosenHeaders(const char *location, StreamHeaders *out)
+{
+    memset(out, 0, sizeof(*out));
+    pthread_mutex_lock(&g_chosen_lock);
+    bool found = false;
+    for (int i = 0; i < CHOSEN_MAX && !found; i++)
+        if (g_chosen[i].location[0] && !strcmp(g_chosen[i].location, location)) {
+            *out = g_chosen[i].headers;
+            found = true;
+        }
+    pthread_mutex_unlock(&g_chosen_lock);
+    return found;
 }
 
 bool stremioChosenUrl(const char *location, char *url, size_t size)

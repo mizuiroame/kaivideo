@@ -511,6 +511,25 @@ void stremioStreamsFree(StremioStream *streams, int count)
     free(streams);
 }
 
+// A stream's proxyHeaders: the request headers it needs. False if it asks for one that isn't sent
+// (only Referer, User-Agent and Origin are), or for one whose value isn't safe: it wouldn't play.
+static bool proxyHeaders(const json_t *proxy, StreamHeaders *out)
+{
+    memset(out, 0, sizeof(*out));
+    const json_t *request = json_object_get(proxy, "request");
+    if (!proxy || !request)
+        return true;  // No headers asked for (a "response" part alone is the proxy's business).
+    if (!json_is_object(request))
+        return false;
+    const char *name;
+    const json_t *value;
+    json_object_foreach((json_t *)request, name, value) {
+        if (!streamHeadersSet(out, name, json_string_value(value)))
+            return false;
+    }
+    return true;
+}
+
 bool stremioParseStreams(const char *json, const char *addon, StremioStream **out, int *count)
 {
     json_t *root = json ? json_loads(json, 0, NULL) : NULL;
@@ -523,8 +542,10 @@ bool stremioParseStreams(const char *json, const char *addon, StremioStream **ou
         const json_t *s = json_array_get(streams, i);
         const char *url = json_string_value(json_object_get(s, "url"));
         const json_t *hints = json_object_get(s, "behaviorHints");
-        // Only plain http(s): no torrents, YouTube or outside links; none that needs headers sent along.
-        if (!isWebUrl(url) || strlen(url) >= STREMIO_URL_MAX * 2 || json_object_get(hints, "proxyHeaders"))
+        // Only plain http(s): no torrents, YouTube or outside links.
+        StreamHeaders headers;
+        if (!isWebUrl(url) || strlen(url) >= STREMIO_URL_MAX * 2 ||
+            !proxyHeaders(json_object_get(hints, "proxyHeaders"), &headers))
             continue;
         StremioStream *grown = realloc(*out, (size_t)(*count + 1) * sizeof(StremioStream));
         if (!grown)
@@ -538,6 +559,7 @@ bool stremioParseStreams(const char *json, const char *addon, StremioStream **ou
         if (!e->detail)
             e->detail = jsonDup(s, "description", 300);
         snprintf(e->addon, sizeof(e->addon), "%s", addon ? addon : "");
+        e->headers = headers;
         if (!e->url)
             (*count)--;
     }

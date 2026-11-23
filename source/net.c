@@ -138,6 +138,17 @@ static struct curl_slist *buildHeaders(const NetRequest *r)
         snprintf(line, sizeof(line), "Depth: %s", r->depth);
         headers = curl_slist_append(headers, line);
     }
+    // Checked when they were read (streamheaders.c): printable ASCII, no line breaks.
+    if (r->stream && r->stream->referer[0]) {
+        char line[HEADER_MAX];
+        snprintf(line, sizeof(line), "Referer: %s", r->stream->referer);
+        headers = curl_slist_append(headers, line);
+    }
+    if (r->stream && r->stream->origin[0]) {
+        char line[HEADER_MAX];
+        snprintf(line, sizeof(line), "Origin: %s", r->stream->origin);
+        headers = curl_slist_append(headers, line);
+    }
     return headers;
 }
 
@@ -201,7 +212,8 @@ static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *heade
     }
     curl_easy_setopt(curl, CURLOPT_URL, r->url);
     limitProtocols(curl, r->url);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, NET_USER_AGENT);
+    bool own_agent = r->stream && r->stream->user_agent[0];
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, own_agent ? r->stream->user_agent : NET_USER_AGENT);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     // A sign-in body (password) is never re-sent to wherever a redirect points.
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, r->post_json ? 0L : 1L);

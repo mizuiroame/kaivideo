@@ -42,6 +42,7 @@ typedef struct {
     SmbFile *smb;          // A network folder on an SMB share: read with it, not HTTP.
     char url[REMOTE_URL_MAX], authorization[JF_AUTH_MAX];
     bool any_certificate;  // An IPTV server's (its list's certificate check is off).
+    StreamHeaders stream;  // The headers an addon's stream asks for.
     BlockSlot slots[BLOCK_SLOTS];
     uint8_t *memory;       // BLOCK_SLOTS blocks.
     char location[LIBRARY_PATH_MAX];
@@ -137,7 +138,7 @@ static size_t fetchBlock(Remote *r, int64_t index, uint8_t *to, long long *total
     snprintf(range, sizeof(range), "%" PRId64 "-%" PRId64, from, from + BLOCK_SIZE - 1);
     NetRequest request = {.url = r->url, .authorization = r->authorization, .range = range,
                           .cancel = &r->abort_fetch, .total_size = total, .stall_s = FETCH_STALL_S,
-                          .any_certificate = r->any_certificate};
+                          .any_certificate = r->any_certificate, .stream = &r->stream};
     for (int attempt = 0; attempt < FETCH_TRIES && !r->abort_fetch; attempt++) {
         Filling filling = {to, 0};
         long status = 0;
@@ -315,6 +316,8 @@ static Remote *remoteOpen(const char *location)
         : stremioIsLocation(location) ? stremioStreamRequest
                                      : jfSyncStreamRequest;
     r->any_certificate = xtreamIsLocation(location) && xtreamVodAnyCertificate();
+    if (stremioIsLocation(location))
+        stremioChosenHeaders(location, &r->stream);
     char why[160];
     if (r->memory && davIsLocation(location) && davIsSmb())  // Opened here, read by the fetch thread only.
         r->smb = davSmbOpen(location, why, sizeof(why));

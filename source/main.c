@@ -319,13 +319,18 @@ static bool openIptv(App *app, char *path, size_t size)
         snprintf(app->open_error, sizeof(app->open_error), "%s", T("That channel isn't in the list any more."));
         return false;
     }
+    if (streamHeadersAny(&app->open_headers)) {
+        char names[64];
+        streamHeadersNames(&app->open_headers, names, sizeof(names));
+        appLog("  with the headers its list or addon asks for: %s", names);  // Names only, never their values.
+    }
     long long bitrate = settingQualityBitrate(&app->config);
     // An address with .m3u8 is HLS first; the rest, a stream sent as it is (MPEG-TS) first. Each falls back on the other.
     bool hls_first = strstr(app->open_url, ".m3u8") != NULL;
     TsStart ts = TS_PLAYLIST;
     if (!hls_first) {
-        ts = tsStreamStart(app->open_url, app->open_any_certificate, &app->open_cancelled, app->open_error,
-                           sizeof(app->open_error));
+        ts = tsStreamStart(app->open_url, app->open_any_certificate, &app->open_headers, &app->open_cancelled,
+                           app->open_error, sizeof(app->open_error));
         if (ts == TS_STARTED) {
             appLog("  IPTV channel's own MPEG-TS stream");
             snprintf(path, size, TS_LOCATION);
@@ -336,11 +341,11 @@ static bool openIptv(App *app, char *path, size_t size)
             return false;
         }
     }
-    if (!hlsStartDirectAny(app->open_url, bitrate, app->open_any_certificate, &app->open_cancelled, app->open_error,
-                           sizeof(app->open_error))) {
+    if (!hlsStartDirectAny(app->open_url, bitrate, app->open_any_certificate, &app->open_headers,
+                           &app->open_cancelled, app->open_error, sizeof(app->open_error))) {
         if (hls_first && hlsDirectWasNotHls() && !app->open_cancelled &&
-            tsStreamStart(app->open_url, app->open_any_certificate, &app->open_cancelled, app->open_error,
-                          sizeof(app->open_error)) == TS_STARTED) {
+            tsStreamStart(app->open_url, app->open_any_certificate, &app->open_headers, &app->open_cancelled,
+                          app->open_error, sizeof(app->open_error)) == TS_STARTED) {
             appLog("  IPTV channel's own MPEG-TS stream (its address said HLS)");
             snprintf(path, size, TS_LOCATION);
             return true;
@@ -432,8 +437,13 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     const char *copy = jfIsRemoteLocation(path) ? appPlayableCopy(app, path) : NULL;
     int iptv = iptvLocationIndex(path);  // An IPTV channel: its stream, for the opening thread.
     snprintf(app->open_url, sizeof(app->open_url), "%s", iptv >= 0 && iptv < app->iptv.count ? app->iptv.channels[iptv].url : "");
-    if (stremioIsLocation(path) && stremioChosenIsHls(path))  // An addon's HLS stream opens as a channel's does.
+    memset(&app->open_headers, 0, sizeof(app->open_headers));
+    if (iptv >= 0 && iptv < app->iptv.count)
+        app->open_headers = app->iptv.channels[iptv].headers;
+    if (stremioIsLocation(path) && stremioChosenIsHls(path)) {  // An addon's HLS stream opens as a channel's does.
         stremioChosenUrl(path, app->open_url, sizeof(app->open_url));
+        stremioChosenHeaders(path, &app->open_headers);
+    }
     app->open_any_certificate = iptv >= 0 && appIptvAnyCertificate();
     snprintf(app->open_copy, sizeof(app->open_copy), "%s", copy ? copy : "");
     app->open_done = false;

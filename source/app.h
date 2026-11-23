@@ -139,6 +139,7 @@ struct App {
     int live_group_cursor;      // Its row: 0 is "All channels", then each group.
     char open_url[STREMIO_URL_MAX * 2];  // The IPTV channel (or addon's HLS stream) opening: copied for the thread,
     bool open_any_certificate;    // and whether its certificate is checked.
+    StreamHeaders open_headers;   // and the headers its list or addon asks for.
     pthread_t live_thread;
     bool live_reading;
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.

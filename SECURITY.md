@@ -50,7 +50,10 @@ touches small:
   guide. With [Stremio addons](docs/iptv-and-addons.md#stremio-and-nuvio-addons),
   it asks the addons you added for their catalogs and streams, and plays a
   stream from the address the one you choose gives. Addons aren't told what
-  you watched.
+  you watched. When a list or an addon asks for a Referer, User-Agent or
+  Origin to be sent with a stream, KaiVideo sends just those three, only with
+  that stream's requests, and only values without line breaks or other
+  control characters; it never sends a cookie or a sign-in an addon asks for.
   Once a day (Settings > About > Check once a day turns it off) and when you
   choose **Look for an update**, it asks GitHub for this repository's latest
   release. Installing one downloads `KaiVideo.nro` only from this repository's
@@ -86,7 +89,8 @@ touches small:
     addons put a key in their address.
   - `kaivideo.log` lists what was played and how (paths and server item ids),
     to find problems. It never holds tokens or passwords, nor the addresses of
-    IPTV channels or addon streams.
+    IPTV channels or addon streams, nor the values of the headers they ask
+    for (only their names).
 - **Shared folders are signed.** SMB connections require signing, so nobody
   on the network can change what's read. **Allow without signing (old NAS)**
   turns that off for a folder whose server can't sign.

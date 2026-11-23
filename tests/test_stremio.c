@@ -116,14 +116,40 @@ static void testAnswers(void)
                               "{\"infoHash\":\"abcdef\",\"name\":\"torrent\"},{\"ytId\":\"xyz\"},"
                               "{\"externalUrl\":\"https://service.example/watch\"},"
                               "{\"url\":\"magnet:?xt=urn:btih:abc\"},"
-                              "{\"url\":\"https://cdn.example/h.m3u8\",\"behaviorHints\":{\"proxyHeaders\":{}}},"
                               "{\"url\":\"http://cdn.example/b.mkv\",\"description\":\"720p\"}]}",
                               "Kites", &s, &n));
     CHECK(n == 2 && !strcmp(s[0].detail, "Paper Boats 2.1 GB") && !strcmp(s[0].addon, "Kites"));
     CHECK(!strcmp(s[1].url, "http://cdn.example/b.mkv") && !s[1].name && !strcmp(s[1].detail, "720p"));
+    CHECK(!streamHeadersAny(&s[0].headers));
     CHECK(stremioParseStreams("{\"streams\":[{\"url\":\"https://other.example/c.mp4\"}]}", "Other", &s, &n));
     CHECK(n == 3 && !strcmp(s[2].addon, "Other"));
     CHECK(!stremioParseStreams("{}", "x", &s, &n) && n == 3);
+    stremioStreamsFree(s, n);
+
+    // Streams that ask for headers: kept when they're ones KaiVideo sends, with safe values.
+    s = NULL;
+    n = 0;
+    CHECK(stremioParseStreams(
+        "{\"streams\":["
+        "{\"url\":\"https://cdn.example/h.m3u8\",\"behaviorHints\":{\"proxyHeaders\":{}}},"
+        "{\"url\":\"https://cdn.example/r.m3u8\",\"behaviorHints\":{\"proxyHeaders\":{\"request\":"
+        "{\"Referer\":\"https://site.example/\",\"user-agent\":\"Mozilla/5.0\",\"Origin\":\"https://site.example\"},"
+        "\"response\":{\"Content-Type\":\"video/mp4\"}}}},"
+        "{\"url\":\"https://cdn.example/cookie.mp4\",\"behaviorHints\":{\"proxyHeaders\":{\"request\":"
+        "{\"Referer\":\"https://site.example/\",\"Cookie\":\"session=1\"}}}},"
+        "{\"url\":\"https://cdn.example/split.mp4\",\"behaviorHints\":{\"proxyHeaders\":{\"request\":"
+        "{\"Referer\":\"https://site.example/\\r\\nX-Evil: 1\"}}}},"
+        "{\"url\":\"https://cdn.example/odd.mp4\",\"behaviorHints\":{\"proxyHeaders\":{\"request\":[\"Referer\"]}}},"
+        "{\"url\":\"https://cdn.example/number.mp4\",\"behaviorHints\":{\"proxyHeaders\":{\"request\":"
+        "{\"Referer\":7}}}}]}",
+        "Kites", &s, &n));
+    CHECK(n == 2);  // The cookie one, the line break, a list and a number are left out.
+    if (n == 2) {
+        CHECK(!strcmp(s[0].url, "https://cdn.example/h.m3u8") && !streamHeadersAny(&s[0].headers));
+        CHECK(!strcmp(s[1].url, "https://cdn.example/r.m3u8") &&
+              !strcmp(s[1].headers.referer, "https://site.example/") &&
+              !strcmp(s[1].headers.user_agent, "Mozilla/5.0") && !strcmp(s[1].headers.origin, "https://site.example"));
+    }
     stremioStreamsFree(s, n);
 }
 

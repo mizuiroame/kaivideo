@@ -30,6 +30,7 @@ static struct {
     pthread_cond_t changed;
     char url[1024];
     bool any_certificate;
+    StreamHeaders stream;     // The headers its list or addon asks for.
     uint8_t *buf;             // Bytes [base, end) of the stream, at buf[pos % TS_WINDOW].
     long long base, end;
     TsReader readers[READERS];
@@ -112,6 +113,7 @@ static void *streamThread(void *arg)
         q.cancel = &g.cancel;
         q.stall_s = g.end > 0 ? STALL_S : START_TIMEOUT_S;
         q.any_certificate = g.any_certificate;
+        q.stream = &g.stream;
         long status = 0;
         char error[NET_ERROR_MAX] = "";
         long long before = g.end;
@@ -153,14 +155,18 @@ void tsStreamStop(void)
     g.running = false;
 }
 
-TsStart tsStreamStart(const char *url, bool any_certificate, const volatile bool *cancel, char *error,
-                      size_t error_size)
+TsStart tsStreamStart(const char *url, bool any_certificate, const StreamHeaders *stream,
+                      const volatile bool *cancel, char *error, size_t error_size)
 {
     pthread_once(&g_once, initLock);
     tsStreamStop();
     pthread_mutex_lock(&g.lock);
     snprintf(g.url, sizeof(g.url), "%s", url);
     g.any_certificate = any_certificate;
+    if (stream)
+        g.stream = *stream;
+    else
+        memset(&g.stream, 0, sizeof(g.stream));
     g.base = g.end = 0;
     memset(g.readers, 0, sizeof(g.readers));
     g.ended = g.failed = g.quit = g.cancel = false;

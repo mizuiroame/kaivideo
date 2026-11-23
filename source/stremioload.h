@@ -40,8 +40,11 @@ bool stremioBusy(StremioJob job);
 // Stops them all, and waits.
 void stremioLoadExit(void);
 
-// The stream chosen for a location (its address), kept for the reader while it plays; the last few.
-void stremioChoose(const char *location, const char *url);
+// The stream chosen for a location (its address and the headers it needs, which may be NULL), kept for
+// the reader while it plays; the last few.
+void stremioChoose(const char *location, const char *url, const StreamHeaders *headers);
+// The headers the chosen stream needs (cleared if none, or none was chosen).
+bool stremioChosenHeaders(const char *location, StreamHeaders *out);
 // The chosen address for a location. False if none was chosen.
 bool stremioChosenUrl(const char *location, char *url, size_t size);
 // mediafile.c's request for a location: the chosen address, no header.

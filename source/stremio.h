@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "library.h"
+#include "streamheaders.h"
 
 #define STREMIO_PREFIX "stremio:"
 #define STREMIO_ADDONS_MAX 6
@@ -68,6 +69,7 @@ typedef struct {
     char *name;                    // The addon's name for it ("1080p"), or NULL.
     char *detail;                  // Its title or description (the file, size...), on one line; or NULL.
     char addon[STREMIO_NAME_MAX];  // The addon it came from.
+    StreamHeaders headers;         // behaviorHints.proxyHeaders.request: what to send along.
 } StremioStream;
 
 // The addresses typed: one manifest address a line (the addons file's text).
