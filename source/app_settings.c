@@ -322,7 +322,7 @@ static void openServer(App *app, ServerKind kind, uint64_t now)
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
-    if (row == SETTING_IPTV_KIND) {  // The IPTV list's: its file.
+    if (row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE) {  // The IPTV list's: its file.
         appIptvActivate(app, row, now);
         return;
     }

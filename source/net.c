@@ -191,7 +191,8 @@ static void limitProtocols(CURL *curl, const char *url)
 static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *headers, Transfer *t, char *error)
 {
     curl_easy_reset(curl);  // Keeps the connection.
-    if (!__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED) && !netAlwaysChecked(r->url)) {
+    bool unchecked = r->any_certificate || !__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED);
+    if (unchecked && !netAlwaysChecked(r->url)) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     } else {

@@ -43,6 +43,7 @@ static bool fetchText(NetClient *c, const char *url, NetResponse *r)
     q.url = url;
     q.cancel = &g_cancel;
     q.stall_s = STALL_S;
+    q.any_certificate = g_account.any_certificate;
     return netFetchText(c, &q, LIST_MAX_BYTES, r);
 }
 
@@ -126,6 +127,7 @@ static void readGuide(NetClient *c, const IptvList *list, IptvGuide *guide, char
     q.url = url;
     q.cancel = &g_cancel;
     q.stall_s = STALL_S;
+    q.any_certificate = g_account.any_certificate;
     long status = 0;
     char net_error[NET_ERROR_MAX] = "";
     bool ok = netFetch(c, &q, feedGuide, r, &status, net_error, sizeof(net_error));

@@ -91,6 +91,8 @@ typedef struct {
     char user[IPTV_NAME_MAX];    // Xtream's.
     char password[IPTV_NAME_MAX];
     char guide[IPTV_URL_MAX];    // An XMLTV guide to use instead of the list's; "" for the list's own.
+    bool any_certificate;        // Certificate check off: the list's, its guide's and its channels' https
+                                 // certificates aren't checked (many IPTV servers' are broken).
 } IptvAccount;
 
 // Reads iptv.txt's text. False (and a cleared account) if it isn't one.

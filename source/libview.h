@@ -71,6 +71,7 @@ typedef struct {
     int result_count;
     Scroll results_scroll;
     Scroll live;      // The Live TV channel under the cursor.
+    bool iptv;        // The IPTV list's view: its Home is its channels' (app_iptvhome.c).
     int64_t live_at;  // And the time in its guide (livetv.h): 0 for now.
 } LibView;
 
@@ -81,6 +82,8 @@ void libviewInit(LibView *v);
 // Series, Search and Files. Downloads goes before Files when asked for. A tab
 // that's gone leaves Home showing.
 void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads);
+// The IPTV list's view: its Home (rows of channels), its Live TV guide, and Files.
+void libviewSetIptvTabs(LibView *v);
 // Shows a tab of that kind (not a server's library). False if there's none.
 bool libviewShowTab(LibView *v, LibTab kind);
 // Live TV: moves the cursor through count channels.

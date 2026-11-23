@@ -55,6 +55,7 @@ typedef enum {
     SETTING_IPTV_ADDRESS,   // Types the M3U's address, or the Xtream server's.
     SETTING_IPTV_ACCOUNT,   // Types the Xtream user and password.
     SETTING_IPTV_GUIDE,     // Types an XMLTV guide's address (empty: the list's own).
+    SETTING_IPTV_CERTIFICATE,  // Whether the list's https certificates must be trusted.
     SETTING_IPTV_LOAD,      // Loads the channels and their guide.
     SETTING_IPTV_FORGET,    // Forgets the list.
     SETTING_COUNT,
@@ -91,6 +92,7 @@ typedef struct {
     bool autoplay;                       // When an episode ends, the next one plays (after a countdown).
     bool use_jellyfin;                   // The library comes from the media server.
     bool use_network;                    // Not a server's: the network folder's (dav.h), not the card's.
+    bool use_iptv;                       // The IPTV list's view (iptv.h): its Live TV.
     int server_kind;                     // ServerKind: the one Settings' Media server page is for.
     int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.

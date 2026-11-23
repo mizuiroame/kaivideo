@@ -8,6 +8,8 @@
 // it now, and it plays on its own at the end. Every control works with
 // touch too.
 #include <stdarg.h>
+
+#include <libavutil/log.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -27,6 +29,7 @@
 #include "input.h"
 #include "dlworker.h"
 #include "hlsio.h"
+#include "tsstream.h"
 #include "lang.h"
 #include "mediafile.h"
 #include "menu.h"
@@ -79,6 +82,24 @@ void appLog(const char *fmt, ...)
     va_end(args);
     fputc('\n', g_log);
     fflush(g_log);
+}
+
+// FFmpeg's warnings and errors in the log (a stream that won't open says why there), a few hundred at most.
+#define FFMPEG_LOG_MAX 200
+
+static void ffmpegLog(void *avcl, int level, const char *fmt, va_list args)
+{
+    static int said;
+    if (level > AV_LOG_WARNING || !g_log || said >= FFMPEG_LOG_MAX)
+        return;
+    char line[512];
+    int prefix = 1;
+    av_log_format_line2(avcl, level, fmt, args, line, sizeof(line), &prefix);
+    line[strcspn(line, "\n")] = '\0';
+    if (line[0]) {
+        said++;
+        appLog("  ffmpeg: %s%s", line, said == FFMPEG_LOG_MAX ? " (no more said)" : "");
+    }
 }
 
 static uint64_t nowNs(void)
@@ -290,16 +311,39 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
 // An IPTV channel: its own HLS stream, read as a server's channel's is. False, with the reason, if it can't be.
 static bool openIptv(App *app, char *path, size_t size)
 {
+    int index = iptvLocationIndex(app->playing_path);
+    appLog("IPTV: opening %d, %s", index, app->playing_name);  // Not its address: an Xtream one holds the password.
     if (!app->open_url[0]) {
         snprintf(app->open_error, sizeof(app->open_error), "%s", T("That channel isn't in the list any more."));
         return false;
     }
     long long bitrate = settingQualityBitrate(&app->config);
-    if (!hlsStartDirect(app->open_url, bitrate, &app->open_cancelled, app->open_error, sizeof(app->open_error))) {
-        appLog("  IPTV: %s", app->open_error);
-        if (!app->open_cancelled)
-            snprintf(app->open_error, sizeof(app->open_error), "%s",
-                     T("This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8)."));
+    // An address with .m3u8 is HLS first; the rest, a stream sent as it is (MPEG-TS) first. Each falls back on the other.
+    bool hls_first = strstr(app->open_url, ".m3u8") != NULL;
+    TsStart ts = TS_PLAYLIST;
+    if (!hls_first) {
+        ts = tsStreamStart(app->open_url, app->open_any_certificate, &app->open_cancelled, app->open_error,
+                           sizeof(app->open_error));
+        if (ts == TS_STARTED) {
+            appLog("  IPTV channel's own MPEG-TS stream");
+            snprintf(path, size, TS_LOCATION);
+            return true;
+        }
+        if (ts == TS_FAILED) {
+            appLog("  IPTV: %s", app->open_error);
+            return false;
+        }
+    }
+    if (!hlsStartDirectAny(app->open_url, bitrate, app->open_any_certificate, &app->open_cancelled, app->open_error,
+                           sizeof(app->open_error))) {
+        if (hls_first && hlsDirectWasNotHls() && !app->open_cancelled &&
+            tsStreamStart(app->open_url, app->open_any_certificate, &app->open_cancelled, app->open_error,
+                          sizeof(app->open_error)) == TS_STARTED) {
+            appLog("  IPTV channel's own MPEG-TS stream (its address said HLS)");
+            snprintf(path, size, TS_LOCATION);
+            return true;
+        }
+        appLog("  IPTV: %s", app->open_error);  // Said as it is: off the air, gone, blocked...
         return false;
     }
     appLog("  IPTV channel's own stream");
@@ -375,6 +419,7 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     const char *copy = jfIsRemoteLocation(path) ? appPlayableCopy(app, path) : NULL;
     int iptv = iptvLocationIndex(path);  // An IPTV channel: its stream, for the opening thread.
     snprintf(app->open_url, sizeof(app->open_url), "%s", iptv >= 0 && iptv < app->iptv.count ? app->iptv.channels[iptv].url : "");
+    app->open_any_certificate = iptv >= 0 && appIptvAnyCertificate();
     snprintf(app->open_copy, sizeof(app->open_copy), "%s", copy ? copy : "");
     app->open_done = false;
     app->open_asked = now;
@@ -446,6 +491,8 @@ static void beginPlaying(App *app, uint64_t now)
     }
     appLog("%s: %s; %s", path, playerVideoInfo(app->player), playerAudioInfo(app->player));
     appLog("  opened in %.1f s", (now - app->open_asked) / 1e9);
+    if (iptvIsLocation(path))
+        appIptvHomeWatched(app, path);  // First in its Recently watched.
     for (int i = 0; i < playerAudioTrackCount(app->player); i++)
         appLog("  sound %d: %s%s", i + 1, playerAudioTrackName(app->player, i),
                i == playerAudioTrack(app->player) ? " (on)" : "");
@@ -677,11 +724,12 @@ static void reopenIfAsked(App *app, uint64_t now)
     }
 }
 
+// What a choice in the player's lists did (or why it can't): in the notice bubble, over the video.
 static void sayInBar(App *app, uint64_t now, const char *fmt, const char *arg)
 {
-    snprintf(app->bar_note, sizeof(app->bar_note), fmt, arg);
-    app->bar_note_until = now + NOTE_NS;
-    app->overlay_until = now + NOTE_NS;
+    char line[NOTICE_TEXT_MAX];
+    snprintf(line, sizeof(line), fmt, arg);
+    appNotify(app, NOTICE_INFO, line, now);
 }
 
 // The options under the Playback list: the quality only for videos from a server.
@@ -1104,10 +1152,10 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
         uiDrawWaiting(spinnerAngle(now), T("Waiting for the server..."));
     char error[160];
     if (playerTakeAudioError(app->player, error, sizeof(error))) {  // A track that can't be played.
-        snprintf(app->bar_note, sizeof(app->bar_note), T("Sound: %s. %s"),
-                 playerAudioTrackName(app->player, playerAudioTrack(app->player)), error);
-        app->bar_note_until = now + NOTE_NS;
-        app->overlay_until = now + NOTE_NS;
+        char line[NOTICE_TEXT_MAX];
+        snprintf(line, sizeof(line), T("Sound: %s. %s"), playerAudioTrackName(app->player, playerAudioTrack(app->player)),
+                 error);
+        appNotify(app, NOTICE_ERROR, line, now);
         appLog("  sound track %d: %s", playerAudioTrack(app->player) + 1, error);
     }
     // Hidden with -, the bar shows only for an open list.
@@ -1166,6 +1214,7 @@ int main(int argc, char **argv)
     char path[APPROOT_PATH_MAX + 32];
     appConfigPath(path, sizeof(path), "kaivideo.log");
     g_log = fopen(path, "w");
+    av_log_set_callback(ffmpegLog);
     appLog("Files in %s%s", g_folder, moved ? " (copied from " OLD_CONFIG_FOLDER ")" : "");
     if (!gfxInit() || !fontInit()) {
         appLog("The GPU or the fonts couldn't start.");

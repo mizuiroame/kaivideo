@@ -223,16 +223,20 @@ static void testGuide(void)
 
 static void testAccount(void)
 {
-    IptvAccount a = {IPTV_XTREAM, "http://tv.example:8080", "kai", "s3cr=t+/x", ""};
+    IptvAccount a = {IPTV_XTREAM, "http://tv.example:8080", "kai", "s3cr=t+/x", "", false};
     char text[2048];
     CHECK(iptvAccountWrite(&a, text, sizeof(text)) && !strstr(text, "s3cr=t") && strstr(text, "password=b64:"));
     IptvAccount back;
     CHECK(iptvAccountRead(&back, text) && back.kind == IPTV_XTREAM && !strcmp(back.password, "s3cr=t+/x") &&
-          !strcmp(back.address, "http://tv.example:8080") && !strcmp(back.user, "kai"));
+          !strcmp(back.address, "http://tv.example:8080") && !strcmp(back.user, "kai") && !back.any_certificate);
+    a.any_certificate = true;  // Certificate check off: kept.
+    CHECK(iptvAccountWrite(&a, text, sizeof(text)) && strstr(text, "certificates=off") &&
+          iptvAccountRead(&back, text) && back.any_certificate);
+    a.any_certificate = false;
     char guide[IPTV_URL_MAX];
     iptvGuideUrl(&back, "https://ignored.example/epg.xml", guide, sizeof(guide));
     CHECK(!strcmp(guide, "http://tv.example:8080/xmltv.php?username=kai&password=s3cr%3Dt%2B%2Fx"));
-    IptvAccount m3u = {IPTV_M3U, "https://lists.example/tv.m3u", "", "", ""};
+    IptvAccount m3u = {IPTV_M3U, "https://lists.example/tv.m3u", "", "", "", false};
     iptvGuideUrl(&m3u, "https://guide.example/epg.xml.gz", guide, sizeof(guide));
     CHECK(!strcmp(guide, "https://guide.example/epg.xml.gz"));
     snprintf(m3u.guide, sizeof(m3u.guide), "%s", "https://mine.example/g.xml");
@@ -240,7 +244,7 @@ static void testAccount(void)
     CHECK(!strcmp(guide, "https://mine.example/g.xml"));
     CHECK(!iptvAccountRead(&back, "kind=m3u\naddress=file:///etc/x\n") && back.kind == IPTV_NONE);
     CHECK(!iptvAccountRead(&back, "nothing") && !iptvAccountRead(&back, "kind=other\naddress=https://x.example\n"));
-    IptvAccount bad = {IPTV_M3U, "https://x.example/a\nkind=xtream", "", "", ""};
+    IptvAccount bad = {IPTV_M3U, "https://x.example/a\nkind=xtream", "", "", "", false};
     CHECK(!iptvAccountWrite(&bad, text, sizeof(text)));
 }
 

@@ -10,7 +10,7 @@
 #define MEDIA_SEQUENCE "#EXT-X-MEDIA-SEQUENCE:"
 #define STREAM_INF "#EXT-X-STREAM-INF:"
 #define NS_PER_S 1e9
-#define HEADER_ROOM 160
+#define HEADER_ROOM 256  // With an fMP4 list's #EXT-X-MAP line.
 #define EXTINF_ROOM 32
 #define CODECS_MAX 128
 #define MAX_HEIGHT 1088  // 1080p, coded as 1088.
@@ -145,6 +145,32 @@ static int localName(const HlsPlaylist *p, int index, char *out, size_t size)
     return snprintf(out, size, HLS_LOCAL_PREFIX "%d/%d.%s\n", p->list, index, p->subtitles ? "vtt" : "ts");
 }
 
+// The #EXT-X-MAP line naming the list's initialization section locally, with its line break.
+static int mapLine(const HlsPlaylist *p, char *out, size_t size)
+{
+    if (p->list < 0)
+        return snprintf(out, size, "#EXT-X-MAP:URI=\"" HLS_LOCAL_PREFIX "init.mp4\"\n");
+    return snprintf(out, size, "#EXT-X-MAP:URI=\"" HLS_LOCAL_PREFIX "%d/init.mp4\"\n", p->list);
+}
+
+// The URI of an #EXT-X-MAP line (n long), resolved against base; NULL if it has none.
+static char *mapUrl(const char *line, size_t n, const char *base)
+{
+    const char *uri = NULL;
+    for (const char *q = line; q + 5 <= line + n; q++)
+        if (!strncmp(q, "URI=\"", 5)) {
+            uri = q + 5;
+            break;
+        }
+    const char *end = uri ? memchr(uri, '"', (size_t)(line + n - uri)) : NULL;
+    char ref[HLS_URL_MAX], url[HLS_URL_MAX];
+    if (!end || (size_t)(end - uri) >= sizeof(ref))
+        return NULL;
+    memcpy(ref, uri, (size_t)(end - uri));
+    ref[end - uri] = '\0';
+    return hlsResolveUrl(base, ref, url, sizeof(url)) ? strdup(url) : NULL;
+}
+
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out)
 {
     return hlsPlaylistParseList(playlist, base, start_ns, -1, false, out);
@@ -161,7 +187,7 @@ bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_
         return false;
     out->urls = calloc((size_t)total, sizeof(char *));
     out->starts_ns = calloc((size_t)total, sizeof(int64_t));
-    out->text = malloc(strlen(playlist) + (size_t)total * LOCAL_NAME_MAX + 2);
+    out->text = malloc(strlen(playlist) + (size_t)total * LOCAL_NAME_MAX + HEADER_ROOM);
     if (!out->urls || !out->starts_ns || !out->text) {
         hlsPlaylistFree(out);
         return false;
@@ -194,6 +220,11 @@ bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_
                 used += (size_t)localName(out, index, out->text + used, LOCAL_NAME_MAX);
             }
             length_line = NULL;
+        } else if (n > 11 && !strncmp(p, "#EXT-X-MAP:", 11)) {  // fMP4: KaiVideo serves it too.
+            if (!out->map_url)
+                out->map_url = mapUrl(p, n, base);
+            if (out->map_url)
+                used += (size_t)mapLine(out, out->text + used, HEADER_ROOM);
         } else if (n) {
             addText(out, &used, p, n);
         }
@@ -224,6 +255,8 @@ static bool rebuildText(HlsPlaylist *p)
     size_t used = (size_t)snprintf(text, room,
                                    "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:%d\n" MEDIA_SEQUENCE "%lld\n",
                                    target > 0 ? target : 1, (long long)(p->sequence + p->first));
+    if (p->map_url)
+        used += (size_t)mapLine(p, text + used, room - used);
     for (int i = p->first; i < p->count; i++) {
         used += (size_t)snprintf(text + used, room - used, EXTINF "%.3f,\n", segmentLength(p, i) / NS_PER_S);
         used += (size_t)localName(p, i, text + used, room - used);
@@ -391,6 +424,7 @@ void hlsPlaylistFree(HlsPlaylist *p)
     free(p->urls);
     free(p->starts_ns);
     free(p->text);
+    free(p->map_url);
     memset(p, 0, sizeof(*p));
 }
 
@@ -429,6 +463,11 @@ bool hlsLocalName(const char *url, int *list, int *index)
     size_t prefix = sizeof(HLS_LOCAL_PREFIX) - 1;
     if (strncmp(url, HLS_LOCAL_PREFIX, prefix) != 0)
         return false;
+    if (!strcmp(url + prefix, "init.mp4")) {  // A list alone's initialization section.
+        *list = 0;
+        *index = HLS_INIT_INDEX;
+        return true;
+    }
     char *end;
     long first = strtol(url + prefix, &end, 10);
     if (end == url + prefix || first < 0)
@@ -444,6 +483,11 @@ bool hlsLocalName(const char *url, int *list, int *index)
     if (!strcmp(rest, "index.m3u8")) {
         *list = (int)first;
         *index = -1;
+        return true;
+    }
+    if (!strcmp(rest, "init.mp4")) {
+        *list = (int)first;
+        *index = HLS_INIT_INDEX;
         return true;
     }
     long second = strtol(rest, &end, 10);

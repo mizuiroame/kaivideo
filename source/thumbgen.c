@@ -52,6 +52,17 @@ static int g_done_count;
 static volatile bool g_stop, g_paused;
 static volatile bool g_busy;         // Using the decoder.
 static NetClient *g_net;             // Only this thread uses it.
+static volatile bool g_net_held;     // The network is held (netInit, on the main thread: its count isn't
+                                     // shared safely) from the first picture asked of it until it stops:
+                                     // an IPTV list's logos come with nothing else holding it.
+
+// The connection, opened the first time it's needed. NULL if it can't be.
+static NetClient *connection(void)
+{
+    if (!g_net && g_net_held)
+        g_net = netClientOpen();
+    return g_net;
+}
 static volatile bool g_net_abort;    // Paused or stopping: no waiting for the server.
 
 // Waits for a frame at or after the point, or gives up (paused, stopped,
@@ -86,7 +97,7 @@ static uint8_t *fetchPicture(const char *location, const char *kind, int max_wid
     char url[JF_URL_MAX], auth[JF_AUTH_MAX];
     if (!jfSyncImageRequest(location, kind, max_width, url, sizeof(url), auth, sizeof(auth)))
         return NULL;
-    if (!g_net && !(g_net = netClientOpen()))
+    if (!connection())
         return NULL;
     NetRequest request = {.url = url, .authorization = auth, .cancel = &g_net_abort, .timeout_s = IMAGE_TIMEOUT_S};
     NetResponse answer;
@@ -134,9 +145,62 @@ static void makeRemote(const Request *r)
         stbi_image_free(rgb);
 }
 
+// A picture at a plain address (an IPTV channel's logo): all of it, centered on the cards' dark color,
+// its transparent parts over it too. None if it can't be had or read.
+static void makeUrl(const Request *r)
+{
+    if (!connection())
+        return;
+    NetRequest request = {.url = r->path, .cancel = &g_net_abort, .timeout_s = IMAGE_TIMEOUT_S};
+    NetResponse answer;
+    bool ok = netFetchText(g_net, &request, IMAGE_MAX_BYTES, &answer);
+    int w = 0, h = 0, channels;
+    const stbi_uc *data = (const stbi_uc *)answer.data;
+    bool fits = ok && stbi_info_from_memory(data, (int)answer.size, &w, &h, &channels) && w > 0 && h > 0 &&
+                (long long)w * h <= IMAGE_MAX_PIXELS;
+    uint8_t *rgba = fits ? stbi_load_from_memory(data, (int)answer.size, &w, &h, &channels, 4) : NULL;
+    long status = answer.status;
+    netResponseFree(&answer);
+    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    uint8_t *out = rgba ? malloc((size_t)out_w * out_h * 3) : NULL;
+    if (out) {
+        static const uint8_t BACK[3] = {0x1C, 0x1C, 0x21};
+        // The largest that fits with a margin, kept in its proportions.
+        double scale = (out_w * 0.8) / w < (out_h * 0.8) / h ? (out_w * 0.8) / w : (out_h * 0.8) / h;
+        int dw = (int)(w * scale), dh = (int)(h * scale);
+        dw = dw < 1 ? 1 : dw;
+        dh = dh < 1 ? 1 : dh;
+        int x0 = (out_w - dw) / 2, y0 = (out_h - dh) / 2;
+        for (int y = 0; y < out_h; y++)
+            for (int x = 0; x < out_w; x++) {
+                uint8_t *o = out + ((size_t)y * out_w + x) * 3;
+                memcpy(o, BACK, 3);
+                if (x < x0 || x >= x0 + dw || y < y0 || y >= y0 + dh)
+                    continue;
+                int sx = (int)((x - x0) / scale), sy = (int)((y - y0) / scale);
+                sx = sx < w ? sx : w - 1;
+                sy = sy < h ? sy : h - 1;
+                const uint8_t *s = rgba + ((size_t)sy * w + sx) * 4;
+                for (int c = 0; c < 3; c++)
+                    o[c] = (uint8_t)((s[c] * s[3] + BACK[c] * (255 - s[3])) / 255);
+            }
+        if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, out, JPEG_QUALITY))
+            remove(r->jpg);
+        free(out);
+    } else if (status == 404 || status == 403 || (ok && !fits)) {
+        markNone(r->jpg);  // Gone, or not a picture. Without an answer, it's tried again next time.
+    }
+    if (rgba)
+        stbi_image_free(rgba);
+}
+
 // Makes one picture. False only when paused or stopped meanwhile (asked again later).
 static bool make(const Request *r)
 {
+    if (!strncmp(r->path, "http://", 7) || !strncmp(r->path, "https://", 8)) {
+        makeUrl(r);
+        return !g_stop && !g_paused;
+    }
     if (jfIsRemoteLocation(r->path)) {
         makeRemote(r);
         return !g_stop && !g_paused;
@@ -254,8 +318,11 @@ void thumbgenStop(void)
     mutexUnlock(&g_lock);
     threadWaitForExit(&g_thread);
     threadClose(&g_thread);
-    netClientClose(g_net);
+    netClientClose(g_net);  // Before the network is let go.
     g_net = NULL;
+    if (g_net_held)
+        netExit();
+    g_net_held = false;
     g_started = false;
 }
 
@@ -263,6 +330,9 @@ void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool 
 {
     if (!g_started || strlen(path) >= PATH_MAX_LEN || strlen(jpg_path) >= PATH_MAX_LEN)
         return;
+    bool remote = !strncmp(path, "http://", 7) || !strncmp(path, "https://", 8) || jfIsRemoteLocation(path);
+    if (remote && !g_net_held)
+        g_net_held = netInit();
     mutexLock(&g_lock);
     for (int i = 0; i < g_count; i++) {
         if (g_queue[i].key == key) {  // Drawn again: still on screen, in this place.

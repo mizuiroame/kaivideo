@@ -14,6 +14,7 @@
 #include "lang.h"
 #include "mediafile.h"
 #include "net.h"
+#include "tsstream.h"
 
 #define SLOTS 24
 #define READERS 16            // The picture's and the sound's readers, each on any of the lists.
@@ -62,6 +63,8 @@ typedef struct {
     HlsPlaylist list;
     char url[HLS_URL_MAX];  // Read again while it grows (live TV).
     bool loaded;
+    char *init;             // fMP4: its initialization section, once fetched.
+    size_t init_size;
 } MediaList;
 
 // List 0 is the video's (and, from a server, the only one); a channel's own
@@ -74,6 +77,10 @@ typedef struct {
     NetClient *net;
     char authorization[512];
     char origin_url[HLS_URL_MAX];  // The first list's address; the header only goes to its origin.
+    NetProblem problem;           // Why a list couldn't be fetched, while starting,
+    long status;                  // the server's status then,
+    bool not_hls;                 // or the first answer wasn't an HLS list at all.
+    bool any_certificate;         // Its addresses' certificates aren't checked (an IPTV list's choice).
     MediaList lists[HLS_LISTS_MAX];
     int list_count;
     char *master_text;            // What FFmpeg opens first when there are several lists, else NULL.
@@ -186,7 +193,8 @@ static bool fetchSegment(HlsSession *ses, int list, int index, NetResponse *r)
 {
     NetRequest request = {.url = ses->lists[list].list.urls[index],
                           .authorization = authorization(ses, ses->lists[list].list.urls[index]),
-                          .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S};
+                          .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S,
+                          .any_certificate = ses->any_certificate};
     for (int attempt = 0; attempt < FETCH_TRIES && !ses->abort_fetch; attempt++) {
         if (netFetchText(ses->net, &request, SEGMENT_MAX, r))
             return true;
@@ -366,7 +374,7 @@ static bool subtitleWork(HlsSession *ses)
     pthread_mutex_unlock(&ses->lock);
     NetResponse r;
     NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = &ses->abort_fetch,
-                          .timeout_s = PLAYLIST_TIMEOUT_S};
+                          .timeout_s = PLAYLIST_TIMEOUT_S, .any_certificate = ses->any_certificate};
     bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, &r);
     pthread_mutex_lock(&ses->lock);
     if (choice != ses->subtitle_choice) {
@@ -521,8 +529,13 @@ static bool getText(HlsSession *ses, const char *url, NetResponse *r)
     // While starting, the caller's cancel cuts it short; afterwards, stopping does.
     const volatile bool *cancel = !ses->running && ses->start_cancel ? ses->start_cancel : &ses->abort_fetch;
     NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = cancel,
-                          .timeout_s = ses->playlist_timeout_s};
-    return netFetchText(ses->net, &request, PLAYLIST_MAX, r);
+                          .timeout_s = ses->playlist_timeout_s, .any_certificate = ses->any_certificate};
+    bool ok = netFetchText(ses->net, &request, PLAYLIST_MAX, r);
+    if (!ok && !ses->running) {  // Starting: why, for the message.
+        ses->problem = r->problem;
+        ses->status = r->status;
+    }
+    return ok;
 }
 
 // Reads list number list (-1: the only one) from url into ses->lists.
@@ -585,6 +598,7 @@ static bool readPlaylists(HlsSession *ses, const char *master_url, int64_t start
     ses->list_count = 1;
     if (!is_master) {  // Already the one with the segments.
         ok = hlsPlaylistParse(first.data, master_url, start_ns, &VIDEO);
+        ses->not_hls = !ok && strncmp(first.data, "#EXTM3U", 7) != 0;  // A plain stream, or a page.
         if (ok && !VIDEO.ended)  // Live: what FFmpeg is told of starts near the end.
             hlsPlaylistTrim(&VIDEO, VIDEO.count - LIVE_KEEP);
         snprintf(ses->lists[0].url, sizeof(ses->lists[0].url), "%s", master_url);
@@ -610,13 +624,24 @@ int64_t hlsBaseNs(void)
 
 static void freeLists(HlsSession *ses)
 {
-    for (int i = 0; i < HLS_LISTS_MAX; i++)
+    for (int i = 0; i < HLS_LISTS_MAX; i++) {
         hlsPlaylistFree(&ses->lists[i].list);
+        free(ses->lists[i].init);
+        ses->lists[i].init = NULL;
+    }
     free(ses->master_text);
     ses->master_text = NULL;
 }
 
 static void stopSession(HlsSession *ses);
+
+static bool g_next_any_certificate;  // For the session start() makes (it clears the session first).
+static bool g_last_not_hls;         // The last direct start found something that isn't HLS.
+
+bool hlsDirectWasNotHls(void)
+{
+    return g_last_not_hls;
+}
 
 static bool start(HlsSession *ses, const char *master_url, const char *auth, long long max_bitrate, long timeout_s,
                   int64_t start_ns, const volatile bool *cancel)
@@ -628,6 +653,7 @@ static bool start(HlsSession *ses, const char *master_url, const char *auth, lon
     ses->start_cancel = cancel;
     snprintf(ses->authorization, sizeof(ses->authorization), "%s", auth ? auth : "");
     snprintf(ses->origin_url, sizeof(ses->origin_url), "%s", master_url);
+    ses->any_certificate = g_next_any_certificate;
     ses->max_bitrate = max_bitrate;
     ses->playlist_timeout_s = timeout_s;
     ses->fetch_index = -1;
@@ -650,11 +676,44 @@ static bool start(HlsSession *ses, const char *master_url, const char *auth, lon
 bool hlsStartDirect(const char *url, long long max_bitrate, const volatile bool *cancel, char *error,
                     size_t error_size)
 {
+    return hlsStartDirectAny(url, max_bitrate, false, cancel, error, error_size);
+}
+
+bool hlsStartDirectAny(const char *url, long long max_bitrate, bool any_certificate, const volatile bool *cancel,
+                       char *error, size_t error_size)
+{
     HlsSession *ses = &g_main;
+    g_last_not_hls = false;
+    g_next_any_certificate = any_certificate;
     bool ok = start(ses, url, NULL, max_bitrate, DIRECT_TIMEOUT_S, 0, cancel);
-    if (!ok)
-        snprintf(error, error_size, "%s", T("The channel's own stream can't be read."));
-    return ok;
+    g_next_any_certificate = false;
+    if (ok)
+        return true;
+    long status = ses->status;
+    g_last_not_hls = ses->not_hls;
+    switch (ses->not_hls ? NET_OK : ses->problem) {
+    case NET_NO_NAME:
+    case NET_NO_CONNECT:
+    case NET_TIMEOUT: snprintf(error, error_size, "%s", T("The channel doesn't answer: it may be off the air.")); break;
+    case NET_CERTIFICATE:
+        snprintf(error, error_size, "%s", T("The channel's server certificate can't be trusted."));
+        break;
+    case NET_SECURE: snprintf(error, error_size, "%s", T("The channel's secure connection failed.")); break;
+    case NET_STATUS:
+        if (status == 404 || status == 410)
+            snprintf(error, error_size, "%s", T("The channel isn't at that address any more."));
+        else if (status == 401 || status == 403 || status == 451)
+            snprintf(error, error_size, "%s", T("The channel refuses to play here (it may play only in its country)."));
+        else
+            snprintf(error, error_size, T("The channel's server answered %ld."), status);
+        break;
+    default:
+        snprintf(error, error_size, "%s",
+                 ses->not_hls ? T("This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.")
+                              : T("The channel's own stream can't be read."));
+        break;
+    }
+    return false;
 }
 
 bool hlsStart(const char *master_url, const char *authorization, int64_t start_ns, const volatile bool *cancel,
@@ -679,6 +738,7 @@ bool hlsStartAudio(const char *url, const char *authorization, int64_t start_ns,
 void hlsStop(void)
 {
     stopSession(&g_main);
+    tsStreamStop();  // A channel sent as it is stops with the video too.
 }
 
 void hlsStopAudio(void)
@@ -895,6 +955,36 @@ static char *copyText(const char *text, size_t size)
     return data;
 }
 
+// An fMP4 list's initialization section: fetched once (the lock let go meanwhile), then copied. NULL if
+// it can't be had. Under the lock.
+static char *initSection(HlsSession *ses, int list, size_t *size)
+{
+    MediaList *m = &ses->lists[list];
+    if (!m->init && m->list.map_url) {
+        char url[HLS_URL_MAX];
+        snprintf(url, sizeof(url), "%s", m->list.map_url);
+        pthread_mutex_unlock(&ses->lock);
+        NetRequest request = {.url = url, .authorization = authorization(ses, url), .cancel = &ses->abort_fetch,
+                              .stall_s = SEGMENT_STALL_S, .any_certificate = ses->any_certificate};
+        NetResponse r;
+        memset(&r, 0, sizeof(r));
+        NetClient *client = netClientOpen();  // Its own: the fetching thread uses the session's meanwhile.
+        bool ok = client && netFetchText(client, &request, SEGMENT_MAX, &r);
+        netClientClose(client);
+        pthread_mutex_lock(&ses->lock);
+        if (ok && !m->init) {
+            m->init = r.data;  // Kept: the response's text is ours.
+            m->init_size = r.size;
+            r.data = NULL;
+        }
+        netResponseFree(&r);
+    }
+    if (!m->init)
+        return NULL;
+    *size = m->init_size;
+    return copyText(m->init, m->init_size);
+}
+
 static int ioOpen(AVFormatContext *s, AVIOContext **pb, const char *url, int flags, AVDictionary **options)
 {
     (void)flags;
@@ -910,7 +1000,9 @@ static int ioOpen(AVFormatContext *s, AVIOContext **pb, const char *url, int fla
         data = copyText(master ? ses->master_text : VIDEO.text, size);
     } else if (hlsLocalName(url, &list, &index) && list >= 0 && list < ses->list_count && ses->lists[list].loaded) {
         HlsPlaylist *p = &ses->lists[list].list;
-        if (index < 0) {
+        if (index == HLS_INIT_INDEX) {
+            data = initSection(ses, list, &size);
+        } else if (index < 0) {
             size = p->size;
             data = copyText(p->text, size);
         } else if (index < p->count) {

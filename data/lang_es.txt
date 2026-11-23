@@ -1521,9 +1521,6 @@ Usuario (vacío: ninguno; DOMINIO\usuario para un dominio)
 [A] choose  [^v] group  [B] back
 [A] elegir  [^v] grupo  [B] atrás
 
-[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
-[A] ver  [^v] canal  [<>] guía  [Y] grupos  [ZL][ZR] pestañas  [+] menú
-
 All channels
 Todos los canales
 
@@ -1638,9 +1635,6 @@ No se pudieron leer los canales del servidor.
 The Xtream server: http://host:port
 El servidor Xtream: http://host:puerto
 
-This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
-No se puede leer la señal de este canal: KaiVideo reproduce canales en HLS (.m3u8).
-
 User name
 Nombre de usuario
 
@@ -1649,3 +1643,63 @@ Xtream
 
 Your own M3U list or Xtream account: its channels show in Live, with their guide.
 Tu propia lista M3U o cuenta Xtream: sus canales salen en Live, con su guía.
+
+The channel doesn't answer: it may be off the air.
+El canal no responde: quizá no está al aire.
+
+The channel's server certificate can't be trusted.
+No se puede confiar en el certificado del servidor del canal.
+
+The channel's secure connection failed.
+Falló la conexión segura con el canal.
+
+The channel isn't at that address any more.
+El canal ya no está en esa dirección.
+
+The channel refuses to play here (it may play only in its country).
+El canal no se deja ver aquí (quizá solo en su país).
+
+The channel's server answered %ld.
+El servidor del canal respondió %ld.
+
+This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.
+Este canal no viene en HLS (.m3u8): KaiVideo aún no puede reproducirlo.
+
+The channel's stream stopped.
+La señal del canal se detuvo.
+
+The list's certificates are checked again.
+Los certificados de la lista se vuelven a comprobar.
+
+The list's certificates aren't checked: load the channels again.
+Los certificados de la lista no se comprueban: vuelve a cargar los canales.
+
+This channel's stream isn't MPEG-TS or HLS: KaiVideo can't play it.
+La señal de este canal no es MPEG-TS ni HLS: KaiVideo no puede reproducirla.
+
+Recently watched
+Vistos recientemente
+
+Reading the channels...
+Leyendo los canales...
+
+They come in a moment.
+Llegan en un momento.
+
+The IPTV list has none KaiVideo can play (Settings > IPTV).
+La lista IPTV no tiene ninguno que KaiVideo pueda reproducir (Ajustes > IPTV).
+
+There are too many favorites.
+Hay demasiados favoritos.
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs
+[A] ver  [^v] canal  [<>] guía  [Y] grupos  [R] favorito  [ZL][ZR] pestañas
+
+[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu
+[A] ver  [^v] canal  [<>] guía  [R] favorito  [ZL][ZR] pestañas  [+] menú
+
+[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] ver  [R] favorito  [X] origen  [ZL][ZR] pestañas  [-] configuración  [+] menú
+
+[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
+[A] abrir  [B] carpeta de arriba  [<>] página  [ZL][ZR] pestañas  [+] menú

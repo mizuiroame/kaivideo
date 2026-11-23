@@ -32,6 +32,7 @@ static void addTab(LibView *v, LibTab kind, int collection)
 void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads)
 {
     v->tab_count = 0;
+    v->iptv = false;
     if (server && (lib->collection_count > 0 || live)) {
         addTab(v, TAB_HOME, -1);
         for (int i = 0; i < lib->collection_count; i++)
@@ -42,11 +43,23 @@ void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool
     } else {
         for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]) - 1; i++)  // Files comes last.
             addTab(v, CARD_TABS[i], -1);
-        if (live)  // An IPTV list's channels: the card's library has Live too.
-            addTab(v, TAB_LIVE, -1);
     }
     if (downloads)
         addTab(v, TAB_DOWNLOADS, -1);
+    addTab(v, TAB_FILES, -1);
+    if (libviewTabIndex(v) < 0) {
+        v->tab = TAB_HOME;
+        v->collection = -1;
+        v->show = -1;
+    }
+}
+
+void libviewSetIptvTabs(LibView *v)
+{
+    v->tab_count = 0;
+    v->iptv = true;
+    addTab(v, TAB_HOME, -1);
+    addTab(v, TAB_LIVE, -1);
     addTab(v, TAB_FILES, -1);
     if (libviewTabIndex(v) < 0) {
         v->tab = TAB_HOME;

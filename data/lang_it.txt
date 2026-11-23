@@ -1521,9 +1521,6 @@ Nome utente (vuoto: nessuno; DOMINIO\utente per un dominio)
 [A] choose  [^v] group  [B] back
 [A] scegli  [^v] gruppo  [B] indietro
 
-[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
-[A] guarda  [^v] canale  [<>] guida  [Y] gruppi  [ZL][ZR] schede  [+] menu
-
 All channels
 Tutti i canali
 
@@ -1638,9 +1635,6 @@ Non è stato possibile leggere i canali del server.
 The Xtream server: http://host:port
 Il server Xtream: http://host:porta
 
-This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
-Il flusso di questo canale non si legge: KaiVideo riproduce canali in HLS (.m3u8).
-
 User name
 Nome utente
 
@@ -1649,3 +1643,63 @@ Xtream
 
 Your own M3U list or Xtream account: its channels show in Live, with their guide.
 La tua lista M3U o il tuo account Xtream: i canali compaiono in Live, con la guida.
+
+The channel doesn't answer: it may be off the air.
+Il canale non risponde: forse non è in onda.
+
+The channel's server certificate can't be trusted.
+Il certificato del server del canale non è affidabile.
+
+The channel's secure connection failed.
+La connessione sicura al canale non è riuscita.
+
+The channel isn't at that address any more.
+Il canale non è più a quell'indirizzo.
+
+The channel refuses to play here (it may play only in its country).
+Il canale non si lascia vedere qui (forse solo nel suo paese).
+
+The channel's server answered %ld.
+Il server del canale ha risposto %ld.
+
+This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.
+Questo canale non è in HLS (.m3u8): KaiVideo non può ancora riprodurlo.
+
+The channel's stream stopped.
+Il flusso del canale si è fermato.
+
+The list's certificates are checked again.
+I certificati della lista vengono di nuovo controllati.
+
+The list's certificates aren't checked: load the channels again.
+I certificati della lista non vengono controllati: ricarica i canali.
+
+This channel's stream isn't MPEG-TS or HLS: KaiVideo can't play it.
+Il flusso di questo canale non è né MPEG-TS né HLS: KaiVideo non può riprodurlo.
+
+Recently watched
+Visti di recente
+
+Reading the channels...
+Lettura dei canali...
+
+They come in a moment.
+Arrivano tra un momento.
+
+The IPTV list has none KaiVideo can play (Settings > IPTV).
+La lista IPTV non ne ha nessuno che KaiVideo possa riprodurre (Impostazioni > IPTV).
+
+There are too many favorites.
+Ci sono troppi preferiti.
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs
+[A] guarda  [^v] canale  [<>] guida  [Y] gruppi  [R] preferito  [ZL][ZR] schede
+
+[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu
+[A] guarda  [^v] canale  [<>] guida  [R] preferito  [ZL][ZR] schede  [+] menu
+
+[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] guarda  [R] preferito  [X] sorgente  [ZL][ZR] schede  [-] impostazioni  [+] menu
+
+[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
+[A] apri  [B] cartella sopra  [<>] pagina  [ZL][ZR] schede  [+] menu

@@ -48,3 +48,4 @@ void testUpdate(void);
 void testUpdateRelease(void);
 void testNotice(void);
 void testIptv(void);
+void testIptvHome(void);

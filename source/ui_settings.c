@@ -71,9 +71,12 @@ void uiSettingsSetNetwork(const char *address, const char *user, bool remember, 
 static const char *g_users[SERVER_KIND_COUNT] = {"", "", ""};
 static const char *g_update_now = "";
 static const char *g_iptv_kind = "", *g_iptv_address = "", *g_iptv_user, *g_iptv_guide = "", *g_iptv_state = "";
+static bool g_iptv_certificates = true;
 
-void uiSettingsSetIptv(const char *kind, const char *address, const char *user, const char *guide, const char *state)
+void uiSettingsSetIptv(const char *kind, const char *address, const char *user, const char *guide, const char *state,
+                       bool check_certificates)
 {
+    g_iptv_certificates = check_certificates;
     g_iptv_kind = kind;
     g_iptv_address = address;
     g_iptv_user = user;
@@ -92,11 +95,22 @@ void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT])
         g_users[k] = users[k];
 }
 
-// A server's color, as a dot before its name.
-static void serverDot(int x, int middle, ServerKind kind)
+// The color of a source a row or page is for (a server, the network folder, the IPTV list). False if none.
+static bool sourceColor(SettingsPage page, ServerKind kind, Color *out)
 {
-    gfxFillRoundRect(x, middle - SERVER_DOT / 2, SERVER_DOT, SERVER_DOT, SERVER_DOT / 2, uiServerColor(kind));
+    switch (page) {
+    case SETTINGS_PAGE_JELLYFIN: *out = uiServerColor(kind); return true;
+    case SETTINGS_PAGE_NETWORK: *out = UI_NETWORK_COLOR; return true;
+    case SETTINGS_PAGE_IPTV: *out = UI_IPTV_COLOR; return true;
+    default: return false;
+    }
 }
+
+static void colorDot(int x, int middle, Color color)
+{
+    gfxFillRoundRect(x, middle - SERVER_DOT / 2, SERVER_DOT, SERVER_DOT, SERVER_DOT / 2, color);
+}
+
 
 void uiSettingsSetJellyfin(const char *server, const char *user)
 {
@@ -131,6 +145,8 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", !g_iptv_user ? T("Only for Xtream") : g_iptv_user[0] ? g_iptv_user : T("None"));
     } else if (row == SETTING_IPTV_GUIDE) {
         snprintf(out, size, "%s", g_iptv_guide[0] ? g_iptv_guide : T("The list's own"));
+    } else if (row == SETTING_IPTV_CERTIFICATE) {
+        snprintf(out, size, "%s", g_iptv_certificates ? T("On") : T("Off: any certificate"));
     } else if (row == SETTING_IPTV_LOAD) {
         snprintf(out, size, "%s", g_iptv_state);
     } else if (row == SETTING_UPDATE_NOW) {
@@ -153,11 +169,12 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
     ServerKind kind = (ServerKind)c->server_kind;
     int count = settingsPageRows(page, g_jf_user[0] != '\0', kind, rows);
     const char *note = settingsPageNote(page, kind);
-    bool server = page == SETTINGS_PAGE_JELLYFIN;  // A server's page wears its color.
+    Color source_color;
+    bool server = sourceColor(page, kind, &source_color);  // A source's page wears its color.
     int head = HEAD_H + (note ? NOTE_H : 0);
     int h = head + count * ROW_H + FOOT_H;
     int x = (GFX_WIDTH - SETTINGS_W) / 2, y = (GFX_HEIGHT - h) / 2;
-    Color mark = server ? uiServerColor(kind) : COLOR_ACCENT;
+    Color mark = server ? source_color : COLOR_ACCENT;
     dimScreen();
     panel(x, y, SETTINGS_W, h);
     if (server)  // Its color along the top.
@@ -166,7 +183,7 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
     if (page != SETTINGS_PAGE_MAIN)  // A page: back to the main one.
         title_x += backButton(x + PANEL_PAD - 4, y + 18) + 12;
     if (server) {
-        serverDot(title_x, y + 34, kind);
+        colorDot(title_x, y + 34, source_color);
         title_x += SERVER_DOT + 10;
     }
     fontDraw(FONT_BOLD, 24, title_x, y + 22, settingsPageTitle(page, kind), COLOR_TEXT);
@@ -181,12 +198,13 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
         SettingsPage opened;
         ServerKind row_kind;
         bool opens = settingOpensPage(row, &opened, &row_kind);
-        bool server_row = opens && opened == SETTINGS_PAGE_JELLYFIN;  // A server: its dot, and its color when chosen.
+        Color row_color;  // A source's row: its dot, and its color when chosen.
+        bool server_row = opens && sourceColor(opened, row_kind, &row_color);
         if (selected)
-            rowHighlight(x + 16, row_y, SETTINGS_W - 32, ROW_H - 6, server_row ? uiServerColor(row_kind) : mark);
+            rowHighlight(x + 16, row_y, SETTINGS_W - 32, ROW_H - 6, server_row ? row_color : mark);
         int label_x = x + PANEL_PAD;
         if (server_row) {
-            serverDot(label_x, row_y + 21, row_kind);
+            colorDot(label_x, row_y + 21, row_color);
             label_x += SERVER_DOT + 10;
         }
         fontDraw(selected ? FONT_BOLD : FONT_REGULAR, 21, label_x, row_y + 8, settingLabel(row), COLOR_TEXT);

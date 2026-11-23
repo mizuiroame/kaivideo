@@ -9,10 +9,24 @@
 #include "approot.h"
 #include "iptvload.h"
 #include "keyboard_system.h"
+#include "net.h"
 #include "lang.h"
 #include "ui_settings.h"
 
 static IptvAccount g_account;  // What Settings shows and the loads use; the file keeps it.
+static bool g_network;         // The console's network, held while a list is set: its channels open on it.
+
+// Holds the network while there's a list (each part that needs it holds it), or lets it go.
+static void useNetwork(void)
+{
+    bool wanted = g_account.kind != IPTV_NONE && g_account.address[0];
+    if (wanted && !g_network)
+        g_network = netInit();
+    else if (!wanted && g_network) {
+        netExit();
+        g_network = false;
+    }
+}
 
 static void accountPath(char *out, size_t size)
 {
@@ -40,6 +54,8 @@ void appIptvStart(App *app)
     if (!iptvAccountRead(&g_account, text))
         memset(&g_account, 0, sizeof(g_account));
     memset(text, 0, sizeof(text));
+    appIptvHomeStart(app);
+    useNetwork();
     startLoad(app);  // Its channels for Live, from the start.
 }
 
@@ -47,6 +63,7 @@ static void save(App *app, uint64_t now)
 {
     char path[APPROOT_PATH_MAX + 32], text[4096];
     accountPath(path, sizeof(path));
+    useNetwork();
     if (g_account.kind == IPTV_NONE) {
         remove(path);
         return;
@@ -65,7 +82,9 @@ void appIptvExit(App *app)
     iptvLoadExit();
     iptvListFree(&app->iptv);
     iptvGuideFree(&app->iptv_guide);
+    appIptvHomeExit(app);
     memset(&g_account, 0, sizeof(g_account));
+    useNetwork();  // Let go.
 }
 
 // --- Settings ---
@@ -163,6 +182,8 @@ static void forget(App *app, uint64_t now)
     save(app, now);
     iptvListFree(&app->iptv);
     iptvGuideFree(&app->iptv_guide);
+    if (app->config.use_iptv)
+        appLibrarySetSource(app, false);  // Its view goes: the card's.
     appLiveIptvChanged(app);
     appNotify(app, NOTICE_DONE, T("The IPTV list is forgotten."), now);
 }
@@ -179,6 +200,15 @@ bool appIptvActivate(App *app, SettingRow row, uint64_t now)
     case SETTING_IPTV_ADDRESS: typeAddress(app, now); return true;
     case SETTING_IPTV_ACCOUNT: typeAccount(app, now); return true;
     case SETTING_IPTV_GUIDE: typeGuide(app, now); return true;
+    case SETTING_IPTV_CERTIFICATE:
+        g_account.any_certificate = !g_account.any_certificate;
+        if (g_account.address[0])
+            save(app, now);
+        appShowMessage(app,
+                       g_account.any_certificate ? T("The list's certificates aren't checked: load the channels again.")
+                                                 : T("The list's certificates are checked again."),
+                       now);
+        return true;
     case SETTING_IPTV_LOAD: load(app, now); return true;
     case SETTING_IPTV_FORGET: forget(app, now); return true;
     default: return false;
@@ -217,6 +247,16 @@ void appIptvUpdate(App *app, uint64_t now)
     appNotify(app, s.guide_error[0] ? NOTICE_INFO : NOTICE_DONE, line, now);
 }
 
+bool appIptvConfigured(void)
+{
+    return g_account.kind != IPTV_NONE && g_account.address[0];
+}
+
+bool appIptvAnyCertificate(void)
+{
+    return g_account.any_certificate;
+}
+
 void appIptvFeedSettings(const App *app)
 {
     static char address[IPTV_URL_MAX], state[96];
@@ -232,5 +272,6 @@ void appIptvFeedSettings(const App *app)
     else
         state[0] = '\0';
     uiSettingsSetIptv(g_account.kind == IPTV_XTREAM ? T("Xtream") : T("M3U list"),
-                      address, g_account.kind == IPTV_XTREAM ? g_account.user : NULL, g_account.guide, state);
+                      address, g_account.kind == IPTV_XTREAM ? g_account.user : NULL, g_account.guide, state,
+                      !g_account.any_certificate);
 }

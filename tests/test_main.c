@@ -103,6 +103,7 @@ int main(void)
     testUpdateRelease();
     testNotice();
     testIptv();
+    testIptvHome();
     printf("%d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

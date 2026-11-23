@@ -88,6 +88,35 @@ static void testListNames(void)
     CHECK(hlsLocalName(HLS_LOCAL_PREFIX "3/index.m3u8", &list, &index) && list == 3 && index == -1);
     CHECK(!hlsLocalName(HLS_LOCAL_PREFIX "x.ts", &list, &index) && !hlsLocalName("https://h/1.ts", &list, &index));
     CHECK(!hlsLocalName(HLS_LOCAL_PREFIX "1/2.mp4", &list, &index));
+    // fMP4: the initialization section's local name.
+    CHECK(hlsLocalName(HLS_LOCAL_PREFIX "init.mp4", &list, &index) && list == 0 && index == HLS_INIT_INDEX);
+    CHECK(hlsLocalName(HLS_LOCAL_PREFIX "1/init.mp4", &list, &index) && list == 1 && index == HLS_INIT_INDEX);
+}
+
+// An fMP4 list (CMAF): its #EXT-X-MAP becomes a name KaiVideo serves, its address kept.
+static void testFmp4(void)
+{
+    static const char LIST[] = "#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-MEDIA-SEQUENCE:46311\n"
+                               "#EXT-X-MAP:URI=\"header_vo.cmfv\"\n#EXTINF:6.006,\nmedia_46311.cmfv\n"
+                               "#EXTINF:6.006,\nmedia_46312.cmfv\n";
+    HlsPlaylist p;
+    CHECK(hlsPlaylistParse(LIST, "https://s.example/ontv/chunklist_vo.m3u8", 0, &p));
+    CHECK(p.map_url && !strcmp(p.map_url, "https://s.example/ontv/header_vo.cmfv"));
+    CHECK(strstr(p.text, "#EXT-X-MAP:URI=\"" HLS_LOCAL_PREFIX "init.mp4\"\n") && !strstr(p.text, "header_vo"));
+    CHECK(p.count == 2 && !strcmp(p.urls[1], "https://s.example/ontv/media_46312.cmfv"));
+    // Read again while live: the rebuilt text keeps it.
+    CHECK(hlsPlaylistAppend(&p, "#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:46312\n#EXT-X-MAP:URI=\"header_vo.cmfv\"\n"
+                                "#EXTINF:6.006,\nmedia_46312.cmfv\n#EXTINF:6.006,\nmedia_46313.cmfv\n",
+                            "https://s.example/ontv/chunklist_vo.m3u8") == 1);
+    CHECK(strstr(p.text, "#EXT-X-MAP:URI=\"" HLS_LOCAL_PREFIX "init.mp4\"\n") != NULL);
+    hlsPlaylistFree(&p);
+    CHECK(hlsPlaylistParseList(LIST, "https://s.example/a.m3u8", 0, 1, false, &p) &&
+          strstr(p.text, "#EXT-X-MAP:URI=\"" HLS_LOCAL_PREFIX "1/init.mp4\"\n"));
+    hlsPlaylistFree(&p);
+    static const char PLAIN[] = "#EXTM3U\n#EXTINF:5.0,\na.ts\n";
+    CHECK(hlsPlaylistParse(PLAIN, "https://s.example/a.m3u8", 0, &p) && p.map_url == NULL &&
+          !strstr(p.text, "EXT-X-MAP"));
+    hlsPlaylistFree(&p);
 }
 
 static void testWebVtt(void)
@@ -126,5 +155,6 @@ void testHlsMaster(void)
     testMasterParse();
     testMasterPlain();
     testListNames();
+    testFmp4();
     testWebVtt();
 }

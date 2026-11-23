@@ -1521,9 +1521,6 @@ IPTV チャンネル %d 件。番組表: %s
 [A] choose  [^v] group  [B] back
 [A] 選ぶ  [^v] グループ  [B] 戻る
 
-[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
-[A] 見る  [^v] チャンネル  [<>] 番組表  [Y] グループ  [ZL][ZR] タブ  [+] メニュー
-
 All channels
 すべてのチャンネル
 
@@ -1638,9 +1635,6 @@ The server's channels couldn't be read.
 The Xtream server: http://host:port
 Xtream サーバー: http://host:port
 
-This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
-このチャンネルのストリームは読めません。KaiVideo は HLS (.m3u8) のチャンネルを再生します。
-
 User name
 ユーザー名
 
@@ -1649,3 +1643,63 @@ Xtream
 
 Your own M3U list or Xtream account: its channels show in Live, with their guide.
 自分の M3U リストか Xtream アカウント。チャンネルは番組表と一緒に Live に表示されます。
+
+The channel doesn't answer: it may be off the air.
+チャンネルが応答しません。放送していないのかもしれません。
+
+The channel's server certificate can't be trusted.
+チャンネルのサーバー証明書を信頼できません。
+
+The channel's secure connection failed.
+チャンネルとの安全な接続に失敗しました。
+
+The channel isn't at that address any more.
+チャンネルはもうそのアドレスにありません。
+
+The channel refuses to play here (it may play only in its country).
+このチャンネルはここでは再生できません（自国内のみかもしれません）。
+
+The channel's server answered %ld.
+チャンネルのサーバーが %ld を返しました。
+
+This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.
+このチャンネルは HLS (.m3u8) ではないため、KaiVideo ではまだ再生できません。
+
+The channel's stream stopped.
+チャンネルのストリームが止まりました。
+
+The list's certificates are checked again.
+リストの証明書を再び確認します。
+
+The list's certificates aren't checked: load the channels again.
+リストの証明書を確認しません。チャンネルを読み込み直してください。
+
+This channel's stream isn't MPEG-TS or HLS: KaiVideo can't play it.
+このチャンネルのストリームは MPEG-TS でも HLS でもないため、KaiVideo では再生できません。
+
+Recently watched
+最近見たチャンネル
+
+Reading the channels...
+チャンネルを読み込んでいます...
+
+They come in a moment.
+まもなく表示されます。
+
+The IPTV list has none KaiVideo can play (Settings > IPTV).
+IPTV リストに KaiVideo で再生できるチャンネルがありません（設定 > IPTV）。
+
+There are too many favorites.
+お気に入りが多すぎます。
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs
+[A] 見る  [^v] チャンネル  [<>] 番組表  [Y] グループ  [R] お気に入り  [ZL][ZR] タブ
+
+[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu
+[A] 見る  [^v] チャンネル  [<>] 番組表  [R] お気に入り  [ZL][ZR] タブ  [+] メニュー
+
+[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 見る  [R] お気に入り  [X] ソース  [ZL][ZR] タブ  [-] 設定  [+] メニュー
+
+[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
+[A] 開く  [B] 上のフォルダー  [<>] ページ  [ZL][ZR] タブ  [+] メニュー

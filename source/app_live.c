@@ -76,7 +76,7 @@ void appLiveRebuild(App *app)
     if (group >= app->iptv.group_count)
         group = app->iptv_group = -1;
     int iptv = 0;
-    for (int i = 0; i < app->iptv.count; i++)
+    for (int i = 0; app->config.use_iptv && i < app->iptv.count; i++)  // In the IPTV view only.
         iptv += group < 0 || app->iptv.channels[i].group == group;
     LiveGuide g;
     liveGuideInit(&g);
@@ -88,7 +88,7 @@ void appLiveRebuild(App *app)
     for (int i = 0; i < server && n < total; i++)
         g.channels[n++] = app->live_server.channels[i];
     int64_t now_s = (int64_t)time(NULL);
-    for (int i = 0; i < app->iptv.count && n < total; i++) {
+    for (int i = 0; app->config.use_iptv && i < app->iptv.count && n < total; i++) {
         const IptvChannel *ic = &app->iptv.channels[i];
         if (group >= 0 && ic->group != group)
             continue;
@@ -96,6 +96,7 @@ void appLiveRebuild(App *app)
         iptvLocation(c->id, sizeof(c->id), i);
         snprintf(c->name, sizeof(c->name), "%.90s", ic->name);  // The guide's rows hold less.
         snprintf(c->number, sizeof(c->number), "%s", ic->number);
+        c->logo = ic->logo[0] ? ic->logo : NULL;
         iptvPrograms(app, i, c, now_s);
     }
     g.count = n;
@@ -106,6 +107,7 @@ void appLiveRebuild(App *app)
 
 void appLiveIptvChanged(App *app)
 {
+    appIptvHomeRebuild(app);
     if (app->live_group_cursor > app->iptv.group_count)
         app->live_group_cursor = 0;
     appLibraryRefreshHome(app);
@@ -201,16 +203,39 @@ static void describeChannel(const LiveChannel *c, char *location, size_t locatio
     snprintf(name, name_size, "%s%s%s", c->name, c->now.title[0] ? "  \xC2\xB7  " : "", c->now.title);
 }
 
-static void playChannel(App *app, int index, uint64_t now)
+static void playLive(App *app, const LiveChannel *c, uint64_t now)
 {
-    if (index < 0 || index >= app->live.count)
-        return;
-    const LiveChannel *c = &app->live.channels[index];
     char location[LIBRARY_PATH_MAX], name[APP_NAME_MAX];
     describeChannel(c, location, sizeof(location), name, sizeof(name));
     app->open_from_start = true;  // A channel has no place to resume.
     if (!appStartVideo(app, location, name, now))
         app->open_from_start = false;
+}
+
+static void playChannel(App *app, int index, uint64_t now)
+{
+    if (index >= 0 && index < app->live.count)
+        playLive(app, &app->live.channels[index], now);
+}
+
+void appLivePlayIptv(App *app, int index, uint64_t now)
+{
+    if (index < 0 || index >= app->iptv.count)
+        return;
+    LiveChannel *c = calloc(1, sizeof(*c));  // Its programs make it big for the stack.
+    if (!c)
+        return;
+    iptvLocation(c->id, sizeof(c->id), index);
+    snprintf(c->name, sizeof(c->name), "%.90s", app->iptv.channels[index].name);
+    iptvPrograms(app, index, c, (int64_t)time(NULL));
+    playLive(app, c, now);
+    free(c);
+}
+
+int appLiveIptvSelected(const App *app)
+{
+    int cursor = app->view.live.cursor;
+    return cursor >= 0 && cursor < app->live.count ? iptvLocationIndex(app->live.channels[cursor].id) : -1;
 }
 
 // A tap on a program in the guide: the cursor goes to it, and a tap on the
@@ -253,6 +278,8 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             tapProgram(app, hit, now);
         } else if (hit.kind == LIBHIT_LIVE_GROUPS) {
             appLiveOpenGroups(app);
+        } else if (hit.kind == LIBHIT_FAVORITE && appLiveIptvSelected(app) >= 0) {
+            appIptvToggleFavorite(app, appLiveIptvSelected(app), now);
         }
     } else if (touch.type == TOUCH_DRAG) {
         appLibraryDrag(app, touch, now);  // The guide follows the finger, as the other lists.
@@ -279,10 +306,12 @@ void appLiveDraw(const App *app)
     bool loading = (app->live_read_at && app->live.count == 0 && app->live_reading) ||
                    (app->live.count == 0 && (s.state == IPTV_LOAD_LIST || s.state == IPTV_LOAD_GUIDE));
     const char *group = NULL;
-    if (app->iptv.group_count > 0)
+    if (app->config.use_iptv && app->iptv.group_count > 0)
         group = app->iptv_group >= 0 ? app->iptv.groups[app->iptv_group].name : T("All channels");
+    int selected = app->config.use_iptv ? appLiveIptvSelected(app) : -1;
+    int favorite = selected >= 0 ? appIptvIsFavorite(app, selected) : -1;
     uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), utcOffset(), app->config.clock_24h, loading, group,
-                  app->iptv.count > 0);
+                  app->config.use_iptv, favorite);
     if (app->live_groups_open)
         uiDrawLiveGroups(&app->iptv, app->live_group_cursor, app->iptv_group + 1);
 }

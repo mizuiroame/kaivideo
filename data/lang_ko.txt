@@ -1521,9 +1521,6 @@ IPTV 채널 %d개. 편성표: %s
 [A] choose  [^v] group  [B] back
 [A] 선택  [^v] 그룹  [B] 뒤로
 
-[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
-[A] 시청  [^v] 채널  [<>] 편성표  [Y] 그룹  [ZL][ZR] 탭  [+] 메뉴
-
 All channels
 모든 채널
 
@@ -1638,9 +1635,6 @@ The server's channels couldn't be read.
 The Xtream server: http://host:port
 Xtream 서버: http://host:port
 
-This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
-이 채널의 스트림을 읽을 수 없습니다. KaiVideo는 HLS(.m3u8) 채널을 재생합니다.
-
 User name
 사용자 이름
 
@@ -1649,3 +1643,63 @@ Xtream
 
 Your own M3U list or Xtream account: its channels show in Live, with their guide.
 내 M3U 목록 또는 Xtream 계정: 채널이 편성표와 함께 Live에 나타납니다.
+
+The channel doesn't answer: it may be off the air.
+채널이 응답하지 않습니다. 방송 중이 아닐 수 있습니다.
+
+The channel's server certificate can't be trusted.
+채널 서버의 인증서를 신뢰할 수 없습니다.
+
+The channel's secure connection failed.
+채널과의 보안 연결에 실패했습니다.
+
+The channel isn't at that address any more.
+채널이 더 이상 그 주소에 없습니다.
+
+The channel refuses to play here (it may play only in its country).
+이 채널은 여기서 재생되지 않습니다(자국에서만 될 수 있음).
+
+The channel's server answered %ld.
+채널 서버가 %ld로 응답했습니다.
+
+This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.
+이 채널은 HLS(.m3u8)가 아니라서 KaiVideo가 아직 재생할 수 없습니다.
+
+The channel's stream stopped.
+채널 스트림이 멈췄습니다.
+
+The list's certificates are checked again.
+목록의 인증서를 다시 확인합니다.
+
+The list's certificates aren't checked: load the channels again.
+목록의 인증서를 확인하지 않습니다. 채널을 다시 불러오세요.
+
+This channel's stream isn't MPEG-TS or HLS: KaiVideo can't play it.
+이 채널의 스트림은 MPEG-TS도 HLS도 아니라서 KaiVideo가 재생할 수 없습니다.
+
+Recently watched
+최근 본 채널
+
+Reading the channels...
+채널을 읽는 중...
+
+They come in a moment.
+잠시 후 나타납니다.
+
+The IPTV list has none KaiVideo can play (Settings > IPTV).
+IPTV 목록에 KaiVideo가 재생할 수 있는 채널이 없습니다 (설정 > IPTV).
+
+There are too many favorites.
+즐겨찾기가 너무 많습니다.
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs
+[A] 시청  [^v] 채널  [<>] 편성표  [Y] 그룹  [R] 즐겨찾기  [ZL][ZR] 탭
+
+[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu
+[A] 시청  [^v] 채널  [<>] 편성표  [R] 즐겨찾기  [ZL][ZR] 탭  [+] 메뉴
+
+[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 시청  [R] 즐겨찾기  [X] 소스  [ZL][ZR] 탭  [-] 설정  [+] 메뉴
+
+[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
+[A] 열기  [B] 상위 폴더  [<>] 페이지  [ZL][ZR] 탭  [+] 메뉴

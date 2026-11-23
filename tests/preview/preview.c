@@ -23,6 +23,7 @@
 #include "theme.h"
 #include "thumbs.h"
 #include "ui_settings.h"
+#include "ui_iptvhome.h"
 #include "ui_live.h"
 #include "ui_notice.h"
 #include "ui_stats.h"
@@ -130,6 +131,8 @@ static void playerScene(const char *name, Player *p, UiMenuKind kind, const Menu
 }
 
 // The Live TV tab, and a channel playing (LIVE in the bar).
+static void makeFakeThumbs(void);
+
 static void liveScene(Player *p)
 {
     static const char *const NAMES[] = {"KaiVideo Test One", "KaiVideo Test Two", "Harbor News 24", "Kite Hill Sports"};
@@ -173,7 +176,7 @@ static void liveScene(Player *p)
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_tab");
     const int row2_y = 116 + 76 + 38;  // The middle of the second channel's row.
@@ -191,16 +194,20 @@ static void liveScene(Player *p)
     view.live_at = liveStep(&channels[1], view.live_at, now, 1);
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_guide_later");
     view.live_at = 0;
     // An IPTV list's group (made-up), and its groups over the guide.
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true);
-    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu"));
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 0);
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs"));
     save("live_iptv");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, 631).kind != LIBHIT_FAVORITE) {
+        printf("TOUCH: live_iptv: the favorite button doesn't answer a tap\n");
+        g_problems++;
+    }
     if (uiLibraryTap(MARGIN + 80, 84 + 13).kind != LIBHIT_LIVE_GROUPS) {
         printf("TOUCH: live_iptv: the group pill doesn't answer a tap\n");
         g_problems++;
@@ -210,7 +217,7 @@ static void liveScene(Player *p)
     IptvList groups_list = {.channels = NULL, .count = 100, .groups = groups, .group_count = 7};
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 1);
     uiDrawLiveGroups(&groups_list, 2, 1);
     uiDrawFooterHelp(T("[A] choose  [B] back"));
     save("live_groups");
@@ -218,6 +225,77 @@ static void liveScene(Player *p)
         printf("TOUCH: live_groups: a group doesn't answer a tap\n");
         g_problems++;
     }
+
+    // The IPTV view's Home (made-up channels): Recently watched, Favorites, then a row a group.
+    makeFakeThumbs();  // The logos (made again later, the same).
+    static const char *const IPTV_NAMES[] = {"Canal Uno", "Noticias 24", "Deportes Max", "Kids Planet", "Musica Viva",
+                                        "Cine Clasico", "Docu World", "Local Siete", "Noticias Norte", "Gol TV"};
+    static IptvChannel iptv_channels[10];
+    static IptvGroup home_groups[] = {{"News", "", 3}, {"Sports", "", 2}, {"Kids", "", 1}, {"Music", "", 1},
+                                      {"Movies", "", 2}, {"Local", "", 1}};
+    static const int GROUP_OF[] = {0, 0, 1, 2, 3, 4, 4, 5, 0, 1};
+    for (int i = 0; i < 10; i++) {
+        snprintf(iptv_channels[i].name, sizeof(iptv_channels[i].name), "%s", IPTV_NAMES[i]);
+        if (i % 4 != 3)  // Some have no logo: their name on a tile.
+            snprintf(iptv_channels[i].logo, sizeof(iptv_channels[i].logo), "https://logo.example/%d.png", i);
+        iptv_channels[i].group = GROUP_OF[i];
+    }
+    IptvList home_list = {.channels = iptv_channels, .count = 10, .groups = home_groups, .group_count = 6};
+    static IptvMarks marks;
+    iptvMarksInit(&marks);
+    iptvMarksWatched(&marks, "Gol TV");
+    iptvMarksWatched(&marks, "Kids Planet");
+    iptvMarksWatched(&marks, "Noticias 24");
+    iptvMarksToggleFavorite(&marks, "Noticias 24");
+    iptvMarksToggleFavorite(&marks, "Docu World");
+    static IptvHome iptv_home;
+    static IptvHomeView home_view;
+    iptvHomeBuild(&iptv_home, &home_list, &marks);
+    iptvHomeViewReset(&home_view);
+    libviewInit(&view);
+    libviewSetIptvTabs(&view);
+    uiLibrarySetSource("IPTV", UI_IPTV_COLOR);
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawIptvHome(&iptv_home, &home_view, &home_list, &marks, NULL, NULL, false);
+    uiDrawFooterHelp(T("[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("iptv_home");
+    LibHit card = uiLibraryTap(MARGIN + 20, 76 + 34 + 40);
+    if (card.kind != LIBHIT_HOME_CARD || card.a != 0 || card.b != 0) {
+        printf("TOUCH: iptv_home: the first channel doesn't answer a tap\n");
+        g_problems++;
+    }
+    card = uiLibraryTap(MARGIN + 222 + 20, 76 + 196 + 34 + 40);
+    if (card.kind != LIBHIT_HOME_CARD || card.a != 1 || card.b != 1) {
+        printf("TOUCH: iptv_home: a favorite doesn't answer a tap\n");
+        g_problems++;
+    }
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, 76 + 11).kind != LIBHIT_FAVORITE) {
+        printf("TOUCH: iptv_home: the favorite button doesn't answer a tap\n");
+        g_problems++;
+    }
+    bool home_tabs = false;
+    for (int x = 0; x < GFX_WIDTH && !home_tabs; x += 4)
+        home_tabs = uiLibraryTap(x, 34).kind == LIBHIT_TAB && uiLibraryTap(x, 34).a == 1;
+    if (!home_tabs) {
+        printf("TOUCH: iptv_home: the Live TV tab doesn't answer a tap\n");
+        g_problems++;
+    }
+    // Further down, on a group's row moved along.
+    iptvHomeMove(&home_view, &iptv_home, 0, 3, UI_IPTVHOME_ROWS, UI_IPTVHOME_COLS);
+    iptvHomeMove(&home_view, &iptv_home, 1, 0, UI_IPTVHOME_ROWS, UI_IPTVHOME_COLS);
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawIptvHome(&iptv_home, &home_view, &home_list, &marks, NULL, NULL, false);
+    uiDrawFooterHelp(T("[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("iptv_home_down");
+    static IptvHome empty_home;
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawIptvHome(&empty_home, &home_view, &home_list, &marks, NULL, NULL, true);
+    save("iptv_home_loading");
+    iptvHomeFree(&iptv_home);
+    uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     p->live = true;
     begin();
@@ -789,7 +867,7 @@ static void libraryScenes(void)
     save("settings_about");
     begin();  // The IPTV page, an Xtream account set (made-up).
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
-    uiSettingsSetIptv("Xtream", "http://tv.example:8080", "kai", "", "412 channels");
+    uiSettingsSetIptv("Xtream", "http://tv.example:8080", "kai", "", "412 channels", true);
     uiDrawSettings(&config, SETTINGS_PAGE_IPTV, SETTING_IPTV_LOAD, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_iptv");

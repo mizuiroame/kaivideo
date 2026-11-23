@@ -1521,9 +1521,6 @@ User name (empty: none; DOMAIN\user for a domain)
 [A] choose  [^v] group  [B] back
 [A] 选择  [^v] 分组  [B] 返回
 
-[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
-[A] 观看  [^v] 频道  [<>] 节目指南  [Y] 分组  [ZL][ZR] 标签页  [+] 菜单
-
 All channels
 所有频道
 
@@ -1638,9 +1635,6 @@ The server's channels couldn't be read.
 The Xtream server: http://host:port
 Xtream 服务器：http://host:port
 
-This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
-无法读取此频道的流：KaiVideo 播放 HLS (.m3u8) 频道。
-
 User name
 用户名
 
@@ -1649,3 +1643,63 @@ Xtream
 
 Your own M3U list or Xtream account: its channels show in Live, with their guide.
 你自己的 M3U 列表或 Xtream 账户：其频道连同节目指南显示在 Live 中。
+
+The channel doesn't answer: it may be off the air.
+频道没有响应：可能未在播出。
+
+The channel's server certificate can't be trusted.
+无法信任该频道服务器的证书。
+
+The channel's secure connection failed.
+与频道的安全连接失败。
+
+The channel isn't at that address any more.
+该频道已不在此地址。
+
+The channel refuses to play here (it may play only in its country).
+该频道拒绝在此播放（可能仅限其所在国家）。
+
+The channel's server answered %ld.
+频道服务器返回了 %ld。
+
+This channel isn't sent as HLS (.m3u8): KaiVideo can't play it yet.
+此频道不是 HLS (.m3u8) 格式：KaiVideo 暂时无法播放。
+
+The channel's stream stopped.
+频道的流已停止。
+
+The list's certificates are checked again.
+将再次检查列表的证书。
+
+The list's certificates aren't checked: load the channels again.
+不再检查列表的证书：请重新加载频道。
+
+This channel's stream isn't MPEG-TS or HLS: KaiVideo can't play it.
+此频道的流既不是 MPEG-TS 也不是 HLS：KaiVideo 无法播放。
+
+Recently watched
+最近观看
+
+Reading the channels...
+正在读取频道...
+
+They come in a moment.
+马上就好。
+
+The IPTV list has none KaiVideo can play (Settings > IPTV).
+IPTV 列表中没有 KaiVideo 能播放的频道（设置 > IPTV）。
+
+There are too many favorites.
+收藏太多了。
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs
+[A] 观看  [^v] 频道  [<>] 节目指南  [Y] 分组  [R] 收藏  [ZL][ZR] 标签页
+
+[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu
+[A] 观看  [^v] 频道  [<>] 节目指南  [R] 收藏  [ZL][ZR] 标签页  [+] 菜单
+
+[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 观看  [R] 收藏  [X] 来源  [ZL][ZR] 标签  [-] 设置  [+] 菜单
+
+[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
+[A] 打开  [B] 上一级文件夹  [<>] 翻页  [ZL][ZR] 标签  [+] 菜单

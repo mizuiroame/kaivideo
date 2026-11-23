@@ -17,7 +17,7 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Test the connection"), N_("Forget this folder"), N_("Remember the password"),
     N_("Allow without signing (old NAS)"), N_("Credits and licenses"), N_("Check once a day"),
     N_("Look for an update"), N_("IPTV"), N_("List type"), N_("Address"), N_("User and password"),
-    N_("Guide (XMLTV)"), N_("Load the channels"), N_("Forget this list"),
+    N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -32,8 +32,8 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
     {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_TEST,
      SETTING_NET_FORGET, SETTING_COUNT},
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
-    {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_LOAD,
-     SETTING_IPTV_FORGET, SETTING_COUNT},
+    {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_CERTIFICATE,
+     SETTING_IPTV_LOAD, SETTING_IPTV_FORGET, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -134,6 +134,8 @@ bool configReadLine(Config *c, const char *line)
         c->use_jellyfin = strcmp(value, "1") == 0;
     else if (isKey(line, length, "network_view"))
         c->use_network = strcmp(value, "1") == 0;
+    else if (isKey(line, length, "iptv_view"))
+        c->use_iptv = strcmp(value, "1") == 0;
     else if (isKey(line, length, "server"))
         c->server_kind = !strcmp(value, "plex") ? SERVER_PLEX : !strcmp(value, "emby") ? SERVER_EMBY : SERVER_JELLYFIN;
     else if (isKey(line, length, "view"))
@@ -172,7 +174,8 @@ void configWrite(const Config *c, FILE *f)
             c->use_jellyfin ? 1 : 0, c->jf_quality);
     fprintf(f, "jellyfin_check_certificate=%d\nserver=%s\n", c->jf_check_certificate ? 1 : 0,
             c->server_kind == SERVER_PLEX ? "plex" : c->server_kind == SERVER_EMBY ? "emby" : "jellyfin");
-    fprintf(f, "view=%d\nnetwork_view=%d\n", c->server_view, c->use_network ? 1 : 0);
+    fprintf(f, "view=%d\nnetwork_view=%d\niptv_view=%d\n", c->server_view, c->use_network ? 1 : 0,
+            c->use_iptv ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
@@ -264,7 +267,7 @@ bool settingIsChoice(SettingRow row)
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
            row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
            row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
-           row == SETTING_IPTV_KIND;
+           row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE;
 }
 
 static int wrap(int value, int delta, int count)

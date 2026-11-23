@@ -33,16 +33,20 @@ static const char *libraryRoot(const App *app)
     return app->config.use_network ? DAV_ROOT : app->library_root;
 }
 
-#define NETWORK_COLOR GFX_RGB(0x2E, 0xC4, 0xB6)  // The network folder's, as servers have theirs.
+#define NETWORK_COLOR UI_NETWORK_COLOR
+#define IPTV_COLOR UI_IPTV_COLOR
 
 // --- The library and its scan ---
 
 void appLibraryRefreshHome(App *app)
 {
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
-    appLiveRebuild(app);  // The server's channels (in its view) and the IPTV list's.
-    libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
-                   app->live.count > 0 || app->iptv.count > 0, appDownloadsTabShown(app));
+    appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
+    if (app->config.use_iptv)
+        libviewSetIptvTabs(&app->view);
+    else
+        libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
+                       app->live.count > 0, appDownloadsTabShown(app));
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -81,6 +85,11 @@ static void loadCardLibrary(App *app)
 void appLibraryStart(App *app)
 {
     libviewInit(&app->view);
+    if (app->config.use_iptv && !app->config.use_jellyfin && appIptvConfigured()) {
+        appLibraryShowIptv(app);
+        return;
+    }
+    app->config.use_iptv = false;
     if (app->config.use_jellyfin && appJellyfinEnsure(app)) {
         libraryInit(&app->library, JF_ROOT);
         appLibraryRefreshHome(app);
@@ -107,7 +116,7 @@ void appLibrarySetSource(App *app, bool jellyfin)
         return;
     }
     libscanStop();
-    app->config.use_jellyfin = app->config.use_network = false;
+    app->config.use_jellyfin = app->config.use_network = app->config.use_iptv = false;
     appSaveSettings(app);
     libraryFree(&app->library);
     libviewInit(&app->view);
@@ -117,12 +126,26 @@ void appLibrarySetSource(App *app, bool jellyfin)
 void appLibraryShowNetwork(App *app)
 {
     libscanStop();
-    app->config.use_jellyfin = false;
+    app->config.use_jellyfin = app->config.use_iptv = false;
     app->config.use_network = true;
     appSaveSettings(app);
     libraryFree(&app->library);
     libviewInit(&app->view);
     loadCardLibrary(app);
+}
+
+void appLibraryShowIptv(App *app)
+{
+    libscanStop();
+    app->config.use_jellyfin = app->config.use_network = false;
+    app->config.use_iptv = true;
+    appSaveSettings(app);
+    libraryFree(&app->library);
+    libraryInit(&app->library, IPTV_PREFIX);  // No videos (yet): its channels.
+    libviewInit(&app->view);
+    app->view.tab = TAB_HOME;
+    appIptvHomeReset(app);
+    appLibraryRefreshHome(app);
 }
 
 void appLibraryNetworkChanged(App *app)
@@ -142,7 +165,7 @@ void appLibraryShowServer(App *app, ServerKind kind)
     libscanStop();
     bool changed = !app->config.use_jellyfin || app->config.server_view != (int)kind;
     app->config.use_jellyfin = true;
-    app->config.use_network = false;
+    app->config.use_network = app->config.use_iptv = false;
     app->config.server_view = kind;
     appSaveSettings(app);
     if (changed)
@@ -162,6 +185,10 @@ void appLibraryShowServer(App *app, ServerKind kind)
 // X goes through the card, the network folder (if there's one) and each server signed in, in turn.
 void appLibraryToggleSource(App *app, uint64_t now)
 {
+    if (app->config.use_iptv) {  // The last: back to the card.
+        appLibrarySetSource(app, false);
+        return;
+    }
     if (appJellyfinEnsure(app))
         jfSyncGetStatus(&app->jf);
     bool on_card = !app->config.use_jellyfin && !app->config.use_network;
@@ -173,6 +200,8 @@ void appLibraryToggleSource(App *app, uint64_t now)
     int next = nextSignedIn(app->config.use_jellyfin ? app->config.server_view : -1);
     if (next >= 0)
         appLibraryShowServer(app, (ServerKind)next);
+    else if (appIptvConfigured())
+        appLibraryShowIptv(app);
     else if (!on_card)
         appLibrarySetSource(app, false);
     else
@@ -686,7 +715,17 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         appLiveGroupsInput(app, pressed, touch, now);
         return;
     }
-    if (live_tab && (pressed & HidNpadButton_Y) && app->iptv.group_count > 0) {
+    bool iptv_home = app->config.use_iptv && v->tab == TAB_HOME && v->show < 0;
+    if ((iptv_home || (live_tab && app->config.use_iptv)) && (pressed & HidNpadButton_R)) {
+        // R: the channel under the cursor in the favorites (ZR still changes tab).
+        int channel = iptv_home ? iptvHomeChannel(&app->iptv_home, app->iptv_home_view.rows.cursor,
+                                                  app->iptv_home_view.cols[app->iptv_home_view.rows.cursor].cursor)
+                                : appLiveIptvSelected(app);
+        if (channel >= 0)
+            appIptvToggleFavorite(app, channel, now);
+        return;
+    }
+    if (live_tab && (pressed & HidNpadButton_Y) && app->config.use_iptv && app->iptv.group_count > 0) {
         appLiveOpenGroups(app);
         return;
     }
@@ -699,7 +738,7 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     bool downloads = v->tab == TAB_DOWNLOADS && v->show < 0;  // X and Y are its rows' there.
-    if ((pressed & HidNpadButton_Y) && !downloads) {
+    if ((pressed & HidNpadButton_Y) && !downloads && !app->config.use_iptv) {  // The IPTV view has no Search.
         search(app, now);
         return;
     }
@@ -729,6 +768,13 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             tapInput(app, hit, now);
         else
             appLiveInput(app, pressed, touch, now);
+        return;
+    }
+    if (iptv_home) {
+        if (header)
+            tapInput(app, hit, now);
+        else
+            appIptvHomeInput(app, pressed, touch, now);
         return;
     }
     buttonInput(app, pressed, now);
@@ -785,6 +831,8 @@ void appLibraryDraw(App *app, uint64_t now)
         uiLibrarySetSource(serverKindName(view), uiServerColor(view));
     else if (app->config.use_network)
         uiLibrarySetSource(T("Network folder"), NETWORK_COLOR);
+    else if (app->config.use_iptv)
+        uiLibrarySetSource(T("IPTV"), IPTV_COLOR);
     else
         uiLibrarySetSource(T("SD card"), COLOR_ACCENT);
     if (app->picking) {
@@ -809,9 +857,11 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawFooterStrip();
     } else {
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
-                      app->library_root[0] != '\0' || app->config.use_jellyfin, status);
+                      app->library_root[0] != '\0' || app->config.use_jellyfin || app->config.use_iptv, status);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
             appLiveDraw(app);
+        if (app->view.iptv && app->view.tab == TAB_HOME && app->view.show < 0)
+            appIptvHomeDraw(app);
         if (app->view.tab == TAB_DOWNLOADS && app->view.show < 0)
             appDownloadsDraw(app);
         drawShowButtons(app);

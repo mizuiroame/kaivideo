@@ -379,6 +379,8 @@ bool iptvAccountRead(IptvAccount *a, const char *text)
                 decode64(value + 4, a->password, sizeof(a->password));
             else if (key == 5 && !strncmp(line, "guide", 5) && isWebUrl(value))
                 snprintf(a->guide, sizeof(a->guide), "%s", value);
+            else if (key == 12 && !strncmp(line, "certificates", 12))
+                a->any_certificate = !strcmp(value, "off");
         }
         line = end ? end + 1 : NULL;
     }
@@ -395,9 +397,9 @@ bool iptvAccountWrite(const IptvAccount *a, char *out, size_t size)
     if (hasLineBreak(a->address) || hasLineBreak(a->user) || hasLineBreak(a->guide) ||
         !encode64(a->password, password, sizeof(password)))
         return false;
-    int n = snprintf(out, size, "kind=%s\naddress=%s\nuser=%s\npassword=b64:%s\nguide=%s\n",
+    int n = snprintf(out, size, "kind=%s\naddress=%s\nuser=%s\npassword=b64:%s\nguide=%s\ncertificates=%s\n",
                      a->kind == IPTV_XTREAM ? "xtream" : a->kind == IPTV_M3U ? "m3u" : "", a->address, a->user,
-                     password, a->guide);
+                     password, a->guide, a->any_certificate ? "off" : "on");
     memset(password, 0, sizeof(password));
     return n > 0 && (size_t)n < size;
 }

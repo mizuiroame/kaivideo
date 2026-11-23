@@ -993,7 +993,7 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
         drawShow(v, lib, resume);
     } else if (v->tab == TAB_SEARCH) {
         drawSearch(v, lib, resume);
-    } else if (v->tab == TAB_LIVE || v->tab == TAB_DOWNLOADS) {
+    } else if (v->tab == TAB_LIVE || v->tab == TAB_DOWNLOADS || (v->iptv && v->tab == TAB_HOME)) {
         // Drawn by the app over this (app_live.c, app_dltab.c): it holds what they show.
     } else if (lib->count == 0) {
         drawCentered(status && status[0] ? T("Looking for videos...") : T("No videos here yet"),

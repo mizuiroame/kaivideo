@@ -27,10 +27,11 @@ void testSettings(void)
           rows[4] == SETTING_OPEN_PLEX && rows[5] == SETTING_OPEN_IPTV && rows[6] == SETTING_OPEN_PLAYBACK &&
           rows[7] == SETTING_OPEN_DISPLAY && rows[8] == SETTING_ABOUT);
     // The IPTV list's page: its type (a choice), address, account, guide, load and forget.
-    CHECK(settingsPageRows(SETTINGS_PAGE_IPTV, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_IPTV_KIND &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_IPTV, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_IPTV_KIND &&
           rows[1] == SETTING_IPTV_ADDRESS && rows[2] == SETTING_IPTV_ACCOUNT && rows[3] == SETTING_IPTV_GUIDE &&
-          rows[4] == SETTING_IPTV_LOAD && rows[5] == SETTING_IPTV_FORGET);
-    CHECK(settingIsChoice(SETTING_IPTV_KIND) && !settingIsChoice(SETTING_IPTV_LOAD) &&
+          rows[4] == SETTING_IPTV_CERTIFICATE && rows[5] == SETTING_IPTV_LOAD && rows[6] == SETTING_IPTV_FORGET);
+    CHECK(settingIsChoice(SETTING_IPTV_KIND) && settingIsChoice(SETTING_IPTV_CERTIFICATE) &&
+          !settingIsChoice(SETTING_IPTV_LOAD) &&
           !strcmp(settingsPageTitle(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN), "IPTV") &&
           settingsPageNote(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN) != NULL);
     SettingsPage iptv_page;

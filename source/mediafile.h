@@ -25,6 +25,7 @@ typedef struct {
     // conversion begun mid-video): FFmpeg's HLS seek, which counts from the
     // earliest track, lands that much late. Seeks ask for that much earlier.
     int64_t sound_lead_us;
+    bool stream;           // A live stream sent as it is (tsstream.h): io is its reader.
 } MediaInput;
 
 // Opens location and reads its format. False if it can't be.

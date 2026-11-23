@@ -11,6 +11,7 @@
 #include "downloads.h"
 #include "home.h"
 #include "iptv.h"
+#include "iptvhome.h"
 #include "iptvload.h"
 #include "jfsync.h"
 #include "kinetic.h"
@@ -118,9 +119,13 @@ struct App {
     IptvGuide iptv_guide;
     unsigned iptv_seen;         // The load whose result was taken.
     int iptv_group;             // An index of its groups, -1 for all its channels.
+    IptvMarks iptv_marks;       // Its channels watched last and favorites (app_iptvhome.c),
+    IptvHome iptv_home;         // the rows of its view's Home,
+    IptvHomeView iptv_home_view;  // and where the cursor is on them.
     bool live_groups_open;      // The list of groups shows over the guide (X).
     int live_group_cursor;      // Its row: 0 is "All channels", then each group.
-    char open_url[IPTV_URL_MAX];  // The IPTV channel opening: its stream (copied for the opening thread).
+    char open_url[IPTV_URL_MAX];  // The IPTV channel opening: its stream (copied for the opening thread),
+    bool open_any_certificate;    // and whether its certificate is checked.
     pthread_t live_thread;
     bool live_reading;
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
@@ -215,6 +220,8 @@ void appLibraryToggleSource(App *app, uint64_t now);
 void appLibrarySetSource(App *app, bool jellyfin);
 // Shows the network folder's library (what was found last time, and a new look).
 void appLibraryShowNetwork(App *app);
+// The IPTV list's view: its Live TV.
+void appLibraryShowIptv(App *app);
 // The network folder's account changed: its library is looked for again, or, gone, the card's shows.
 void appLibraryNetworkChanged(App *app);
 // Puts a library read from the server in place (taking it from c) with what it says was watched.
@@ -266,10 +273,36 @@ void appIptvUpdate(App *app, uint64_t now);
 void appIptvExit(App *app);
 // What its rows say, before Settings is drawn.
 void appIptvFeedSettings(const App *app);
+// Its Certificate check is off: its channels' streams take any certificate.
+bool appIptvAnyCertificate(void);
+// There's a list set: X goes to its view.
+bool appIptvConfigured(void);
 
 // app_live.c
 // The IPTV list's channels or guide changed: the Live tab is made again.
 void appLiveIptvChanged(App *app);
+// Plays the IPTV list's index'th channel.
+void appLivePlayIptv(App *app, int index, uint64_t now);
+// The IPTV channel the Live guide's cursor is on, -1 if none.
+int appLiveIptvSelected(const App *app);
+
+// app_iptvhome.c: the IPTV view's Home, its recents and favorites.
+void appIptvHomeStart(App *app);
+void appIptvHomeExit(App *app);
+// The list or the marks changed: its rows again, the cursor on the same row.
+void appIptvHomeRebuild(App *app);
+// On the first channel (entering the view: the one watched last).
+void appIptvHomeReset(App *app);
+// A channel opened (its location): first in the recents.
+void appIptvHomeWatched(App *app, const char *location);
+// The channel in the favorites, or out of them.
+void appIptvToggleFavorite(App *app, int channel, uint64_t now);
+bool appIptvIsFavorite(const App *app, int channel);
+void appIptvHomeInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appIptvHomeDraw(const App *app);
+// A finger moves its rows (up and down), or one of them (across).
+bool appIptvHomeScrollPx(App *app, int px);
+bool appIptvHomeRowScrollPx(App *app, int row, int px);
 // The IPTV list's groups over the Live tab (Y): opened, and their buttons and taps.
 void appLiveOpenGroups(App *app);
 void appLiveGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);

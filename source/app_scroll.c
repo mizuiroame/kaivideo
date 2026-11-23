@@ -18,6 +18,8 @@ typedef enum {
     SCROLL_FILES,
     SCROLL_LIVE,
     SCROLL_DOWNLOADS,
+    SCROLL_IPTV_HOME,
+    SCROLL_IPTV_ROW,
 } ScrollTarget;
 
 // What's on screen: a list being scrolled stops if this changes.
@@ -51,6 +53,8 @@ static bool scrollTarget(App *app, int px)
     case SCROLL_FILES: return app->scroll_browser && browserScrollPx(app->scroll_browser, px, UI_ROW_H, UI_ROWS);
     case SCROLL_LIVE: return scrollPx(&v->live, px, LIBVIEW_LIVE_ROW_PX, LIBVIEW_LIVE_ROWS, 1, app->live.count);
     case SCROLL_DOWNLOADS: return v->tab == TAB_DOWNLOADS && appDownloadsScrollPx(app, px);
+    case SCROLL_IPTV_HOME: return appIptvHomeScrollPx(app, px);
+    case SCROLL_IPTV_ROW: return appIptvHomeRowScrollPx(app, app->scroll_row, px);
     default: return false;
     }
 }
@@ -81,6 +85,8 @@ static void startScroll(App *app, TouchEvent touch)
         LibHit hit = uiLibraryTap(touch.start_x, touch.start_y);
         bool across = abs(touch.x - touch.start_x) > abs(touch.y - touch.start_y);
         app->scroll_target = hit.kind == LIBHIT_HOME_CARD && across ? SCROLL_HOME_ROW : SCROLL_HOME;
+        if (v->iptv)  // The IPTV view's rows of channels.
+            app->scroll_target = app->scroll_target == SCROLL_HOME_ROW ? SCROLL_IPTV_ROW : SCROLL_IPTV_HOME;
         app->scroll_row = hit.a;
     } else if (libviewGrid(v) >= 0) {
         app->scroll_target = SCROLL_GRID;
@@ -97,7 +103,8 @@ void appLibraryDrag(App *app, TouchEvent touch, uint64_t now)
         kineticDrag(&app->kinetic, 0, now);
     }
     // The content goes with the finger: dragging up shows what's below.
-    int px = app->scroll_target == SCROLL_HOME_ROW ? -touch.dx : -touch.dy;
+    bool across = app->scroll_target == SCROLL_HOME_ROW || app->scroll_target == SCROLL_IPTV_ROW;
+    int px = across ? -touch.dx : -touch.dy;
     scrollTarget(app, px);
     if (!starting)
         kineticDrag(&app->kinetic, px, now);

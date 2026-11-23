@@ -34,6 +34,7 @@ typedef struct {
     long quiet_s;                 // With no data, gives up after this instead (a server that works
                                   // before it answers); connecting still gives up as stall_s says. 0: none.
     bool accept_json;             // Asks for JSON (Plex answers XML otherwise).
+    bool any_certificate;         // Takes any https certificate (an IPTV list with Certificate check off).
 } NetRequest;
 
 // Takes a piece of the answer. False stops the transfer, which then counts as fine.

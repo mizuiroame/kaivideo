@@ -15,6 +15,7 @@
 #include "davnet.h"
 #include "smbnet.h"
 #include "hlsio.h"
+#include "tsstream.h"
 #include "jfsync.h"
 #include "net.h"
 
@@ -476,7 +477,10 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
 {
     memset(in, 0, sizeof(*in));
     bool converted = hlsIsLocation(location);
-    bool ok = converted ? hlsOpenInput(fmt, &in->playlist, location) : openFileInput(in, fmt, location, buffer_size);
+    in->stream = tsStreamIsLocation(location);
+    bool ok = converted    ? hlsOpenInput(fmt, &in->playlist, location)
+              : in->stream ? tsStreamOpenInput(fmt, &in->io)
+                           : openFileInput(in, fmt, location, buffer_size);
     if (!ok || avformat_find_stream_info(*fmt, NULL) < 0)
         return false;
     if (converted) {
@@ -506,6 +510,11 @@ bool mediaInputOpen(MediaInput *in, AVFormatContext **fmt, const char *location,
 
 void mediaInputClose(MediaInput *in)
 {
+    if (in->stream) {  // Its reader of the stream goes.
+        tsStreamCloseInput(in->io);
+        in->io = NULL;
+        in->stream = false;
+    }
     if (in->io) {
         av_freep(&in->io->buffer);
         avio_context_free(&in->io);

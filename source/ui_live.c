@@ -6,7 +6,9 @@
 #include "gfx.h"
 #include "lang.h"
 #include "ui_buttons.h"
+#include "thumbs.h"
 #include "ui_library.h"
+#include "ui_library_shared.h"
 #include "ui_style.h"
 
 // The guide: times along the top, a row a channel, its programs across two
@@ -16,6 +18,7 @@
 #define LIVE_ROW_H LIBVIEW_LIVE_ROW_PX
 #define CHANNEL_W 224          // The channel's number and name, on the left.
 #define NUMBER_W 52
+#define LOGO_W 72              // An IPTV channel's logo, 16:9.
 #define GRID_X (MARGIN + CHANNEL_W + 12)
 #define GRID_W (GFX_WIDTH - MARGIN - GRID_X)
 #define CELL_GAP 3
@@ -70,8 +73,19 @@ static void drawChannel(const LiveChannel *c, int index, int y, bool focused)
         gfxFillRect(MARGIN - 12, y + 18, 3, LIVE_ROW_H - 36, COLOR_ACCENT);
     }
     float cy = y + LIVE_ROW_H / 2.0f;
-    fontDrawMiddle(FONT_BOLD, 20, MARGIN, cy, c->number[0] ? c->number : "-", COLOR_FAINT);
-    fontDrawClipped(FONT_BOLD, 19, MARGIN + NUMBER_W, (int)cy - 12, CHANNEL_W - NUMBER_W - 8, c->name,
+    int name_x = MARGIN + NUMBER_W;
+    const uint32_t *logo = c->logo ? thumbGet(c->logo, 0) : NULL;
+    if (c->logo) {  // An IPTV channel: its logo (a dark card while it comes) where the number was.
+        int lw = LOGO_W, lh = LOGO_W * THUMB_H / THUMB_W, ly = (int)cy - lh / 2;
+        if (logo)
+            uiLibDrawPicture(logo, MARGIN - 4, ly, lw, lh, 6);
+        else
+            gfxFillRoundRect(MARGIN - 4, ly, lw, lh, 6, COLOR_SURFACE);
+        name_x = MARGIN - 4 + lw + 10;
+    } else {
+        fontDrawMiddle(FONT_BOLD, 20, MARGIN, cy, c->number[0] ? c->number : "-", COLOR_FAINT);
+    }
+    fontDrawClipped(FONT_BOLD, 19, name_x, (int)cy - 12, MARGIN + CHANNEL_W - 8 - name_x, c->name,
                     focused ? COLOR_TEXT : COLOR_DIM);
     uiLibraryAddHit(0, y, GRID_X - CELL_GAP, LIVE_ROW_H, LIBHIT_LIVE_ROW, index, 0);
 }
@@ -120,11 +134,29 @@ static void drawPrograms(const LiveChannel *c, int index, int y, int focus, cons
 }
 
 // What the cursor is on: on now or later, its times, and its channel.
-static void drawStrip(const LiveChannel *c, int focus, const GuideTime *t)
+#define PILL_H 30
+
+// R: the IPTV channel in the favorites, or out of them, at the strip's bottom right. Returns its width.
+static int drawFavoritePill(int right, int y, bool favorite)
+{
+    const char *label = favorite ? T("In Favorites") : T("Add to Favorites");
+    int w = uiButtonWidth("R") + fontTextWidth(FONT_BOLD, 16, label) + 32, x = right - w;
+    gfxFillRoundRect(x, y, w, PILL_H, PILL_H / 2, favorite ? COLOR_ACCENT : COLOR_SURFACE_HI);
+    uiDrawButton(x + 10, y + PILL_H / 2.0f, "R", COLOR_SURFACE, COLOR_TEXT);
+    fontDrawMiddle(FONT_BOLD, 16, x + 20 + uiButtonWidth("R"), y + PILL_H / 2.0f, label,
+                   favorite ? COLOR_BG : COLOR_TEXT);
+    uiLibraryAddHit(x, y - 4, w, PILL_H + 8, LIBHIT_FAVORITE, 0, 0);
+    return w;
+}
+
+static void drawStrip(const LiveChannel *c, int focus, const GuideTime *t, int favorite)
 {
     int x = MARGIN - 12, w = GFX_WIDTH - 2 * x;
     gfxFillRoundRect(x, STRIP_Y, w, STRIP_H, 12, COLOR_SURFACE);
     int tx = x + 20, right = x + w - 20;
+    int title_right = right;
+    if (favorite >= 0)
+        title_right -= drawFavoritePill(right, STRIP_Y + STRIP_H - PILL_H - 10, favorite == 1) + 16;
     int channel_w = fontTextWidth(FONT_REGULAR, 16, c->name);
     fontDraw(FONT_REGULAR, 16, right - channel_w, STRIP_Y + 14, c->name, COLOR_FAINT);
     if (focus < 0) {
@@ -138,7 +170,7 @@ static void drawStrip(const LiveChannel *c, int focus, const GuideTime *t)
     liveTimeRange(p, t->offset, t->h24, when, sizeof(when));
     fontDraw(FONT_BOLD, 14, tx, STRIP_Y + 14, label, COLOR_ACCENT);
     fontDraw(FONT_REGULAR, 15, tx + fontTextWidth(FONT_BOLD, 14, label) + 10, STRIP_Y + 14, when, COLOR_FAINT);
-    fontDrawClipped(FONT_BOLD, 22, tx, STRIP_Y + 38, right - tx, p->title, COLOR_TEXT);
+    fontDrawClipped(FONT_BOLD, 22, tx, STRIP_Y + 38, title_right - tx, p->title, COLOR_TEXT);
 }
 
 // The IPTV group shown, as a pill over the channels' names: Y or a tap lists the groups.
@@ -156,7 +188,7 @@ static void drawGroupPill(const char *group)
 }
 
 void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int64_t utc_offset_s, bool clock_24h,
-                   bool loading, const char *group, bool iptv)
+                   bool loading, const char *group, bool iptv, int favorite)
 {
     if (group)
         drawGroupPill(group);
@@ -190,7 +222,7 @@ void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int6
     drawNowLine(&t, rows);
     if (s->cursor >= 0 && s->cursor < guide->count) {
         const LiveChannel *c = &guide->channels[s->cursor];
-        drawStrip(c, liveProgramAt(c, at), &t);
+        drawStrip(c, liveProgramAt(c, at), &t, favorite);
     }
 }
 

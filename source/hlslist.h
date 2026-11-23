@@ -36,6 +36,8 @@ typedef struct {
     int first;               // The first segment in text.
     int list;                // Its number among a master list's (hlsmaster.h), -1 when alone.
     bool subtitles;          // Its segments are WebVTT.
+    char *map_url;           // fMP4: its initialization section (#EXT-X-MAP), which FFmpeg reads first;
+                             // its text names it HLS_LOCAL_PREFIX "init.mp4" ("list/init.mp4"). NULL for none.
 } HlsPlaylist;
 
 // The variant of a master list that the console plays best: up to 1080p,
@@ -64,6 +66,7 @@ void hlsPlaylistFree(HlsPlaylist *p);
 void hlsPlaylistSpan(const HlsPlaylist *p, int64_t from_ns, int64_t length_ns, int *first, int *last);
 // The segment number of a name made by hlsPlaylistParse, or -1.
 int hlsLocalSegment(const char *url);
-// A local name: the list (0 for a list alone) and segment, or -1 for the
-// list's own "list/index.m3u8". False if it isn't one.
+// A local name: the list (0 for a list alone) and segment, -1 for the
+// list's own "list/index.m3u8", or HLS_INIT_INDEX for its "init.mp4". False if it isn't one.
+#define HLS_INIT_INDEX (-2)
 bool hlsLocalName(const char *url, int *list, int *index);

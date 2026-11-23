@@ -27,6 +27,7 @@ typedef struct {
     LiveProgram now, next;
     LiveProgram programs[LIVE_PROGRAMS_PER_CHANNEL];  // Those not over yet, by start time.
     int program_count;
+    const char *logo;  // An IPTV channel's logo's address (in the app's list), or NULL.
 } LiveChannel;
 
 typedef struct {
