@@ -1703,3 +1703,12 @@ Há favoritos demais.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] abrir  [B] pasta acima  [<>] página  [ZL][ZR] abas  [+] menu
+
+Reading the episodes...
+Lendo os episódios...
+
+The episodes couldn't be read.
+Não foi possível ler os episódios.
+
+The episodes are still being read.
+Os episódios ainda estão sendo lidos.

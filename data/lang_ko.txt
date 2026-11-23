@@ -1703,3 +1703,12 @@ There are too many favorites.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] 열기  [B] 상위 폴더  [<>] 페이지  [ZL][ZR] 탭  [+] 메뉴
+
+Reading the episodes...
+에피소드를 읽는 중...
+
+The episodes couldn't be read.
+에피소드를 읽을 수 없습니다.
+
+The episodes are still being read.
+아직 에피소드를 읽는 중입니다.

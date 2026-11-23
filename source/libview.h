@@ -82,8 +82,9 @@ void libviewInit(LibView *v);
 // Series, Search and Files. Downloads goes before Files when asked for. A tab
 // that's gone leaves Home showing.
 void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads);
-// The IPTV list's view: its Home (rows of channels), its Live TV guide, and Files.
-void libviewSetIptvTabs(LibView *v);
+// The IPTV list's view: its Home (rows of channels), its Live TV guide, an Xtream account's
+// Films, Series and Search (when it has them), and Files.
+void libviewSetIptvTabs(LibView *v, const Library *lib);
 // Shows a tab of that kind (not a server's library). False if there's none.
 bool libviewShowTab(LibView *v, LibTab kind);
 // Live TV: moves the cursor through count channels.

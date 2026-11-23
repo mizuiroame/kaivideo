@@ -18,6 +18,7 @@
 #include "tsstream.h"
 #include "jfsync.h"
 #include "net.h"
+#include "xtreamvod.h"
 
 #define FETCH_TRIES 3         // With the stall below: about 16 s without the server, then it's lost.
 #define FETCH_STALL_S 5L
@@ -39,6 +40,7 @@ typedef struct {
     NetClient *net;
     SmbFile *smb;          // A network folder on an SMB share: read with it, not HTTP.
     char url[REMOTE_URL_MAX], authorization[JF_AUTH_MAX];
+    bool any_certificate;  // An IPTV server's (its list's certificate check is off).
     BlockSlot slots[BLOCK_SLOTS];
     uint8_t *memory;       // BLOCK_SLOTS blocks.
     char location[LIBRARY_PATH_MAX];
@@ -133,7 +135,8 @@ static size_t fetchBlock(Remote *r, int64_t index, uint8_t *to, long long *total
     int64_t from = index * BLOCK_SIZE;
     snprintf(range, sizeof(range), "%" PRId64 "-%" PRId64, from, from + BLOCK_SIZE - 1);
     NetRequest request = {.url = r->url, .authorization = r->authorization, .range = range,
-                          .cancel = &r->abort_fetch, .total_size = total, .stall_s = FETCH_STALL_S};
+                          .cancel = &r->abort_fetch, .total_size = total, .stall_s = FETCH_STALL_S,
+                          .any_certificate = r->any_certificate};
     for (int attempt = 0; attempt < FETCH_TRIES && !r->abort_fetch; attempt++) {
         Filling filling = {to, 0};
         long status = 0;
@@ -306,7 +309,10 @@ static Remote *remoteOpen(const char *location)
     r->memory = malloc((size_t)BLOCK_SLOTS * BLOCK_SIZE);
     r->net = netClientOpen();
     bool (*request)(const char *, char *, size_t, char *, size_t) =
-        davIsLocation(location) ? davStreamRequest : jfSyncStreamRequest;
+        davIsLocation(location)      ? davStreamRequest
+        : xtreamIsLocation(location) ? xtreamVodStreamRequest
+                                     : jfSyncStreamRequest;
+    r->any_certificate = xtreamIsLocation(location) && xtreamVodAnyCertificate();
     char why[160];
     if (r->memory && davIsLocation(location) && davIsSmb())  // Opened here, read by the fetch thread only.
         r->smb = davSmbOpen(location, why, sizeof(why));
@@ -390,7 +396,7 @@ MediaFile *mediaFileOpen(const char *location)
     MediaFile *f = calloc(1, sizeof(*f));
     if (!f)
         return NULL;
-    if (jfIsRemoteLocation(location) || davIsLocation(location))
+    if (jfIsRemoteLocation(location) || davIsLocation(location) || xtreamIsLocation(location))
         remoteAttach(f, location);
     else
         f->file = fopen(location, "rb");

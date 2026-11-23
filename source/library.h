@@ -24,6 +24,7 @@ typedef struct {
     bool named;
     char *overview;      // Its summary, or NULL.
     char *series_art;    // Where its series' picture comes from, or NULL.
+    char *art;           // Where its own picture comes from (thumbs.h's key), or NULL: from its file.
     int64_t runtime_ns;  // 0 if unknown.
     int blocked;         // Why the console can't play it (JfPlayability), 0 if it can.
     bool favorite;       // A film marked so, or an episode of a series marked so.
@@ -32,7 +33,7 @@ typedef struct {
 
 // What a server says of a video besides its name.
 typedef struct {
-    const char *overview, *series_art;
+    const char *overview, *series_art, *art;
     int64_t runtime_ns;
     int blocked;
     bool favorite;

@@ -189,6 +189,8 @@ const uint32_t *uiLibPicture(const Library *lib, LibraryRef ref)
 {
     if (!g_thumbnails)
         return NULL;
+    if (!ref.is_show && lib->items[ref.index].art)
+        return thumbGet(lib->items[ref.index].art, 0);
     if (!ref.is_show)
         return thumbGet(lib->items[ref.index].path, lib->items[ref.index].size);
     // A series: the server's picture for it, or its first episode that has one
@@ -914,7 +916,12 @@ static void drawShow(const LibView *v, const Library *lib, const ResumeList *res
             snprintf(title, sizeof(title), "%s", it->name.title);
         else
             snprintf(title, sizeof(title), T("Episode %d"), it->name.episode);
-        formatSize(it->size, size, sizeof(size));
+        if (it->size > 0)
+            formatSize(it->size, size, sizeof(size));
+        else if (it->runtime_ns > 0)  // An IPTV server's: no size known, its length if told.
+            snprintf(size, sizeof(size), T("%d min"), (int)((it->runtime_ns / 1000000000ll + 30) / 60));
+        else
+            size[0] = '\0';
         drawListRow(y, e == v->episodes.cursor, number, title, size, uiLibWatched(lib, resume, item),
                     uiLibPicture(lib, (LibraryRef){false, item}), uiLibSeen(lib, item) ? 1 : 0, it->path);
         addListHit(0, y, GFX_WIDTH, LIST_ROW_H, SHOW_LIST_Y, list_bottom, LIBHIT_EPISODE, e, 0);

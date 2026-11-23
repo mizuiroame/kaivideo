@@ -54,12 +54,18 @@ void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool
     }
 }
 
-void libviewSetIptvTabs(LibView *v)
+void libviewSetIptvTabs(LibView *v, const Library *lib)
 {
     v->tab_count = 0;
     v->iptv = true;
     addTab(v, TAB_HOME, -1);
     addTab(v, TAB_LIVE, -1);
+    if (lib->film_count > 0)
+        addTab(v, TAB_FILMS, -1);
+    if (lib->show_count > 0)
+        addTab(v, TAB_SERIES, -1);
+    if (lib->count > 0)
+        addTab(v, TAB_SEARCH, -1);
     addTab(v, TAB_FILES, -1);
     if (libviewTabIndex(v) < 0) {
         v->tab = TAB_HOME;

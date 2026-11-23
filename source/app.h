@@ -119,6 +119,7 @@ struct App {
     IptvGuide iptv_guide;
     unsigned iptv_seen;         // The load whose result was taken.
     int iptv_group;             // An index of its groups, -1 for all its channels.
+    XtreamCatalog xtream;       // An Xtream account's films and series (app_xtream.c).
     IptvMarks iptv_marks;       // Its channels watched last and favorites (app_iptvhome.c),
     IptvHome iptv_home;         // the rows of its view's Home,
     IptvHomeView iptv_home_view;  // and where the cursor is on them.
@@ -285,6 +286,17 @@ void appLiveIptvChanged(App *app);
 void appLivePlayIptv(App *app, int index, uint64_t now);
 // The IPTV channel the Live guide's cursor is on, -1 if none.
 int appLiveIptvSelected(const App *app);
+
+// app_xtream.c: an Xtream account's films and series in the IPTV view.
+// The load's catalog (taken).
+void appXtreamTake(App *app, XtreamCatalog *c);
+// The IPTV view's library made again from the catalog.
+void appXtreamInstall(App *app);
+// Once a frame: a series' episodes read when its page opens.
+void appXtreamUpdate(App *app);
+void appXtreamExit(App *app);
+// app_library.c: a library made for the IPTV view replaces the app's (taken).
+void appLibraryInstallIptv(App *app, Library *built);
 
 // app_iptvhome.c: the IPTV view's Home, its recents and favorites.
 void appIptvHomeStart(App *app);

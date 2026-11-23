@@ -1703,3 +1703,12 @@ There are too many favorites.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] 打开  [B] 上一级文件夹  [<>] 翻页  [ZL][ZR] 标签  [+] 菜单
+
+Reading the episodes...
+正在读取剧集...
+
+The episodes couldn't be read.
+无法读取剧集。
+
+The episodes are still being read.
+仍在读取剧集。

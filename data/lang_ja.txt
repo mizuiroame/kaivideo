@@ -1703,3 +1703,12 @@ There are too many favorites.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] 開く  [B] 上のフォルダー  [<>] ページ  [ZL][ZR] タブ  [+] メニュー
+
+Reading the episodes...
+エピソードを読み込んでいます...
+
+The episodes couldn't be read.
+エピソードを読み込めませんでした。
+
+The episodes are still being read.
+エピソードをまだ読み込んでいます。

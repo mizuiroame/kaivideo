@@ -1703,3 +1703,12 @@ Il y a trop de favoris.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] ouvrir  [B] dossier parent  [<>] page  [ZL][ZR] onglets  [+] menu
+
+Reading the episodes...
+Lecture des épisodes...
+
+The episodes couldn't be read.
+Les épisodes n'ont pas pu être lus.
+
+The episodes are still being read.
+Les épisodes sont encore en cours de lecture.

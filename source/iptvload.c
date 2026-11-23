@@ -18,6 +18,7 @@ static volatile bool g_cancel;
 static IptvLoadStatus g_status;
 static IptvList g_list;     // Read, not taken yet.
 static IptvGuide g_guide;
+static XtreamCatalog g_catalog;
 static bool g_ready;
 static IptvAccount g_account;
 static int64_t g_now;
@@ -91,6 +92,26 @@ static bool readList(NetClient *c, IptvList *list, char *error, size_t size)
     return ok;
 }
 
+// An Xtream account's films and series. Without them (an old server, an error), the channels still come.
+static void readCatalog(NetClient *c, XtreamCatalog *catalog)
+{
+    if (g_account.kind != IPTV_XTREAM)
+        return;
+    XtreamAccount x;
+    iptvXtreamOf(&g_account, &x);
+    char url[IPTV_URL_MAX + 256];
+    NetResponse r;
+    memset(&r, 0, sizeof(r));
+    if (!g_cancel && xtreamApiUrl(&x, "get_vod_streams", NULL, url, sizeof(url)) && fetchText(c, url, &r))
+        xtreamParseFilms(r.data, catalog);
+    netResponseFree(&r);
+    if (!g_cancel && xtreamApiUrl(&x, "get_series", NULL, url, sizeof(url)) && fetchText(c, url, &r))
+        xtreamParseShows(r.data, catalog);
+    netResponseFree(&r);
+    memset(&x, 0, sizeof(x));
+    memset(url, 0, sizeof(url));
+}
+
 static bool feedGuide(const void *data, size_t size, void *user)
 {
     return !g_cancel && xmltvFeed(user, data, size);
@@ -158,12 +179,16 @@ static void *loadThread(void *arg)
     NetClient *c = network ? netClientOpen() : NULL;
     IptvList list;
     IptvGuide guide;
+    XtreamCatalog catalog;
     memset(&list, 0, sizeof(list));
     memset(&guide, 0, sizeof(guide));
+    memset(&catalog, 0, sizeof(catalog));
     char error[256] = "", guide_error[256] = "";
     bool ok = c && readList(c, &list, error, sizeof(error));
     if (!c)
         snprintf(error, sizeof(error), "%s", T("The network can't be used."));
+    if (ok && !g_cancel)
+        readCatalog(c, &catalog);
     if (ok && !g_cancel) {
         setState(IPTV_LOAD_GUIDE);
         readGuide(c, &list, &guide, guide_error, sizeof(guide_error));
@@ -176,11 +201,14 @@ static void *loadThread(void *arg)
     if (g_cancel) {
         iptvListFree(&list);
         iptvGuideFree(&guide);
+        xtreamCatalogFree(&catalog);
     } else {
         iptvListFree(&g_list);
         iptvGuideFree(&g_guide);
+        xtreamCatalogFree(&g_catalog);
         g_list = list;
         g_guide = guide;
+        g_catalog = catalog;
         g_ready = ok;
         g_status.state = ok ? IPTV_LOAD_DONE : IPTV_LOAD_FAILED;
         snprintf(g_status.error, sizeof(g_status.error), "%s", error);
@@ -228,13 +256,15 @@ void iptvLoadStatus(IptvLoadStatus *out)
     pthread_mutex_unlock(&g_lock);
 }
 
-bool iptvLoadTake(IptvList *list, IptvGuide *guide)
+bool iptvLoadTake(IptvList *list, IptvGuide *guide, XtreamCatalog *catalog)
 {
     pthread_mutex_lock(&g_lock);
     bool ready = g_ready;
     if (ready) {
         *list = g_list;
         *guide = g_guide;
+        *catalog = g_catalog;
+        memset(&g_catalog, 0, sizeof(g_catalog));
         memset(&g_list, 0, sizeof(g_list));
         memset(&g_guide, 0, sizeof(g_guide));
         g_ready = false;

@@ -1,5 +1,6 @@
 // Loads the IPTV list set in Settings, and its guide, on a thread of its
-// own: an M3U playlist, or an Xtream account's live channels; then the
+// own: an M3U playlist, or an Xtream account's live channels (and its
+// films and series, without their episodes: xtreamvod.h); then the
 // XMLTV guide, read as it downloads. One load at a time; a new one replaces it.
 #pragma once
 
@@ -8,6 +9,7 @@
 
 #include "iptv.h"
 #include "xmltv.h"
+#include "xtreamvod.h"
 
 #define IPTV_GUIDE_BEFORE_S (2 * 3600)  // Programs kept from this long ago,
 #define IPTV_GUIDE_AFTER_S (24 * 3600)  // to this far ahead.
@@ -40,8 +42,8 @@ void iptvGuideFree(IptvGuide *g);
 
 void iptvLoadStart(const IptvAccount *a, int64_t now_s);
 void iptvLoadStatus(IptvLoadStatus *out);
-// Moves a finished load's list and guide to the caller (who frees them).
+// Moves a finished load's list, guide and films and series to the caller (who frees them).
 // False if there's none new since the last take.
-bool iptvLoadTake(IptvList *list, IptvGuide *guide);
+bool iptvLoadTake(IptvList *list, IptvGuide *guide, XtreamCatalog *catalog);
 // Stops a load under way, and waits for it.
 void iptvLoadExit(void);

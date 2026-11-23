@@ -43,7 +43,7 @@ void appLibraryRefreshHome(App *app)
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
     appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
     if (app->config.use_iptv)
-        libviewSetIptvTabs(&app->view);
+        libviewSetIptvTabs(&app->view, &app->library);
     else
         libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
                        app->live.count > 0, appDownloadsTabShown(app));
@@ -141,10 +141,11 @@ void appLibraryShowIptv(App *app)
     app->config.use_iptv = true;
     appSaveSettings(app);
     libraryFree(&app->library);
-    libraryInit(&app->library, IPTV_PREFIX);  // No videos (yet): its channels.
+    libraryInit(&app->library, IPTV_PREFIX);  // Its channels, and an Xtream account's films and series.
     libviewInit(&app->view);
     app->view.tab = TAB_HOME;
     appIptvHomeReset(app);
+    appXtreamInstall(app);
     appLibraryRefreshHome(app);
 }
 
@@ -235,6 +236,17 @@ static void afterNewLibrary(App *app, const char *details_path)
     }
     app->view.details = details_path[0] ? libraryFind(&app->library, details_path) : -1;
     appLibraryRefreshHome(app);
+}
+
+void appLibraryInstallIptv(App *app, Library *built)
+{
+    char details[LIBRARY_PATH_MAX] = "";
+    if (app->view.details >= 0 && (size_t)app->view.details < app->library.count)
+        snprintf(details, sizeof(details), "%s", app->library.items[app->view.details].path);
+    libraryFree(&app->library);
+    app->library = *built;
+    libraryInit(built, IPTV_PREFIX);  // The library is the app's now.
+    afterNewLibrary(app, details);
 }
 
 void appLibraryInstallCatalog(App *app, JfCatalog *c)
@@ -738,7 +750,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     bool downloads = v->tab == TAB_DOWNLOADS && v->show < 0;  // X and Y are its rows' there.
-    if ((pressed & HidNpadButton_Y) && !downloads && !app->config.use_iptv) {  // The IPTV view has no Search.
+    // The IPTV view has Search only with an Xtream account's films and series.
+    if ((pressed & HidNpadButton_Y) && !downloads && (!app->config.use_iptv || app->library.count > 0)) {
         search(app, now);
         return;
     }

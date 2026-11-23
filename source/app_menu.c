@@ -189,7 +189,7 @@ const char *appFooterHelp(const App *app)
             return T("[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu");
         return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_FILES:
-        if (app->config.use_iptv)  // Its view has no Search.
+        if (app->config.use_iptv && app->library.count == 0)  // Its view has no Search then.
             return T("[A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu");
         return T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
     default: return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");

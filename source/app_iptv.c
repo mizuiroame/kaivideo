@@ -36,6 +36,11 @@ static void accountPath(char *out, size_t size)
 static void startLoad(App *app)
 {
     (void)app;
+    XtreamAccount x;  // Its films and series are read with it.
+    iptvXtreamOf(&g_account, &x);
+    xtreamVodSetAccount(g_account.kind == IPTV_XTREAM && g_account.address[0] ? &x : NULL,
+                        g_account.any_certificate);
+    memset(&x, 0, sizeof(x));
     if (g_account.kind != IPTV_NONE && g_account.address[0])
         iptvLoadStart(&g_account, (int64_t)time(NULL));
 }
@@ -83,6 +88,8 @@ void appIptvExit(App *app)
     iptvListFree(&app->iptv);
     iptvGuideFree(&app->iptv_guide);
     appIptvHomeExit(app);
+    appXtreamExit(app);
+    xtreamVodSetAccount(NULL, false);
     memset(&g_account, 0, sizeof(g_account));
     useNetwork();  // Let go.
 }
@@ -182,6 +189,8 @@ static void forget(App *app, uint64_t now)
     save(app, now);
     iptvListFree(&app->iptv);
     iptvGuideFree(&app->iptv_guide);
+    appXtreamExit(app);
+    xtreamVodSetAccount(NULL, false);
     if (app->config.use_iptv)
         appLibrarySetSource(app, false);  // Its view goes: the card's.
     appLiveIptvChanged(app);
@@ -230,13 +239,15 @@ void appIptvUpdate(App *app, uint64_t now)
     }
     IptvList list;
     IptvGuide guide;
-    if (!iptvLoadTake(&list, &guide))
+    XtreamCatalog catalog;
+    if (!iptvLoadTake(&list, &guide, &catalog))
         return;
     iptvListFree(&app->iptv);
     iptvGuideFree(&app->iptv_guide);
     app->iptv = list;
     app->iptv_guide = guide;
     appLiveIptvChanged(app);
+    appXtreamTake(app, &catalog);
     char line[NOTICE_TEXT_MAX];
     if (s.guide_error[0])
         snprintf(line, sizeof(line), T("%d IPTV channels; the guide: %s"), list.count, s.guide_error);

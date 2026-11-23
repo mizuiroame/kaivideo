@@ -397,6 +397,10 @@ static void *openThread(void *arg)
 
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
 {
+    if (xtreamStandInShow(path) > 0) {  // A series whose episodes are still being read: nothing to play yet.
+        appNotify(app, NOTICE_INFO, T("The episodes are still being read."), now);
+        return false;
+    }
     if (davIsLocation(path) && !appNetworkEnsurePassword(app, now))
         return false;  // A network folder's video: its password first, if it's asked for.
     if (app->opening && app->open_dismissed) {  // The one let go still ends: this one opens after it.
@@ -1266,6 +1270,7 @@ int main(int argc, char **argv)
         appJellyfinUpdate(&app, now);
         appNetworkUpdate(&app, now);
         appIptvUpdate(&app, now);
+        appXtreamUpdate(&app);
         appDownloadsUpdate(&app, now);
         appLiveUpdate(&app, now);
         updateScreenKeeping(&app);

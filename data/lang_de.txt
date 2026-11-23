@@ -1703,3 +1703,12 @@ Es gibt zu viele Favoriten.
 
 [A] open  [B] folder above  [<>] page  [ZL][ZR] tabs  [+] menu
 [A] Öffnen  [B] Nach oben  [<>] Seite  [ZL][ZR] Tabs  [+] Menü
+
+Reading the episodes...
+Folgen werden gelesen...
+
+The episodes couldn't be read.
+Die Folgen konnten nicht gelesen werden.
+
+The episodes are still being read.
+Die Folgen werden noch gelesen.

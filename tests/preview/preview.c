@@ -24,6 +24,7 @@
 #include "thumbs.h"
 #include "ui_settings.h"
 #include "ui_iptvhome.h"
+#include "xtreamvod.h"
 #include "ui_live.h"
 #include "ui_notice.h"
 #include "ui_stats.h"
@@ -253,7 +254,7 @@ static void liveScene(Player *p)
     iptvHomeBuild(&iptv_home, &home_list, &marks);
     iptvHomeViewReset(&home_view);
     libviewInit(&view);
-    libviewSetIptvTabs(&view);
+    libviewSetIptvTabs(&view, &lib);
     uiLibrarySetSource("IPTV", UI_IPTV_COLOR);
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
@@ -295,6 +296,49 @@ static void liveScene(Player *p)
     uiDrawIptvHome(&empty_home, &home_view, &home_list, &marks, NULL, NULL, true);
     save("iptv_home_loading");
     iptvHomeFree(&iptv_home);
+    // An Xtream account's films and series (made-up), in the IPTV view's tabs.
+    static const char *const FILMS_JSON =
+        "[{\"name\":\"Paper Boats (2019)\",\"stream_id\":1,\"stream_icon\":\"http://img.example/1.jpg\"},"
+        "{\"name\":\"Night Desk (2021)\",\"stream_id\":2,\"stream_icon\":\"http://img.example/2.jpg\"},"
+        "{\"name\":\"Harbor Lights\",\"stream_id\":3},"
+        "{\"name\":\"The Quiet Workshop (2017)\",\"stream_id\":4,\"stream_icon\":\"http://img.example/4.jpg\"},"
+        "{\"name\":\"Morning Lanterns (2022)\",\"stream_id\":5,\"stream_icon\":\"http://img.example/5.jpg\"},"
+        "{\"name\":\"Kite Hill (2015)\",\"stream_id\":6,\"stream_icon\":\"http://img.example/6.jpg\"}]";
+    static const char *const SHOWS_JSON =
+        "[{\"name\":\"Evening Report\",\"series_id\":7,\"cover\":\"http://img.example/7.jpg\",\"plot\":\"News.\"}]";
+    static XtreamCatalog vod;
+    xtreamParseFilms(FILMS_JSON, &vod);
+    xtreamParseShows(SHOWS_JSON, &vod);
+    static Library vod_lib;
+    libraryInit(&vod_lib, "iptv:");
+    xtreamFillLibrary(&vod_lib, &vod, T("Reading the episodes..."), T("The episodes couldn't be read."));
+    libraryBuild(&vod_lib);
+    libviewInit(&view);
+    libviewSetIptvTabs(&view, &vod_lib);
+    libviewShowTab(&view, TAB_FILMS);
+    uiLibrarySetSource("IPTV", UI_IPTV_COLOR);
+    begin();
+    uiDrawLibrary(&view, &vod_lib, &home, &resume, true, NULL);
+    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("iptv_films");
+    bool vod_tabs[TAB_COUNT] = {false};
+    for (int x = 0; x < GFX_WIDTH; x += 4) {
+        LibHit hit = uiLibraryTap(x, 34);
+        if (hit.kind == LIBHIT_TAB && hit.a >= 0 && hit.a < view.tab_count)
+            vod_tabs[view.tabs[hit.a].kind] = true;
+    }
+    if (!vod_tabs[TAB_FILMS] || !vod_tabs[TAB_SERIES] || !vod_tabs[TAB_SEARCH]) {
+        printf("TOUCH: iptv_films: the Films, Series or Search tab doesn't answer a tap\n");
+        g_problems++;
+    }
+    libviewShowTab(&view, TAB_SERIES);
+    libviewOpenShow(&view, &vod_lib, 0, -1);
+    begin();
+    uiDrawLibrary(&view, &vod_lib, &home, &resume, true, NULL);
+    uiDrawFooterHelp(T("[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu"));
+    save("iptv_show_reading");
+    libraryFree(&vod_lib);
+    xtreamCatalogFree(&vod);
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     p->live = true;
