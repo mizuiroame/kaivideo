@@ -45,7 +45,9 @@ KaiVideo is released under the [MIT License](../LICENSE). It includes:
 |------|--------------|---------|
 | [FFmpeg](https://ffmpeg.org/) | Demuxing, decoding, sound | [LGPL 2.1](../third_party/FFmpeg-LGPL-2.1.txt) |
 | [libsmb2](https://github.com/sahlberg/libsmb2) | Network folders over SMB | [LGPL 2.1](../third_party/libsmb2-LGPL-2.1.txt) ([its notice](../third_party/libsmb2-COPYING.txt)) |
-| [curl](https://curl.se/) | The network, servers and WebDAV | [curl](../third_party/curl-LICENSE.txt) |
+| [curl](https://curl.se/) | The network, servers, WebDAV and FTP | [curl](../third_party/curl-LICENSE.txt) |
+| [libssh2](https://libssh2.org/) | Network folders over SFTP | [BSD 3-Clause](../third_party/libssh2-BSD-3-Clause.txt) |
+| [Mbed TLS](https://www.trustedfirmware.org/projects/mbed-tls/) | libssh2's encryption | [Apache 2.0](../third_party/MbedTLS-Apache-2.0.txt) |
 | [Jansson](https://github.com/akheron/jansson) | Servers' answers | [MIT](../third_party/Jansson-MIT.txt) |
 | [libass](https://github.com/libass/libass) | Styled subtitles | [ISC](../third_party/libass-ISC.txt) |
 | [FreeType](https://freetype.org/) | Fonts | [FTL](../third_party/FreeType-FTL.txt) |
