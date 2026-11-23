@@ -1485,8 +1485,8 @@ Reproduciendo: desde la carpeta de red
 A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
 Una carpeta compartida (SMB) o WebDAV de tu red. X muestra su biblioteca; aparece primero en Archivos.
 
-Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
-Dirección: \\PC\Videos (carpeta compartida) o 192.168.0.10:8098 (WebDAV)
+Address: \\PC\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas
+Dirección: \\PC\Videos (carpeta compartida), 192.168.0.10:8098 (WebDAV o web), ftp://nas o sftp://nas
 
 Nothing answered at that address. Is the computer on, and is the folder shared?
 Nada respondió en esa dirección. ¿Está encendida la computadora y la carpeta está compartida?
@@ -1494,8 +1494,8 @@ Nada respondió en esa dirección. ¿Está encendida la computadora y la carpeta
 That isn't a network folder's address.
 Esa no es la dirección de una carpeta de red.
 
-That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
-Esa no es la dirección de una carpeta de red: \\PC\Videos, smb://, http:// o https://.
+That isn't a network folder's address: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://.
+Esa no es la dirección de una carpeta de red: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// o sftp://.
 
 That shared folder isn't on the computer. Check the share's name after the computer's.
 Esa carpeta compartida no está en la computadora. Revisa el nombre que va después del de la computadora.
@@ -1808,3 +1808,30 @@ Reproduciendo: de la lista IPTV
 
 The addon's stream couldn't be played: it may be gone, or not work here.
 No se pudo reproducir la fuente del addon: puede que ya no exista o que no funcione aquí.
+
+That address answers, but not as an SFTP server. Is the port right?
+Esa dirección responde, pero no como servidor SFTP. ¿El puerto es correcto?
+
+That address answers, but with neither a WebDAV folder nor a list of files. Check the path after the port.
+Esa dirección responde, pero no con una carpeta WebDAV ni con una lista de archivos. Revisa la ruta después del puerto.
+
+That folder isn't on the server, or this user can't see it.
+Esa carpeta no está en el servidor, o este usuario no puede verla.
+
+That video isn't on the server any more, or this user can't read it.
+Ese video ya no está en el servidor, o este usuario no puede leerlo.
+
+The secure connection failed.
+Falló la conexión segura.
+
+The server doesn't offer a secure connection: use ftp:// instead.
+El servidor no ofrece una conexión segura: usa ftp:// en su lugar.
+
+The server doesn't offer SFTP to this user.
+El servidor no ofrece SFTP a este usuario.
+
+The server's folder listing couldn't be read.
+No se pudo leer la lista de la carpeta del servidor.
+
+The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
+La clave del servidor no es la de antes: podría ser otro servidor haciéndose pasar por él. Si cambiaste el servidor, vuelve a poner la dirección en Configuración.

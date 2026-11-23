@@ -19,7 +19,7 @@ static void testAddresses(void)
     CHECK(!davNormalizeAddress("", out, sizeof(out)));
     CHECK(!davNormalizeAddress("http://", out, sizeof(out)));
     CHECK(!davNormalizeAddress("my pc:8098", out, sizeof(out)));
-    CHECK(!davNormalizeAddress("ftp://pc", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("gopher://pc", out, sizeof(out)));
     CHECK(!davNormalizeAddress("http://me:secret@pc:8098/", out, sizeof(out)));
     CHECK(davNormalizeAddress("pc:8098/a@b", out, sizeof(out)));  // An '@' in the path is a name.
     CHECK(davSameServer("http://pc:8098/a/", "HTTP://PC:8098/b/"));
@@ -63,6 +63,42 @@ static void testAddresses(void)
     davSplitUser("kai@outlook.com", domain, sizeof(domain), name, sizeof(name));
     CHECK_STR(domain, "");
     CHECK_STR(name, "kai@outlook.com");
+
+    // FTP and SFTP.
+    CHECK(davNormalizeAddress("ftp://nas/Videos", out, sizeof(out)));
+    CHECK_STR(out, "ftp://nas/Videos/");
+    CHECK(davProtocolOf(out) == DAV_FTP);
+    CHECK(davNormalizeAddress("FTPES://nas:2121", out, sizeof(out)) && davProtocolOf(out) == DAV_FTP);
+    CHECK(davNormalizeAddress("ftps://nas/", out, sizeof(out)) && davProtocolOf(out) == DAV_FTP);
+    CHECK(davNormalizeAddress("sftp://[fe80::1]:2222/media", out, sizeof(out)));
+    CHECK_STR(out, "sftp://[fe80::1]:2222/media/");
+    CHECK(davProtocolOf(out) == DAV_SFTP);
+    CHECK(davProtocolOf("smb://PC/V/") == DAV_SMB && davProtocolOf("https://h/") == DAV_WEBDAV);
+    CHECK(davProtocolOf("") == DAV_NONE && davProtocolOf("gopher://h/") == DAV_NONE);
+    CHECK(!davNormalizeAddress("sftp://me:pw@nas/", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("ftp://nas/My Videos", out, sizeof(out)));
+    CHECK(!davNormalizeAddress("sftp://", out, sizeof(out)));
+    CHECK(davSameServer("sftp://nas:22/a/", "SFTP://NAS:22/b/") && !davSameServer("ftp://nas/", "sftp://nas/"));
+
+    char host[64];
+    int port = 0;
+    CHECK(davHostPort("sftp://nas/media/", host, sizeof(host), &port) && !strcmp(host, "nas") && port == 22);
+    CHECK(davHostPort("ftp://10.0.0.2:2121/", host, sizeof(host), &port) && !strcmp(host, "10.0.0.2") && port == 2121);
+    CHECK(davHostPort("ftps://nas/", host, sizeof(host), &port) && port == 990);
+    CHECK(davHostPort("ftpes://nas/", host, sizeof(host), &port) && port == 21);
+    CHECK(davHostPort("sftp://[fe80::1]:2222/", host, sizeof(host), &port) && !strcmp(host, "[fe80::1]") &&
+          port == 2222);
+    CHECK(!davHostPort("sftp://nas:99999/", host, sizeof(host), &port));
+    CHECK(!davHostPort("sftp://nas:22x/", host, sizeof(host), &port));
+    CHECK(!davHostPort("http://nas/", host, sizeof(host), &port));
+    CHECK(davServerPath("sftp://nas/media/", "dav:/A B/c.mkv", out, sizeof(out)));
+    CHECK_STR(out, "/media/A B/c.mkv");
+    CHECK(davServerPath("sftp://nas/media/", "dav:/", out, sizeof(out)));
+    CHECK_STR(out, "/media/");
+    CHECK(davServerPath("ftp://nas/", "dav:/Movies", out, sizeof(out)));
+    CHECK_STR(out, "/Movies");
+    CHECK(!davServerPath("smb://PC/V/", "dav:/a", out, sizeof(out)));
+    CHECK(!davServerPath("sftp://nas/", "sdmc:/a", out, sizeof(out)));
 
     davShownAddress("http://192.168.0.10:8098/", out, sizeof(out));
     CHECK_STR(out, "192.168.0.10:8098");
@@ -145,6 +181,18 @@ static void testAccountFile(void)
     CHECK_STR(b.address, "");
     DavAccount bad = {.address = "http://pc/", .user = "line\nbreak", .password = ""};
     CHECK(!davAccountWrite(&bad, text, sizeof(text)));
+
+    // SFTP: the password encoded (it's sent as it is), and the server's key's fingerprint kept.
+    DavAccount s = {.address = "sftp://nas/media/", .user = "kai", .password = "pa ss",
+                    .host_key = "SHA256:AbCdEf0123456789+/xyz="};
+    CHECK(davAccountWrite(&s, text, sizeof(text)));
+    CHECK(strstr(text, "pa ss") == NULL && strstr(text, "host_key=SHA256:AbCdEf0123456789+/xyz=\n"));
+    CHECK(!davAccountRead(&b, text));
+    CHECK_STR(b.password, "pa ss");
+    CHECK_STR(b.host_key, s.host_key);
+    CHECK(davAccountWrite(&a, text, sizeof(text)) && !strstr(text, "host_key"));  // None: no line.
+    DavAccount bad_key = {.address = "sftp://nas/", .host_key = "SHA256:x\ny"};
+    CHECK(!davAccountWrite(&bad_key, text, sizeof(text)));
 }
 
 // A file from before: its password as typed is read, and the file is to be written again.

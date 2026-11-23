@@ -1485,8 +1485,8 @@ Playing: from the network folder
 A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
 네트워크의 공유 폴더(SMB) 또는 WebDAV 폴더입니다. X로 라이브러리를 표시하며, 파일에서는 맨 위에 표시됩니다.
 
-Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
-주소: \\PC\Videos (공유 폴더) 또는 192.168.0.10:8098 (WebDAV)
+Address: \\PC\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas
+주소: \\PC\Videos(공유 폴더), 192.168.0.10:8098(WebDAV 또는 웹), ftp://nas 또는 sftp://nas
 
 Nothing answered at that address. Is the computer on, and is the folder shared?
 해당 주소에서 응답이 없습니다. 컴퓨터가 켜져 있고 폴더가 공유되어 있는지 확인하세요.
@@ -1494,8 +1494,8 @@ Nothing answered at that address. Is the computer on, and is the folder shared?
 That isn't a network folder's address.
 네트워크 폴더 주소가 아닙니다.
 
-That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
-네트워크 폴더 주소가 아닙니다: \\PC\Videos, smb://, http:// 또는 https://.
+That isn't a network folder's address: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://.
+네트워크 폴더 주소가 아닙니다: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// 또는 sftp://.
 
 That shared folder isn't on the computer. Check the share's name after the computer's.
 컴퓨터에 해당 공유 폴더가 없습니다. 컴퓨터 이름 뒤의 공유 이름을 확인하세요.
@@ -1808,3 +1808,30 @@ Playing: from the IPTV list
 
 The addon's stream couldn't be played: it may be gone, or not work here.
 애드온 스트림을 재생할 수 없습니다. 사라졌거나 여기서 작동하지 않을 수 있습니다.
+
+That address answers, but not as an SFTP server. Is the port right?
+그 주소는 응답하지만 SFTP 서버가 아닙니다. 포트가 맞나요?
+
+That address answers, but with neither a WebDAV folder nor a list of files. Check the path after the port.
+그 주소는 응답하지만 WebDAV 폴더도 파일 목록도 아닙니다. 포트 뒤의 경로를 확인하세요.
+
+That folder isn't on the server, or this user can't see it.
+서버에 이 폴더가 없거나 이 사용자가 볼 수 없습니다.
+
+That video isn't on the server any more, or this user can't read it.
+그 동영상이 더 이상 서버에 없거나 이 사용자가 읽을 수 없습니다.
+
+The secure connection failed.
+보안 연결에 실패했습니다.
+
+The server doesn't offer a secure connection: use ftp:// instead.
+서버가 보안 연결을 제공하지 않습니다. 대신 ftp://를 사용하세요.
+
+The server doesn't offer SFTP to this user.
+서버가 이 사용자에게 SFTP를 제공하지 않습니다.
+
+The server's folder listing couldn't be read.
+서버의 폴더 목록을 읽을 수 없습니다.
+
+The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
+서버의 키가 이전과 다릅니다. 다른 서버가 이 서버인 척하고 있을 수 있습니다. 서버를 바꿨다면 설정에서 주소를 다시 입력하세요.

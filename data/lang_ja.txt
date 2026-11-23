@@ -276,8 +276,8 @@ Added to Favorites.
 Address
 アドレス
 
-Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
-アドレス: \\PC\Videos（共有フォルダー）または 192.168.0.10:8098（WebDAV）
+Address: \\PC\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas
+アドレス: \\PC\Videos（共有フォルダー）、192.168.0.10:8098（WebDAV または Web）、ftp://nas または sftp://nas
 
 Allow without signing (old NAS)
 署名なしを許可（古いNAS）
@@ -1179,8 +1179,8 @@ That folder's name is too long.
 That isn't a network folder's address.
 ネットワークフォルダーのアドレスではありません。
 
-That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
-ネットワークフォルダーのアドレスではありません。\\PC\Videos、smb://、http://、https:// のいずれかで入力してください。
+That isn't a network folder's address: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://.
+ネットワークフォルダーのアドレスではありません。\\PC\Videos、smb://、http://、https://、ftp://、ftps://、ftpes://、sftp:// のいずれかで入力してください。
 
 That isn't a server's address.
 サーバーのアドレスではありません。
@@ -1808,3 +1808,30 @@ Playing: from the IPTV list
 
 The addon's stream couldn't be played: it may be gone, or not work here.
 アドオンのストリームを再生できませんでした。削除されたか、ここでは動作しない可能性があります。
+
+That address answers, but not as an SFTP server. Is the port right?
+そのアドレスは応答しますが、SFTP サーバーではありません。ポートは正しいですか？
+
+That address answers, but with neither a WebDAV folder nor a list of files. Check the path after the port.
+そのアドレスは応答しますが、WebDAV フォルダーでもファイル一覧でもありません。ポートの後のパスを確認してください。
+
+That folder isn't on the server, or this user can't see it.
+そのフォルダーはサーバーにないか、このユーザーには見えません。
+
+That video isn't on the server any more, or this user can't read it.
+その動画はもうサーバーにないか、このユーザーには読めません。
+
+The secure connection failed.
+安全な接続に失敗しました。
+
+The server doesn't offer a secure connection: use ftp:// instead.
+サーバーは安全な接続に対応していません。代わりに ftp:// を使ってください。
+
+The server doesn't offer SFTP to this user.
+サーバーはこのユーザーに SFTP を提供していません。
+
+The server's folder listing couldn't be read.
+サーバーのフォルダー一覧を読み取れませんでした。
+
+The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
+サーバーの鍵が以前のものと違います。別のサーバーがなりすましている可能性があります。サーバーを変えた場合は、設定でアドレスを入力し直してください。

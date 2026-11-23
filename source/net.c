@@ -159,6 +159,11 @@ void netSetCheckCertificates(bool check)
     __atomic_store_n(&g_check_certificates, check, __ATOMIC_RELAXED);
 }
 
+bool netChecksCertificates(void)
+{
+    return __atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED);
+}
+
 static NetProblem problemOf(CURLcode rc, long status)
 {
     switch (rc) {

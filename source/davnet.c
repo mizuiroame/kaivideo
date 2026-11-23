@@ -6,8 +6,11 @@
 #include <string.h>
 
 #include "browser.h"
+#include "folderlist.h"
+#include "ftpnet.h"
 #include "lang.h"
 #include "net.h"
+#include "sftpnet.h"
 #include "smbnet.h"
 
 #define LISTING_MAX_BYTES (8u << 20)
@@ -18,11 +21,16 @@
 #define HTTP_FORBIDDEN 403
 #define HTTP_NOT_FOUND 404
 #define HTTP_NOT_ALLOWED 405
+#define HTTP_NOT_IMPLEMENTED 501
+#define HTTP_BAD_REQUEST 400
+#define PATH_MAX_DAV 512
 #define URL_MAX 2048
 #define AUTH_MAX 512
 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static DavAccount g_account;
+static char g_path[PATH_MAX_DAV];               // The account's file, to keep an SFTP server's key in.
+static char g_index_address[DAV_ADDRESS_MAX];  // An http(s) folder found to be a web index, not WebDAV.
 
 void davUseAccount(const DavAccount *a)
 {
@@ -48,6 +56,7 @@ bool davConfigured(void)
 
 void davLoadAccount(const char *path)
 {
+    snprintf(g_path, sizeof(g_path), "%s", path);
     DavAccount a;
     char text[1024] = "";
     FILE *f = fopen(path, "r");
@@ -96,25 +105,108 @@ static bool sayMissing(char *why, size_t why_size)
     return true;
 }
 
-bool davIsSmb(void)
+static DavProtocol protocolInUse(void)
 {
     pthread_mutex_lock(&g_lock);
-    bool smb = davIsSmbAddress(g_account.address);
+    DavProtocol p = davProtocolOf(g_account.address);
     pthread_mutex_unlock(&g_lock);
-    return smb;
+    return p;
 }
 
-SmbFile *davSmbOpen(const char *location, char *why, size_t why_size)
+bool davReadsFiles(void)
+{
+    DavProtocol p = protocolInUse();
+    return p == DAV_SMB || p == DAV_FTP || p == DAV_SFTP;
+}
+
+// An SFTP server's key met for the first time: kept in the account and its file.
+static void keepKey(const char *address, const char *key)
+{
+    if (!key[0])
+        return;
+    pthread_mutex_lock(&g_lock);
+    bool kept = !strcmp(g_account.address, address) && !g_account.host_key[0];
+    if (kept)
+        snprintf(g_account.host_key, sizeof(g_account.host_key), "%s", key);
+    pthread_mutex_unlock(&g_lock);
+    if (kept && g_path[0])
+        davSaveAccount(g_path);
+}
+
+void davForget(void)
+{
+    smbForget();
+    ftpForget();
+    sftpForget();
+    pthread_mutex_lock(&g_lock);
+    g_index_address[0] = '\0';
+    pthread_mutex_unlock(&g_lock);
+}
+
+struct DavFile {
+    DavProtocol protocol;
+    void *file;  // SmbFile, FtpFile or SftpFile.
+};
+
+DavFile *davFileOpen(const char *location, char *why, size_t why_size)
 {
     if (sayMissing(why, why_size))
         return NULL;
     DavAccount a;
     davGetAccount(&a);
-    SmbFile *f = davIsSmbAddress(a.address) ? smbFileOpen(&a, location, why, why_size) : NULL;
-    if (!davIsSmbAddress(a.address))
-        snprintf(why, why_size, "%s", T("Set up the network folder in Settings first."));
+    DavFile *f = calloc(1, sizeof(*f));
+    char key[DAV_HOST_KEY_MAX] = "";
+    if (f) {
+        f->protocol = davProtocolOf(a.address);
+        switch (f->protocol) {
+        case DAV_SMB: f->file = smbFileOpen(&a, location, why, why_size); break;
+        case DAV_FTP: f->file = ftpFileOpen(&a, location, why, why_size); break;
+        case DAV_SFTP: f->file = sftpFileOpen(&a, location, key, why, why_size); break;
+        default: snprintf(why, why_size, "%s", T("Set up the network folder in Settings first.")); break;
+        }
+    } else {
+        snprintf(why, why_size, "%s", T("Out of memory"));
+    }
+    keepKey(a.address, key);
     memset(&a, 0, sizeof(a));
+    if (f && !f->file) {
+        free(f);
+        f = NULL;
+    }
     return f;
+}
+
+int64_t davFileSize(const DavFile *f)
+{
+    switch (f->protocol) {
+    case DAV_SMB: return smbFileSize(f->file);
+    case DAV_FTP: return ftpFileSize(f->file);
+    case DAV_SFTP: return sftpFileSize(f->file);
+    default: return -1;
+    }
+}
+
+int64_t davFileRead(DavFile *f, int64_t offset, uint8_t *to, size_t size, const volatile bool *cancel)
+{
+    switch (f->protocol) {
+    case DAV_SMB: return smbFileRead(f->file, offset, to, size, cancel);
+    case DAV_FTP: return ftpFileRead(f->file, offset, to, size, cancel);
+    case DAV_SFTP: return sftpFileRead(f->file, offset, to, size, cancel);
+    default: return -1;
+    }
+}
+
+void davFileClose(DavFile *f)
+{
+    if (!f)
+        return;
+    switch (f->protocol) {
+    case DAV_SMB: smbFileClose(f->file); break;
+    case DAV_FTP: ftpFileClose(f->file); break;
+    case DAV_SFTP: sftpFileClose(f->file); break;
+    default: break;
+    }
+    free(f);
 }
 
 bool davStreamRequest(const char *location, char *url, size_t url_size, char *auth, size_t auth_size)
@@ -123,7 +215,8 @@ bool davStreamRequest(const char *location, char *url, size_t url_size, char *au
         return false;
     DavAccount a;
     davGetAccount(&a);
-    bool ok = a.address[0] && !davIsSmbAddress(a.address) && davUrlOf(a.address, location, url, url_size) && davAuthorization(&a, auth, auth_size);
+    bool ok = davProtocolOf(a.address) == DAV_WEBDAV && davUrlOf(a.address, location, url, url_size) &&
+              davAuthorization(&a, auth, auth_size);
     memset(&a, 0, sizeof(a));
     return ok;
 }
@@ -157,9 +250,12 @@ static void explain(const NetResponse *r, char *why, size_t size)
     snprintf(why, size, "%s", text);
 }
 
-// Asks for a folder's listing; url gets what was asked (the listing's hrefs are under it).
-static bool propfind(const char *location, NetResponse *response, char url[URL_MAX], char *why, size_t why_size)
+// Asks for a folder's listing with PROPFIND (WebDAV) or GET (a web index); url gets what was asked (the
+// listing's hrefs are under it). False with why if no answer came; *response holds any answer that did.
+static bool askFolder(const char *location, bool webdav, NetResponse *response, char url[URL_MAX], char *why,
+                      size_t why_size)
 {
+    memset(response, 0, sizeof(*response));
     DavAccount a;
     davGetAccount(&a);
     char auth[AUTH_MAX];
@@ -177,9 +273,8 @@ static bool propfind(const char *location, NetResponse *response, char url[URL_M
     if (length + 1 < URL_MAX && url[length - 1] != '/')
         strcat(url, "/");  // A folder: some servers redirect without the '/', losing the method.
     NetClient *c = netClientOpen();
-    NetRequest request = {.url = url, .authorization = auth, .custom_method = "PROPFIND", .depth = "1",
-                          .stall_s = LIST_STALL_S, .timeout_s = LIST_TIMEOUT_S};
-    memset(response, 0, sizeof(*response));
+    NetRequest request = {.url = url, .authorization = auth, .custom_method = webdav ? "PROPFIND" : NULL,
+                          .depth = webdav ? "1" : NULL, .stall_s = LIST_STALL_S, .timeout_s = LIST_TIMEOUT_S};
     ok = c && netFetchText(c, &request, LISTING_MAX_BYTES, response);
     netClientClose(c);
     memset(auth, 0, sizeof(auth));
@@ -187,16 +282,60 @@ static bool propfind(const char *location, NetResponse *response, char url[URL_M
         snprintf(why, why_size, "%s", T("The network can't be used."));
         return false;
     }
-    if (!ok || response->status != HTTP_MULTI_STATUS) {
-        if (ok && response->status / 100 == 2)  // A web page, not a listing.
-            response->status = HTTP_NOT_ALLOWED;
-        if (ok)
-            response->problem = NET_STATUS;
-        explain(response, why, why_size);
-        netResponseFree(response);
-        return false;
+    if (!ok)
+        explain(response, why, why_size);  // response->status says what the server answered, if it did.
+    return ok;
+}
+
+// An answer to PROPFIND that says the server isn't WebDAV there, so a web index may be.
+static bool notWebdav(const NetResponse *r, bool answered)
+{
+    long s = r->status;
+    return (answered && s != HTTP_MULTI_STATUS) || s == HTTP_NOT_ALLOWED || s == HTTP_NOT_IMPLEMENTED ||
+           s == HTTP_BAD_REQUEST || s == HTTP_FORBIDDEN;
+}
+
+static bool isIndexAddress(const char *address)
+{
+    pthread_mutex_lock(&g_lock);
+    bool index = g_index_address[0] && !strcmp(g_index_address, address);
+    pthread_mutex_unlock(&g_lock);
+    return index;
+}
+
+// A WebDAV folder's listing, or a web server's index page when it isn't WebDAV (remembered for the address).
+static bool webList(const char *address, const char *location, DavEntry **out, size_t *count, char *why,
+                    size_t why_size)
+{
+    NetResponse response;
+    char url[URL_MAX];
+    if (!isIndexAddress(address)) {
+        bool answered = askFolder(location, true, &response, url, why, why_size);
+        if (answered && response.status == HTTP_MULTI_STATUS) {
+            bool ok = davParseListing(response.data, url, out, count);
+            netResponseFree(&response);
+            if (!ok)
+                snprintf(why, why_size, "%s",
+                         T("That address answers, but it isn't a WebDAV folder. Check the path after the port."));
+            return ok;
+        }
+        bool other = notWebdav(&response, answered);
+        netResponseFree(&response);
+        if (!other)
+            return false;  // why says it: no answer, a wrong password, no such folder.
     }
-    return true;
+    bool answered = askFolder(location, false, &response, url, why, why_size);
+    bool ok = answered && folderParseHtmlIndex(response.data, url, out, count);
+    netResponseFree(&response);
+    if (answered && !ok)
+        snprintf(why, why_size, "%s",
+                 T("That address answers, but with neither a WebDAV folder nor a list of files. Check the path after the port."));
+    if (ok) {
+        pthread_mutex_lock(&g_lock);
+        snprintf(g_index_address, sizeof(g_index_address), "%s", address);
+        pthread_mutex_unlock(&g_lock);
+    }
+    return ok;
 }
 
 bool davList(const char *location, DavEntry **out, size_t *count, char *why, size_t why_size)
@@ -207,21 +346,21 @@ bool davList(const char *location, DavEntry **out, size_t *count, char *why, siz
     *count = 0;
     DavAccount a;
     davGetAccount(&a);
-    if (davIsSmbAddress(a.address)) {
-        bool listed = smbList(&a, location, out, count, why, why_size);
-        memset(&a, 0, sizeof(a));
-        return listed;
+    char key[DAV_HOST_KEY_MAX] = "";
+    bool listed;
+    switch (davProtocolOf(a.address)) {
+    case DAV_SMB: listed = smbList(&a, location, out, count, why, why_size); break;
+    case DAV_FTP: listed = ftpList(&a, location, out, count, why, why_size); break;
+    case DAV_SFTP: listed = sftpList(&a, location, out, count, key, why, why_size); break;
+    case DAV_WEBDAV: listed = webList(a.address, location, out, count, why, why_size); break;
+    default:
+        snprintf(why, why_size, "%s", T("Set up the network folder in Settings first."));
+        listed = false;
+        break;
     }
+    keepKey(a.address, key);
     memset(&a, 0, sizeof(a));
-    NetResponse response;
-    char url[URL_MAX];
-    if (!propfind(location, &response, url, why, why_size))
-        return false;
-    bool ok = davParseListing(response.data, url, out, count);
-    netResponseFree(&response);
-    if (!ok)
-        snprintf(why, why_size, "%s", T("That address answers, but it isn't a WebDAV folder. Check the path after the port."));
-    return ok;
+    return listed;
 }
 
 bool davTest(char *out, size_t size)

@@ -1485,8 +1485,8 @@ Playing: from the network folder
 A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.
 网络中的共享文件夹（SMB）或WebDAV文件夹。按X显示其媒体库；它会显示在“文件”的最前面。
 
-Address: \\PC\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)
-地址：\\PC\Videos（共享文件夹）或 192.168.0.10:8098（WebDAV）
+Address: \\PC\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas
+地址：\\PC\Videos（共享文件夹）、192.168.0.10:8098（WebDAV 或网页）、ftp://nas 或 sftp://nas
 
 Nothing answered at that address. Is the computer on, and is the folder shared?
 该地址没有响应。电脑是否已开启？文件夹是否已共享？
@@ -1494,8 +1494,8 @@ Nothing answered at that address. Is the computer on, and is the folder shared?
 That isn't a network folder's address.
 这不是网络文件夹地址。
 
-That isn't a network folder's address: \\PC\Videos, smb://, http:// or https://.
-这不是网络文件夹地址：\\PC\Videos、smb://、http:// 或 https://。
+That isn't a network folder's address: \\PC\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://.
+这不是网络文件夹地址：\\PC\Videos、smb://、http://、https://、ftp://、ftps://、ftpes:// 或 sftp://。
 
 That shared folder isn't on the computer. Check the share's name after the computer's.
 电脑上没有该共享文件夹。请检查电脑名称后面的共享名称。
@@ -1808,3 +1808,30 @@ Playing: from the IPTV list
 
 The addon's stream couldn't be played: it may be gone, or not work here.
 无法播放插件的流：它可能已不存在，或在此无法使用。
+
+That address answers, but not as an SFTP server. Is the port right?
+该地址有响应，但不是 SFTP 服务器。端口正确吗？
+
+That address answers, but with neither a WebDAV folder nor a list of files. Check the path after the port.
+该地址有响应，但既不是 WebDAV 文件夹，也不是文件列表。请检查端口后面的路径。
+
+That folder isn't on the server, or this user can't see it.
+服务器上没有该文件夹，或者该用户无法查看。
+
+That video isn't on the server any more, or this user can't read it.
+服务器上已没有该视频，或者该用户无法读取。
+
+The secure connection failed.
+安全连接失败。
+
+The server doesn't offer a secure connection: use ftp:// instead.
+服务器不提供安全连接：请改用 ftp://。
+
+The server doesn't offer SFTP to this user.
+服务器不向该用户提供 SFTP。
+
+The server's folder listing couldn't be read.
+无法读取服务器的文件夹列表。
+
+The server's key isn't the one met before: it may be another server pretending to be it. If you changed the server, set the address again in Settings.
+服务器的密钥与之前的不同：可能是另一台服务器在冒充它。如果你更换了服务器，请在设置中重新输入地址。

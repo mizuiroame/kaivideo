@@ -80,7 +80,7 @@ static void save(App *app, const DavAccount *a, uint64_t now)
     }
     memset(&before, 0, sizeof(before));
     davUseAccount(a);
-    smbForget();  // The listing's connection was the old account's.
+    davForget();  // The listing's connections were the old account's.
     char path[APPROOT_PATH_MAX + 32];
     accountPath(path, sizeof(path));
     if (!davSaveAccount(path))
@@ -97,16 +97,17 @@ static void typeAddress(App *app, uint64_t now)
     char shown[DAV_ADDRESS_MAX], text[DAV_ADDRESS_MAX], address[DAV_ADDRESS_MAX];
     davShownAddress(a.address, shown, sizeof(shown));
     // Room for "https://" and the last '/' that may be added.
-    SystemKeyboardResult result = systemKeyboardInput(T("Address: \\\\PC\\Videos (a shared folder) or 192.168.0.10:8098 (WebDAV)"), shown, text,
+    SystemKeyboardResult result = systemKeyboardInput(T("Address: \\\\PC\\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas"), shown, text,
                                                       sizeof(text), sizeof(text) - 10);
     if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
         appNotify(app, NOTICE_ERROR, T("The keyboard couldn't open."), now);
     } else if (result == SYSTEM_KEYBOARD_OK && !davNormalizeAddress(text, address, sizeof(address))) {
-        appNotify(app, NOTICE_ERROR, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http:// or https://."), now);
+        appNotify(app, NOTICE_ERROR, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
         if (!davSameServer(address, a.address)) {  // Another server: the old one's password isn't sent there.
             a.user[0] = '\0';
             memset(a.password, 0, sizeof(a.password));
+            a.host_key[0] = 0;  // And an SFTP server's key is met anew.
         }
         memcpy(a.address, address, sizeof(a.address));
         save(app, &a, now);
@@ -170,7 +171,7 @@ bool appNetworkEnsurePassword(App *app, uint64_t now)
     bool ok = result == SYSTEM_KEYBOARD_OK && password[0] && davSetPassword(&a, password);
     if (ok) {
         davUseAccount(&a);  // Kept until KaiVideo closes; the card's file stays without it.
-        smbForget();
+        davForget();
         if (app->config.use_network && !app->config.use_jellyfin)
             appLibraryShowNetwork(app);  // Read until now without it: read again.
     } else if (result == SYSTEM_KEYBOARD_UNAVAILABLE) {
@@ -285,7 +286,7 @@ void appNetworkUpdate(App *app, uint64_t now)
 
 void appNetworkExit(void)
 {
-    smbForget();
+    davForget();
     if (g_network)
         netExit();
     g_network = false;

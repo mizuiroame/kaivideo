@@ -11,6 +11,13 @@
 #define HTTP "http://"
 #define HTTPS "https://"
 #define SMB "smb://"
+#define FTP "ftp://"
+#define FTPS "ftps://"
+#define FTPES "ftpes://"
+#define SFTP "sftp://"
+#define SFTP_PORT 22
+#define FTP_PORT 21
+#define FTPS_PORT 990
 #define LISTING_GROWTH 64
 #define HREF_MAX 4096  // A 255-byte name in CJK is ~765 characters percent-encoded, plus its folders.
 
@@ -21,11 +28,29 @@ bool davIsLocation(const char *path)
 
 static size_t schemeLength(const char *s)
 {
-    if (!strncasecmp(s, HTTP, sizeof(HTTP) - 1))
-        return sizeof(HTTP) - 1;
-    if (!strncasecmp(s, HTTPS, sizeof(HTTPS) - 1))
-        return sizeof(HTTPS) - 1;
+    static const char *const SCHEMES[] = {HTTP, HTTPS, FTP, FTPS, FTPES, SFTP};
+    for (size_t i = 0; i < sizeof(SCHEMES) / sizeof(SCHEMES[0]); i++)
+        if (!strncasecmp(s, SCHEMES[i], strlen(SCHEMES[i])))
+            return strlen(SCHEMES[i]);
     return 0;
+}
+
+static bool startsWith(const char *s, const char *prefix)
+{
+    return !strncasecmp(s, prefix, strlen(prefix));
+}
+
+DavProtocol davProtocolOf(const char *address)
+{
+    if (!address || !address[0])
+        return DAV_NONE;
+    if (davIsSmbAddress(address))
+        return DAV_SMB;
+    if (startsWith(address, SFTP))
+        return DAV_SFTP;
+    if (startsWith(address, FTP) || startsWith(address, FTPS) || startsWith(address, FTPES))
+        return DAV_FTP;
+    return startsWith(address, HTTP) || startsWith(address, HTTPS) ? DAV_WEBDAV : DAV_NONE;
 }
 
 bool davIsSmbAddress(const char *address)
@@ -133,6 +158,61 @@ bool davSmbPath(const char *address, const char *location, char *out, size_t siz
     return n >= 0 && (size_t)n < size;
 }
 
+// An FTP or SFTP address's authority ("user@host:port" has no user here) and its length.
+static const char *authorityOf(const char *address, size_t *length)
+{
+    DavProtocol p = davProtocolOf(address);
+    if (p != DAV_FTP && p != DAV_SFTP)
+        return NULL;
+    const char *a = address + schemeLength(address);
+    *length = strcspn(a, "/");
+    return *length ? a : NULL;
+}
+
+bool davServerPath(const char *address, const char *location, char *out, size_t size)
+{
+    size_t authority;
+    const char *a = authorityOf(address, &authority);
+    if (!a || !davIsLocation(location))
+        return false;
+    const char *base = a + authority;  // "/media/" or "".
+    const char *rest = location + sizeof(DAV_PREFIX) - 1;
+    size_t base_length = strlen(base);
+    bool slash = base_length && base[base_length - 1] == '/';
+    int n = snprintf(out, size, "%s%s%s", base_length ? base : "/", slash || !base_length ? "" : "/", rest);
+    return n >= 0 && (size_t)n < size;
+}
+
+bool davHostPort(const char *address, char *host, size_t host_size, int *port)
+{
+    size_t authority;
+    const char *a = authorityOf(address, &authority);
+    if (!a)
+        return false;
+    const char *colon = NULL;
+    if (a[0] == '[') {  // "[fe80::1]:22"
+        const char *close = memchr(a, ']', authority);
+        if (!close)
+            return false;
+        colon = close + 1 < a + authority && close[1] == ':' ? close + 1 : NULL;
+    } else {
+        colon = memchr(a, ':', authority);
+    }
+    size_t host_length = colon ? (size_t)(colon - a) : authority;
+    if (!host_length || host_length >= host_size)
+        return false;
+    snprintf(host, host_size, "%.*s", (int)host_length, a);
+    *port = startsWith(address, SFTP) ? SFTP_PORT : startsWith(address, FTPS) ? FTPS_PORT : FTP_PORT;
+    if (colon) {
+        char *end;
+        long value = strtol(colon + 1, &end, 10);
+        if (end != a + authority || value < 1 || value > 65535)
+            return false;
+        *port = (int)value;
+    }
+    return true;
+}
+
 void davSplitUser(const char *user, char *domain, size_t domain_size, char *name, size_t name_size)
 {
     const char *slash = strchr(user, '\\');
@@ -182,7 +262,7 @@ bool davUrlOf(const char *address, const char *location, char *out, size_t size)
 
 static const char BASE64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-static bool base64(const unsigned char *in, size_t length, char *out, size_t size)
+bool davBase64(const unsigned char *in, size_t length, char *out, size_t size)
 {
     if ((length + 2) / 3 * 4 + 1 > size)
         return false;
@@ -210,7 +290,7 @@ bool davAuthorization(const DavAccount *a, char *out, size_t size)
     int length = snprintf(pair, sizeof(pair), "%s:%s", a->user, a->password);
     static const char BASIC[] = "Basic ";
     bool ok = length > 0 && size > sizeof(BASIC) - 1 &&
-              base64((const unsigned char *)pair, (size_t)length, out + sizeof(BASIC) - 1, size - (sizeof(BASIC) - 1));
+              davBase64((const unsigned char *)pair, (size_t)length, out + sizeof(BASIC) - 1, size - (sizeof(BASIC) - 1));
     if (ok)
         memcpy(out, BASIC, sizeof(BASIC) - 1);
     else
@@ -399,6 +479,8 @@ bool davAccountRead(DavAccount *a, const char *text)
                 a->forget_password = value == 1 && eq[1] == '1';
             else if (isKey(line, key, "allow_unsigned"))
                 a->allow_unsigned = value == 1 && eq[1] == '1';
+            else if (isKey(line, key, "host_key"))
+                readValue(a->host_key, sizeof(a->host_key), eq + 1, value);
         }
         line += length;
         line += strspn(line, "\r\n");
@@ -419,20 +501,22 @@ bool davAccountRead(DavAccount *a, const char *text)
 
 bool davAccountWrite(const DavAccount *a, char *out, size_t size)
 {
-    if (strpbrk(a->address, "\r\n") || strpbrk(a->user, "\r\n") || strpbrk(a->password, "\r\n"))
+    if (strpbrk(a->address, "\r\n") || strpbrk(a->user, "\r\n") || strpbrk(a->password, "\r\n") ||
+        strpbrk(a->host_key, "\r\n"))
         return false;
     char kept[DAV_TEXT_MAX * 2] = "";
     if (a->forget_password || !a->password[0])
         kept[0] = '\0';
     else if (isNtHash(a->password))
         snprintf(kept, sizeof(kept), "%s", a->password);
-    else if (!base64((const unsigned char *)a->password, strlen(a->password), kept + sizeof(ENCODED_PREFIX) - 1,
+    else if (!davBase64((const unsigned char *)a->password, strlen(a->password), kept + sizeof(ENCODED_PREFIX) - 1,
                      sizeof(kept) - (sizeof(ENCODED_PREFIX) - 1)))
         return false;
     else
         memcpy(kept, ENCODED_PREFIX, sizeof(ENCODED_PREFIX) - 1);
-    int n = snprintf(out, size, "address=%s\nuser=%s\npassword=%s\n%s%s", a->address, a->user, kept,
-                     a->forget_password ? "forget_password=1\n" : "", a->allow_unsigned ? "allow_unsigned=1\n" : "");
+    int n = snprintf(out, size, "address=%s\nuser=%s\npassword=%s\n%s%s%s%s%s", a->address, a->user, kept,
+                     a->forget_password ? "forget_password=1\n" : "", a->allow_unsigned ? "allow_unsigned=1\n" : "",
+                     a->host_key[0] ? "host_key=" : "", a->host_key, a->host_key[0] ? "\n" : "");
     memset(kept, 0, sizeof(kept));
     return n > 0 && (size_t)n < size;
 }
@@ -549,8 +633,7 @@ static int hexValue(char c)
     return isdigit((unsigned char)c) ? c - '0' : isxdigit((unsigned char)c) ? (tolower((unsigned char)c) - 'a' + 10) : -1;
 }
 
-// False if it decodes a NUL (the name would end there).
-static bool percentDecode(char *s)
+bool davPercentDecode(char *s)
 {
     char *o = s;
     for (const char *p = s; *p; p++) {
@@ -570,7 +653,7 @@ static bool percentDecode(char *s)
 
 // The path part of an href or URL ("https://h/a/b" or "/a/b" -> "/a/b"),
 // decoded, without a last '/'. False if it didn't fit or can't be decoded.
-static bool hrefPath(const char *href, char *out, size_t size)
+bool davHrefPath(const char *href, char *out, size_t size)
 {
     size_t scheme = schemeLength(href);
     if (scheme) {
@@ -582,7 +665,7 @@ static bool hrefPath(const char *href, char *out, size_t size)
     char *query = strchr(out, '?');
     if (query)
         *query = '\0';
-    if (!percentDecode(out))
+    if (!davPercentDecode(out))
         return false;
     size_t length = strlen(out);
     while (length > 1 && out[length - 1] == '/')
@@ -590,8 +673,7 @@ static bool hrefPath(const char *href, char *out, size_t size)
     return true;
 }
 
-// A name a line-based file (resume.txt and the like) can keep.
-static bool plainName(const char *name)
+bool davNameIsPlain(const char *name)
 {
     for (const unsigned char *p = (const unsigned char *)name; *p; p++)
         if (*p < 0x20 || *p == 0x7f)
@@ -599,12 +681,7 @@ static bool plainName(const char *name)
     return true;
 }
 
-typedef struct {
-    DavEntry *items;
-    size_t count, capacity;
-} Listing;
-
-static bool add(Listing *l, const DavEntry *e)
+bool davListingAdd(DavListing *l, const DavEntry *e)
 {
     if (l->count >= DAV_LISTING_MAX)
         return true;  // The rest isn't shown.
@@ -620,11 +697,10 @@ static bool add(Listing *l, const DavEntry *e)
     return true;
 }
 
-// The entry an href names, if it's in the folder (not the folder itself).
-static bool entryOf(const char *href, const char *folder, DavEntry *e)
+bool davEntryOfHref(const char *href, const char *folder, DavEntry *e)
 {
     char path[HREF_MAX];
-    if (!hrefPath(href, path, sizeof(path)) || !strcmp(path, folder))
+    if (!davHrefPath(href, path, sizeof(path)) || !strcmp(path, folder))
         return false;
     char *slash = strrchr(path, '/');
     if (!slash)
@@ -635,7 +711,7 @@ static bool entryOf(const char *href, const char *folder, DavEntry *e)
     if (strcmp(path[0] ? path : "/", folder))
         return false;
     size_t length = strlen(name);
-    if (!length || !strcmp(name, ".") || !strcmp(name, "..") || length >= sizeof(e->name) || !plainName(name))
+    if (!length || !strcmp(name, ".") || !strcmp(name, "..") || length >= sizeof(e->name) || !davNameIsPlain(name))
         return false;
     memcpy(e->name, name, length + 1);
     return true;
@@ -646,11 +722,11 @@ bool davParseListing(const char *xml, const char *folder_url, DavEntry **out, si
     *out = NULL;
     *count = 0;
     char folder[HREF_MAX];
-    if (!hrefPath(folder_url, folder, sizeof(folder)))
+    if (!davHrefPath(folder_url, folder, sizeof(folder)))
         return false;
     Scanner s = {xml};
     Tag t;
-    Listing l = {0};
+    DavListing l = {0};
     bool listing = false, in_response = false, named = false, href_seen = false, ok = true;
     DavEntry e;
     char text[HREF_MAX];
@@ -664,13 +740,13 @@ bool davParseListing(const char *xml, const char *folder_url, DavEntry **out, si
             e.size = -1;
         } else if (tagIs(&t, "response") && t.closing) {
             if (in_response && named)
-                ok = add(&l, &e);
+                ok = davListingAdd(&l, &e);
             in_response = false;
         } else if (in_response && !href_seen && !t.closing && !t.empty && tagIs(&t, "href")) {
             // The response's own href comes first; later ones are in its
             // properties (a lock's root), and aren't its name.
             href_seen = true;
-            named = tagText(t.after, text, sizeof(text)) && entryOf(text, folder, &e);
+            named = tagText(t.after, text, sizeof(text)) && davEntryOfHref(text, folder, &e);
         } else if (in_response && !t.closing && tagIs(&t, "collection")) {
             e.is_dir = true;
         } else if (in_response && !t.closing && !t.empty && tagIs(&t, "getcontentlength")) {

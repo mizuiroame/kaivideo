@@ -1,8 +1,9 @@
-// The network folder: a WebDAV server (a NAS, Nextcloud, rclone) or an SMB
-// share (a Windows shared folder, Samba), browsed in Files, a library source,
-// and played from there. Its videos are "dav:/path" locations whatever the
+// The network folder: a WebDAV server (a NAS, Nextcloud, rclone), a plain
+// web server's folder index, an SMB share (a Windows shared folder, Samba),
+// an FTP server or an SFTP one, browsed in Files, a library source, and
+// played from there. Its videos are "dav:/path" locations whatever the
 // protocol, read ahead in blocks like a Jellyfin file (mediafile.c): with
-// HTTP ranges, or SMB reads (smbnet.c).
+// HTTP ranges, or the protocol's own reads (smbnet.c, ftpnet.c, sftpnet.c).
 //
 // dav.c is pure: locations, addresses, the account's file and the server's
 // listing. davnet.c asks the server.
@@ -21,6 +22,15 @@
 #define DAV_LISTING_MAX 5000      // Entries a folder shows at most.
 #define DAV_NT_HASH_PREFIX "ntlm:"  // libsmb2 takes "ntlm:<32 hex digits>" as the password's NT hash.
 #define DAV_NT_HASH_SIZE (sizeof(DAV_NT_HASH_PREFIX) - 1 + 32 + 1)
+#define DAV_HOST_KEY_MAX 96         // "SHA256:" and the base64 of an SFTP server's key's SHA-256.
+
+typedef enum {
+    DAV_NONE,
+    DAV_WEBDAV,  // http:// or https://: WebDAV, or a plain web server's folder index.
+    DAV_SMB,     // smb://
+    DAV_FTP,     // ftp:// (plain), ftps:// (TLS from the start) or ftpes:// (TLS asked for first).
+    DAV_SFTP,    // sftp://
+} DavProtocol;
 
 typedef struct {
     // "http://192.168.0.10:8098/dav/" or "smb://PC/Videos/sub/", always ending in '/'; "" for none.
@@ -31,6 +41,8 @@ typedef struct {
     char password[DAV_TEXT_MAX];
     bool forget_password;           // Not kept on the card: only until KaiVideo closes.
     bool allow_unsigned;            // SMB: a server that doesn't sign is used too (an old NAS, guests).
+    // SFTP: the server's key's fingerprint, kept the first time it's met; another key later is refused.
+    char host_key[DAV_HOST_KEY_MAX];
 } DavAccount;
 
 typedef struct {
@@ -47,13 +59,21 @@ int64_t davParseDate(const char *text);
 bool davIsLocation(const char *path);
 
 // What was typed, as an address: "192.168.0.10:8098" -> "http://192.168.0.10:8098/",
-// "smb://PC/Videos" or "\\PC\Videos" -> "smb://PC/Videos/". False if it isn't
-// one (another scheme, spaces in a WebDAV address, nothing after the scheme,
-// an SMB address without its share, or "user:password@" in it: those go in
-// their own row).
+// "smb://PC/Videos" or "\\PC\Videos" -> "smb://PC/Videos/", "ftp://nas/Videos"
+// -> "ftp://nas/Videos/" (ftps://, ftpes:// and sftp:// the same). False if it isn't one (another scheme, spaces in an
+// address other than SMB's, nothing after the scheme, an SMB address without
+// its share, or "user:password@" in it: those go in their own row).
 bool davNormalizeAddress(const char *typed, char *out, size_t size);
 // True for an SMB share's address.
 bool davIsSmbAddress(const char *address);
+// The protocol an address (normalized) is read with.
+DavProtocol davProtocolOf(const char *address);
+// A location's path on an SFTP or FTP server, not encoded: the address's own
+// path, then the location's ("sftp://nas/media/" + "dav:/A B/c.mkv" ->
+// "/media/A B/c.mkv"; the top is "/media/"). False if it isn't one or too long.
+bool davServerPath(const char *address, const char *location, char *out, size_t size);
+// An SFTP or FTP address's host and port ("nas", 22). False if it isn't one.
+bool davHostPort(const char *address, char *host, size_t host_size, int *port);
 // An SMB address's parts: the server ("PC" or "PC:4450"), the share, and the
 // folder in it ("" or "Media/Videos", no slash at either end). False if it isn't one.
 bool davSmbParts(const char *address, char *server, size_t server_size, char *share, size_t share_size, char *folder,
@@ -80,7 +100,7 @@ bool davNtHash(const char *password, char out[DAV_NT_HASH_SIZE]);
 bool davSetPassword(DavAccount *a, const char *typed);
 
 // The account's file: "address=", "user=", "password=", and "forget_password=1",
-// "allow_unsigned=1" when set. On the card the password is never as typed: an SMB
+// "allow_unsigned=1" and "host_key=" when set. On the card the password is never as typed: an SMB
 // folder's is its NT hash, a WebDAV folder's is encoded ("b64:"; Basic needs the
 // password itself, so anyone with the card can still decode it); a password not
 // to remember isn't written. Returns true when text was an older form (a
@@ -95,3 +115,24 @@ bool davAccountWrite(const DavAccount *a, char *out, size_t size);
 // past DAV_LISTING_MAX entries, the rest too.
 // *out is malloc'd (free it), *count entries. False if it isn't a listing.
 bool davParseListing(const char *xml, const char *folder_url, DavEntry **out, size_t *count);
+
+// --- For the other listings (folderlist.c) ---
+
+typedef struct {
+    DavEntry *items;
+    size_t count, capacity;
+} DavListing;
+
+// Adds an entry (past DAV_LISTING_MAX, the rest is left out). False if memory runs out.
+bool davListingAdd(DavListing *l, const DavEntry *e);
+// A name a line-based file (resume.txt and the like) can keep: no control characters.
+bool davNameIsPlain(const char *name);
+// Standard base64 of length bytes, NUL-terminated. False if it doesn't fit.
+bool davBase64(const unsigned char *in, size_t length, char *out, size_t size);
+// Decodes %XX in place. False if it decodes a NUL (the name would end there).
+bool davPercentDecode(char *s);
+// The path part of an href or URL ("https://h/a/b" or "/a/b" -> "/a/b"),
+// decoded, without a last '/'. False if it didn't fit or can't be decoded.
+bool davHrefPath(const char *href, char *out, size_t size);
+// The entry an href names (its name), if it's in folder (a path from davHrefPath) and isn't it.
+bool davEntryOfHref(const char *href, const char *folder, DavEntry *e);

@@ -13,7 +13,6 @@
 
 #include "blockcache.h"
 #include "davnet.h"
-#include "smbnet.h"
 #include "hlsio.h"
 #include "tsstream.h"
 #include "jfsync.h"
@@ -39,7 +38,7 @@ typedef struct {
     pthread_mutex_t lock;
     pthread_cond_t wake;  // The reader moved, a block came, or stop.
     NetClient *net;
-    SmbFile *smb;          // A network folder on an SMB share: read with it, not HTTP.
+    DavFile *file;         // A network folder over SMB, FTP or SFTP: read with it, not HTTP.
     char url[REMOTE_URL_MAX], authorization[JF_AUTH_MAX];
     bool any_certificate;  // An IPTV server's (its list's certificate check is off).
     StreamHeaders stream;  // The headers an addon's stream asks for.
@@ -105,23 +104,23 @@ static bool blockIsRight(long status, long long total, int64_t from, size_t size
     return (long long)size == (left < BLOCK_SIZE ? left : BLOCK_SIZE);
 }
 
-// An SMB share's block: read on the file's own connection, opened again if it dropped.
-static size_t readSmbBlock(Remote *r, int64_t index, uint8_t *to, long long *total)
+// A network folder's block over SMB, FTP or SFTP: read on the file's own connection, opened again if it dropped.
+static size_t readFolderBlock(Remote *r, int64_t index, uint8_t *to, long long *total)
 {
     int64_t from = index * BLOCK_SIZE;
     char why[160];
     for (int attempt = 0; attempt < FETCH_TRIES && !r->abort_fetch; attempt++) {
-        if (!r->smb)
-            r->smb = davSmbOpen(r->location, why, sizeof(why));
-        if (r->smb) {
-            *total = smbFileSize(r->smb);
-            int64_t n = smbFileRead(r->smb, from, to, BLOCK_SIZE, &r->abort_fetch);
+        if (!r->file)
+            r->file = davFileOpen(r->location, why, sizeof(why));
+        if (r->file) {
+            *total = davFileSize(r->file);
+            int64_t n = davFileRead(r->file, from, to, BLOCK_SIZE, &r->abort_fetch);
             if (n > 0 && (n == BLOCK_SIZE || from + n == *total))
                 return (size_t)n;
             if (r->abort_fetch)
                 return 0;
-            smbFileClose(r->smb);  // The connection may be gone: a new one next try.
-            r->smb = NULL;
+            davFileClose(r->file);  // The connection may be gone: a new one next try.
+            r->file = NULL;
         }
         waitBeforeRetry(r, RETRY_WAIT_MS << attempt);
     }
@@ -131,8 +130,8 @@ static size_t readSmbBlock(Remote *r, int64_t index, uint8_t *to, long long *tot
 // Fetches one block into its slot's memory. How many bytes, 0 on failure.
 static size_t fetchBlock(Remote *r, int64_t index, uint8_t *to, long long *total)
 {
-    if (r->smb || (davIsLocation(r->location) && davIsSmb()))
-        return readSmbBlock(r, index, to, total);
+    if (r->file || (davIsLocation(r->location) && davReadsFiles()))
+        return readFolderBlock(r, index, to, total);
     char range[64], error[NET_ERROR_MAX];
     int64_t from = index * BLOCK_SIZE;
     snprintf(range, sizeof(range), "%" PRId64 "-%" PRId64, from, from + BLOCK_SIZE - 1);
@@ -219,7 +218,7 @@ static void remoteFree(Remote *r)
         pthread_join(r->thread, NULL);
     }
     netClientClose(r->net);
-    smbFileClose(r->smb);
+    davFileClose(r->file);
     pthread_cond_destroy(&r->wake);
     pthread_mutex_destroy(&r->lock);
     free(r->memory);
@@ -319,9 +318,9 @@ static Remote *remoteOpen(const char *location)
     if (stremioIsLocation(location))
         stremioChosenHeaders(location, &r->stream);
     char why[160];
-    if (r->memory && davIsLocation(location) && davIsSmb())  // Opened here, read by the fetch thread only.
-        r->smb = davSmbOpen(location, why, sizeof(why));
-    bool ok = r->memory && r->net && (r->smb || request(location, r->url, sizeof(r->url), r->authorization,
+    if (r->memory && davIsLocation(location) && davReadsFiles())  // Opened here, read by the fetch thread only.
+        r->file = davFileOpen(location, why, sizeof(why));
+    bool ok = r->memory && r->net && (r->file || request(location, r->url, sizeof(r->url), r->authorization,
                                                          sizeof(r->authorization)));
     r->thread_started = ok && pthread_create(&r->thread, NULL, fetchThread, r) == 0;
     if (!r->thread_started) {
