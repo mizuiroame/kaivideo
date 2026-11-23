@@ -22,10 +22,21 @@ void testSettings(void)
     CHECK(settingIsChoice(SETTING_NET_REMEMBER) && settingIsChoice(SETTING_NET_UNSIGNED) &&
           !settingIsChoice(SETTING_NET_FORGET));
     CHECK(settingsPageNote(SETTINGS_PAGE_NETWORK, SERVER_JELLYFIN) != NULL);
-    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_OPEN_LIBRARY &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_MAIN, false, SERVER_JELLYFIN, rows) == 9 && rows[0] == SETTING_OPEN_LIBRARY &&
           rows[1] == SETTING_OPEN_NETWORK && rows[2] == SETTING_OPEN_JELLYFIN && rows[3] == SETTING_OPEN_EMBY &&
-          rows[4] == SETTING_OPEN_PLEX && rows[5] == SETTING_OPEN_PLAYBACK && rows[6] == SETTING_OPEN_DISPLAY &&
-          rows[7] == SETTING_ABOUT);
+          rows[4] == SETTING_OPEN_PLEX && rows[5] == SETTING_OPEN_IPTV && rows[6] == SETTING_OPEN_PLAYBACK &&
+          rows[7] == SETTING_OPEN_DISPLAY && rows[8] == SETTING_ABOUT);
+    // The IPTV list's page: its type (a choice), address, account, guide, load and forget.
+    CHECK(settingsPageRows(SETTINGS_PAGE_IPTV, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_IPTV_KIND &&
+          rows[1] == SETTING_IPTV_ADDRESS && rows[2] == SETTING_IPTV_ACCOUNT && rows[3] == SETTING_IPTV_GUIDE &&
+          rows[4] == SETTING_IPTV_LOAD && rows[5] == SETTING_IPTV_FORGET);
+    CHECK(settingIsChoice(SETTING_IPTV_KIND) && !settingIsChoice(SETTING_IPTV_LOAD) &&
+          !strcmp(settingsPageTitle(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN), "IPTV") &&
+          settingsPageNote(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN) != NULL);
+    SettingsPage iptv_page;
+    ServerKind iptv_kind;
+    CHECK(settingOpensPage(SETTING_OPEN_IPTV, &iptv_page, &iptv_kind) && iptv_page == SETTINGS_PAGE_IPTV &&
+          settingPageOpener(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN) == SETTING_OPEN_IPTV);
     // Every page ends where its list does (none takes an empty row as the first setting).
     for (int p = 0; p < SETTINGS_PAGE_COUNT; p++)
         for (int k = 0; k < SERVER_KIND_COUNT; k++)

@@ -322,6 +322,10 @@ static void openServer(App *app, ServerKind kind, uint64_t now)
 
 static void change(App *app, SettingRow row, int delta, uint64_t now)
 {
+    if (row == SETTING_IPTV_KIND) {  // The IPTV list's: its file.
+        appIptvActivate(app, row, now);
+        return;
+    }
     if (row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED) {  // The network folder's account: its file.
         appNetworkActivate(app, row, now);
         return;
@@ -399,8 +403,9 @@ static void activate(App *app, SettingRow row, uint64_t now)
     case SETTING_CREDITS: app->about_open = true; break;
     case SETTING_UPDATE_NOW: appUpdatesActivate(app, now); break;
     case SETTING_OPEN_NETWORK: openPage(app, SETTINGS_PAGE_NETWORK); break;
+    case SETTING_OPEN_IPTV: openPage(app, SETTINGS_PAGE_IPTV); break;
     default:
-        if (!appNetworkActivate(app, row, now))
+        if (!appIptvActivate(app, row, now) && !appNetworkActivate(app, row, now))
             change(app, row, 1, now);
         break;
     }
@@ -511,6 +516,7 @@ void appSettingsDraw(const App *app)
     }
     uiSettingsSetServers(names);
     appNetworkFeedSettings();
+    appIptvFeedSettings(app);
     static char update_now[96];
     appUpdatesValue(app, SETTING_UPDATE_NOW, update_now, sizeof(update_now));
     uiSettingsSetUpdate(update_now);

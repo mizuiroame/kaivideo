@@ -9,7 +9,7 @@
 #include "jellyfin.h"
 
 #define SETTINGS_NAME_MAX 128
-#define SETTINGS_PAGE_MAX_ROWS 8
+#define SETTINGS_PAGE_MAX_ROWS 9
 
 typedef enum {
     SETTING_LIBRARY,       // Opens the folder picker.
@@ -50,6 +50,13 @@ typedef enum {
     SETTING_CREDITS,        // About: shows the credits and licenses.
     SETTING_UPDATE_AUTO,    // About: whether GitHub is asked once a day for a new version.
     SETTING_UPDATE_NOW,     // About: looks for one now, or installs the one found.
+    SETTING_OPEN_IPTV,      // Opens the IPTV list's page.
+    SETTING_IPTV_KIND,      // An M3U list or an Xtream account.
+    SETTING_IPTV_ADDRESS,   // Types the M3U's address, or the Xtream server's.
+    SETTING_IPTV_ACCOUNT,   // Types the Xtream user and password.
+    SETTING_IPTV_GUIDE,     // Types an XMLTV guide's address (empty: the list's own).
+    SETTING_IPTV_LOAD,      // Loads the channels and their guide.
+    SETTING_IPTV_FORGET,    // Forgets the list.
     SETTING_COUNT,
 } SettingRow;
 
@@ -63,6 +70,7 @@ typedef enum {
     SETTINGS_PAGE_PLAYBACK,
     SETTINGS_PAGE_NETWORK,
     SETTINGS_PAGE_ABOUT,
+    SETTINGS_PAGE_IPTV,
     SETTINGS_PAGE_COUNT
 } SettingsPage;
 

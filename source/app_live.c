@@ -9,6 +9,7 @@
 
 #include "app.h"
 #include "buttons.h"
+#include "lang.h"
 #include "ui_library.h"
 #include "ui_live.h"
 
@@ -35,17 +36,126 @@ static bool takeGuide(App *app)
         return false;
     pthread_join(app->live_thread, NULL);
     if (app->live_read_count >= 0) {  // The server answered: its channels, none included.
-        bool had = app->live.count > 0;
-        liveGuideFree(&app->live);
-        app->live = app->live_incoming;
+        liveGuideFree(&app->live_server);
+        app->live_server = app->live_incoming;
         liveGuideInit(&app->live_incoming);
-        if (had != (app->live.count > 0))
-            appLibraryRefreshHome(app);  // The tab comes or goes.
-        libviewLiveMove(&app->view, app->live.count, 0);
+        appLibraryRefreshHome(app);  // The tab may come or go; the guide shown is made again.
         if (app->view.live_at <= (int64_t)time(NULL))
             app->view.live_at = 0;  // The program the cursor was on has started: it's on now.
     }
     return true;
+}
+
+bool appIsLiveLocation(const char *location)
+{
+    return liveIsLocation(location) || iptvIsLocation(location);
+}
+
+// What's on an IPTV channel now and next, and its programs not over yet.
+static void iptvPrograms(const App *app, int index, LiveChannel *c, int64_t now_s)
+{
+    const IptvGuide *g = &app->iptv_guide;
+    if (index >= g->count)
+        return;
+    for (int j = 0; j < g->counts[index] && c->program_count < LIVE_PROGRAMS_PER_CHANNEL; j++) {
+        const LiveProgram *p = &g->programs[index][j];
+        if (p->end <= now_s)
+            continue;
+        c->programs[c->program_count++] = *p;
+        if (p->start <= now_s)
+            c->now = *p;
+        else if (!c->next.title[0] && !c->next.start)
+            c->next = *p;
+    }
+}
+
+void appLiveRebuild(App *app)
+{
+    bool jellyfin = app->config.use_jellyfin && app->config.server_view == SERVER_JELLYFIN;  // Its Live TV.
+    int server = jellyfin ? app->live_server.count : 0, group = app->iptv_group;
+    if (group >= app->iptv.group_count)
+        group = app->iptv_group = -1;
+    int iptv = 0;
+    for (int i = 0; i < app->iptv.count; i++)
+        iptv += group < 0 || app->iptv.channels[i].group == group;
+    LiveGuide g;
+    liveGuideInit(&g);
+    int total = server + iptv < LIVE_CHANNELS_MAX ? server + iptv : LIVE_CHANNELS_MAX;
+    g.channels = total > 0 ? calloc((size_t)total, sizeof(LiveChannel)) : NULL;
+    if (total > 0 && !g.channels)
+        total = 0;
+    int n = 0;
+    for (int i = 0; i < server && n < total; i++)
+        g.channels[n++] = app->live_server.channels[i];
+    int64_t now_s = (int64_t)time(NULL);
+    for (int i = 0; i < app->iptv.count && n < total; i++) {
+        const IptvChannel *ic = &app->iptv.channels[i];
+        if (group >= 0 && ic->group != group)
+            continue;
+        LiveChannel *c = &g.channels[n++];
+        iptvLocation(c->id, sizeof(c->id), i);
+        snprintf(c->name, sizeof(c->name), "%.90s", ic->name);  // The guide's rows hold less.
+        snprintf(c->number, sizeof(c->number), "%s", ic->number);
+        iptvPrograms(app, i, c, now_s);
+    }
+    g.count = n;
+    liveGuideFree(&app->live);
+    app->live = g;
+    libviewLiveMove(&app->view, app->live.count, 0);
+}
+
+void appLiveIptvChanged(App *app)
+{
+    if (app->live_group_cursor > app->iptv.group_count)
+        app->live_group_cursor = 0;
+    appLibraryRefreshHome(app);
+}
+
+// --- The IPTV list's groups (Y on the Live tab) ---
+
+static void chooseGroup(App *app, int row)
+{
+    if (row < 0 || row > app->iptv.group_count)
+        return;
+    app->iptv_group = row - 1;  // Row 0: all its channels.
+    app->live_groups_open = false;
+    app->view.live.cursor = 0;
+    app->view.live.first = 0;
+    appLiveRebuild(app);
+}
+
+void appLiveGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+{
+    (void)now;
+    int rows = app->iptv.group_count + 1;
+    int *cursor = &app->live_group_cursor;
+    if (pressed & BUTTONS_UP)
+        *cursor = *cursor > 0 ? *cursor - 1 : 0;
+    if (pressed & BUTTONS_DOWN)
+        *cursor = *cursor + 1 < rows ? *cursor + 1 : rows - 1;
+    if (pressed & BUTTONS_PAGE_UP)
+        *cursor = *cursor > LIBVIEW_LIVE_ROWS ? *cursor - LIBVIEW_LIVE_ROWS : 0;
+    if (pressed & BUTTONS_PAGE_DOWN)
+        *cursor = *cursor + LIBVIEW_LIVE_ROWS < rows ? *cursor + LIBVIEW_LIVE_ROWS : rows - 1;
+    if (pressed & HidNpadButton_A)
+        chooseGroup(app, *cursor);
+    if (pressed & (HidNpadButton_B | HidNpadButton_Y))
+        app->live_groups_open = false;
+    if (touch.type == TOUCH_TAP) {
+        LibHit hit = uiLibraryTap(touch.x, touch.y);
+        if (hit.kind == LIBHIT_LIVE_GROUP_ROW)
+            chooseGroup(app, hit.a);
+        else if (hit.kind == LIBHIT_CLOSE || hit.kind == LIBHIT_LIVE_GROUPS)
+            app->live_groups_open = false;
+    }
+}
+
+void appLiveOpenGroups(App *app)
+{
+    if (app->iptv.group_count == 0)
+        return;
+    app->live_groups_open = true;
+    app->live_group_cursor = app->iptv_group + 1;
 }
 
 void appLiveUpdate(App *app, uint64_t now)
@@ -77,13 +187,17 @@ void appLiveExit(App *app)
     if (app->live_read_at && app->live_reading)
         pthread_join(app->live_thread, NULL);
     liveGuideFree(&app->live);
+    liveGuideFree(&app->live_server);
     liveGuideFree(&app->live_incoming);
 }
 
 // A channel's location, and its name in the player's bar: "One  ·  What's on".
 static void describeChannel(const LiveChannel *c, char *location, size_t location_size, char *name, size_t name_size)
 {
-    liveLocation(location, location_size, c->id);
+    if (iptvIsLocation(c->id))
+        snprintf(location, location_size, "%s", c->id);  // An IPTV channel's id is its location.
+    else
+        liveLocation(location, location_size, c->id);
     snprintf(name, name_size, "%s%s%s", c->name, c->now.title[0] ? "  \xC2\xB7  " : "", c->now.title);
 }
 
@@ -137,6 +251,8 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             playChannel(app, hit.a, now);
         } else if (hit.kind == LIBHIT_LIVE_PROGRAM) {
             tapProgram(app, hit, now);
+        } else if (hit.kind == LIBHIT_LIVE_GROUPS) {
+            appLiveOpenGroups(app);
         }
     } else if (touch.type == TOUCH_DRAG) {
         appLibraryDrag(app, touch, now);  // The guide follows the finger, as the other lists.
@@ -158,16 +274,25 @@ static int64_t utcOffset(void)
 
 void appLiveDraw(const App *app)
 {
-    uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), utcOffset(), app->config.clock_24h,
-                  app->live_read_at && app->live.count == 0 && app->live_reading);
+    IptvLoadStatus s;
+    iptvLoadStatus(&s);
+    bool loading = (app->live_read_at && app->live.count == 0 && app->live_reading) ||
+                   (app->live.count == 0 && (s.state == IPTV_LOAD_LIST || s.state == IPTV_LOAD_GUIDE));
+    const char *group = NULL;
+    if (app->iptv.group_count > 0)
+        group = app->iptv_group >= 0 ? app->iptv.groups[app->iptv_group].name : T("All channels");
+    uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), utcOffset(), app->config.clock_24h, loading, group,
+                  app->iptv.count > 0);
+    if (app->live_groups_open)
+        uiDrawLiveGroups(&app->iptv, app->live_group_cursor, app->iptv_group + 1);
 }
 
 bool appLiveNeighbor(App *app, int delta, char *location, size_t location_size, char *name, size_t name_size)
 {
     int at = -1;
     for (int i = 0; i < app->live.count && at < 0; i++) {
-        char here[LIBRARY_PATH_MAX];
-        liveLocation(here, sizeof(here), app->live.channels[i].id);
+        char here[LIBRARY_PATH_MAX], name_here[APP_NAME_MAX];
+        describeChannel(&app->live.channels[i], here, sizeof(here), name_here, sizeof(name_here));
         if (!strcmp(here, app->playing_path))
             at = i;
     }
@@ -182,5 +307,5 @@ bool appLiveNeighbor(App *app, int delta, char *location, size_t location_size, 
 
 bool appPlayingLive(const App *app)
 {
-    return app->player && liveIsLocation(app->playing_path);
+    return app->player && appIsLiveLocation(app->playing_path);
 }

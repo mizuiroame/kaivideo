@@ -10,6 +10,8 @@
 #include "browser.h"
 #include "downloads.h"
 #include "home.h"
+#include "iptv.h"
+#include "iptvload.h"
 #include "jfsync.h"
 #include "kinetic.h"
 #include "library.h"
@@ -106,9 +108,19 @@ struct App {
     char favorite_changes[APP_FAVORITE_CHANGES][LIBRARY_PATH_MAX];
     bool favorite_values[APP_FAVORITE_CHANGES];
     int favorite_change_count;
-    // Live TV (app_live.c): the guide shown, and one being read by a thread.
+    // Live TV (app_live.c): the guide shown (the server's channels, then the
+    // IPTV list's of the group chosen), the server's, and one being read by a thread.
     LiveGuide live;
+    LiveGuide live_server;
     LiveGuide live_incoming;
+    // The IPTV list (app_iptv.c): its channels and guide, and the group the Live tab shows.
+    IptvList iptv;
+    IptvGuide iptv_guide;
+    unsigned iptv_seen;         // The load whose result was taken.
+    int iptv_group;             // An index of its groups, -1 for all its channels.
+    bool live_groups_open;      // The list of groups shows over the guide (X).
+    int live_group_cursor;      // Its row: 0 is "All channels", then each group.
+    char open_url[IPTV_URL_MAX];  // The IPTV channel opening: its stream (copied for the opening thread).
     pthread_t live_thread;
     bool live_reading;
     int live_read_count;        // What the thread found: channels, -1 if the server didn't answer.
@@ -245,7 +257,26 @@ void appNetworkExit(void);
 // What its rows say, before Settings is drawn.
 void appNetworkFeedSettings(void);
 
+// app_iptv.c: the IPTV list. Reads its account and loads its channels.
+void appIptvStart(App *app);
+// A Settings row of its page: true if it was one.
+bool appIptvActivate(App *app, SettingRow row, uint64_t now);
+// Once a frame: a load that finished, taken (and said).
+void appIptvUpdate(App *app, uint64_t now);
+void appIptvExit(App *app);
+// What its rows say, before Settings is drawn.
+void appIptvFeedSettings(const App *app);
+
 // app_live.c
+// The IPTV list's channels or guide changed: the Live tab is made again.
+void appLiveIptvChanged(App *app);
+// The IPTV list's groups over the Live tab (Y): opened, and their buttons and taps.
+void appLiveOpenGroups(App *app);
+void appLiveGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+// Makes the guide shown from the server's channels and the IPTV group chosen.
+void appLiveRebuild(App *app);
+// A channel's location (a server's or an IPTV list's).
+bool appIsLiveLocation(const char *location);
 // Once a frame: reads the guide now and then (often while its tab shows), and takes it when read.
 void appLiveUpdate(App *app, uint64_t now);
 void appLiveExit(App *app);

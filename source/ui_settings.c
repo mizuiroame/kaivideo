@@ -70,6 +70,16 @@ void uiSettingsSetNetwork(const char *address, const char *user, bool remember, 
 }
 static const char *g_users[SERVER_KIND_COUNT] = {"", "", ""};
 static const char *g_update_now = "";
+static const char *g_iptv_kind = "", *g_iptv_address = "", *g_iptv_user, *g_iptv_guide = "", *g_iptv_state = "";
+
+void uiSettingsSetIptv(const char *kind, const char *address, const char *user, const char *guide, const char *state)
+{
+    g_iptv_kind = kind;
+    g_iptv_address = address;
+    g_iptv_user = user;
+    g_iptv_guide = guide;
+    g_iptv_state = state;
+}
 
 void uiSettingsSetUpdate(const char *now)
 {
@@ -113,6 +123,16 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", g_net_remember ? T("On") : T("Off: asked when the folder is used"));
     } else if (row == SETTING_NET_UNSIGNED) {
         snprintf(out, size, "%s", !g_net_smb ? T("Only for shared folders (SMB)") : g_net_unsigned ? T("On: not signed") : T("Off"));
+    } else if (row == SETTING_IPTV_KIND) {
+        snprintf(out, size, "%s", g_iptv_kind);
+    } else if (row == SETTING_OPEN_IPTV || row == SETTING_IPTV_ADDRESS) {
+        snprintf(out, size, "%s", g_iptv_address[0] ? g_iptv_address : T("Not set"));
+    } else if (row == SETTING_IPTV_ACCOUNT) {
+        snprintf(out, size, "%s", !g_iptv_user ? T("Only for Xtream") : g_iptv_user[0] ? g_iptv_user : T("None"));
+    } else if (row == SETTING_IPTV_GUIDE) {
+        snprintf(out, size, "%s", g_iptv_guide[0] ? g_iptv_guide : T("The list's own"));
+    } else if (row == SETTING_IPTV_LOAD) {
+        snprintf(out, size, "%s", g_iptv_state);
     } else if (row == SETTING_UPDATE_NOW) {
         snprintf(out, size, "%s", g_update_now);
     } else if (row == SETTING_JF_SIGN_OUT) {

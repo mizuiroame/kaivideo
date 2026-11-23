@@ -41,6 +41,13 @@ typedef struct {
 
 void iptvListFree(IptvList *list);
 
+// A channel's location for the player: "iptv:<index in the list>".
+#define IPTV_PREFIX "iptv:"
+void iptvLocation(char *out, size_t size, int index);
+bool iptvIsLocation(const char *location);
+// Its index, or -1 if it isn't one.
+int iptvLocationIndex(const char *location);
+
 // An M3U playlist (#EXTM3U, #EXTINF with tvg-id, tvg-name, tvg-logo,
 // tvg-chno and group-title, #EXTGRP). Entries that aren't http(s) are left
 // out. False if it isn't an M3U playlist, or memory runs out.
@@ -71,6 +78,29 @@ typedef struct {
     int64_t expires;      // Seconds since 1970; 0 if never or unknown.
     int max_connections;  // 0 if unknown.
 } XtreamAuth;
+
+// --- The list set in Settings (iptv.txt in KaiVideo's folder) ---
+
+#define IPTV_ACCOUNT_FILE "iptv.txt"
+
+typedef enum { IPTV_NONE, IPTV_M3U, IPTV_XTREAM } IptvKind;
+
+typedef struct {
+    IptvKind kind;
+    char address[IPTV_URL_MAX];  // The M3U's address, or the Xtream server.
+    char user[IPTV_NAME_MAX];    // Xtream's.
+    char password[IPTV_NAME_MAX];
+    char guide[IPTV_URL_MAX];    // An XMLTV guide to use instead of the list's; "" for the list's own.
+} IptvAccount;
+
+// Reads iptv.txt's text. False (and a cleared account) if it isn't one.
+bool iptvAccountRead(IptvAccount *a, const char *text);
+// Writes it: the password only encoded (base64), never as typed. False if it doesn't fit.
+bool iptvAccountWrite(const IptvAccount *a, char *out, size_t size);
+// The Xtream account in it.
+void iptvXtreamOf(const IptvAccount *a, XtreamAccount *out);
+// The guide to read: the one set, else an Xtream server's, else the M3U's own (list_epg). "" for none.
+void iptvGuideUrl(const IptvAccount *a, const char *list_epg, char *out, size_t size);
 
 // The account's answer. False if it isn't an Xtream server's.
 bool xtreamParseAuth(const char *json, XtreamAuth *out);

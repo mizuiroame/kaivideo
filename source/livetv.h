@@ -10,7 +10,7 @@
 #define LIVE_NAME_MAX 96
 #define LIVE_NUMBER_MAX 12
 #define LIVE_SOURCE "live"  // A channel's location: "jellyfin:<channel id>/live".
-#define LIVE_CHANNELS_MAX 500
+#define LIVE_CHANNELS_MAX 2000  // A server's, and an IPTV list's too.
 #define LIVE_PROGRAMS_PER_CHANNEL 16
 #define LIVE_GRID_STEP_S 1800                     // The guide's columns: half hours.
 #define LIVE_GRID_SPAN_S (4 * LIVE_GRID_STEP_S)   // What the guide shows at once: two hours.

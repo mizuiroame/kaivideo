@@ -221,8 +221,32 @@ static void testGuide(void)
     free(copy);
 }
 
+static void testAccount(void)
+{
+    IptvAccount a = {IPTV_XTREAM, "http://tv.example:8080", "kai", "s3cr=t+/x", ""};
+    char text[2048];
+    CHECK(iptvAccountWrite(&a, text, sizeof(text)) && !strstr(text, "s3cr=t") && strstr(text, "password=b64:"));
+    IptvAccount back;
+    CHECK(iptvAccountRead(&back, text) && back.kind == IPTV_XTREAM && !strcmp(back.password, "s3cr=t+/x") &&
+          !strcmp(back.address, "http://tv.example:8080") && !strcmp(back.user, "kai"));
+    char guide[IPTV_URL_MAX];
+    iptvGuideUrl(&back, "https://ignored.example/epg.xml", guide, sizeof(guide));
+    CHECK(!strcmp(guide, "http://tv.example:8080/xmltv.php?username=kai&password=s3cr%3Dt%2B%2Fx"));
+    IptvAccount m3u = {IPTV_M3U, "https://lists.example/tv.m3u", "", "", ""};
+    iptvGuideUrl(&m3u, "https://guide.example/epg.xml.gz", guide, sizeof(guide));
+    CHECK(!strcmp(guide, "https://guide.example/epg.xml.gz"));
+    snprintf(m3u.guide, sizeof(m3u.guide), "%s", "https://mine.example/g.xml");
+    iptvGuideUrl(&m3u, "https://guide.example/epg.xml.gz", guide, sizeof(guide));
+    CHECK(!strcmp(guide, "https://mine.example/g.xml"));
+    CHECK(!iptvAccountRead(&back, "kind=m3u\naddress=file:///etc/x\n") && back.kind == IPTV_NONE);
+    CHECK(!iptvAccountRead(&back, "nothing") && !iptvAccountRead(&back, "kind=other\naddress=https://x.example\n"));
+    IptvAccount bad = {IPTV_M3U, "https://x.example/a\nkind=xtream", "", "", ""};
+    CHECK(!iptvAccountWrite(&bad, text, sizeof(text)));
+}
+
 void testIptv(void)
 {
+    testAccount();
     testM3u();
     testXtream();
     testGuide();

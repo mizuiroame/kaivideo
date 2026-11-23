@@ -173,7 +173,7 @@ static void liveScene(Player *p)
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_tab");
     const int row2_y = 116 + 76 + 38;  // The middle of the second channel's row.
@@ -191,10 +191,33 @@ static void liveScene(Player *p)
     view.live_at = liveStep(&channels[1], view.live_at, now, 1);
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("live_guide_later");
     view.live_at = 0;
+    // An IPTV list's group (made-up), and its groups over the guide.
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true);
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu"));
+    save("live_iptv");
+    if (uiLibraryTap(MARGIN + 80, 84 + 13).kind != LIBHIT_LIVE_GROUPS) {
+        printf("TOUCH: live_iptv: the group pill doesn't answer a tap\n");
+        g_problems++;
+    }
+    static IptvGroup groups[] = {{"News", "", 12}, {"Sports", "", 30}, {"Kids", "", 8}, {"Music", "", 15},
+                                 {"Movies", "", 22}, {"Documentaries", "", 9}, {"Local", "", 4}};
+    IptvList groups_list = {.channels = NULL, .count = 100, .groups = groups, .group_count = 7};
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true);
+    uiDrawLiveGroups(&groups_list, 2, 1);
+    uiDrawFooterHelp(T("[A] choose  [B] back"));
+    save("live_groups");
+    if (uiLibraryTap(GFX_WIDTH / 2, 64 + 56 + 2 * 52 + 26).kind != LIBHIT_LIVE_GROUP_ROW) {
+        printf("TOUCH: live_groups: a group doesn't answer a tap\n");
+        g_problems++;
+    }
     uiLibrarySetSource("", uiServerColor(SERVER_JELLYFIN));
     p->live = true;
     begin();
@@ -725,9 +748,9 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_MAIN, SETTING_OPEN_PLEX, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [>][A] open  [B] close"));
     save("settings");
-    // The main page's rows: 48 high from 76 below the panel's top (8 rows, a 60 footer).
-    int top = (GFX_HEIGHT - (76 + 8 * 48 + 60)) / 2 + 76;
-    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 7 * 48 + 20), outside = uiLibraryTap(20, 400);
+    // The main page's rows: 48 high from 76 below the panel's top (9 rows, a 60 footer).
+    int top = (GFX_HEIGHT - (76 + 9 * 48 + 60)) / 2 + 76;
+    LibHit about = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 8 * 48 + 20), outside = uiLibraryTap(20, 400);
     LibHit plex_row = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 4 * 48 + 20);
     if (about.kind != LIBHIT_SETTING || about.a != SETTING_ABOUT || outside.kind != LIBHIT_CLOSE ||
         plex_row.kind != LIBHIT_SETTING || plex_row.a != SETTING_OPEN_PLEX) {
@@ -764,6 +787,12 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_ABOUT, SETTING_UPDATE_NOW, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_about");
+    begin();  // The IPTV page, an Xtream account set (made-up).
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiSettingsSetIptv("Xtream", "http://tv.example:8080", "kai", "", "412 channels");
+    uiDrawSettings(&config, SETTINGS_PAGE_IPTV, SETTING_IPTV_LOAD, "sdmc:/Media/Videos", "1.9.0");
+    uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
+    save("settings_iptv");
     begin();  // A notice over Settings.
     uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
     uiDrawSettings(&config, SETTINGS_PAGE_ABOUT, SETTING_UPDATE_NOW, "sdmc:/Media/Videos", "1.9.0");

@@ -672,9 +672,6 @@ LIVE
 Live TV
 电视直播
 
-Live TV comes from your Jellyfin server's tuners and guide.
-电视直播来自Jellyfin服务器的调谐器和节目表。
-
 Loading...
 正在载入...
 
@@ -1508,3 +1505,147 @@ The shared folder couldn't be opened (%d: %s).
 
 User name (empty: none; DOMAIN\user for a domain)
 用户名（留空表示无；域用户请用 DOMAIN\user）
+
+%d channels
+%d 个频道
+
+%d IPTV channels (the list has no guide).
+%d 个 IPTV 频道（列表没有节目指南）。
+
+%d IPTV channels, with their guide.
+%d 个 IPTV 频道，含节目指南。
+
+%d IPTV channels; the guide: %s
+%d 个 IPTV 频道；节目指南：%s
+
+[A] choose  [^v] group  [B] back
+[A] 选择  [^v] 分组  [B] 返回
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
+[A] 观看  [^v] 频道  [<>] 节目指南  [Y] 分组  [ZL][ZR] 标签页  [+] 菜单
+
+All channels
+所有频道
+
+An M3U list needs no user: its address is enough.
+M3U 列表不需要用户，地址即可。
+
+An XMLTV guide's address (empty: the list's own)
+XMLTV 节目指南地址（留空：使用列表自带的）
+
+Enter the list's address first.
+请先输入列表地址。
+
+Enter the server, and its user and password, first.
+请先输入服务器及其用户名和密码。
+
+Forget this list
+删除此列表
+
+Groups
+分组
+
+Guide (XMLTV)
+节目指南 (XMLTV)
+
+IPTV
+IPTV
+
+List set: Load the channels to see them in Live.
+列表已设置：加载频道后即可在 Live 中观看。
+
+List type
+列表类型
+
+Live TV comes from your Jellyfin server, or an IPTV list (Settings > IPTV).
+直播电视来自你的 Jellyfin 服务器或 IPTV 列表（设置 > IPTV）。
+
+Load the channels
+加载频道
+
+Loading the channels…
+正在加载频道…
+
+Loading…
+正在加载…
+
+M3U list
+M3U 列表
+
+No channels in this group
+此分组中没有频道
+
+Only for Xtream
+仅限 Xtream
+
+Out of memory
+内存不足
+
+Press Y to choose another group.
+按 Y 选择其他分组。
+
+Reading the guide…
+正在读取节目指南…
+
+Saved: the password is only encoded on the card.
+已保存：密码在卡上仅做编码。
+
+Server set: now its user and password.
+服务器已设置：接下来输入用户名和密码。
+
+That address isn't an M3U list.
+该地址不是 M3U 列表。
+
+That channel isn't in the list any more.
+该频道已不在列表中。
+
+That isn't an address: it starts with http:// or https://.
+这不是地址：地址以 http:// 或 https:// 开头。
+
+That isn't an Xtream server, or the user or password is wrong.
+这不是 Xtream 服务器，或用户名、密码错误。
+
+The account isn't active (%s).
+账户未激活（%s）。
+
+The channels come in a moment.
+频道马上就来。
+
+The guide couldn't be read.
+无法读取节目指南。
+
+The guide has nothing for these channels.
+节目指南中没有这些频道的内容。
+
+The IPTV list is forgotten.
+已删除 IPTV 列表。
+
+The list couldn't be read.
+无法读取列表。
+
+The list's own
+列表自带
+
+The M3U list's address: https://...
+M3U 列表地址：https://...
+
+The server didn't answer.
+服务器没有响应。
+
+The server's channels couldn't be read.
+无法读取服务器的频道。
+
+The Xtream server: http://host:port
+Xtream 服务器：http://host:port
+
+This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
+无法读取此频道的流：KaiVideo 播放 HLS (.m3u8) 频道。
+
+User name
+用户名
+
+Xtream
+Xtream
+
+Your own M3U list or Xtream account: its channels show in Live, with their guide.
+你自己的 M3U 列表或 Xtream 账户：其频道连同节目指南显示在 Live 中。

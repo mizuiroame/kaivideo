@@ -16,13 +16,14 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Playback"), N_("Color"), N_("Language"), N_("Network folder"), N_("Address"), N_("User and password"),
     N_("Test the connection"), N_("Forget this folder"), N_("Remember the password"),
     N_("Allow without signing (old NAS)"), N_("Credits and licenses"), N_("Check once a day"),
-    N_("Look for an update"),
+    N_("Look for an update"), N_("IPTV"), N_("List type"), N_("Address"), N_("User and password"),
+    N_("Guide (XMLTV)"), N_("Load the channels"), N_("Forget this list"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_NETWORK, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX,
-     SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
+     SETTING_OPEN_IPTV, SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
     {SETTING_LANGUAGE, SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
      SETTING_SERVER_COLOR, SETTING_COUNT},
@@ -31,6 +32,8 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
     {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_TEST,
      SETTING_NET_FORGET, SETTING_COUNT},
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
+    {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_LOAD,
+     SETTING_IPTV_FORGET, SETTING_COUNT},
 };
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
                                             SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
@@ -41,7 +44,7 @@ static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
                                        SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
-                                                              N_("Playback"), N_("Network folder"), N_("About")};
+                                                              N_("Playback"), N_("Network folder"), N_("About"), N_("IPTV")};
 static const char *const SERVER_NOTES[SERVER_KIND_COUNT] = {
     N_("Your Jellyfin server: sign in with Quick Connect or a password."),
     N_("Your Emby server: sign in with its user name and password."),
@@ -211,6 +214,8 @@ const char *settingsPageTitle(SettingsPage page, ServerKind kind)
 
 const char *settingsPageNote(SettingsPage page, ServerKind kind)
 {
+    if (page == SETTINGS_PAGE_IPTV)
+        return T("Your own M3U list or Xtream account: its channels show in Live, with their guide.");
     if (page == SETTINGS_PAGE_NETWORK)
         return T("A shared folder (SMB) or WebDAV folder on your network. X shows its library; Files shows it first.");
     return page == SETTINGS_PAGE_JELLYFIN && kind >= 0 && kind < SERVER_KIND_COUNT ? T(SERVER_NOTES[kind]) : NULL;
@@ -225,6 +230,7 @@ bool settingOpensPage(SettingRow row, SettingsPage *page, ServerKind *kind)
     case SETTING_OPEN_PLAYBACK: *page = SETTINGS_PAGE_PLAYBACK; return true;
     case SETTING_OPEN_NETWORK: *page = SETTINGS_PAGE_NETWORK; return true;
     case SETTING_ABOUT: *page = SETTINGS_PAGE_ABOUT; return true;
+    case SETTING_OPEN_IPTV: *page = SETTINGS_PAGE_IPTV; return true;
     case SETTING_OPEN_JELLYFIN: *page = SETTINGS_PAGE_JELLYFIN; return true;
     case SETTING_OPEN_EMBY: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_EMBY; return true;
     case SETTING_OPEN_PLEX: *page = SETTINGS_PAGE_JELLYFIN; *kind = SERVER_PLEX; return true;
@@ -240,6 +246,7 @@ SettingRow settingPageOpener(SettingsPage page, ServerKind kind)
     case SETTINGS_PAGE_PLAYBACK: return SETTING_OPEN_PLAYBACK;
     case SETTINGS_PAGE_NETWORK: return SETTING_OPEN_NETWORK;
     case SETTINGS_PAGE_ABOUT: return SETTING_ABOUT;
+    case SETTINGS_PAGE_IPTV: return SETTING_OPEN_IPTV;
     case SETTINGS_PAGE_JELLYFIN:
         return kind == SERVER_PLEX ? SETTING_OPEN_PLEX : kind == SERVER_EMBY ? SETTING_OPEN_EMBY : SETTING_OPEN_JELLYFIN;
     default: return SETTING_OPEN_LIBRARY;
@@ -256,7 +263,8 @@ bool settingIsChoice(SettingRow row)
     return row == SETTING_THEME || row == SETTING_ACCENT || row == SETTING_BACKGROUND || row == SETTING_BLUR ||
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
            row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
-           row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO;
+           row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
+           row == SETTING_IPTV_KIND;
 }
 
 static int wrap(int value, int delta, int count)

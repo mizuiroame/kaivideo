@@ -21,3 +21,5 @@ void uiSettingsSetServers(const char *const users[SERVER_KIND_COUNT]);
 void uiSettingsSetNetwork(const char *address, const char *user, bool remember, bool allow_unsigned, bool smb);
 // What Look for an update says: the version found, the download's progress...
 void uiSettingsSetUpdate(const char *now);
+// What the IPTV rows show: its type, address, Xtream user (NULL for an M3U), guide, and how its load goes.
+void uiSettingsSetIptv(const char *kind, const char *address, const char *user, const char *guide, const char *state);

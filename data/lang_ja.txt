@@ -690,9 +690,6 @@ LIVE
 Live TV
 ライブTV
 
-Live TV comes from your Jellyfin server's tuners and guide.
-ライブTVは Jellyfin サーバーのチューナーと番組表を使います。
-
 Loading...
 読み込み中...
 
@@ -1508,3 +1505,147 @@ Plex サーバーが応答しません。
 
 Your server converts this format for the console.
 この形式はサーバーが本体向けに変換します。
+
+%d channels
+%d チャンネル
+
+%d IPTV channels (the list has no guide).
+IPTV チャンネル %d 件（番組表なし）。
+
+%d IPTV channels, with their guide.
+IPTV チャンネル %d 件（番組表つき）。
+
+%d IPTV channels; the guide: %s
+IPTV チャンネル %d 件。番組表: %s
+
+[A] choose  [^v] group  [B] back
+[A] 選ぶ  [^v] グループ  [B] 戻る
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
+[A] 見る  [^v] チャンネル  [<>] 番組表  [Y] グループ  [ZL][ZR] タブ  [+] メニュー
+
+All channels
+すべてのチャンネル
+
+An M3U list needs no user: its address is enough.
+M3U リストにユーザーは不要です。アドレスだけで使えます。
+
+An XMLTV guide's address (empty: the list's own)
+XMLTV 番組表のアドレス（空欄: リストのもの）
+
+Enter the list's address first.
+先にリストのアドレスを入力してください。
+
+Enter the server, and its user and password, first.
+先にサーバーとユーザー、パスワードを入力してください。
+
+Forget this list
+このリストを削除
+
+Groups
+グループ
+
+Guide (XMLTV)
+番組表 (XMLTV)
+
+IPTV
+IPTV
+
+List set: Load the channels to see them in Live.
+リストを設定しました。「チャンネルを読み込む」で Live に表示されます。
+
+List type
+リストの種類
+
+Live TV comes from your Jellyfin server, or an IPTV list (Settings > IPTV).
+ライブ TV は Jellyfin サーバーか IPTV リスト（設定 > IPTV）から見られます。
+
+Load the channels
+チャンネルを読み込む
+
+Loading the channels…
+チャンネルを読み込み中…
+
+Loading…
+読み込み中…
+
+M3U list
+M3U リスト
+
+No channels in this group
+このグループにチャンネルはありません
+
+Only for Xtream
+Xtream のみ
+
+Out of memory
+メモリ不足
+
+Press Y to choose another group.
+Y で別のグループを選べます。
+
+Reading the guide…
+番組表を読み込み中…
+
+Saved: the password is only encoded on the card.
+保存しました。パスワードはカードにエンコードして保存されます（暗号化ではありません）。
+
+Server set: now its user and password.
+サーバーを設定しました。次はユーザーとパスワードです。
+
+That address isn't an M3U list.
+そのアドレスは M3U リストではありません。
+
+That channel isn't in the list any more.
+そのチャンネルはもうリストにありません。
+
+That isn't an address: it starts with http:// or https://.
+アドレスではありません。http:// か https:// で始まります。
+
+That isn't an Xtream server, or the user or password is wrong.
+Xtream サーバーではないか、ユーザーまたはパスワードが違います。
+
+The account isn't active (%s).
+アカウントが有効ではありません（%s）。
+
+The channels come in a moment.
+まもなくチャンネルが表示されます。
+
+The guide couldn't be read.
+番組表を読み込めませんでした。
+
+The guide has nothing for these channels.
+番組表にこれらのチャンネルの情報がありません。
+
+The IPTV list is forgotten.
+IPTV リストを削除しました。
+
+The list couldn't be read.
+リストを読み込めませんでした。
+
+The list's own
+リストのもの
+
+The M3U list's address: https://...
+M3U リストのアドレス: https://...
+
+The server didn't answer.
+サーバーが応答しませんでした。
+
+The server's channels couldn't be read.
+サーバーのチャンネルを読み込めませんでした。
+
+The Xtream server: http://host:port
+Xtream サーバー: http://host:port
+
+This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
+このチャンネルのストリームは読めません。KaiVideo は HLS (.m3u8) のチャンネルを再生します。
+
+User name
+ユーザー名
+
+Xtream
+Xtream
+
+Your own M3U list or Xtream account: its channels show in Live, with their guide.
+自分の M3U リストか Xtream アカウント。チャンネルは番組表と一緒に Live に表示されます。

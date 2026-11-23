@@ -672,9 +672,6 @@ LIVE
 Live TV
 Live-TV
 
-Live TV comes from your Jellyfin server's tuners and guide.
-Live-TV kommt von den Tunern und dem Programm deines Jellyfin-Servers.
-
 Loading...
 Wird geladen...
 
@@ -1508,3 +1505,147 @@ Der freigegebene Ordner konnte nicht geöffnet werden (%d: %s).
 
 User name (empty: none; DOMAIN\user for a domain)
 Benutzername (leer: keiner; DOMÄNE\Benutzer für eine Domäne)
+
+%d channels
+%d Sender
+
+%d IPTV channels (the list has no guide).
+%d IPTV-Sender (die Liste hat keinen Programmführer).
+
+%d IPTV channels, with their guide.
+%d IPTV-Sender, mit Programmführer.
+
+%d IPTV channels; the guide: %s
+%d IPTV-Sender; Programmführer: %s
+
+[A] choose  [^v] group  [B] back
+[A] wählen  [^v] Gruppe  [B] zurück
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
+[A] ansehen  [^v] Sender  [<>] Programm  [Y] Gruppen  [ZL][ZR] Tabs  [+] Menü
+
+All channels
+Alle Sender
+
+An M3U list needs no user: its address is enough.
+Eine M3U-Liste braucht keinen Benutzer: die Adresse genügt.
+
+An XMLTV guide's address (empty: the list's own)
+Adresse eines XMLTV-Programmführers (leer: der der Liste)
+
+Enter the list's address first.
+Gib zuerst die Adresse der Liste ein.
+
+Enter the server, and its user and password, first.
+Gib zuerst den Server und Benutzer und Passwort ein.
+
+Forget this list
+Diese Liste vergessen
+
+Groups
+Gruppen
+
+Guide (XMLTV)
+Programmführer (XMLTV)
+
+IPTV
+IPTV
+
+List set: Load the channels to see them in Live.
+Liste gesetzt: Sender laden, um sie in Live zu sehen.
+
+List type
+Listentyp
+
+Live TV comes from your Jellyfin server, or an IPTV list (Settings > IPTV).
+Live-TV kommt von deinem Jellyfin-Server oder einer IPTV-Liste (Einstellungen > IPTV).
+
+Load the channels
+Sender laden
+
+Loading the channels…
+Sender werden geladen…
+
+Loading…
+Wird geladen…
+
+M3U list
+M3U-Liste
+
+No channels in this group
+Keine Sender in dieser Gruppe
+
+Only for Xtream
+Nur für Xtream
+
+Out of memory
+Nicht genug Speicher
+
+Press Y to choose another group.
+Drücke Y, um eine andere Gruppe zu wählen.
+
+Reading the guide…
+Programmführer wird gelesen…
+
+Saved: the password is only encoded on the card.
+Gespeichert: das Passwort ist auf der Karte nur kodiert.
+
+Server set: now its user and password.
+Server gesetzt: jetzt Benutzer und Passwort.
+
+That address isn't an M3U list.
+Diese Adresse ist keine M3U-Liste.
+
+That channel isn't in the list any more.
+Dieser Sender ist nicht mehr in der Liste.
+
+That isn't an address: it starts with http:// or https://.
+Das ist keine Adresse: sie beginnt mit http:// oder https://.
+
+That isn't an Xtream server, or the user or password is wrong.
+Das ist kein Xtream-Server, oder Benutzer oder Passwort sind falsch.
+
+The account isn't active (%s).
+Das Konto ist nicht aktiv (%s).
+
+The channels come in a moment.
+Die Sender kommen gleich.
+
+The guide couldn't be read.
+Der Programmführer konnte nicht gelesen werden.
+
+The guide has nothing for these channels.
+Der Programmführer hat nichts für diese Sender.
+
+The IPTV list is forgotten.
+Die IPTV-Liste ist vergessen.
+
+The list couldn't be read.
+Die Liste konnte nicht gelesen werden.
+
+The list's own
+Der der Liste
+
+The M3U list's address: https://...
+Adresse der M3U-Liste: https://...
+
+The server didn't answer.
+Der Server hat nicht geantwortet.
+
+The server's channels couldn't be read.
+Die Sender des Servers konnten nicht gelesen werden.
+
+The Xtream server: http://host:port
+Der Xtream-Server: http://host:port
+
+This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
+Der Stream dieses Senders ist nicht lesbar: KaiVideo spielt Sender als HLS (.m3u8).
+
+User name
+Benutzername
+
+Xtream
+Xtream
+
+Your own M3U list or Xtream account: its channels show in Live, with their guide.
+Deine eigene M3U-Liste oder dein Xtream-Konto: die Sender erscheinen in Live, mit Programmführer.

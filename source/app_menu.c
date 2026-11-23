@@ -176,7 +176,12 @@ const char *appFooterHelp(const App *app)
     switch (app->view.tab) {
     case TAB_DOWNLOADS: return appDownloadsHelp(app);
     case TAB_SEARCH: return T("[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu");
-    case TAB_LIVE: return T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
+    case TAB_LIVE:
+        if (app->live_groups_open)
+            return T("[A] choose  [^v] group  [B] back");
+        if (app->iptv.group_count > 0)
+            return T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu");
+        return T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_FILES: return T("[A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu");
     default: return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     }

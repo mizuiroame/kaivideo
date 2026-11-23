@@ -82,6 +82,26 @@ static IptvChannel *addChannel(IptvList *list, size_t *capacity)
     return c;
 }
 
+void iptvLocation(char *out, size_t size, int index)
+{
+    snprintf(out, size, IPTV_PREFIX "%d", index);
+}
+
+bool iptvIsLocation(const char *location)
+{
+    return iptvLocationIndex(location) >= 0;
+}
+
+int iptvLocationIndex(const char *location)
+{
+    size_t n = sizeof(IPTV_PREFIX) - 1;
+    if (!location || strncmp(location, IPTV_PREFIX, n) || !isdigit((unsigned char)location[n]))
+        return -1;
+    char *end;
+    long index = strtol(location + n, &end, 10);
+    return *end || index < 0 || index >= IPTV_CHANNELS_MAX ? -1 : (int)index;
+}
+
 // --- M3U ---
 
 // The value of key="value" in an #EXTINF or #EXTM3U line (up to stop). False if it has none.
@@ -287,6 +307,125 @@ bool xtreamGuideUrl(const XtreamAccount *a, char *out, size_t size)
     return a->server[0] && appendText(out, size, &n, a->server) &&
            appendText(out, size, &n, "/xmltv.php?username=") && appendEncoded(out, size, &n, a->user) &&
            appendText(out, size, &n, "&password=") && appendEncoded(out, size, &n, a->password);
+}
+
+// --- The account's file ---
+
+static const char BASE64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static bool encode64(const char *in, char *out, size_t size)
+{
+    size_t n = 0, length = strlen(in);
+    const unsigned char *s = (const unsigned char *)in;
+    for (size_t i = 0; i < length; i += 3) {
+        unsigned v = (unsigned)s[i] << 16 | (i + 1 < length ? (unsigned)s[i + 1] << 8 : 0) |
+                     (i + 2 < length ? s[i + 2] : 0);
+        if (n + 4 >= size)
+            return false;
+        out[n++] = BASE64[v >> 18 & 63];
+        out[n++] = BASE64[v >> 12 & 63];
+        out[n++] = i + 1 < length ? BASE64[v >> 6 & 63] : '=';
+        out[n++] = i + 2 < length ? BASE64[v & 63] : '=';
+    }
+    out[n] = '\0';
+    return true;
+}
+
+static bool decode64(const char *in, char *out, size_t size)
+{
+    size_t n = 0;
+    unsigned v = 0;
+    int bits = 0;
+    for (const char *p = in; *p && *p != '='; p++) {
+        const char *at = strchr(BASE64, *p);
+        if (!at || !*p)
+            return false;
+        v = v << 6 | (unsigned)(at - BASE64);
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            if (n + 1 >= size)
+                return false;
+            out[n++] = (char)(v >> bits & 0xFF);
+        }
+    }
+    out[n] = '\0';
+    return true;
+}
+
+static bool hasLineBreak(const char *s)
+{
+    return strpbrk(s, "\r\n") != NULL;
+}
+
+bool iptvAccountRead(IptvAccount *a, const char *text)
+{
+    memset(a, 0, sizeof(*a));
+    for (const char *line = text; line && *line;) {
+        const char *end = strchr(line, '\n');
+        size_t length = end ? (size_t)(end - line) : strlen(line);
+        const char *eq = memchr(line, '=', length);
+        if (eq) {
+            size_t key = (size_t)(eq - line);
+            char value[IPTV_URL_MAX];
+            copyTrimmed(value, sizeof(value), eq + 1, length - key - 1);
+            if (key == 4 && !strncmp(line, "kind", 4))
+                a->kind = !strcmp(value, "m3u") ? IPTV_M3U : !strcmp(value, "xtream") ? IPTV_XTREAM : IPTV_NONE;
+            else if (key == 7 && !strncmp(line, "address", 7) && isWebUrl(value))
+                snprintf(a->address, sizeof(a->address), "%s", value);
+            else if (key == 4 && !strncmp(line, "user", 4))
+                copyTrimmed(a->user, sizeof(a->user), value, strlen(value));
+            else if (key == 8 && !strncmp(line, "password", 8) && !strncmp(value, "b64:", 4))
+                decode64(value + 4, a->password, sizeof(a->password));
+            else if (key == 5 && !strncmp(line, "guide", 5) && isWebUrl(value))
+                snprintf(a->guide, sizeof(a->guide), "%s", value);
+        }
+        line = end ? end + 1 : NULL;
+    }
+    if (a->kind == IPTV_NONE || !a->address[0]) {
+        memset(a, 0, sizeof(*a));
+        return false;
+    }
+    return true;
+}
+
+bool iptvAccountWrite(const IptvAccount *a, char *out, size_t size)
+{
+    char password[IPTV_NAME_MAX * 2];
+    if (hasLineBreak(a->address) || hasLineBreak(a->user) || hasLineBreak(a->guide) ||
+        !encode64(a->password, password, sizeof(password)))
+        return false;
+    int n = snprintf(out, size, "kind=%s\naddress=%s\nuser=%s\npassword=b64:%s\nguide=%s\n",
+                     a->kind == IPTV_XTREAM ? "xtream" : a->kind == IPTV_M3U ? "m3u" : "", a->address, a->user,
+                     password, a->guide);
+    memset(password, 0, sizeof(password));
+    return n > 0 && (size_t)n < size;
+}
+
+void iptvXtreamOf(const IptvAccount *a, XtreamAccount *out)
+{
+    memset(out, 0, sizeof(*out));
+    if (a->kind != IPTV_XTREAM)
+        return;
+    snprintf(out->server, sizeof(out->server), "%s", a->address);
+    snprintf(out->user, sizeof(out->user), "%s", a->user);
+    snprintf(out->password, sizeof(out->password), "%s", a->password);
+}
+
+void iptvGuideUrl(const IptvAccount *a, const char *list_epg, char *out, size_t size)
+{
+    out[0] = '\0';
+    if (a->guide[0]) {
+        snprintf(out, size, "%s", a->guide);
+    } else if (a->kind == IPTV_XTREAM) {
+        XtreamAccount x;
+        iptvXtreamOf(a, &x);
+        if (!xtreamGuideUrl(&x, out, size))
+            out[0] = '\0';
+        memset(&x, 0, sizeof(x));
+    } else if (list_epg && isWebUrl(list_epg)) {
+        snprintf(out, size, "%s", list_epg);
+    }
 }
 
 // A field Xtream sends as a string or a number.

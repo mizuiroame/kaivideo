@@ -672,9 +672,6 @@ LIVE
 Live TV
 실시간 TV
 
-Live TV comes from your Jellyfin server's tuners and guide.
-실시간 TV는 Jellyfin 서버의 튜너와 편성표를 사용합니다.
-
 Loading...
 불러오는 중...
 
@@ -1508,3 +1505,147 @@ The shared folder couldn't be opened (%d: %s).
 
 User name (empty: none; DOMAIN\user for a domain)
 사용자 이름 (비워 두면 없음, 도메인은 DOMAIN\user)
+
+%d channels
+채널 %d개
+
+%d IPTV channels (the list has no guide).
+IPTV 채널 %d개 (편성표 없음).
+
+%d IPTV channels, with their guide.
+IPTV 채널 %d개, 편성표 포함.
+
+%d IPTV channels; the guide: %s
+IPTV 채널 %d개. 편성표: %s
+
+[A] choose  [^v] group  [B] back
+[A] 선택  [^v] 그룹  [B] 뒤로
+
+[A] watch  [^v] channel  [<>] guide  [Y] groups  [ZL][ZR] tabs  [+] menu
+[A] 시청  [^v] 채널  [<>] 편성표  [Y] 그룹  [ZL][ZR] 탭  [+] 메뉴
+
+All channels
+모든 채널
+
+An M3U list needs no user: its address is enough.
+M3U 목록에는 사용자가 필요 없습니다. 주소면 충분합니다.
+
+An XMLTV guide's address (empty: the list's own)
+XMLTV 편성표 주소 (비우면: 목록의 것)
+
+Enter the list's address first.
+먼저 목록 주소를 입력하세요.
+
+Enter the server, and its user and password, first.
+먼저 서버와 사용자, 비밀번호를 입력하세요.
+
+Forget this list
+이 목록 지우기
+
+Groups
+그룹
+
+Guide (XMLTV)
+편성표 (XMLTV)
+
+IPTV
+IPTV
+
+List set: Load the channels to see them in Live.
+목록 설정됨: 채널 불러오기로 Live에서 볼 수 있습니다.
+
+List type
+목록 종류
+
+Live TV comes from your Jellyfin server, or an IPTV list (Settings > IPTV).
+실시간 TV는 Jellyfin 서버나 IPTV 목록(설정 > IPTV)에서 나옵니다.
+
+Load the channels
+채널 불러오기
+
+Loading the channels…
+채널 불러오는 중…
+
+Loading…
+불러오는 중…
+
+M3U list
+M3U 목록
+
+No channels in this group
+이 그룹에 채널이 없습니다
+
+Only for Xtream
+Xtream 전용
+
+Out of memory
+메모리 부족
+
+Press Y to choose another group.
+Y를 눌러 다른 그룹을 고르세요.
+
+Reading the guide…
+편성표 읽는 중…
+
+Saved: the password is only encoded on the card.
+저장됨: 비밀번호는 카드에 인코딩만 되어 저장됩니다.
+
+Server set: now its user and password.
+서버 설정됨: 이제 사용자와 비밀번호를 입력하세요.
+
+That address isn't an M3U list.
+그 주소는 M3U 목록이 아닙니다.
+
+That channel isn't in the list any more.
+그 채널은 더 이상 목록에 없습니다.
+
+That isn't an address: it starts with http:// or https://.
+주소가 아닙니다. http:// 또는 https://로 시작합니다.
+
+That isn't an Xtream server, or the user or password is wrong.
+Xtream 서버가 아니거나 사용자 또는 비밀번호가 틀렸습니다.
+
+The account isn't active (%s).
+계정이 활성 상태가 아닙니다(%s).
+
+The channels come in a moment.
+잠시 후 채널이 나타납니다.
+
+The guide couldn't be read.
+편성표를 읽을 수 없습니다.
+
+The guide has nothing for these channels.
+편성표에 이 채널들의 정보가 없습니다.
+
+The IPTV list is forgotten.
+IPTV 목록을 지웠습니다.
+
+The list couldn't be read.
+목록을 읽을 수 없습니다.
+
+The list's own
+목록의 것
+
+The M3U list's address: https://...
+M3U 목록 주소: https://...
+
+The server didn't answer.
+서버가 응답하지 않았습니다.
+
+The server's channels couldn't be read.
+서버의 채널을 읽을 수 없습니다.
+
+The Xtream server: http://host:port
+Xtream 서버: http://host:port
+
+This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8).
+이 채널의 스트림을 읽을 수 없습니다. KaiVideo는 HLS(.m3u8) 채널을 재생합니다.
+
+User name
+사용자 이름
+
+Xtream
+Xtream
+
+Your own M3U list or Xtream account: its channels show in Live, with their guide.
+내 M3U 목록 또는 Xtream 계정: 채널이 편성표와 함께 Live에 나타납니다.

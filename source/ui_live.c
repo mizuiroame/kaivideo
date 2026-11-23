@@ -5,6 +5,7 @@
 #include "font.h"
 #include "gfx.h"
 #include "lang.h"
+#include "ui_buttons.h"
 #include "ui_library.h"
 #include "ui_style.h"
 
@@ -140,12 +141,32 @@ static void drawStrip(const LiveChannel *c, int focus, const GuideTime *t)
     fontDrawClipped(FONT_BOLD, 22, tx, STRIP_Y + 38, right - tx, p->title, COLOR_TEXT);
 }
 
-void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int64_t utc_offset_s, bool clock_24h,
-                   bool loading)
+// The IPTV group shown, as a pill over the channels' names: Y or a tap lists the groups.
+static void drawGroupPill(const char *group)
 {
+    int x = MARGIN - 4, y = TIMES_Y - 2;
+    uiDrawButton(x, y + 13.0f, "Y", COLOR_SURFACE_HI, COLOR_DIM);
+    int bx = x + uiButtonWidth("Y") + 8, w = CHANNEL_W - (bx - MARGIN);
+    gfxFillRoundRect(bx, y, w, 26, 13, COLOR_SURFACE_HI);
+    fontDrawClipped(FONT_BOLD, 15, bx + 12, y + 4, w - 34, group, COLOR_TEXT);
+    float cx = bx + w - 16.0f, cy = y + 13.0f;  // A chevron down: it opens a list.
+    gfxLine(cx - 5, cy - 2, cx, cy + 3, 2.5f, COLOR_DIM);
+    gfxLine(cx, cy + 3, cx + 5, cy - 2, 2.5f, COLOR_DIM);
+    uiLibraryAddHit(x - 8, y - 8, CHANNEL_W + 12, 42, LIBHIT_LIVE_GROUPS, 0, 0);
+}
+
+void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int64_t utc_offset_s, bool clock_24h,
+                   bool loading, const char *group, bool iptv)
+{
+    if (group)
+        drawGroupPill(group);
     if (guide->count == 0) {
-        drawCentered(loading ? T("Reading the guide...") : T("No channels"),
-                     T("Live TV comes from your Jellyfin server's tuners and guide."));
+        if (loading)
+            drawCentered(T("Reading the guide..."), T("The channels come in a moment."));
+        else if (iptv)
+            drawCentered(T("No channels in this group"), T("Press Y to choose another group."));
+        else
+            drawCentered(T("No channels"), T("Live TV comes from your Jellyfin server, or an IPTV list (Settings > IPTV)."));
         return;
     }
     const Scroll *s = &v->live;
@@ -170,5 +191,42 @@ void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int6
     if (s->cursor >= 0 && s->cursor < guide->count) {
         const LiveChannel *c = &guide->channels[s->cursor];
         drawStrip(c, liveProgramAt(c, at), &t);
+    }
+}
+
+#define GROUP_ROW_H 52
+#define GROUPS_Y (UI_TAB_BAR_H + 56)
+#define GROUP_ROWS ((UI_FOOTER_Y - 8 - GROUPS_Y) / GROUP_ROW_H)
+
+void uiDrawLiveGroups(const IptvList *list, int cursor, int chosen)
+{
+    int x = MARGIN - 12, w = GFX_WIDTH - 2 * x, top = UI_TAB_BAR_H + 8;
+    gfxFillRoundRect(x, top, w, UI_FOOTER_Y - 8 - top, 14, COLOR_SURFACE);
+    uiLibraryAddHit(x, top, w, UI_FOOTER_Y - 8 - top, LIBHIT_PANEL, 0, 0);
+    // "< Groups": back to the guide.
+    int bx = MARGIN + 4, by = top + 14;
+    gfxLine(bx + 8, by + 4, bx, by + 13, 3, COLOR_TEXT);
+    gfxLine(bx, by + 13, bx + 8, by + 22, 3, COLOR_TEXT);
+    int tw = fontDraw(FONT_BOLD, 20, bx + 20, by + 2, T("Groups"), COLOR_TEXT);
+    uiLibraryAddHit(x, top, tw + 60, 50, LIBHIT_LIVE_GROUPS, 0, 0);
+    int rows = list->group_count + 1;
+    int first = cursor - GROUP_ROWS / 2;
+    first = first > rows - GROUP_ROWS ? rows - GROUP_ROWS : first;
+    first = first < 0 ? 0 : first;
+    for (int r = first; r < rows && r < first + GROUP_ROWS; r++) {
+        int y = GROUPS_Y + (r - first) * GROUP_ROW_H;
+        if (r == cursor) {
+            gfxFillRoundRect(x + 12, y + 2, w - 24, GROUP_ROW_H - 4, 10, COLOR_SURFACE_HI);
+            gfxFillRect(x + 12, y + 12, 3, GROUP_ROW_H - 24, COLOR_ACCENT);
+        }
+        char count[32];
+        snprintf(count, sizeof(count), "%d", r == 0 ? list->count : list->groups[r - 1].count);
+        const char *name = r == 0 ? T("All channels") : list->groups[r - 1].name;
+        bool on = r == chosen;
+        fontDrawClipped(on ? FONT_BOLD : FONT_REGULAR, 19, MARGIN + 16, y + 14, w - 200, name,
+                        on ? COLOR_ACCENT : COLOR_TEXT);
+        int cw = fontTextWidth(FONT_REGULAR, 16, count);
+        fontDraw(FONT_REGULAR, 16, x + w - 40 - cw, y + 16, count, COLOR_FAINT);
+        uiLibraryAddHit(x + 12, y, w - 24, GROUP_ROW_H, LIBHIT_LIVE_GROUP_ROW, r, 0);
     }
 }

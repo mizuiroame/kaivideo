@@ -287,6 +287,26 @@ static bool prepareRemote(App *app, int audio_index, int subtitle_index, bool tr
     return started;
 }
 
+// An IPTV channel: its own HLS stream, read as a server's channel's is. False, with the reason, if it can't be.
+static bool openIptv(App *app, char *path, size_t size)
+{
+    if (!app->open_url[0]) {
+        snprintf(app->open_error, sizeof(app->open_error), "%s", T("That channel isn't in the list any more."));
+        return false;
+    }
+    long long bitrate = settingQualityBitrate(&app->config);
+    if (!hlsStartDirect(app->open_url, bitrate, &app->open_cancelled, app->open_error, sizeof(app->open_error))) {
+        appLog("  IPTV: %s", app->open_error);
+        if (!app->open_cancelled)
+            snprintf(app->open_error, sizeof(app->open_error), "%s",
+                     T("This channel's stream can't be read: KaiVideo plays channels sent as HLS (.m3u8)."));
+        return false;
+    }
+    appLog("  IPTV channel's own stream");
+    snprintf(path, size, HLS_LOCATION);
+    return true;
+}
+
 // What's opening or playing comes from a server over the network (not from its download).
 static bool playingStream(const App *app)
 {
@@ -303,7 +323,10 @@ static void *openThread(void *arg)
     int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
     app->next_audio_plus1 = 0;
     app->next_subtitle_set = false;
-    if (!remote || prepareRemote(app, audio_index, subtitle_index, true, path, sizeof(path)))
+    bool iptv = iptvIsLocation(app->playing_path);
+    if (iptv && !openIptv(app, path, sizeof(path)))
+        ;  // The reason is in open_error.
+    else if (!remote || prepareRemote(app, audio_index, subtitle_index, true, path, sizeof(path)))
         app->open_result = playerOpen(path, nowNs(), app->open_error, sizeof(app->open_error));
     if (!app->open_result && app->open_plan.source_url[0] && !app->open_cancelled) {
         // The channel's own stream opened but won't play here: the server converts it.
@@ -350,6 +373,8 @@ bool appStartVideo(App *app, const char *path, const char *name, uint64_t now)
     snprintf(app->playing_name, sizeof(app->playing_name), "%s", name);
     snprintf(app->playing_path, sizeof(app->playing_path), "%s", path);
     const char *copy = jfIsRemoteLocation(path) ? appPlayableCopy(app, path) : NULL;
+    int iptv = iptvLocationIndex(path);  // An IPTV channel: its stream, for the opening thread.
+    snprintf(app->open_url, sizeof(app->open_url), "%s", iptv >= 0 && iptv < app->iptv.count ? app->iptv.channels[iptv].url : "");
     snprintf(app->open_copy, sizeof(app->open_copy), "%s", copy ? copy : "");
     app->open_done = false;
     app->open_asked = now;
@@ -579,7 +604,7 @@ static void switchChannel(App *app, uint64_t now)
 // they lead to (counting every press) opens after it.
 static void switchWhileOpening(App *app, uint64_t pressed)
 {
-    if (!liveIsLocation(app->playing_path) || !(pressed & (HidNpadButton_L | HidNpadButton_R)))
+    if (!appIsLiveLocation(app->playing_path) || !(pressed & (HidNpadButton_L | HidNpadButton_R)))
         return;
     int delta = app->live_pending + ((pressed & HidNpadButton_L) ? -1 : 1);
     char location[BROWSER_PATH_MAX], name[APP_NAME_MAX];
@@ -1174,6 +1199,7 @@ int main(int argc, char **argv)
     sysinfoInit();
     appSettingsStart(&app);
     appNetworkStart(&app);  // After the language: Files names the folder in it.
+    appIptvStart(&app);  // Its channels for Live, loaded in the background.
     appDownloadsStart(&app);  // Before the library: the card's downloads take their servers' names.
     appLibraryStart(&app);
     appStartUpdates(&app, argc > 0 ? argv[0] : NULL);  // Once a day, asks GitHub for a new version.
@@ -1190,6 +1216,7 @@ int main(int argc, char **argv)
         appLibraryUpdate(&app);
         appJellyfinUpdate(&app, now);
         appNetworkUpdate(&app, now);
+        appIptvUpdate(&app, now);
         appDownloadsUpdate(&app, now);
         appLiveUpdate(&app, now);
         updateScreenKeeping(&app);
@@ -1246,7 +1273,7 @@ int main(int argc, char **argv)
             bool switching = app.live_pending_set;
             uiDrawLoading(switching ? app.live_pending_name : app.playing_name, spinnerAngle(now),
                           app.open_cancelled && !switching);
-            uiDrawFooterHelp(liveIsLocation(app.playing_path) ? T("[L][R] channel  [B] cancel") : T("[B] cancel"));
+            uiDrawFooterHelp(appIsLiveLocation(app.playing_path) ? T("[L][R] channel  [B] cancel") : T("[B] cancel"));
         } else if (app.player) {
             char error[160] = "";
             bool keep = playerInput(&app, pressed, t, now);
@@ -1299,6 +1326,7 @@ int main(int argc, char **argv)
     EXIT_STEP("video stopped");
     appletSetMediaPlaybackState(false);
     appSaveSettings(&app);
+    appIptvExit(&app);  // A load under way stops.
     appLiveExit(&app);
     EXIT_STEP("live TV");
     appLibraryExit(&app);

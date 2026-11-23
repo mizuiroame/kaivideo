@@ -40,9 +40,9 @@ static const char *libraryRoot(const App *app)
 void appLibraryRefreshHome(App *app)
 {
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
-    bool jellyfin = app->config.use_jellyfin && app->config.server_view == SERVER_JELLYFIN;  // Live TV is its.
+    appLiveRebuild(app);  // The server's channels (in its view) and the IPTV list's.
     libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin,  // The server's libraries are tabs.
-                   jellyfin && app->live.count > 0, appDownloadsTabShown(app));
+                   app->live.count > 0 || app->iptv.count > 0, appDownloadsTabShown(app));
     libviewClamp(&app->view, &app->library, &app->home);
 }
 
@@ -679,6 +679,15 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     bool season_download = v->show >= 0 && (size_t)v->show < app->library.show_count && seasonDownloadable(app);
     if (season_download && (pressed & HidNpadButton_L)) {
         appDownloadSeason(app, v->show, v->season, now);
+        return;
+    }
+    bool live_tab = v->tab == TAB_LIVE && v->show < 0;
+    if (live_tab && app->live_groups_open) {  // The IPTV list's groups take the buttons until one is chosen.
+        appLiveGroupsInput(app, pressed, touch, now);
+        return;
+    }
+    if (live_tab && (pressed & HidNpadButton_Y) && app->iptv.group_count > 0) {
+        appLiveOpenGroups(app);
         return;
     }
     if (pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)) {

@@ -51,6 +51,8 @@ typedef enum {
     LIBHIT_DOWNLOAD_DELETE,  // a: its delete button.
     LIBHIT_DOWNLOADS,        // The header's downloads pill: the Downloads panel.
     LIBHIT_DOWNLOADS_CLEAR,  // The Clear button of the Downloads tab's deleted ones.
+    LIBHIT_LIVE_GROUPS,      // The Live tab's group pill: the IPTV list's groups.
+    LIBHIT_LIVE_GROUP_ROW,   // a: a row of the groups (0: all channels).
 } LibHitKind;
 
 typedef struct {
