@@ -1307,9 +1307,10 @@ int main(int argc, char **argv)
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
         appUpdatesTick(&app, now);
-        app.notice = noticeShown(&app.notices, now, &app.notice_slide);
-        if (t.type == TOUCH_TAP && uiNoticeAt(t.x, t.y)) {  // On the bubble: it goes, and nothing under it is tapped.
-            noticeDismiss(&app.notices, now);
+        app.notice_count = noticeVisible(&app.notices, now, app.notice_views);
+        uint64_t tapped = t.type == TOUCH_TAP ? uiNoticeAt(t.x, t.y) : 0;
+        if (tapped) {  // On a bubble: it goes, and nothing under it is tapped.
+            noticeDismiss(&app.notices, tapped, now);
             t.type = TOUCH_NONE;
         }
         if (app.player && !app.opening && app.live_switch)
@@ -1386,7 +1387,7 @@ int main(int argc, char **argv)
             else
                 appLibraryDraw(&app, now);
         }
-        uiDrawNotice(app.notice, app.notice_slide);  // Last: over every screen, the video's too.
+        uiDrawNotices(app.notice_views, app.notice_count);  // Last: over every screen, the video's too.
         gfxEnd();
     }
     // Each step's time goes in the log, to find what makes the exit slow.
