@@ -1,5 +1,7 @@
 # KaiVideo
 
+<p align="center"><img src="docs/cover.png" alt="KaiVideo" width="100%"></p>
+
 An **open-source video player** for **Switch 2** running
 [kaiHEN](https://github.com/ouncebrew/kaihen). It plays the videos on your
 microSD card, in a **shared folder on your network** (Windows, a NAS, Samba
