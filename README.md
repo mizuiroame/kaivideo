@@ -81,8 +81,9 @@ or [KaiDrop](https://github.com/mizuiroame/kaidrop).
    `sdmc:/switch/kaivideo/KaiVideo.nro`.
 4. Copy your videos to a folder on the card, for example `Videos`. Or skip
    this step and use a network folder or a server.
-5. Open hbmenu and select **KaiVideo**. The first time, choose the folder with
-   your videos: open it and press **X** (or tap **Use this folder**).
+5. Open hbmenu and select **KaiVideo**. The first time, it asks where your
+   videos are: a folder on the SD card (open it and press **X**), a network
+   folder, a media server, an IPTV list, Stremio addons, or later.
 
 > **File names with accents or other non-ASCII characters** (á, ñ, ’,
 > Japanese) on the card are hidden by the console's file system, in every

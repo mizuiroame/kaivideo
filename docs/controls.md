@@ -11,10 +11,10 @@ KaiRadio.
 | Button | What it does |
 |--------|--------------|
 | **ZL** / **ZR** (or **L** / **R**) | The tab before or after: Home, Films, Series (or your server's libraries), Search, Files |
-| **↑** **↓** **◀** **▶** | Move |
+| **↑** **↓** **◀** **▶**, or either stick | Move (a card or a row at a time) |
 | **A** | Play the film or episode, or open the series |
 | **B** | Back from a series (in Files: the folder above) |
-| **X** | Go through the sources: the SD card, the network folder and each server |
+| **X** | Go through the sources: the SD card, the network folder and each server (with none other set up: Settings, to add one) |
 | **Y** | Search |
 | **−** | Settings |
 | **L** | On a server's film or episode (its panel) or series' page: download it, or the season |
@@ -24,8 +24,10 @@ KaiRadio.
   guide and **A** watches the channel.
 - **A series**: **◀** / **▶** change the season, and **X** marks the episode
   watched or not (or tap its circle on the right).
-- **Files**: **◀** / **▶** move a page, and the path at the top goes to the
-  folder above.
+- **Files**: **◀** / **▶** on the D-pad move a page, and the path at the top
+  goes to the folder above.
+- **Menus and panels** (the + menu, Settings, the video's lists, the streams to
+  choose from, IPTV groups): the right stick moves like the D-pad.
 - **Touch**: tap a tab, a card or a row to open it, and drag to scroll. Lists
   follow your finger and glide on when you let go, as on a phone; a tap stops
   them. The **☰** before the name opens the menu.

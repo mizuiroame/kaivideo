@@ -16,7 +16,9 @@ watch without the network.
 They come one at a time, in the order asked for, into a `KaiVideo Downloads`
 folder inside your library folder (`Films` and `Series` in it). The SD
 card's library shows them with their server's names. With no library folder
-chosen yet, `sdmc:/KaiVideo Downloads` becomes it. The server's subtitle file
+chosen yet, a `KaiVideo Downloads` folder in KaiVideo's own folder (`config`)
+becomes it, and KaiVideo says where; what's downloaded there stays there if you
+choose a library folder later (the Downloads tab still has it). The server's subtitle file
 comes with the video; subtitles inside the video are in it already.
 
 ## The Downloads tab

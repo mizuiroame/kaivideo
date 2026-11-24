@@ -7,6 +7,12 @@ the library from the folder you choose on the card, or from a
 [network folder](network-folder.md), or it shows a
 [media server's](media-servers.md) own library.
 
+The first time, KaiVideo asks where your videos are: **a folder on the SD card**
+(the folder picker; **−** or **B** at the card's top goes back), **a network
+folder**, **a media server**, **an IPTV list** or **Stremio addons**, which open
+their page in Settings (**B** there comes back), or **Later**. Leaving without
+setting anything up brings the question back.
+
 - **Home** shows what you were watching, what's newest, your series and your
   films.
 - **Films** and **Series** show them all. A series opens on its seasons and
