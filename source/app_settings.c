@@ -181,15 +181,22 @@ static void openServer(App *app, ServerKind kind, uint64_t now);
 
 void appOpenSettings(App *app)
 {
-    app->settings_open = true;
-    app->about_open = false;
-    openPage(app, SETTINGS_PAGE_MAIN);
+    appOpenSettingsAt(app, SETTINGS_PAGE_MAIN);
 }
 
-// Back from a page to the main one (on the row that opened it), or closed.
+void appOpenSettingsAt(App *app, SettingsPage page)
+{
+    app->settings_open = true;
+    app->settings_from_welcome = false;
+    app->about_open = false;
+    openPage(app, page);
+}
+
+// Back from a page to the main one (on the row that opened it), or closed;
+// from the welcome's page, closed too (back to the welcome).
 static void back(App *app)
 {
-    if (app->settings_page == SETTINGS_PAGE_MAIN) {
+    if (app->settings_page == SETTINGS_PAGE_MAIN || app->settings_from_welcome) {
         app->settings_open = false;
     } else {
         app->settings_cursor = settingPageOpener((SettingsPage)app->settings_page, (ServerKind)app->config.server_kind);
@@ -239,6 +246,7 @@ static void openJellyfin(App *app, uint64_t now)
 void appOpenJellyfinSettings(App *app, uint64_t now)
 {
     app->settings_open = true;
+    app->settings_from_welcome = false;
     app->about_open = false;
     openPage(app, SETTINGS_PAGE_MAIN);
     openServer(app, (ServerKind)app->config.server_kind, now);

@@ -33,7 +33,8 @@
 #define APP_NAME_MAX 300
 #define APP_FAVORITE_CHANGES 8
 
-typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT } AppMenu;
+// The + menu, its exit question, or the first run's "Where are your videos?".
+typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT, APP_MENU_WELCOME } AppMenu;
 
 typedef struct App App;
 
@@ -167,6 +168,7 @@ struct App {
     Config config;
     bool settings_open, about_open;
     int settings_page;          // SettingsPage.
+    bool settings_from_welcome; // Opened by the welcome on a page: B there goes back to it.
     int settings_cursor;        // The SettingRow under the cursor.
 
     // Jellyfin (app_jellyfin.c).
@@ -210,6 +212,8 @@ void appUpdatesValue(const App *app, int row, char *out, size_t size);
 bool appStartVideo(App *app, const char *path, const char *name, uint64_t now);
 // Builds a file's path in KaiVideo's own folder.
 void appConfigPath(char *out, size_t size, const char *name);
+// Where downloads go while no library folder is chosen: in KaiVideo's own folder.
+void appDownloadsFolderFirstRun(char *out, size_t size);
 void appSaveSettings(const App *app);
 void appLog(const char *fmt, ...);
 // Keeps watched.txt after app->watched changed.
@@ -457,6 +461,11 @@ void appApplySubtitleStyle(const App *app);
 // False, with what to say in note, if there are none or one can't be read.
 bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size);
 void appOpenSettings(App *app);
+// Settings, on one of its pages (B goes back to the main page from it).
+void appOpenSettingsAt(App *app, SettingsPage page);
+// Once per frame: the first run's welcome while nothing says where the videos
+// are and it wasn't answered (again after a page it opened is left without one).
+void appWelcomeTick(App *app);
 void appOpenJellyfinSettings(App *app, uint64_t now);
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appSettingsDraw(const App *app);

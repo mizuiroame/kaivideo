@@ -100,6 +100,7 @@ typedef struct {
     bool use_network;                    // Not a server's: the network folder's (dav.h), not the card's.
     bool use_iptv;                       // The IPTV list's view (iptv.h): its Live TV.
     bool use_addons;                     // The Stremio addons' view (stremio.h).
+    bool welcomed;                       // The first run's welcome was answered ("Later" or a source set).
     int server_kind;                     // ServerKind: the one Settings' Media server page is for.
     int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.

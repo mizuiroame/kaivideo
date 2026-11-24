@@ -596,11 +596,11 @@ static void libraryHelpScene(const char *name, const char *help)
 static void drawNotice(NoticeKind kind, const char *message)
 {
     Notices notices = {0};
-    float slide;
+    NoticeView views[NOTICE_STACK + 1];
     noticePush(&notices, kind, message, 1);
-    noticeShown(&notices, 1000000000ull, &slide);  // The first look starts it,
-    const Notice *shown = noticeShown(&notices, 2000000000ull, &slide);  // and a second later it's in.
-    uiDrawNotice(shown, slide);
+    noticeVisible(&notices, 1000000000ull, views);  // The first look starts it,
+    int count = noticeVisible(&notices, 2000000000ull, views);  // and a second later it's in.
+    uiDrawNotices(views, count);
 }
 
 static void libraryScene(const char *name, bool folder_set, const char *status, const char *message)
@@ -1112,6 +1112,18 @@ static void libraryScenes(void)
     uiDrawMenu("Exit KaiVideo?", NULL, EXIT, 2, 0, 0);
     uiDrawFooterHelp(T("[A] choose  [B] cancel  [+] exit"));
     save("menu_exit");
+    // The first run's welcome: where are the videos? "Later" under a line.
+    static const char *const WELCOME[] = {"A folder on the SD card", "A network folder (SMB, WebDAV, FTP...)",
+                                          "A media server (Jellyfin, Emby, Plex)", "An IPTV list", "Stremio addons",
+                                          "Later"};
+    static const char *welcome[6];
+    for (int i = 0; i < 6; i++)
+        welcome[i] = T(WELCOME[i]);
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawMenu(T("Welcome! Where are your videos?"), NULL, welcome, 6, 5, 0);
+    uiDrawFooterHelp(T("[A] choose  [B] later  [+] exit"));
+    save("welcome");
     themeApply(0, 0);
 
     libraryScene("lib_no_folder", false, NULL, NULL);

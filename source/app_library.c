@@ -68,7 +68,7 @@ static void loadCardLibrary(App *app)
     const char *root = libraryRoot(app);
     if (!root[0]) {
         libraryInit(&app->library, "");
-        app->picking = browserOpen(&app->picker, BROWSER_ROOT);  // The first run: choose a folder.
+        // The first run: the welcome asks where the videos are (appWelcomeTick).
         return;
     }
     // What was found last time shows at once; a new scan replaces it.
@@ -232,8 +232,10 @@ void appLibraryToggleSource(App *app, uint64_t now)
         appLibraryShowAddons(app);
     else if (!on_card)
         appLibrarySetSource(app, false);
-    else
-        appOpenJellyfinSettings(app, now);
+    else {  // Nothing else to go to: Settings, to add one.
+        appOpenSettings(app);
+        appNotify(app, NOTICE_INFO, T("No other source yet: add one in Settings."), now);
+    }
 }
 
 void appLibraryServerCatalog(App *app, ServerKind kind, JfCatalog *c)
@@ -608,7 +610,8 @@ static void folderInput(App *app, Browser *b, bool picking, uint64_t pressed, To
     if (pressed & BUTTONS_PAGE_UP) moveCursor(b, -UI_ROWS);
     if (pressed & BUTTONS_PAGE_DOWN) moveCursor(b, UI_ROWS);
     if (pressed & HidNpadButton_A) openEntry(app, b, picking, now);
-    if (pressed & HidNpadButton_B) browserUp(b);
+    if ((pressed & HidNpadButton_B) && !browserUp(b) && picking)
+        app->picking = false;  // At the card's top: the picker closes (the first time, back to the welcome).
     if (picking && (pressed & HidNpadButton_X)) {
         useFolder(app, b->path);
         return;
@@ -727,8 +730,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     if (app->picking) {
-        // Leaving without choosing goes back to the folder there was.
-        if ((pressed & HidNpadButton_Minus) && app->library_root[0])
+        // Leaving without choosing goes back to the folder there was (the first time, to the welcome).
+        if (pressed & HidNpadButton_Minus)
             app->picking = false;
         else
             folderInput(app, &app->picker, true, pressed, touch, now);

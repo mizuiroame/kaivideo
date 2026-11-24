@@ -183,9 +183,6 @@ Os vídeos de %s já estão na biblioteca.
 [A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] abrir  [B] pasta acima  [<>] página  [Y] buscar  [ZL][ZR] abas  [+] menu
 
-[A] open  [B] folder above  [X] use this folder  [+] menu
-[A] abrir  [B] pasta acima  [X] usar esta pasta  [+] menu
-
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] abrir  [B] pasta acima  [X] usar esta pasta  [-] cancelar
 
@@ -1838,3 +1835,30 @@ A chave do servidor não é a de antes: pode ser outro servidor se passando por 
 
 The file couldn't be read.
 Não foi possível ler o arquivo.
+
+Welcome! Where are your videos?
+Boas-vindas! Onde estão seus vídeos?
+
+A folder on the SD card
+Uma pasta do cartão SD
+
+A network folder (SMB, WebDAV, FTP...)
+Uma pasta de rede (SMB, WebDAV, FTP...)
+
+A media server (Jellyfin, Emby, Plex)
+Um servidor de mídia (Jellyfin, Emby, Plex)
+
+An IPTV list
+Uma lista IPTV
+
+Later
+Depois
+
+[A] choose  [B] later  [+] exit
+[A] escolher  [B] depois  [+] sair
+
+Downloads go to %s until you choose a folder.
+Os downloads vão para %s até você escolher uma pasta.
+
+No other source yet: add one in Settings.
+Ainda não há outra fonte: adicione uma em Configurações.

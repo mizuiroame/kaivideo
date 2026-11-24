@@ -183,9 +183,6 @@ I video di %s sono nella libreria.
 [A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] apri  [B] cartella sopra  [<>] pagina  [Y] cerca  [ZL][ZR] schede  [+] menu
 
-[A] open  [B] folder above  [X] use this folder  [+] menu
-[A] apri  [B] cartella sopra  [X] usa questa cartella  [+] menu
-
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] apri  [B] cartella sopra  [X] usa questa cartella  [-] annulla
 
@@ -1838,3 +1835,30 @@ La chiave del server non è quella di prima: potrebbe essere un altro server che
 
 The file couldn't be read.
 Non è stato possibile leggere il file.
+
+Welcome! Where are your videos?
+Benvenuto! Dove sono i tuoi video?
+
+A folder on the SD card
+Una cartella della scheda SD
+
+A network folder (SMB, WebDAV, FTP...)
+Una cartella di rete (SMB, WebDAV, FTP...)
+
+A media server (Jellyfin, Emby, Plex)
+Un media server (Jellyfin, Emby, Plex)
+
+An IPTV list
+Una lista IPTV
+
+Later
+Più tardi
+
+[A] choose  [B] later  [+] exit
+[A] scegli  [B] più tardi  [+] esci
+
+Downloads go to %s until you choose a folder.
+I download vanno in %s finché non scegli una cartella.
+
+No other source yet: add one in Settings.
+Nessun'altra fonte per ora: aggiungine una in Impostazioni.

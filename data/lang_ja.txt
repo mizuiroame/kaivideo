@@ -183,9 +183,6 @@ language = 日本語
 [A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] 開く  [B] 上のフォルダー  [<>] ページ  [Y] 検索  [ZL][ZR] タブ  [+] メニュー
 
-[A] open  [B] folder above  [X] use this folder  [+] menu
-[A] 開く  [B] 上のフォルダー  [X] このフォルダーを使う  [+] メニュー
-
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] 開く  [B] 上のフォルダー  [X] このフォルダーを使う  [-] キャンセル
 
@@ -1838,3 +1835,30 @@ The server's key isn't the one met before: it may be another server pretending t
 
 The file couldn't be read.
 ファイルを読み取れませんでした。
+
+Welcome! Where are your videos?
+ようこそ！動画はどこにありますか？
+
+A folder on the SD card
+SDカードのフォルダー
+
+A network folder (SMB, WebDAV, FTP...)
+ネットワークフォルダー（SMB、WebDAV、FTPなど）
+
+A media server (Jellyfin, Emby, Plex)
+メディアサーバー（Jellyfin、Emby、Plex）
+
+An IPTV list
+IPTVリスト
+
+Later
+あとで
+
+[A] choose  [B] later  [+] exit
+[A] 決定  [B] あとで  [+] 終了
+
+Downloads go to %s until you choose a folder.
+フォルダーを選ぶまで、ダウンロードは%sに保存されます。
+
+No other source yet: add one in Settings.
+ほかのソースはまだありません。「設定」で追加してください。

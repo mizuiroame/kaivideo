@@ -183,9 +183,6 @@ language = 简体中文
 [A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] 打开  [B] 上一级文件夹  [<>] 翻页  [Y] 搜索  [ZL][ZR] 标签  [+] 菜单
 
-[A] open  [B] folder above  [X] use this folder  [+] menu
-[A] 打开  [B] 上一级文件夹  [X] 使用此文件夹  [+] 菜单
-
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] 打开  [B] 上一级文件夹  [X] 使用此文件夹  [-] 取消
 
@@ -1838,3 +1835,30 @@ The server's key isn't the one met before: it may be another server pretending t
 
 The file couldn't be read.
 无法读取该文件。
+
+Welcome! Where are your videos?
+欢迎！你的视频在哪里？
+
+A folder on the SD card
+SD卡上的文件夹
+
+A network folder (SMB, WebDAV, FTP...)
+网络文件夹（SMB、WebDAV、FTP等）
+
+A media server (Jellyfin, Emby, Plex)
+媒体服务器（Jellyfin、Emby、Plex）
+
+An IPTV list
+IPTV列表
+
+Later
+稍后
+
+[A] choose  [B] later  [+] exit
+[A] 选择  [B] 稍后  [+] 退出
+
+Downloads go to %s until you choose a folder.
+在选择文件夹之前，下载内容保存在%s。
+
+No other source yet: add one in Settings.
+还没有其他来源：请在“设置”中添加。

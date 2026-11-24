@@ -206,6 +206,8 @@ void testSettings(void)
     settingStep(&c, SETTING_UPDATE_AUTO, 1);
     c.update_checked = 1795000000;
     snprintf(c.update_tag, sizeof(c.update_tag), "%s", "v1.14.0");
+    CHECK(!c.welcomed);  // The first run asks where the videos are.
+    c.welcomed = true;
     const char *file = TMP_ROOT "/settings_test.txt";
     FILE *f = fopen(file, "w");
     CHECK(f != NULL);
@@ -227,6 +229,7 @@ void testSettings(void)
           back.clock_24h && !back.autoplay && back.subtitle_color == c.subtitle_color && back.subtitle_style == SUBTITLE_BOX &&
           strcmp(back.background, "beach.jpg") == 0 && !strcmp(back.subtitle_font, "Atkinson Hyperlegible.ttf"));
     CHECK(!back.update_check && back.update_checked == 1795000000 && !strcmp(back.update_tag, "v1.14.0"));
+    CHECK(back.welcomed);
     CHECK(configReadLine(&back, "update_tag=v123456789012345678901234567890123") && back.update_tag[0] == '\0');
     CHECK(configReadLine(&back, "subtitle_font=../x.ttf") && back.subtitle_font[0] == '\0');  // A name, never a path.
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));

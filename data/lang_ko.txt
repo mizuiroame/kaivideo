@@ -183,9 +183,6 @@ language = 한국어
 [A] open  [B] folder above  [<>] page  [Y] search  [ZL][ZR] tabs  [+] menu
 [A] 열기  [B] 상위 폴더  [<>] 페이지  [Y] 검색  [ZL][ZR] 탭  [+] 메뉴
 
-[A] open  [B] folder above  [X] use this folder  [+] menu
-[A] 열기  [B] 상위 폴더  [X] 이 폴더 사용  [+] 메뉴
-
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] 열기  [B] 상위 폴더  [X] 이 폴더 사용  [-] 취소
 
@@ -1838,3 +1835,30 @@ The server's key isn't the one met before: it may be another server pretending t
 
 The file couldn't be read.
 파일을 읽을 수 없습니다.
+
+Welcome! Where are your videos?
+환영합니다! 동영상은 어디에 있나요?
+
+A folder on the SD card
+SD 카드의 폴더
+
+A network folder (SMB, WebDAV, FTP...)
+네트워크 폴더 (SMB, WebDAV, FTP...)
+
+A media server (Jellyfin, Emby, Plex)
+미디어 서버 (Jellyfin, Emby, Plex)
+
+An IPTV list
+IPTV 목록
+
+Later
+나중에
+
+[A] choose  [B] later  [+] exit
+[A] 선택  [B] 나중에  [+] 종료
+
+Downloads go to %s until you choose a folder.
+폴더를 선택할 때까지 다운로드는 %s에 저장됩니다.
+
+No other source yet: add one in Settings.
+아직 다른 소스가 없습니다. 설정에서 추가하세요.

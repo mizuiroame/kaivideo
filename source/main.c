@@ -1307,6 +1307,7 @@ int main(int argc, char **argv)
         uiLibrarySetStatus(&sys, app.config.clock_24h);
         gfxBegin();
         appUpdatesTick(&app, now);
+        appWelcomeTick(&app);
         app.notice_count = noticeVisible(&app.notices, now, app.notice_views);
         uint64_t tapped = t.type == TOUCH_TAP ? uiNoticeAt(t.x, t.y) : 0;
         if (tapped) {  // On a bubble: it goes, and nothing under it is tapped.

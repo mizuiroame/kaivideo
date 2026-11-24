@@ -119,12 +119,17 @@ void appDownloadsExit(App *app)
     dlListFree(&app->downloads);
 }
 
+void appDownloadsFolderFirstRun(char *out, size_t size)
+{
+    appConfigPath(out, size, DL_FOLDER);
+}
+
 // Where downloads go: a folder in the library's, so the card's library shows
-// them. With no library folder yet, that folder is made the library's.
+// them. With no library folder yet, one in KaiVideo's own folder, made the library's.
 static bool downloadsRoot(App *app, char *out, size_t size)
 {
     if (!app->library_root[0]) {
-        snprintf(app->library_root, sizeof(app->library_root), "sdmc:/%s", DL_FOLDER);
+        appDownloadsFolderFirstRun(app->library_root, sizeof(app->library_root));
         mkdir(app->library_root, 0777);
         appSaveSettings(app);
     }
