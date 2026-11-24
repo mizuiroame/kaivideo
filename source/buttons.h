@@ -35,14 +35,16 @@ enum {
 #define BUTTONS_DOWN (HidNpadButton_Down | HidNpadButton_StickLDown)
 #define BUTTONS_LEFT (HidNpadButton_Left | HidNpadButton_StickLLeft)
 #define BUTTONS_RIGHT (HidNpadButton_Right | HidNpadButton_StickLRight)
-// Left and right, and the right stick up and down, move a list by a page.
-#define BUTTONS_PAGE_UP (HidNpadButton_Left | HidNpadButton_StickLLeft | HidNpadButton_StickRUp)
-#define BUTTONS_PAGE_DOWN (HidNpadButton_Right | HidNpadButton_StickLRight | HidNpadButton_StickRDown)
+// The d-pad's left and right move a list by a page (the sticks go a row at a
+// time: a stick pushed a little sideways jumped pages).
+#define BUTTONS_PAGE_UP HidNpadButton_Left
+#define BUTTONS_PAGE_DOWN HidNpadButton_Right
 // Stick directions, which drift and are never "let go" exactly.
 #define BUTTONS_STICKS (HidNpadButton_StickLLeft | HidNpadButton_StickLUp | HidNpadButton_StickLRight | \
                         HidNpadButton_StickLDown | HidNpadButton_StickRLeft | HidNpadButton_StickRUp | \
                         HidNpadButton_StickRRight | HidNpadButton_StickRDown)
-#define BUTTONS_REPEATING (BUTTONS_UP | BUTTONS_DOWN | BUTTONS_PAGE_UP | BUTTONS_PAGE_DOWN |                            HidNpadButton_StickRLeft | HidNpadButton_StickRRight)
+#define BUTTONS_REPEATING (BUTTONS_UP | BUTTONS_DOWN | BUTTONS_LEFT | BUTTONS_RIGHT | HidNpadButton_StickRUp | \
+                           HidNpadButton_StickRDown | HidNpadButton_StickRLeft | HidNpadButton_StickRRight)
 
 // In a menu or panel the right stick moves like the d-pad, as in KaiPlayer and
 // KaiRadio: there it has nothing else to do (paging long lists and the video

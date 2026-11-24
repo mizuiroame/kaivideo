@@ -713,6 +713,9 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
 
 void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
+    // Over the library the right stick moves like the d-pad too, a row or card at a time (the owner found
+    // it doing nothing on Home and the tabs' grids, and jumping a page in Files); paging is left and right.
+    pressed = buttonsRightStickAsDpad(pressed);
     if (app->app_menu != APP_MENU_NONE || app->settings_open)
         kineticStop(&app->kinetic);
     else
