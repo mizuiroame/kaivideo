@@ -38,6 +38,10 @@ void playerTogglePause(Player *p, uint64_t now_ns);
 bool playerPaused(const Player *p);
 // True until the first frame after opening or a jump has come.
 bool playerWaitingForPicture(const Player *p);
+// True once after playback stopped to wait for the network (the sound waited with the picture); at_ns:
+// where. playerRebuffers: how many times since it opened.
+bool playerTakeRebuffer(Player *p, int64_t *at_ns);
+unsigned playerRebuffers(const Player *p);
 // Goes delta_ns from where playback is (kept within the file).
 void playerSeekBy(Player *p, int64_t delta_ns, uint64_t now_ns);
 // Goes to target_ns (kept within the file): a tap on the progress bar.

@@ -599,9 +599,9 @@ static void stopVideo(App *app, const char *error, bool ended)
     playerDescribe(app->player, state, sizeof(state));
     appLog("  at the end: %s", state);
     VideoStats s = playerStats(app->player);
-    appLog("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late", error && error[0] ? error : "",
-            error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks, s.decoded, s.shown,
-            s.dropped);
+    appLog("  %s%s%.1f s, %u seeks: %u frames decoded, %u shown, %u dropped as late, %u waits for the network",
+           error && error[0] ? error : "", error && error[0] ? "; " : "", (nowNs() - app->started) / 1e9, app->seeks,
+           s.decoded, s.shown, s.dropped, playerRebuffers(app->player));
     mediaFileInterruptAll();  // Nothing waits for the network now.
     tpfetchStop();
     playerClose(app->player);
@@ -1318,6 +1318,9 @@ int main(int argc, char **argv)
         if (app.player && !app.opening)
             reopenIfAsked(&app, now);
         int start_ms, cushion_ms;
+        int64_t starved_at;
+        if (app.player && !app.opening && playerTakeRebuffer(app.player, &starved_at))
+            appLog("  waiting for the network at %.1f s (the sound waits with the picture)", starved_at / 1e9);
         if (app.player && !app.opening && playerTakeStartTimes(app.player, &start_ms, &cushion_ms))
             appLog("  playing after %d ms (%d ms gathering video)", start_ms, cushion_ms);
         if (app.opening) {

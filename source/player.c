@@ -14,12 +14,14 @@
 #include "jfsync.h"
 #include "lang.h"
 #include "livetv.h"
+#include "mediafile.h"
 #include "subs.h"
 #include "webvtt.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
 #define SWITCH_LEAD_NS 300000000ll   // A new sound track joins this far ahead of the picture.
 #define REMOTE_LEAD_NS 2000000000ll  // Over the network it takes longer to get ready.
+#define STARVED_NS 300000000ull       // No picture and the network behind this long: the sound waits too.
 #define MAX_LEAD_NS 16000000000ll    // Each time it arrives late, the lead doubles up to this.
 #define SWITCH_GAP_NS 700000000ll    // A new track starting further on than this is sought instead.
 #define SWITCH_WAIT_NS 10000000000ull // The picture waits this long for a new track, at most.
@@ -58,6 +60,11 @@ struct Player {
     PlaybackLoop loop;       // A-B loop (playback.h), for this video.
     int audio_delay_ms, subtitle_delay_ms;
     bool holding;            // Waiting for the picture's first frame (opening, a seek): the sound waits too.
+    bool remote;             // Read over the network (a server's file, a network folder...).
+    uint64_t starved_since_ns;  // Since when the picture has had no frame while the network was behind; 0 if not.
+    bool rebuffer_noted;        // A wait for the network began: where, for the log.
+    int64_t rebuffer_at_ns;
+    unsigned rebuffers;
     int64_t position_ns;     // Where playback is, in the file's time.
     int64_t first_frame_ns;  // The first frame since opening or the last seek.
     uint64_t hold_since_ns;     // When holding began.
@@ -204,6 +211,8 @@ Player *playerOpen(const char *path, uint64_t now_ns, char *error, size_t error_
     p->volume = PLAYBACK_VOLUME_NORMAL;
     p->loop = PLAYBACK_LOOP_OFF;
     pthread_mutex_init(&p->ext_lock, NULL);
+    p->remote = jfIsRemoteLocation(path) || davIsLocation(path) || !strncmp(path, "jellyfin-", 9) ||
+                !strncmp(path, "xtream:", 7) || !strncmp(path, "stremio:", 8);
     p->join_lead_ns = jfIsRemoteLocation(path) || davIsLocation(path) || !strncmp(path, "jellyfin-", 9) ||
                               !strncmp(path, "xtream:", 7) || !strncmp(path, "stremio:", 8)
                           ? REMOTE_LEAD_NS
@@ -523,6 +532,51 @@ static void startFromFirstFrame(Player *p, uint64_t now_ns)
         audioSetPaused(p->audio, p->paused);
 }
 
+// The picture has nothing to show and the network is behind: rather than the sound going on alone (the
+// picture would then skip frames to catch up, looking fast), it pauses where it is and waits with the
+// picture, as after a seek. Only for a file read over the network, so a picture slow to decode (4K on
+// the CPU) still drops frames as before.
+static void watchStarving(Player *p, uint64_t now_ns)
+{
+    int64_t next;
+    bool starved = p->remote && !p->converted && !p->paused && p->audio && !videoNextPts(p->video, &next) &&
+                   mediaFileWaitingForNetwork();
+    if (!starved) {
+        p->starved_since_ns = 0;
+        return;
+    }
+    if (!p->starved_since_ns) {
+        p->starved_since_ns = now_ns;
+        return;
+    }
+    if (now_ns - p->starved_since_ns < STARVED_NS)
+        return;
+    p->starved_since_ns = 0;
+    p->rebuffers++;
+    p->rebuffer_noted = true;
+    p->rebuffer_at_ns = p->position_ns;
+    p->holding = true;  // Until the picture has its next frame; the sound starts again from here.
+    p->hold_since_ns = now_ns;
+    p->first_frame_at_ns = 0;
+    p->first_frame_ns = p->position_ns;
+    audioSetPaused(p->audio, true);
+    audioSeek(p->audio, p->position_ns);
+    p->waiting_since_ns = now_ns;
+}
+
+bool playerTakeRebuffer(Player *p, int64_t *at_ns)
+{
+    bool noted = p->rebuffer_noted;
+    p->rebuffer_noted = false;
+    *at_ns = p->rebuffer_at_ns;
+    return noted;
+}
+
+unsigned playerRebuffers(const Player *p)
+{
+    return p->rebuffers;
+}
+
 bool playerTakeStartTimes(Player *p, int *start_ms, int *cushion_ms)
 {
     bool noted = p->start_noted;
@@ -564,6 +618,8 @@ const GfxVideoFrame *playerUpdate(Player *p, uint64_t now_ns)
             useOwnClock(p, now_ns);  // It's late: the picture goes on, and it joins when it can.
             startJoining(p);
         }
+        if (!p->own_clock)
+            watchStarving(p, now_ns);
     }
     // Sound later than the picture: the picture is that far ahead of what's heard.
     // Never before the first frame: after a seek it shows at once, even with

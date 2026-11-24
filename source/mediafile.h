@@ -43,6 +43,8 @@ void mediaFileClose(MediaFile *f);
 void mediaFileInterruptAll(void);
 // How many interrupts there have been: for other things that wait for the network.
 unsigned mediaFileInterrupts(void);
+// True while a reader of a file over the network is waiting for a piece of it that hasn't come.
+bool mediaFileWaitingForNetwork(void);
 // True if reading stopped because the network failed (not at the file's end).
 // f NULL: a converted stream.
 bool mediaFileFailed(const MediaFile *f);

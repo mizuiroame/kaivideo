@@ -31,6 +31,7 @@
 #define REMOTE_READERS 3      // Picture, sound, and a sound being changed.
 
 static unsigned g_interrupts;    // Files opened before the last interrupt give up.
+static int g_waiting;             // Readers waiting now for a block that hasn't come.
 
 typedef struct {
     pthread_t thread;
@@ -250,7 +251,26 @@ static bool interrupted(const Remote *r)
 
 // The ready slot of a block, waiting for it. -1 if it can't come: what's
 // already here is still given when a later block failed. Under the lock.
+bool mediaFileWaitingForNetwork(void)
+{
+    return __atomic_load_n(&g_waiting, __ATOMIC_RELAXED) > 0;
+}
+
+static int waitForBlockCounted(Remote *r, int64_t block);
+
+// Waits (under r->lock) for a block, counted as waiting for the network while it does.
 static int waitForBlock(Remote *r, int64_t block)
+{
+    int slot = blockFind(r->slots, BLOCK_SLOTS, block);
+    if (slot >= 0 && r->slots[slot].state == BLOCK_READY)
+        return slot;  // Here already: no wait.
+    __atomic_add_fetch(&g_waiting, 1, __ATOMIC_RELAXED);
+    slot = waitForBlockCounted(r, block);
+    __atomic_sub_fetch(&g_waiting, 1, __ATOMIC_RELAXED);
+    return slot;
+}
+
+static int waitForBlockCounted(Remote *r, int64_t block)
 {
     for (;;) {
         int slot = blockFind(r->slots, BLOCK_SLOTS, block);
