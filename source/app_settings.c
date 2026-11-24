@@ -470,6 +470,7 @@ static void keepCursorOnPage(App *app)
 
 void appSettingsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
+    pressed = buttonsRightStickAsDpad(pressed);
     keepCursorOnPage(app);
     if (pressed & HidNpadButton_Plus) {
         app->quit = true;

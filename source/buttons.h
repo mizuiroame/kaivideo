@@ -42,4 +42,21 @@ enum {
 #define BUTTONS_STICKS (HidNpadButton_StickLLeft | HidNpadButton_StickLUp | HidNpadButton_StickLRight | \
                         HidNpadButton_StickLDown | HidNpadButton_StickRLeft | HidNpadButton_StickRUp | \
                         HidNpadButton_StickRRight | HidNpadButton_StickRDown)
-#define BUTTONS_REPEATING (BUTTONS_UP | BUTTONS_DOWN | BUTTONS_PAGE_UP | BUTTONS_PAGE_DOWN)
+#define BUTTONS_REPEATING (BUTTONS_UP | BUTTONS_DOWN | BUTTONS_PAGE_UP | BUTTONS_PAGE_DOWN |                            HidNpadButton_StickRLeft | HidNpadButton_StickRRight)
+
+// In a menu or panel the right stick moves like the d-pad, as in KaiPlayer and
+// KaiRadio: there it has nothing else to do (paging long lists and the video
+// under them keep it).
+static inline unsigned long long buttonsRightStickAsDpad(unsigned long long pressed)
+{
+    static const unsigned long long MAP[][2] = {
+        {HidNpadButton_StickRUp, HidNpadButton_Up},
+        {HidNpadButton_StickRDown, HidNpadButton_Down},
+        {HidNpadButton_StickRLeft, HidNpadButton_Left},
+        {HidNpadButton_StickRRight, HidNpadButton_Right},
+    };
+    for (unsigned i = 0; i < sizeof(MAP) / sizeof(MAP[0]); i++)
+        if (pressed & MAP[i][0])
+            pressed = (pressed & ~MAP[i][0]) | MAP[i][1];
+    return pressed;
+}

@@ -265,6 +265,7 @@ static void moveStreams(App *app, int delta)
 
 void appStremioStreamsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
+    pressed = buttonsRightStickAsDpad(pressed);
     if (pressed & BUTTONS_UP)
         moveStreams(app, -1);
     if (pressed & BUTTONS_DOWN)

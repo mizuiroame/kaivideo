@@ -129,6 +129,7 @@ static void chooseGroup(App *app, int row)
 void appLiveGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     (void)now;
+    pressed = buttonsRightStickAsDpad(pressed);
     int rows = app->iptv.group_count + 1;
     int *cursor = &app->live_group_cursor;
     if (pressed & BUTTONS_UP)

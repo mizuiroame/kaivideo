@@ -1,9 +1,16 @@
 // The player's drop-down lists: cursor and scrolling.
 #include "check.h"
+#include "buttons.h"
 #include "menu.h"
 
 void testMenu(void)
 {
+    // In menus and panels the right stick is the d-pad; other buttons stay.
+    CHECK(buttonsRightStickAsDpad(HidNpadButton_StickRUp) == HidNpadButton_Up);
+    CHECK(buttonsRightStickAsDpad(HidNpadButton_StickRDown | HidNpadButton_A) == (HidNpadButton_Down | HidNpadButton_A));
+    CHECK(buttonsRightStickAsDpad(HidNpadButton_StickRLeft) == HidNpadButton_Left);
+    CHECK(buttonsRightStickAsDpad(HidNpadButton_StickRRight) == HidNpadButton_Right);
+    CHECK(buttonsRightStickAsDpad(HidNpadButton_StickLUp) == HidNpadButton_StickLUp);
     Menu m;
     menuOpen(&m, 3, 0, 1);
     CHECK(m.open && m.cursor == 1 && m.first == 0 && menuVisible(&m) == 3);

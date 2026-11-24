@@ -920,6 +920,7 @@ static void menuGlide(App *app, uint64_t pressed, TouchEvent *touch, uint64_t no
 static void menuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     Menu *m = &app->menu;
+    pressed = buttonsRightStickAsDpad(pressed);  // The video under the list keeps none of it.
     app->overlay_until = now + OVERLAY_NS;  // The bar stays while the list is open.
     menuGlide(app, pressed, &touch, now);
     if (pressed & BUTTONS_UP) menuMove(m, -1);

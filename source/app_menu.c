@@ -197,6 +197,7 @@ void appMenuAfterVideo(App *app, uint64_t now)
 
 void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
+    pressed = buttonsRightStickAsDpad(pressed);
     MenuItemId ids[ITEMS_MAX];
     int screen, n = items(app, ids, &screen);
     if (pressed & HidNpadButton_Plus) {  // + again: the question, then out.
