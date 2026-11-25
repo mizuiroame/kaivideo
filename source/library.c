@@ -1,6 +1,6 @@
 #include "library.h"
 
-#include <ctype.h>
+#include <limits.h>
 #include <dirent.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "browser.h"
+#include "libnfo.h"
 #include "util.h"
 
 void libraryInit(Library *lib, const char *root)
@@ -364,40 +365,6 @@ static void considerPicture(char *best, size_t size, int *best_rank, const char 
     }
 }
 
-// True if path is right in folder, not in a folder inside it.
-static bool directlyIn(const char *path, const char *folder)
-{
-    size_t n = strlen(folder);
-    if (strncmp(path, folder, n))
-        return false;
-    const char *rest = path + n;
-    if (n && folder[n - 1] != '/') {
-        if (*rest != '/')
-            return false;
-        rest++;
-    }
-    return *rest && !strchr(rest, '/');
-}
-
-// True if path is in a season's folder ("Season 01", "S2", "Temporada 3", "Specials": a name with a
-// digit, or Specials) right in folder: the series' folder, whose picture is the series'.
-static bool inSeasonOf(const char *path, const char *folder)
-{
-    size_t n = strlen(folder);
-    if (strncmp(path, folder, n))
-        return false;
-    const char *rest = path + n + (n && folder[n - 1] != '/' && path[n] == '/');
-    const char *slash = strchr(rest, '/');
-    if (!slash || slash == rest || strchr(slash + 1, '/'))
-        return false;  // Not exactly one folder down.
-    if ((size_t)(slash - rest) == 8 && !strncasecmp(rest, "Specials", 8))
-        return true;
-    for (const char *p = rest; p < slash; p++)
-        if (isdigit((unsigned char)*p))
-            return true;
-    return false;
-}
-
 // A folder's picture (name, "" for none) for the videos found from start on: a film or an
 // episode right in the folder gets it; an episode deeper (a season's folder) gets it as its series'.
 static void applyPicture(Library *lib, size_t start, const char *folder, const char *name)
@@ -411,14 +378,27 @@ static void applyPicture(Library *lib, size_t start, const char *folder, const c
     bool one_video = lib->count - start == 1;
     for (size_t i = start; i < lib->count; i++) {
         LibraryItem *item = &lib->items[i];
-        bool here = directlyIn(item->path, folder);
-        VideoName name;  // Names are read when the library is built; here, for this.
-        namingParse(item->path, lib->root, &name);
-        if (name.is_episode && !item->series_art && (here || inSeasonOf(item->path, folder)))
+        bool here = libDirectlyIn(item->path, folder);
+        VideoName name;  // Names are read when the library is built (or from an .nfo already); here, for this.
+        if (item->named)
+            name = item->name;
+        else
+            namingParse(item->path, lib->root, &name);
+        if (name.is_episode && !item->series_art && (here || libInSeasonOf(item->path, folder)))
             item->series_art = strdup(key);
         else if (here && one_video && !name.is_episode && !item->art)
             item->art = strdup(key);
     }
+}
+
+// After a folder's files were listed: its .nfo files and pictures, for the videos found in it from start on.
+static void finishFolder(Library *lib, size_t start, const char *folder, int depth, const char *picture,
+                         LibFolderFiles *files, LibraryReadFile read, int *budget)
+{
+    libnfoApply(lib, start, folder, depth == 0, files, read, budget);  // A video's own pictures first.
+    if (depth > 0)  // The library's own folder's picture isn't any one video's.
+        applyPicture(lib, start, folder, picture);
+    libFolderFree(files);
 }
 
 // --- Scanning the card ---
@@ -430,7 +410,7 @@ static bool joinPath(char *out, size_t size, const char *folder, const char *nam
     return n > 0 && (size_t)n < size;
 }
 
-static bool scanFolder(Library *lib, const char *folder, int depth, const volatile bool *cancel)
+static bool scanFolder(Library *lib, const char *folder, int depth, int *budget, const volatile bool *cancel)
 {
     DIR *dir = opendir(folder);
     if (!dir)
@@ -440,6 +420,7 @@ static bool scanFolder(Library *lib, const char *folder, int depth, const volati
     char path[LIBRARY_PATH_MAX], picture[PICTURE_NAME_MAX] = "";
     int picture_rank = 0;
     size_t start = lib->count;
+    LibFolderFiles files = {0};
     while ((e = readdir(dir)) != NULL && !(cancel && *cancel)) {
         if (e->d_name[0] == '.' || (at_card_root && strcmp(e->d_name, "Nintendo") == 0) ||
             !joinPath(path, sizeof(path), folder, e->d_name))
@@ -454,16 +435,16 @@ static bool scanFolder(Library *lib, const char *folder, int depth, const volati
         }
         if (is_dir) {
             if (depth < LIBRARY_DEPTH)
-                scanFolder(lib, path, depth + 1, cancel);
+                scanFolder(lib, path, depth + 1, budget, cancel);
         } else if (browserIsVideo(e->d_name)) {
             libraryAdd(lib, path, (int64_t)st.st_size, (int64_t)st.st_mtime);
         } else {
             considerPicture(picture, sizeof(picture), &picture_rank, e->d_name);
+            libFolderNote(&files, e->d_name);
         }
     }
     closedir(dir);
-    if (depth > 0)  // The library's own folder's picture isn't any one video's.
-        applyPicture(lib, start, folder, picture);
+    finishFolder(lib, start, folder, depth, picture, &files, libnfoReadCard, budget);
     return true;
 }
 
@@ -473,7 +454,8 @@ bool libraryScan(Library *lib, const volatile bool *cancel)
     snprintf(root, sizeof(root), "%s", lib->root);
     libraryFree(lib);
     libraryInit(lib, root);
-    bool ok = scanFolder(lib, root, 0, cancel) && !(cancel && *cancel);
+    int budget = INT_MAX;  // The card's files are quick to read.
+    bool ok = scanFolder(lib, root, 0, &budget, cancel) && !(cancel && *cancel);
     if (!(cancel && *cancel))  // Stopped: thrown away, so not worth sorting.
         libraryBuild(lib);
     return ok;
@@ -481,8 +463,10 @@ bool libraryScan(Library *lib, const volatile bool *cancel)
 
 typedef struct {
     bool (*list)(const char *, DavEntry **, size_t *, char *, size_t);
+    LibraryReadFile read;
     const volatile bool *cancel;
     int folders;  // Asked for so far.
+    int nfo_budget;  // .nfo files it may still read.
 } NetworkScan;
 
 static bool scanNetworkFolder(Library *lib, NetworkScan *s, const char *folder, int depth)
@@ -495,31 +479,36 @@ static bool scanNetworkFolder(Library *lib, NetworkScan *s, const char *folder, 
     char path[LIBRARY_PATH_MAX], picture[PICTURE_NAME_MAX] = "";
     int picture_rank = 0;
     size_t start = lib->count;
+    LibFolderFiles files = {0};
     for (size_t i = 0; i < count && !(s->cancel && *s->cancel); i++) {
         const DavEntry *e = &entries[i];
         if (e->name[0] == '.' || !joinPath(path, sizeof(path), folder, e->name))
             continue;
-        if (e->is_dir && depth < LIBRARY_DEPTH)
+        if (e->is_dir && depth < LIBRARY_DEPTH) {
             scanNetworkFolder(lib, s, path, depth + 1);
-        else if (!e->is_dir && browserIsVideo(e->name) && lib->count < LIBRARY_NETWORK_VIDEOS)
+        } else if (!e->is_dir && browserIsVideo(e->name) && lib->count < LIBRARY_NETWORK_VIDEOS) {
             libraryAdd(lib, path, e->size, e->modified);
-        else if (!e->is_dir)
+        } else if (!e->is_dir) {
             considerPicture(picture, sizeof(picture), &picture_rank, e->name);
+            libFolderNote(&files, e->name);
+        }
     }
     free(entries);
-    if (depth > 0)
-        applyPicture(lib, start, folder, picture);
+    if (s->cancel && *s->cancel)
+        libFolderFree(&files);  // Thrown away: nothing more to read.
+    else
+        finishFolder(lib, start, folder, depth, picture, &files, s->read, &s->nfo_budget);
     return true;
 }
 
 bool libraryScanNetwork(Library *lib, bool (*list)(const char *, DavEntry **, size_t *, char *, size_t),
-                        const volatile bool *cancel)
+                        LibraryReadFile read, const volatile bool *cancel)
 {
     char root[LIBRARY_PATH_MAX];
     snprintf(root, sizeof(root), "%s", lib->root);
     libraryFree(lib);
     libraryInit(lib, root);
-    NetworkScan s = {list, cancel, 0};
+    NetworkScan s = {list, read, cancel, 0, LIBRARY_NETWORK_NFOS};
     bool ok = scanNetworkFolder(lib, &s, root, 0) && !(cancel && *cancel);
     if (!(cancel && *cancel))
         libraryBuild(lib);
@@ -527,6 +516,37 @@ bool libraryScanNetwork(Library *lib, bool (*list)(const char *, DavEntry **, si
 }
 
 // --- The cache ---
+
+#define CACHE_LINE_MAX 8192  // An .nfo's line: two plots of NFO_PLOT_MAX, names and a path fit.
+#define NFO_FIELDS 12        // "nfo", the video, then what it says (more, from a later version, are skipped).
+#define NS_PER_MIN 60000000000ll
+
+static bool hasBreak(const char *text)
+{
+    return text && strpbrk(text, "\t\r\n");
+}
+
+// What an .nfo said of the video, on one line (none if it said nothing).
+static void saveNfo(FILE *f, const LibraryItem *it)
+{
+    const VideoName *n = &it->name;
+    bool said = it->named || it->overview || it->genres || it->series_overview || it->runtime_ns;
+    if (!said || hasBreak(n->title) || hasBreak(n->show) || hasBreak(it->genres) || hasBreak(it->overview) ||
+        hasBreak(it->series_overview))
+        return;
+    fprintf(f, "nfo\t%s\t%d\t%d\t%d\t%d\t%lld\t%s\t%s\t%s\t%s\t%s\n", it->path, it->named ? n->is_episode : -1,
+            n->season, n->episode, n->year, (long long)(it->runtime_ns / NS_PER_MIN), it->named ? n->title : "",
+            it->named ? n->show : "", it->genres ? it->genres : "", it->overview ? it->overview : "",
+            it->series_overview ? it->series_overview : "");
+}
+
+// "<tag>\t<video>\t<picture's location>" if art is a picture in a folder ("picture:<location>").
+static void savePicture(FILE *f, const char *tag, const char *path, const char *art)
+{
+    const size_t prefix = sizeof(LIBRARY_PICTURE_PREFIX) - 1;
+    if (art && !strncmp(art, LIBRARY_PICTURE_PREFIX, prefix) && !strpbrk(art, "\r\n"))
+        fprintf(f, "%s\t%s\t%s\n", tag, path, art + prefix);
+}
 
 bool librarySave(const Library *lib, const char *file)
 {
@@ -538,42 +558,126 @@ bool librarySave(const Library *lib, const char *file)
         if (!strpbrk(lib->items[i].path, "\r\n"))
             fprintf(f, "%lld\t%lld\t%s\n", (long long)lib->items[i].size, (long long)lib->items[i].added,
                     lib->items[i].path);
-    // Folders' pictures, after the videos (older versions skip these lines).
-    const size_t prefix = sizeof(LIBRARY_PICTURE_PREFIX) - 1;
+    // Folders' pictures and what .nfo files said, after the videos (older versions skip these lines).
     for (size_t i = 0; i < lib->count; i++) {
         const LibraryItem *it = &lib->items[i];
         if (strpbrk(it->path, "\r\n\t"))
             continue;
-        if (it->art && !strncmp(it->art, LIBRARY_PICTURE_PREFIX, prefix) && !strpbrk(it->art, "\r\n"))
-            fprintf(f, "picture\t%s\t%s\n", it->path, it->art + prefix);
-        if (it->series_art && !strncmp(it->series_art, LIBRARY_PICTURE_PREFIX, prefix) &&
-            !strpbrk(it->series_art, "\r\n"))
-            fprintf(f, "series_picture\t%s\t%s\n", it->path, it->series_art + prefix);
+        savePicture(f, "picture", it->path, it->art);
+        savePicture(f, "series_picture", it->path, it->series_art);
+        savePicture(f, "backdrop", it->path, it->backdrop);
+        saveNfo(f, it);
     }
     return fclose(f) == 0;
 }
 
-// A cache line "picture\t<video>\t<picture>" (or series_picture): the video's art, if the video was read
-// and the picture is in the library's folder. True if it was such a line.
-static bool readPictureLine(Library *lib, char *line)
+// The item with this path, looked for first where *hint says (the lines after the videos come in their
+// order), then everywhere. -1 if none.
+static int findFrom(const Library *lib, const char *path, size_t *hint)
 {
-    bool series = !strncmp(line, "series_picture\t", 15);
-    if (!series && strncmp(line, "picture\t", 8))
+    for (size_t k = 0; k < 2; k++) {
+        size_t i = *hint + k;
+        if (i < lib->count && !strcmp(lib->items[i].path, path)) {
+            *hint = i;
+            return (int)i;
+        }
+    }
+    int found = libraryFind(lib, path);
+    if (found >= 0)
+        *hint = (size_t)found;
+    return found;
+}
+
+// A cache line "picture\t<video>\t<picture>" (or series_picture, backdrop): the video's art, if the video
+// was read and the picture is in the library's folder. True if it was such a line.
+static bool readPictureLine(Library *lib, char *line, size_t *hint)
+{
+    static const struct {
+        const char *tag;
+        size_t length;
+    } TAGS[] = {{"picture\t", 8}, {"series_picture\t", 15}, {"backdrop\t", 9}};
+    int kind = -1;
+    for (int k = 0; k < 3 && kind < 0; k++)
+        if (!strncmp(line, TAGS[k].tag, TAGS[k].length))
+            kind = k;
+    if (kind < 0)
         return false;
-    char *video = line + (series ? 15 : 8), *tab = strchr(video, '\t');
+    char *video = line + TAGS[kind].length, *tab = strchr(video, '\t');
     if (!tab)
         return true;
     *tab = '\0';
     const char *picture = tab + 1;
     size_t root = strlen(lib->root);
     char key[LIBRARY_PATH_MAX + sizeof(LIBRARY_PICTURE_PREFIX)];
-    int item = libraryFind(lib, video);
+    int item = findFrom(lib, video, hint);
     if (item < 0 || !root || strncmp(picture, lib->root, root) ||
         snprintf(key, sizeof(key), "%s%s", LIBRARY_PICTURE_PREFIX, picture) >= (int)sizeof(key))
         return true;
-    char **slot = series ? &lib->items[item].series_art : &lib->items[item].art;
+    LibraryItem *it = &lib->items[item];
+    char **slot = kind == 0 ? &it->art : kind == 1 ? &it->series_art : &it->backdrop;
     if (!*slot)
         *slot = strdup(key);
+    return true;
+}
+
+// Splits line at its tabs (empty fields kept): how many, at most max.
+static int splitTabs(char *line, char **fields, int max)
+{
+    int n = 0;
+    for (char *p = line; n < max;) {
+        fields[n++] = p;
+        char *tab = strchr(p, '\t');
+        if (!tab)
+            break;
+        *tab = '\0';
+        p = tab + 1;
+    }
+    return n;
+}
+
+// A whole number from min to max, or fallback.
+static int readInt(const char *text, int min, int max, int fallback)
+{
+    char *end;
+    long v = strtol(text, &end, 10);
+    return end != text && *end == '\0' && v >= min && v <= max ? (int)v : fallback;
+}
+
+static void keepText(char **slot, const char *text)
+{
+    if (text[0] && !*slot)
+        *slot = strdup(text);
+}
+
+// A cache line "nfo\t<video>\t..." (saveNfo's): what its .nfo said. True if it was such a line.
+static bool readNfoLine(Library *lib, char *line, size_t *hint)
+{
+    if (strncmp(line, "nfo\t", 4))
+        return false;
+    char *f[NFO_FIELDS];
+    if (splitTabs(line, f, NFO_FIELDS) < NFO_FIELDS)
+        return true;  // Broken.
+    int item = findFrom(lib, f[1], hint);
+    if (item < 0)
+        return true;
+    LibraryItem *it = &lib->items[item];
+    int episode = readInt(f[2], -1, 1, -1);
+    if (episode >= 0) {  // Its name as the .nfo gave it (-1: the file's name stands).
+        it->named = true;
+        memset(&it->name, 0, sizeof(it->name));
+        it->name.is_episode = episode == 1;
+        it->name.season = readInt(f[3], 0, 9999, 0);
+        it->name.episode = readInt(f[4], 0, 99999, 0);
+        it->name.year = readInt(f[5], 0, 9999, 0);
+        snprintf(it->name.title, sizeof(it->name.title), "%s", f[7]);
+        snprintf(it->name.show, sizeof(it->name.show), "%s", f[8]);
+    }
+    int minutes = readInt(f[6], 0, 100000, 0);
+    if (minutes && !it->runtime_ns)
+        it->runtime_ns = minutes * NS_PER_MIN;
+    keepText(&it->genres, f[9]);
+    keepText(&it->overview, f[10]);
+    keepText(&it->series_overview, f[11]);
     return true;
 }
 
@@ -583,14 +687,15 @@ bool libraryLoad(Library *lib, const char *file)
     FILE *f = fopen(file, "r");
     if (!f)
         return false;
-    char line[LIBRARY_PATH_MAX + 64];
-    bool ok = fgets(line, sizeof(line), f) && strncmp(line, "root=", 5) == 0;
+    char *line = malloc(CACHE_LINE_MAX);
+    bool ok = line && fgets(line, CACHE_LINE_MAX, f) && strncmp(line, "root=", 5) == 0;
     if (ok) {
         line[strcspn(line, "\r\n")] = '\0';
         libraryInit(lib, line + 5);
-        while (fgets(line, sizeof(line), f)) {
+        size_t hint = 0;
+        while (fgets(line, CACHE_LINE_MAX, f)) {
             line[strcspn(line, "\r\n")] = '\0';
-            if (readPictureLine(lib, line))
+            if (readPictureLine(lib, line, &hint) || readNfoLine(lib, line, &hint))
                 continue;
             char *end;
             long long size = strtoll(line, &end, 10);
@@ -606,6 +711,7 @@ bool libraryLoad(Library *lib, const char *file)
         }
         libraryBuild(lib);
     }
+    free(line);
     fclose(f);
     return ok;
 }

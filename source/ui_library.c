@@ -194,6 +194,15 @@ const uint32_t *uiLibPicture(const Library *lib, LibraryRef ref)
 {
     if (!g_thumbnails)
         return NULL;
+    // A wide picture from beside the files (fanart.jpg: a film's, or a series' on its episodes) fits a
+    // card better than a poster; one that can't be read gives way to the rest.
+    const LibraryItem *first = ref.is_show ? (lib->shows[ref.index].count
+                                                  ? &lib->items[lib->shows[ref.index].episodes[0]] : NULL)
+                                           : &lib->items[ref.index];
+    const char *wide = first && (ref.is_show || first->show < 0) ? first->backdrop : NULL;
+    if (wide && !strncmp(wide, LIBRARY_PICTURE_PREFIX, sizeof(LIBRARY_PICTURE_PREFIX) - 1) &&
+        !thumbIsNone(wide, 0))
+        return thumbGet(wide, 0);
     if (!ref.is_show && lib->items[ref.index].art)
         return thumbGet(lib->items[ref.index].art, 0);
     if (!ref.is_show)

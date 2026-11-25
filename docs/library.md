@@ -41,6 +41,58 @@ kept:
 After you copy more videos, **Update the library** (in the **+** menu, or
 in Settings' Library page) looks again.
 
+## Summaries, genres and pictures (.nfo files)
+
+KaiVideo reads the `.nfo` files that Kodi, Jellyfin, Emby, tinyMediaManager
+and similar tools write next to videos, and the pictures beside them. With
+them, Home's **Showcase** shows the summary, year, length and genres of a film
+or series on the card or the network folder, a wide picture behind it, and a
+row for each common genre, as it does for a media server.
+
+```
+Movies/
+  Paper Lanterns (1998)/
+    Paper.Lanterns.1998.1080p.mkv
+    movie.nfo            (or Paper.Lanterns.1998.1080p.nfo)
+    poster.jpg           (or folder.jpg, cover.jpg, Paper.Lanterns.1998.1080p-poster.jpg)
+    fanart.jpg           (or backdrop.jpg, background.jpg, Paper.Lanterns.1998.1080p-fanart.jpg)
+  Kite Hill.mkv          (several films in one folder: each by its own name)
+  Kite Hill.nfo
+  Kite Hill-poster.jpg
+  Kite Hill-fanart.jpg
+TV/
+  Rook/
+    tvshow.nfo           the series' name, year, summary and genres
+    poster.jpg           the series' poster
+    fanart.jpg           the series' wide picture
+    Season 1/
+      Rook.S01E01.mkv
+      Rook.S01E01.nfo    the episode's title and summary (optional)
+      Rook.S01E01-thumb.jpg   a still of the episode (optional)
+```
+
+- **Names**: a video's own files are named like it, without its extension,
+  plus `.nfo`, `-poster`, `-fanart` or `-thumb` (`.jpg`, `.jpeg` or `.png`; any
+  case). `movie.nfo`, `fanart.jpg` and `poster.jpg` count only in a folder
+  with **one** film; in a folder of several, each film needs its own.
+- **A series' files** (`tvshow.nfo`, `poster.jpg`, `fanart.jpg`) go in the
+  series' folder; they cover its episodes there and in its season folders
+  (`Season 1`, `S2`, `Specials`...). Episodes still need the season and
+  episode in their file names (`S01E03`).
+- **What's read**: from `<movie>`, `<tvshow>` and `<episodedetails>`, the
+  title, year (or the premiere date), plot (or outline), up to three genres,
+  the length in minutes, and an episode's season and number. A film's `.nfo`
+  title replaces the one from its file name; a `tvshow.nfo` title names the
+  series. Ratings, cast and the web addresses of artwork are left out: only
+  pictures next to the videos are shown.
+- **When**: `.nfo` files are read only while the library is scanned (at start,
+  or **Update the library**), and what they said is kept in `library.txt`, so
+  after editing one, update the library. A broken `.nfo`, or one that's only a
+  web address, is skipped: the file's name is used.
+- **Text**: UTF-8, as these tools write it. A network folder's `.nfo` files
+  are read one request each (up to 4000 per update), so a big folder takes
+  longer to update the first time.
+
 ## Settings
 
 Press **−** (or tap **Settings**). Settings has pages:

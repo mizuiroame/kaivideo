@@ -25,6 +25,7 @@ void testClock(void);
 void testMenu(void);
 void testNaming(void);
 void testLibrary(void);
+void testNfo(void);
 void testHome(void);
 void testShowcase(void);
 void testLibView(void);

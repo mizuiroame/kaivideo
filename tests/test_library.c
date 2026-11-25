@@ -232,7 +232,7 @@ void testLibrary(void)
     // A network folder: the same films and series, listed by its server.
     static Library net;
     libraryInit(&net, DAV_ROOT);
-    CHECK(libraryScanNetwork(&net, fakeList, NULL));
+    CHECK(libraryScanNetwork(&net, fakeList, NULL, NULL));
     CHECK(net.count == 4 && net.film_count == 1 && net.show_count == 1);
     const LibraryShow *net_rook = findShow(&net, "Rook");
     CHECK(net_rook && net_rook->count == 3 && net_rook->added == 1795221535);
@@ -244,7 +244,7 @@ void testLibrary(void)
     libraryFree(&net);
     libraryInit(&net, DAV_ROOT);
     g_fake_down = true;
-    CHECK(!libraryScanNetwork(&net, fakeList, NULL) && net.count == 0);
+    CHECK(!libraryScanNetwork(&net, fakeList, NULL, NULL) && net.count == 0);
     g_fake_down = false;
     libraryFree(&net);
 

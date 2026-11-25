@@ -16,11 +16,18 @@ static volatile bool g_cancel;
 static bool g_ok;
 static Library g_result;
 
+// An .nfo of the network folder, read whole (one too big isn't read).
+static char *readNetworkFile(const char *location, size_t max_bytes, size_t *size)
+{
+    char *data, why[160];
+    return davReadWhole(location, max_bytes, &data, size, why, sizeof(why)) ? data : NULL;
+}
+
 static void scanThread(void *arg)
 {
     (void)arg;
     // The network folder ("dav:/") is listed by its server, a folder at a time.
-    g_ok = davIsLocation(g_result.root) ? libraryScanNetwork(&g_result, davList, &g_cancel)
+    g_ok = davIsLocation(g_result.root) ? libraryScanNetwork(&g_result, davList, readNetworkFile, &g_cancel)
                                         : libraryScan(&g_result, &g_cancel);
     g_done = true;
 }

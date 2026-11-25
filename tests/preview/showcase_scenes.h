@@ -33,3 +33,7 @@ void iptvShowcaseScenes(const ShowcaseCtx *c, const Library *sd, const Library *
 const uint32_t *fakeLogo(const char *path);
 // The made-up large picture of a video while the Showcase scenes draw, else NULL.
 const uint32_t *fakeLarge(const char *path);
+// Home's Showcase for the card with .nfo files and pictures beside its videos (nfo_scenes.c), and a
+// server's tiles wearing their downloads' marks.
+void nfoShowcaseScenes(const ShowcaseCtx *c);
+void downloadShowcaseScenes(const ShowcaseCtx *c, const Library *server);

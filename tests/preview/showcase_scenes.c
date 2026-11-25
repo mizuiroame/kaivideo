@@ -96,8 +96,9 @@ static void makePosters(void)
 
 const uint32_t *thumbGetPoster(const char *art)
 {
-    if (strncmp(art, LIBRARY_POSTER_PREFIX, sizeof(LIBRARY_POSTER_PREFIX) - 1))
-        return NULL;  // Only the made-up server's have posters.
+    if (strncmp(art, LIBRARY_POSTER_PREFIX, sizeof(LIBRARY_POSTER_PREFIX) - 1) &&
+        strncmp(art, LIBRARY_PICTURE_PREFIX, sizeof(LIBRARY_PICTURE_PREFIX) - 1))
+        return NULL;  // Only the made-up server's, and pictures beside files, have posters.
     return g_posters[hashOf(art) % FAKE_POSTERS];
 }
 
@@ -413,6 +414,8 @@ void showcaseScenes(const ShowcaseCtx *c)
     libraryFree(&big);
     libraryFree(&small);
 
+    nfoShowcaseScenes(c);
+    downloadShowcaseScenes(c, &server);
     realCatalog(c, &sd_view, &sd_home);
     iptvShowcaseScenes(c, c->sd, &server, &sd_view, &sd_home);
     uiLibrarySetSource("", COLOR_ACCENT);

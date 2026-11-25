@@ -38,6 +38,7 @@ typedef struct {
     char *genres;        // "Drama, Comedy" as its server names them (its series' for an episode), or NULL.
     char *series_overview;  // Its series' summary, kept by one of its episodes only; or NULL.
     char *backdrop;      // A wide picture for the Showcase's large picture (thumbs.h's key), or NULL.
+    bool nfo_series;     // While scanning: its series' tvshow.nfo was read into it (the nearest folder's wins).
 } LibraryItem;
 
 // What a server says of a video besides its name.
@@ -110,21 +111,28 @@ bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int
 // Names, sorts and groups what was added.
 void libraryBuild(Library *lib);
 
-// Finds the videos under lib->root (emptying it first) and builds it.
+// Finds the videos under lib->root (emptying it first), with what the .nfo
+// files and pictures beside them say (libnfo.h), and builds it.
 // False if the folder can't be read, or *cancel was set meanwhile.
 bool libraryScan(Library *lib, const volatile bool *cancel);
 
 #define LIBRARY_NETWORK_FOLDERS 2000  // A network folder's scan asks for at most this many folders.
 #define LIBRARY_NETWORK_VIDEOS 20000
+#define LIBRARY_NETWORK_NFOS 4000     // And reads at most this many .nfo files.
+
+// Reads a small file whole (an .nfo), up to max_bytes, NUL-terminated (free it); NULL if it can't.
+typedef char *(*LibraryReadFile)(const char *location, size_t max_bytes, size_t *size);
 
 // The same for a network folder (lib->root "dav:/"), listed through list
-// (davList's shape: it asks the server, one folder at a time). False if its
-// top can't be listed, or *cancel was set.
+// (davList's shape: it asks the server, one folder at a time), its .nfo
+// files read through read (NULL: none are). False if its top can't be
+// listed, or *cancel was set.
 bool libraryScanNetwork(Library *lib, bool (*list)(const char *path, DavEntry **out, size_t *count, char *why,
                                                    size_t why_size),
-                        const volatile bool *cancel);
+                        LibraryReadFile read, const volatile bool *cancel);
 
-// The cache: the root on the first line, then "size<TAB>time<TAB>path".
+// The cache: the root on the first line, then "size<TAB>time<TAB>path"; then folders' pictures and
+// what .nfo files said (names, plots, genres, lengths, wide pictures), a line per video.
 bool librarySave(const Library *lib, const char *file);
 // Reads a cache (emptying lib first) and builds it. False if there's none.
 bool libraryLoad(Library *lib, const char *file);

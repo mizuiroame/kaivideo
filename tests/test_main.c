@@ -80,6 +80,7 @@ int main(void)
     testMenu();
     testNaming();
     testLibrary();
+    testNfo();
     testHome();
     testShowcase();
     testLibView();

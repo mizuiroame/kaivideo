@@ -123,6 +123,9 @@ only.
   (or `.png`) in a film's own folder is its card's picture; in a series'
   folder, the series'. A folder of several films keeps its picture to itself.
   This works on the SD card too.
+- **Summaries and genres**: Kodi-style `.nfo` files and `-poster`/`-fanart`
+  pictures next to the videos are read while the folder is scanned. See
+  [the library](library.md#summaries-genres-and-pictures-nfo-files).
 - **Pictures** for the cards are made by reading each video over the network
   the first time, so they come more slowly than from the card. Once made,
   they're kept.
