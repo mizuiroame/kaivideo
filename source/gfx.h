@@ -75,6 +75,9 @@ void gfxDrawImageFb(int x, int y, int w, int h, const uint32_t *pixels);
 // one made gfxDetail() times finer stays sharp on a bigger screen. The CPU
 // copies an image of w x h 1:1, and samples others.
 void gfxDrawImageScaledFb(float x, float y, float w, float h, int image_w, int image_h, const uint32_t *pixels);
+// Images drawn from now on (gfxDrawImageFb, gfxDrawImageScaledFb) are this opaque (0-255) besides
+// their own alpha: a picture fading in. 255 again when done.
+void gfxSetImageAlpha(unsigned alpha);
 // A decoded video frame: NV12 (a Y plane, then interleaved U and V at half
 // size), pitch-linear. id changes when the pixels do, so an unchanged frame
 // isn't sent to the GPU again.

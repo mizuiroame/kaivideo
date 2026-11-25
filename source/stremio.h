@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "genres.h"
 #include "library.h"
 #include "streamheaders.h"
 
@@ -57,6 +58,7 @@ typedef struct {
     char *poster;                  // An address, or NULL.
     char *description;
     int year;
+    char genres[GENRES_TEXT_MAX];  // "Drama, Comedy", or "".
 } StremioMeta;
 
 typedef struct {

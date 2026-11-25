@@ -50,6 +50,21 @@ typedef enum { GRID_FILMS, GRID_SERIES, GRID_COLLECTIONS, GRID_COUNT = GRID_COLL
 
 
 
+// How many of Home's rows and cards fit in view, and their sizes (which a finger moves them by).
+typedef struct {
+    int rows, cols;      // In view.
+    int row_px, col_px;  // A row with its title, and a card with the gap after it.
+    int wide_cols, wide_col_px;  // The same for a row of wide pictures (HomeRow.wide).
+} LibHomeLayout;
+
+// The Showcase style's: one row in view under its large picture, with posters across.
+#define LIBVIEW_SHOWCASE_ROWS 1
+#define LIBVIEW_SHOWCASE_COLS 9
+#define LIBVIEW_SHOWCASE_ROW_PX 226
+#define LIBVIEW_SHOWCASE_COL_PX 132
+#define LIBVIEW_SHOWCASE_WIDE_COLS 4
+#define LIBVIEW_SHOWCASE_WIDE_COL_PX 262
+
 typedef struct {
     LibTab tab;
     int collection;               // The library shown, when tab is TAB_COLLECTION.
@@ -57,7 +72,9 @@ typedef struct {
     int tab_count;
     int home_row, home_first_row;
     int home_offset;  // Pixels into Home's first row in view (Scroll.offset's).
-    Scroll home_cols[HOME_KIND_COUNT];  // Each Home row's place (by row index on screen).
+    Scroll home_cols[HOME_ROWS_MAX];    // Each Home row's place (by row index on screen).
+    LibHomeLayout home_layout;          // How Home's rows are laid out (libviewSetHomeShowcase),
+    bool showcase;                      // as the Showcase style's.
     Scroll grid[GRID_COUNT];            // first is a row of cards here.
     // A series' page, over the tab it was opened from (-1: none).
     int show;
@@ -79,8 +96,10 @@ typedef struct {
     int64_t live_at;  // And the time in its guide (livetv.h): 0 for now.
 } LibView;
 
-// Starts on Home, with the card's tabs.
+// Starts on Home, with the card's tabs, its rows laid out as the classic style's.
 void libviewInit(LibView *v);
+// Home's rows laid out as the Showcase style's (true) or the classic one's.
+void libviewSetHomeShowcase(LibView *v, bool showcase);
 // The tabs for this library: with a server's libraries, Home, each of them,
 // Live TV (live: the server has channels), Search and Files; else Home, Films,
 // Series, Search and Files. Downloads goes before Files when asked for. A tab
@@ -109,6 +128,8 @@ int libviewGrid(const LibView *v);
 int libviewGridCount(const LibView *v, const Library *lib, int grid);
 LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int index);
 
+// How many of a Home row's cards fit in view, and a card's size with its gap.
+int libviewHomeCols(const LibView *v, const Home *home, int row, int *col_px);
 // Home: dx moves across the row, dy between rows.
 void libviewHomeMove(LibView *v, const Home *home, int dx, int dy);
 

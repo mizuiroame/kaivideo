@@ -81,6 +81,7 @@ int main(void)
     testNaming();
     testLibrary();
     testHome();
+    testShowcase();
     testLibView();
     testSettings();
     testThumbs();

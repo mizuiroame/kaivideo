@@ -1889,3 +1889,30 @@ Origine:
 
 Its own
 Il suo
+
+Home style
+Stile della Home
+
+Showcase
+Vetrina
+
+Classic
+Classico
+
+Showcase tiles
+Riquadri della vetrina
+
+Mixed
+Misti
+
+DVD covers
+Copertine DVD
+
+Landscape
+Orizzontali
+
+Episodes
+Episodi
+
+%d min left
+Mancano %d min

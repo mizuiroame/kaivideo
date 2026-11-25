@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "genres.h"
 #include "library.h"
 #include "net.h"
 #include "resume.h"
@@ -187,6 +188,7 @@ typedef struct {
     char (*favorite_series)[JF_ID_MAX];  // Series the user marked: their episodes count as favorites.
     int favorite_series_count;
     char prefix[JF_PREFIX_MAX];          // Of the locations its pages make: JF_PREFIX, or EMBY_PREFIX.
+    GenreTable series_genres;            // Each series' genres: its episodes come without their own.
 } JfCatalog;
 
 void jfCatalogInit(JfCatalog *c);
@@ -196,6 +198,9 @@ void jfCatalogFree(JfCatalog *c);
 int jfCatalogAddViews(JfCatalog *c, const char *json);
 // The series the user marked as favorites (an /Items answer). Returns how many, -1 if unreadable.
 int jfCatalogSetFavoriteSeries(JfCatalog *c, const char *json);
+// The genres of the series in an /Items answer (Id, Genres), for their episodes. Returns how many
+// series it held, -1 if it can't be read.
+int jfCatalogAddSeriesGenres(JfCatalog *c, const char *json);
 // Adds the films and episodes of one /Items answer. Returns how many it held
 // (those that can't be used included), -1 if it can't be read. total, if not
 // NULL, gets TotalRecordCount.

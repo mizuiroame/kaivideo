@@ -1889,3 +1889,30 @@ Source:
 
 Its own
 固有の色
+
+Home style
+ホームの表示
+
+Showcase
+ショーケース
+
+Classic
+クラシック
+
+Showcase tiles
+ショーケースのタイル
+
+Mixed
+ミックス
+
+DVD covers
+DVDケース
+
+Landscape
+横長
+
+Episodes
+エピソード
+
+%d min left
+残り%d分

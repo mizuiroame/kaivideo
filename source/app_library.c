@@ -41,7 +41,16 @@ static const char *libraryRoot(const App *app)
 
 void appLibraryRefreshHome(App *app)
 {
-    homeCompute(&app->home, &app->library, &app->resume, &app->watched);
+    // The Showcase (the default) or the classic rows; the IPTV list's Home is its channels' (app_iptvhome.c).
+    bool showcase = !app->config.home_classic && !app->config.use_iptv;
+    if (showcase) {
+        homeComputeShowcase(&app->home, &app->library, &app->resume, &app->watched);
+        homeSetTiles(&app->home, app->config.home_tiles);
+    } else {
+        homeCompute(&app->home, &app->library, &app->resume, &app->watched);
+    }
+    if (app->view.showcase != showcase)
+        libviewSetHomeShowcase(&app->view, showcase);
     appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
     if (app->config.use_iptv) {
         libviewSetIptvTabs(&app->view, &app->library);
@@ -681,12 +690,17 @@ static void tapInput(App *app, LibHit hit, uint64_t now)
     case LIBHIT_MENU: appOpenMenu(app); break;
     case LIBHIT_DOWNLOADS: appDownloadsOpen(app, now); break;
     case LIBHIT_SOURCE: appLibraryToggleSource(app, now); break;
-    case LIBHIT_HOME_CARD:
+    case LIBHIT_HOME_CARD: {
+        // The Showcase shows what a tap chose in its large picture first; a second tap opens it.
+        bool chosen = v->home_row == hit.a && v->home_cols[hit.a].cursor == hit.b;
         v->home_row = hit.a;
         v->home_cols[hit.a].cursor = hit.b;
         libviewHomeMove(v, &app->home, 0, 0);
-        openSelected(app, now);
+        if (!v->showcase || chosen)
+            openSelected(app, now);
         break;
+    }
+    case LIBHIT_HERO: openSelected(app, now); break;
     case LIBHIT_GRID_CARD:
         if (libviewGrid(v) < 0)
             break;

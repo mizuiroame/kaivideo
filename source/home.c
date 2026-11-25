@@ -71,10 +71,10 @@ static void addUpNext(HomeRow *row, const Library *lib, const ResumeList *resume
     free(seen);
 }
 
-void homeCompute(Home *home, const Library *lib, const ResumeList *resume, const Watched *watched)
+void homeContinueRow(HomeRow *row, const Library *lib, const ResumeList *resume, const Watched *watched)
 {
-    memset(home, 0, sizeof(*home));
-    HomeRow *row = addRow(home, HOME_CONTINUE);
+    memset(row, 0, sizeof(*row));
+    row->kind = HOME_CONTINUE;
     for (size_t i = 0; resume && i < resume->count && row->count < HOME_ROW_MAX; i++) {
         int item = libraryFind(lib, resume->items[i].path);
         if (item >= 0)
@@ -82,6 +82,13 @@ void homeCompute(Home *home, const Library *lib, const ResumeList *resume, const
     }
     if (watched)
         addUpNext(row, lib, resume, watched);
+}
+
+void homeCompute(Home *home, const Library *lib, const ResumeList *resume, const Watched *watched)
+{
+    memset(home, 0, sizeof(*home));
+    HomeRow *row = &home->rows[0];
+    homeContinueRow(row, lib, resume, watched);
     home->count += row->count > 0;
 
     row = addRow(home, HOME_FAVORITES);
@@ -114,4 +121,9 @@ const char *homeRowTitle(HomeRowKind kind)
     case HOME_FILMS: return T("Films");
     default: return "";
     }
+}
+
+const char *homeRowName(const HomeRow *row)
+{
+    return row->kind == HOME_GENRE ? row->genre : homeRowTitle(row->kind);
 }

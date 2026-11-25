@@ -44,6 +44,8 @@ void libraryFree(Library *lib)
         free(lib->items[i].overview);
         free(lib->items[i].series_art);
         free(lib->items[i].art);
+        free(lib->items[i].genres);
+        free(lib->items[i].series_overview);
     }
     free(lib->items);
     lib->items = NULL;
@@ -87,6 +89,9 @@ bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int
     item->overview = remote->overview && remote->overview[0] ? strdup(remote->overview) : NULL;
     item->series_art = remote->series_art && remote->series_art[0] ? strdup(remote->series_art) : NULL;
     item->art = remote->art && remote->art[0] ? strdup(remote->art) : NULL;
+    item->genres = remote->genres && remote->genres[0] ? strdup(remote->genres) : NULL;
+    item->series_overview =
+        remote->series_overview && remote->series_overview[0] ? strdup(remote->series_overview) : NULL;
     item->favorite = remote->favorite;
     int collection = remote->in_collection - 1;
     item->collection = collection >= 0 && collection < lib->collection_count ? collection : -1;

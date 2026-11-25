@@ -1889,3 +1889,30 @@ Quelle:
 
 Its own
 Eigene
+
+Home style
+Start-Ansicht
+
+Showcase
+Schaufenster
+
+Classic
+Klassisch
+
+Showcase tiles
+Schaufenster-Kacheln
+
+Mixed
+Gemischt
+
+DVD covers
+DVD-Hüllen
+
+Landscape
+Querformat
+
+Episodes
+Folgen
+
+%d min left
+Noch %d Min.

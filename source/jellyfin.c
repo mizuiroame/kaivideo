@@ -21,6 +21,7 @@
 #define CACHE_LINE_MAX 65536
 #define CACHE_MAGIC "kaivideo-jellyfin-3"
 #define CACHE_FIELDS 18
+#define CACHE_FIELDS_MAX (CACHE_FIELDS + 2)  // And the genres and series summary, since 1.18.
 #define CACHE_COLLECTION "#collection\t"  // A library: its kind, then its name.
 #define FIRST_CAPACITY 512
 
@@ -414,7 +415,8 @@ bool jfCatalogAppend(JfCatalog *dst, const JfCatalog *src, const char *suffix)
                              ? map[item->collection] : -1;
         LibraryRemote remote = {.overview = item->overview, .series_art = item->series_art,
                                 .runtime_ns = item->runtime_ns, .blocked = item->blocked,
-                                .favorite = item->favorite, .in_collection = collection + 1};
+                                .favorite = item->favorite, .in_collection = collection + 1,
+                                .genres = item->genres, .series_overview = item->series_overview};
         if (!jfCatalogAddVideo(dst, item->path, &item->name, item->size, item->added, &remote, &src->users[i]))
             return false;
     }
@@ -430,6 +432,7 @@ void jfCatalogFree(JfCatalog *c)
     free(c->favorite_series);
     c->favorite_series = NULL;
     c->favorite_series_count = 0;
+    genreTableFree(&c->series_genres);
 }
 
 // What a library holds, from its CollectionType; false for what isn't videos.
@@ -494,6 +497,26 @@ int jfCatalogSetFavoriteSeries(JfCatalog *c, const char *json)
     }
     json_decref(root);
     return c->favorite_series_count;
+}
+
+int jfCatalogAddSeriesGenres(JfCatalog *c, const char *json)
+{
+    json_t *root = json_loads(json, 0, NULL);
+    const json_t *items = json_object_get(root, "Items");
+    if (!json_is_array(items)) {
+        json_decref(root);
+        return -1;
+    }
+    size_t i;
+    const json_t *series;
+    json_array_foreach(items, i, series) {
+        char genres[GENRES_TEXT_MAX];
+        genresJoin(json_object_get(series, "Genres"), NULL, genres, sizeof(genres));
+        genreTableAdd(&c->series_genres, textOf(series, "Id"), genres, textOf(series, "Overview"));
+    }
+    int count = (int)json_array_size(items);
+    json_decref(root);
+    return count;
 }
 
 static bool seriesIsFavorite(const JfCatalog *c, const char *series)
@@ -580,7 +603,13 @@ static bool addItem(JfCatalog *c, const json_t *item)
     jfLocationMakeWith(location, sizeof(location), c->prefix, id, source_id);
     if (isId(series, strlen(series)))
         jfLocationMakeWith(art, sizeof(art), c->prefix, series, JF_SERIES_SOURCE);
+    char genres[GENRES_TEXT_MAX];
+    genresJoin(json_object_get(item, "Genres"), NULL, genres, sizeof(genres));
+    int at = genreTableFind(&c->series_genres, series);
+    const char *of_series = genres[0] ? NULL : genreTableGenres(&c->series_genres, at);
     LibraryRemote remote = {
+        .genres = of_series ? of_series : genres,
+        .series_overview = genreTableTakeOverview(&c->series_genres, at),
         .overview = textOf(item, "Overview"),
         .series_art = art,
         .runtime_ns = json_integer_value(json_object_get(item, "RunTimeTicks")) * TICKS_TO_NS,
@@ -655,16 +684,19 @@ bool jfCatalogSave(const JfCatalog *c, const char *file)
         writeField(f, it->name.show);
         writeField(f, it->overview ? it->overview : "");
         writeField(f, it->series_art ? it->series_art : "");
-        fprintf(f, "%d\t%d\n", it->favorite ? 1 : 0, it->collection + 1);
+        fprintf(f, "%d\t%d\t", it->favorite ? 1 : 0, it->collection + 1);
+        writeField(f, it->genres ? it->genres : "");  // Added in 1.18: older caches end before them.
+        writeField(f, it->series_overview ? it->series_overview : "");
+        fputc('\n', f);
     }
     return fclose(f) == 0;
 }
 
 // Splits a line at its tabs. How many fields there are.
-static int splitFields(char *line, char *fields[CACHE_FIELDS])
+static int splitFields(char *line, char *fields[CACHE_FIELDS_MAX])
 {
     int n = 0;
-    while (n < CACHE_FIELDS) {
+    while (n < CACHE_FIELDS_MAX) {
         fields[n++] = line;
         char *tab = strchr(line, '\t');
         if (!tab)
@@ -694,14 +726,17 @@ static void loadLine(JfCatalog *c, char *line)
         loadCollection(c, line);
         return;
     }
-    char *v[CACHE_FIELDS];
-    if (splitFields(line, v) < CACHE_FIELDS || !jfIsRemoteLocation(v[11]) || !growUsers(c))
+    char *v[CACHE_FIELDS_MAX];
+    int fields = splitFields(line, v);
+    if (fields < CACHE_FIELDS || !jfIsRemoteLocation(v[11]) || !growUsers(c))
         return;
     VideoName name = {.is_episode = atoi(v[4]) != 0, .season = atoi(v[5]), .episode = atoi(v[6]), .year = atoi(v[7])};
     snprintf(name.title, sizeof(name.title), "%s", v[12]);
     snprintf(name.show, sizeof(name.show), "%s", v[13]);
     LibraryRemote remote = {.overview = v[14], .series_art = v[15], .runtime_ns = strtoll(v[2], NULL, 10),
-                            .blocked = atoi(v[3]), .favorite = atoi(v[16]) != 0, .in_collection = atoi(v[17])};
+                            .blocked = atoi(v[3]), .favorite = atoi(v[16]) != 0, .in_collection = atoi(v[17]),
+                            .genres = fields > CACHE_FIELDS ? v[CACHE_FIELDS] : NULL,
+                            .series_overview = fields > CACHE_FIELDS + 1 ? v[CACHE_FIELDS + 1] : NULL};
     if (!libraryAddRemote(&c->library, v[11], &name, strtoll(v[0], NULL, 10), strtoll(v[1], NULL, 10), &remote))
         return;
     c->users[c->library.count - 1] = (JfUserData){strtoll(v[8], NULL, 10), strtoll(v[9], NULL, 10), atoi(v[10]) != 0};

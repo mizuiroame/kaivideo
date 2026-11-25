@@ -1889,3 +1889,30 @@ Source:
 
 Its own
 自带颜色
+
+Home style
+首页样式
+
+Showcase
+展示
+
+Classic
+经典
+
+Showcase tiles
+展示的图块
+
+Mixed
+混合
+
+DVD covers
+DVD 封面
+
+Landscape
+横向
+
+Episodes
+剧集
+
+%d min left
+剩余 %d 分钟

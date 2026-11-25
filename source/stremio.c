@@ -451,6 +451,9 @@ bool stremioParseMetas(const char *json, StremioMeta **out, int *count)
         }
         e->description = jsonDup(m, "description", TEXT_MAX);
         e->year = yearOf(m);
+        genresJoin(json_object_get(m, "genres"), NULL, e->genres, sizeof(e->genres));
+        if (!e->genres[0])  // Older addons: "genre".
+            genresJoin(json_object_get(m, "genre"), NULL, e->genres, sizeof(e->genres));
         (*count)++;
     }
     json_decref(root);
@@ -783,7 +786,8 @@ static void addMeta(Library *lib, const StremioStore *s, const StremioMeta *m, i
     if (!series) {
         snprintf(name.title, sizeof(name.title), "%s", m->name);
         name.year = m->year;
-        LibraryRemote remote = {.art = art, .overview = m->description, .in_collection = collection + 1};
+        LibraryRemote remote = {.art = art, .overview = m->description, .in_collection = collection + 1,
+                                .genres = m->genres};
         libraryAddRemote(lib, path, &name, 0, 0, &remote);
         return;
     }
@@ -793,7 +797,8 @@ static void addMeta(Library *lib, const StremioStore *s, const StremioMeta *m, i
     if (!e || e->state != STREMIO_EPISODES_READ) {  // A stand-in until they're read.
         name.season = name.episode = 1;
         snprintf(name.title, sizeof(name.title), "%s", e ? failed : unread);
-        LibraryRemote remote = {.series_art = art, .overview = m->description, .in_collection = collection + 1};
+        LibraryRemote remote = {.series_art = art, .overview = m->description, .in_collection = collection + 1,
+                                .genres = m->genres};
         libraryAddRemote(lib, path, &name, 0, 0, &remote);
         return;
     }
@@ -805,7 +810,8 @@ static void addMeta(Library *lib, const StremioStore *s, const StremioMeta *m, i
         name.episode = v->episode;
         snprintf(name.title, sizeof(name.title), "%s", v->title ? v->title : "");
         LibraryRemote remote = {.series_art = art, .overview = v->overview ? v->overview : m->description,
-                                .in_collection = collection + 1};
+                                .in_collection = collection + 1, .genres = m->genres,
+                                .series_overview = i == 0 ? m->description : NULL};
         libraryAddRemote(lib, path, &name, 0, 0, &remote);
     }
 }

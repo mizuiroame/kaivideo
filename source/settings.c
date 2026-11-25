@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "background.h"
+#include "home.h"
 #include "lang.h"
 #include "theme.h"
 
@@ -20,6 +21,7 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
     N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
     N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"), N_("Certificate check"),
+    N_("Home style"), N_("Showcase tiles"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -27,7 +29,8 @@ static const char *const SOURCE_COLOR_KEYS[SOURCE_COLOR_COUNT] = {"network_color
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_NETWORK, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX,
      SETTING_OPEN_IPTV, SETTING_OPEN_ADDONS, SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
-    {SETTING_LANGUAGE, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_THEME, SETTING_COUNT},
+    {SETTING_LANGUAGE, SETTING_HOME_STYLE, SETTING_HOME_TILES, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR,
+     SETTING_CLOCK, SETTING_THEME, SETTING_COUNT},
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
      SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
@@ -138,6 +141,10 @@ bool configReadLine(Config *c, const char *line)
         c->blur = readChoice(value, BLUR_COUNT, BLUR_MEDIUM);
     else if (isKey(line, length, "clock24"))
         c->clock_24h = strcmp(value, "1") == 0;
+    else if (isKey(line, length, "home_style"))
+        c->home_classic = strcmp(value, "classic") == 0;
+    else if (isKey(line, length, "home_tiles"))
+        c->home_tiles = readChoice(value, HOME_TILES_COUNT, HOME_TILES_MIXED);
     else if (isKey(line, length, "thumbnails"))
         c->thumbnails = strcmp(value, "0") != 0;
     else if (isKey(line, length, "autoplay"))
@@ -205,6 +212,7 @@ void configWrite(const Config *c, FILE *f)
             c->use_network ? 1 : 0, c->use_iptv ? 1 : 0, c->use_addons ? 1 : 0, c->welcomed ? 1 : 0);
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
+    fprintf(f, "home_style=%s\nhome_tiles=%d\n", c->home_classic ? "classic" : "showcase", c->home_tiles);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
@@ -317,7 +325,7 @@ bool settingIsChoice(SettingRow row)
            row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
            row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE ||
            row == SETTING_NET_COLOR || row == SETTING_IPTV_COLOR || row == SETTING_ADDONS_COLOR ||
-           row == SETTING_NET_CERTIFICATE;
+           row == SETTING_NET_CERTIFICATE || row == SETTING_HOME_STYLE || row == SETTING_HOME_TILES;
 }
 
 static int wrap(int value, int delta, int count)
@@ -333,6 +341,8 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_BLUR: c->blur = wrap(c->blur, delta, BLUR_COUNT); break;
     case SETTING_THUMBNAILS: c->thumbnails = !c->thumbnails; break;
     case SETTING_CLOCK: c->clock_24h = !c->clock_24h; break;
+    case SETTING_HOME_STYLE: c->home_classic = !c->home_classic; break;
+    case SETTING_HOME_TILES: c->home_tiles = wrap(c->home_tiles, delta, HOME_TILES_COUNT); break;
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     case SETTING_UPDATE_AUTO: c->update_check = !c->update_check; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
@@ -367,6 +377,12 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     case SETTING_BLUR: snprintf(out, size, "%s", backgroundBlurName(c->blur)); break;
     case SETTING_THUMBNAILS: snprintf(out, size, "%s", c->thumbnails ? T("On") : T("Off")); break;
     case SETTING_CLOCK: snprintf(out, size, "%s", c->clock_24h ? T("24-hour") : T("12-hour")); break;
+    case SETTING_HOME_STYLE: snprintf(out, size, "%s", c->home_classic ? T("Classic") : T("Showcase")); break;
+    case SETTING_HOME_TILES: {
+        static const char *const TILES[HOME_TILES_COUNT] = {N_("Mixed"), N_("DVD covers"), N_("Landscape")};
+        snprintf(out, size, "%s", T(TILES[inRange(c->home_tiles, HOME_TILES_COUNT)]));
+        break;
+    }
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? T("On") : T("Off")); break;
     case SETTING_UPDATE_AUTO: snprintf(out, size, "%s", c->update_check ? T("On") : T("Off")); break;
     case SETTING_JF_QUALITY:

@@ -26,6 +26,7 @@ void testMenu(void);
 void testNaming(void);
 void testLibrary(void);
 void testHome(void);
+void testShowcase(void);
 void testLibView(void);
 void testSettings(void);
 void testThumbs(void);

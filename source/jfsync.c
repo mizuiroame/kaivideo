@@ -453,7 +453,7 @@ static bool readCollection(JfCatalog *c, const JfSession *s, const char *parent,
         char path[640];
         snprintf(path, sizeof(path),
                  "/Items?userId=%s%s%s&Recursive=true&IncludeItemTypes=Movie,Episode"
-                 "&Fields=MediaSources,Overview,DateCreated&SortBy=SortName&EnableImages=false&StartIndex=%d&Limit=%d",
+                 "&Fields=MediaSources,Overview,DateCreated,Genres&SortBy=SortName&EnableImages=false&StartIndex=%d&Limit=%d",
                  user, parent ? "&ParentId=" : "", parent ? parent : "", start, JF_PAGE_ITEMS);
         NetResponse r;
         if (!callAs(s, path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r)) {
@@ -502,10 +502,32 @@ static void readFavoriteSeries(JfCatalog *c, const JfSession *s)
     netResponseFree(&r);
 }
 
+// Each series' genres, for its episodes (which come without them), a page at a time. Without them,
+// episodes have only their own.
+static void readSeriesGenres(JfCatalog *c, const JfSession *s)
+{
+    for (int start = 0; start < MAX_ITEMS;) {
+        char path[320];
+        snprintf(path, sizeof(path),
+                 "/Items?userId=%s&Recursive=true&IncludeItemTypes=Series&Fields=Genres,Overview&EnableImages=false"
+                 "&EnableUserData=false&StartIndex=%d&Limit=%d",
+                 s->user_id, start, JF_PAGE_ITEMS);
+        NetResponse r;
+        if (!callAs(s, path, NULL, PAGE_MAX_BYTES, API_TIMEOUT_S, &r))
+            return;
+        int count = jfCatalogAddSeriesGenres(c, r.data);
+        netResponseFree(&r);
+        if (count < JF_PAGE_ITEMS)
+            return;
+        start += count;
+    }
+}
+
 // Reads every video into c, library by library. False if a page can't be had.
 static bool readPages(JfCatalog *c, const JfSession *s, bool emby)
 {
     readFavoriteSeries(c, s);
+    readSeriesGenres(c, s);
     int loaded = 0;
     if (readViews(c, s, emby) <= 0)
         return readCollection(c, s, NULL, &loaded);

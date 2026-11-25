@@ -81,3 +81,12 @@ int thumbgenLuma(const uint8_t *y, int w, int h, int pitch)
             sum += y[row * pitch + col];
     return n ? (int)(sum / n) : 0;
 }
+
+void thumbShapeSize(ThumbShape shape, int *w, int *h)
+{
+    switch (shape) {
+    case THUMB_SHAPE_LARGE: *w = THUMB_LARGE_W, *h = THUMB_LARGE_H; break;
+    case THUMB_SHAPE_POSTER: *w = THUMB_POSTER_W, *h = THUMB_POSTER_H; break;
+    default: *w = THUMB_W, *h = THUMB_H; break;
+    }
+}

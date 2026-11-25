@@ -274,6 +274,13 @@ static const Texture *textureFor(const uint32_t *pixels, int w, int h)
     return slot;
 }
 
+static float g_image_alpha = 1.0f;
+
+void gfxSetImageAlpha(unsigned alpha)
+{
+    g_image_alpha = (alpha > 255 ? 255 : alpha) / 255.0f;
+}
+
 // An image over the rectangle; covers are opaque, layers carry their own alpha.
 static void image(float x0, float y0, float x1, float y1, const uint32_t *pixels, int w, int h, float radius)
 {
@@ -281,7 +288,7 @@ static void image(float x0, float y0, float x1, float y1, const uint32_t *pixels
     if (!t)
         return;
     useImage(t);
-    float white[4] = {1, 1, 1, 1}, a[4] = {x0, y0, x1, y1}, b[4] = {radius, 0, 0, KIND_IMAGE};
+    float white[4] = {1, 1, 1, g_image_alpha}, a[4] = {x0, y0, x1, y1}, b[4] = {radius, 0, 0, KIND_IMAGE};
     quad(x0, y0, x1, y1, white, a, b);
 }
 

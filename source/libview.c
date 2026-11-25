@@ -92,6 +92,22 @@ void libviewInit(LibView *v)
     v->collection = -1;
     for (size_t i = 0; i < sizeof(CARD_TABS) / sizeof(CARD_TABS[0]); i++)
         addTab(v, CARD_TABS[i], -1);
+    libviewSetHomeShowcase(v, false);
+}
+
+void libviewSetHomeShowcase(LibView *v, bool showcase)
+{
+    static const LibHomeLayout CLASSIC = {LIBVIEW_HOME_ROWS, LIBVIEW_HOME_COLS, LIBVIEW_HOME_ROW_PX,
+                                          LIBVIEW_HOME_COL_PX, LIBVIEW_HOME_COLS, LIBVIEW_HOME_COL_PX};
+    static const LibHomeLayout SHOWCASE = {LIBVIEW_SHOWCASE_ROWS, LIBVIEW_SHOWCASE_COLS, LIBVIEW_SHOWCASE_ROW_PX,
+                                           LIBVIEW_SHOWCASE_COL_PX, LIBVIEW_SHOWCASE_WIDE_COLS,
+                                           LIBVIEW_SHOWCASE_WIDE_COL_PX};
+    v->home_layout = showcase ? SHOWCASE : CLASSIC;
+    v->showcase = showcase;
+    v->home_offset = 0;
+    v->home_first_row = v->home_row;  // In view again, whichever way it's laid out.
+    for (int r = 0; r < HOME_ROWS_MAX; r++)
+        v->home_cols[r].offset = 0;
 }
 
 int libviewTabIndex(const LibView *v)
@@ -165,6 +181,14 @@ LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int in
 
 // --- Home ---
 
+int libviewHomeCols(const LibView *v, const Home *home, int row, int *col_px)
+{
+    bool wide = row >= 0 && row < home->count && home->rows[row].wide;
+    if (col_px)
+        *col_px = wide ? v->home_layout.wide_col_px : v->home_layout.col_px;
+    return wide ? v->home_layout.wide_cols : v->home_layout.cols;
+}
+
 void libviewHomeMove(LibView *v, const Home *home, int dx, int dy)
 {
     if (home->count == 0)
@@ -174,11 +198,11 @@ void libviewHomeMove(LibView *v, const Home *home, int dx, int dy)
     v->home_row = clamp(v->home_row + dy, 0, home->count - 1);
     if (v->home_row < v->home_first_row)
         v->home_first_row = v->home_row;
-    if (v->home_row >= v->home_first_row + LIBVIEW_HOME_ROWS)
-        v->home_first_row = v->home_row - LIBVIEW_HOME_ROWS + 1;
+    if (v->home_row >= v->home_first_row + v->home_layout.rows)
+        v->home_first_row = v->home_row - v->home_layout.rows + 1;
     Scroll *cols = &v->home_cols[v->home_row];
     cols->cursor += dx;
-    keepInView(cols, home->rows[v->home_row].count, LIBVIEW_HOME_COLS);
+    keepInView(cols, home->rows[v->home_row].count, libviewHomeCols(v, home, v->home_row, NULL));
 }
 
 // --- Following a finger ---
@@ -186,7 +210,7 @@ void libviewHomeMove(LibView *v, const Home *home, int dx, int dy)
 bool libviewHomeScrollPx(LibView *v, const Home *home, int px)
 {
     Scroll s = {v->home_row, v->home_first_row, v->home_offset};
-    bool moved = scrollPx(&s, px, LIBVIEW_HOME_ROW_PX, LIBVIEW_HOME_ROWS, 1, home->count);
+    bool moved = scrollPx(&s, px, v->home_layout.row_px, v->home_layout.rows, 1, home->count);
     v->home_row = s.cursor;
     v->home_first_row = s.first;
     v->home_offset = s.offset;
@@ -197,7 +221,8 @@ bool libviewHomeRowScrollPx(LibView *v, const Home *home, int row, int px)
 {
     if (row < 0 || row >= home->count)
         return false;
-    return scrollPx(&v->home_cols[row], px, LIBVIEW_HOME_COL_PX, LIBVIEW_HOME_COLS, 1, home->rows[row].count);
+    int col_px, cols = libviewHomeCols(v, home, row, &col_px);
+    return scrollPx(&v->home_cols[row], px, col_px, cols, 1, home->rows[row].count);
 }
 
 // --- Grids ---
@@ -342,7 +367,7 @@ void libviewClamp(LibView *v, const Library *lib, const Home *home)
     v->home_row = home->count ? clamp(v->home_row, 0, home->count - 1) : 0;
     v->home_first_row = clamp(v->home_first_row, 0, v->home_row);
     for (int r = 0; r < home->count; r++)
-        keepInView(&v->home_cols[r], home->rows[r].count, LIBVIEW_HOME_COLS);
+        keepInView(&v->home_cols[r], home->rows[r].count, libviewHomeCols(v, home, r, NULL));
     for (int grid = 0; grid < GRID_COUNT; grid++)
         libviewGridMove(v, (LibGrid)grid, libviewGridCount(v, lib, grid), 0, 0);
     if (v->query[0]) {

@@ -424,6 +424,13 @@ void gfxSaveFrame(uint32_t *pixels)
         memcpy(pixels + (size_t)y * GFX_FB_WIDTH, g_pixels + (size_t)y * g_stride, GFX_FB_WIDTH * sizeof(uint32_t));
 }
 
+static unsigned g_image_alpha = 255;
+
+void gfxSetImageAlpha(unsigned alpha)
+{
+    g_image_alpha = alpha > 255 ? 255 : alpha;
+}
+
 void gfxDrawImageFb(int x, int y, int w, int h, const uint32_t *pixels)
 {
     int cx = x, cy = y, cw = w, ch = h;
@@ -433,7 +440,7 @@ void gfxDrawImageFb(int x, int y, int w, int h, const uint32_t *pixels)
         const uint32_t *src = pixels + (size_t)(py - y) * w + (cx - x);
         uint32_t *row = g_pixels + (size_t)py * g_stride + cx;
         for (int i = 0; i < cw; i++)
-            blendPixel(&row[i], src[i] | 0xFF000000u, src[i] >> 24);
+            blendPixel(&row[i], src[i] | 0xFF000000u, (src[i] >> 24) * g_image_alpha / 255);
     }
 }
 
@@ -452,7 +459,7 @@ void gfxDrawImageScaledFb(float x, float y, float w, float h, int image_w, int i
         uint32_t *row = g_pixels + (size_t)py * g_stride;
         for (int px = cx; px < cx + cw; px++) {
             uint32_t p = src[(long)(px - ix) * image_w / iw];
-            blendPixel(&row[px], p | 0xFF000000u, p >> 24);
+            blendPixel(&row[px], p | 0xFF000000u, (p >> 24) * g_image_alpha / 255);
         }
     }
 }

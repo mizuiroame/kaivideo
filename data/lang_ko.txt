@@ -1889,3 +1889,30 @@ Source:
 
 Its own
 고유 색
+
+Home style
+홈 스타일
+
+Showcase
+쇼케이스
+
+Classic
+클래식
+
+Showcase tiles
+쇼케이스 타일
+
+Mixed
+혼합
+
+DVD covers
+DVD 케이스
+
+Landscape
+가로형
+
+Episodes
+에피소드
+
+%d min left
+%d분 남음

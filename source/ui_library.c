@@ -15,6 +15,7 @@
 #include "ui_style.h"
 #include "ui_library_shared.h"
 #include "ui_live.h"
+#include "ui_showcase.h"
 #include "util.h"
 
 #define TAB_GAP 28             // The header, as KaiPlayer's and KaiRadio's.
@@ -777,7 +778,7 @@ static void drawHome(const LibView *v, const Library *lib, const Home *home, con
         int y = HOME_Y + (r - v->home_first_row) * HOME_ROW_H - v->home_offset;
         if (y >= bottom)
             break;
-        fontDraw(FONT_BOLD, 22, MARGIN, y, homeRowTitle(row->kind), r == v->home_row ? COLOR_TEXT : COLOR_DIM);
+        fontDraw(FONT_BOLD, 22, MARGIN, y, homeRowName(row), r == v->home_row ? COLOR_TEXT : COLOR_DIM);
         const Scroll *cols = &v->home_cols[r];
         // One card more than fit, cut by the screen's edge: there's more.
         for (int c = cols->first; c < row->count && c <= cols->first + LIBVIEW_HOME_COLS + 1; c++) {
@@ -1017,7 +1018,10 @@ static void drawSearch(const LibView *v, const Library *lib, const ResumeList *r
 void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume,
                    bool folder_set, const char *status)
 {
+    bool showcase = uiShowcaseShown(v, lib, home, folder_set);
     uiDrawBackground();
+    if (showcase)  // Its picture goes behind the header.
+        uiShowcaseDrawBackdrop(v, lib, home);
     uiDrawTabBar(v, lib, status);
     gfxSetClip(0, UI_TAB_BAR_H, GFX_WIDTH, UI_FOOTER_Y - UI_TAB_BAR_H);
     if (!folder_set) {
@@ -1032,6 +1036,8 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
     } else if (lib->count == 0) {
         drawCentered(status && status[0] ? T("Looking for videos...") : T("No videos here yet"),
                      T("KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8)."));
+    } else if (showcase) {
+        uiShowcaseDraw(v, lib, home, resume);
     } else if (v->tab == TAB_HOME) {
         drawHome(v, lib, home, resume);
     } else if (v->tab == TAB_FILMS && lib->film_count == 0) {

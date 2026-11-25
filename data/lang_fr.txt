@@ -1889,3 +1889,30 @@ Source :
 
 Its own
 La sienne
+
+Home style
+Style de l'accueil
+
+Showcase
+Vitrine
+
+Classic
+Classique
+
+Showcase tiles
+Vignettes de la vitrine
+
+Mixed
+Mixtes
+
+DVD covers
+Jaquettes DVD
+
+Landscape
+Paysage
+
+Episodes
+Épisodes
+
+%d min left
+Encore %d min

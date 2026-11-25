@@ -11,8 +11,20 @@
 #define THUMB_H 216
 #define THUMB_LARGE_W 960         // For the details panel.
 #define THUMB_LARGE_H 540
+#define THUMB_POSTER_W 200        // A film's or series' poster, upright (Home's Showcase).
+#define THUMB_POSTER_H 300
 #define THUMB_NONE_MARK "none"     // The file left for a video without a picture.
 #define THUMB_NONE_MARK_SIZE 4
+
+// The shapes a picture is made in.
+typedef enum {
+    THUMB_SHAPE_CARD,    // THUMB_W x THUMB_H.
+    THUMB_SHAPE_LARGE,   // THUMB_LARGE_W x THUMB_LARGE_H.
+    THUMB_SHAPE_POSTER,  // THUMB_POSTER_W x THUMB_POSTER_H: a server's poster, not its wide picture.
+} ThumbShape;
+
+// A shape's size in pixels.
+void thumbShapeSize(ThumbShape shape, int *w, int *h);
 
 typedef enum {
     THUMB_FILE_RETRY,    // Empty: an older version couldn't decode it; this one may.
@@ -29,7 +41,7 @@ ThumbFileKind thumbgenFileKind(long long size);
 // Asks for path's picture, to be written to jpg_path (THUMB_NONE_MARK there
 // means the video has none). The latest asked are made first; old requests
 // drop off when too many wait.
-void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool large);
+void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, ThumbShape shape);
 // True once for each finished request: its key.
 bool thumbgenTakeDone(uint64_t *key);
 // Once a frame, before it's drawn: what it asks for is what's on screen now.

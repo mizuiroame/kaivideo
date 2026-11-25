@@ -182,8 +182,9 @@ void testSettings(void)
     settingStep(&quality, SETTING_JF_QUALITY, -1);       // Wraps to the lowest.
     CHECK(settingQualityBitrate(&quality) == 420000 && settingIsChoice(SETTING_JF_QUALITY));
     CHECK(configReadLine(&quality, "jellyfin_quality=3") && settingQualityBitrate(&quality) == 20000000);
-    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_LANGUAGE &&
-          rows[1] == SETTING_ACCENT && rows[4] == SETTING_CLOCK && rows[5] == SETTING_THEME);
+    CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_LANGUAGE &&
+          rows[1] == SETTING_HOME_STYLE && rows[2] == SETTING_HOME_TILES && rows[3] == SETTING_ACCENT &&
+          rows[6] == SETTING_CLOCK && rows[7] == SETTING_THEME);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY, SERVER_JELLYFIN), "Display") == 0);
 
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.

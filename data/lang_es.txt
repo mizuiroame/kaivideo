@@ -1889,3 +1889,30 @@ Fuente:
 
 Its own
 El suyo
+
+Home style
+Estilo de Inicio
+
+Showcase
+Vitrina
+
+Classic
+Clásico
+
+Showcase tiles
+Miniaturas de Vitrina
+
+Mixed
+Mixtas
+
+DVD covers
+Carátulas de DVD
+
+Landscape
+Horizontales
+
+Episodes
+Episodios
+
+%d min left
+Quedan %d min

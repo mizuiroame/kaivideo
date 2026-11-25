@@ -1889,3 +1889,30 @@ Fonte:
 
 Its own
 A própria
+
+Home style
+Estilo do Início
+
+Showcase
+Vitrine
+
+Classic
+Clássico
+
+Showcase tiles
+Miniaturas da Vitrine
+
+Mixed
+Mistas
+
+DVD covers
+Capas de DVD
+
+Landscape
+Horizontais
+
+Episodes
+Episódios
+
+%d min left
+Faltam %d min

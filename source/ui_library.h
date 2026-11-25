@@ -54,6 +54,7 @@ typedef enum {
     LIBHIT_LIVE_GROUPS,      // The Live tab's group pill (the IPTV list's groups), or Films' or Series' (categories).
     LIBHIT_LIVE_GROUP_ROW,   // a: a row of the groups (0: all channels).
     LIBHIT_STREAM_ROW,       // a: one of the streams an addon gave.
+    LIBHIT_HERO,             // Home's Showcase: the button under the large picture opens what it shows.
 } LibHitKind;
 
 typedef struct {

@@ -35,7 +35,7 @@
 typedef struct {
     char path[PATH_MAX_LEN], jpg[PATH_MAX_LEN];
     uint64_t key;
-    bool large;
+    ThumbShape shape;
     uint64_t frame;  // The last frame that asked for it (drew it).
     uint32_t order;  // Its place among that frame's: the screen is drawn from its top left.
 } Request;
@@ -121,11 +121,13 @@ static uint8_t *fetchPicture(const char *location, const char *kind, int max_wid
 static void makeRemote(const Request *r)
 {
     int w = 0, h = 0, wide_w = 0, wide_h = 0;
-    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    int out_w, out_h;
+    thumbShapeSize(r->shape, &out_w, &out_h);
     int fetch_w = out_w * FETCH_SCALE;  // A little more than needed: it's cropped and averaged down.
     long status = 0, wide_status = 0;
     uint8_t *rgb = fetchPicture(r->path, "Primary", fetch_w, &w, &h, &status);
-    if (!rgb || h > w) {
+    bool poster = r->shape == THUMB_SHAPE_POSTER;  // The upright one is wanted: a wide one only without it.
+    if (!rgb || (h > w && !poster)) {
         uint8_t *wide = fetchPicture(r->path, "Backdrop", fetch_w, &wide_w, &wide_h, &wide_status);
         if (wide) {
             if (rgb)
@@ -208,7 +210,8 @@ static void makeUrl(const Request *r)
     uint8_t *rgba = fits ? stbi_load_from_memory(data, (int)answer.size, &w, &h, &channels, 4) : NULL;
     long status = answer.status;
     netResponseFree(&answer);
-    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    int out_w, out_h;
+    thumbShapeSize(r->shape, &out_w, &out_h);
     uint8_t *out = rgba ? malloc((size_t)out_w * out_h * 3) : NULL;
     bool drawn = out && (poster ? drawPoster(rgba, w, h, out, out_w, out_h)
                                 : (drawLogo(rgba, w, h, out, out_w, out_h), true));
@@ -254,7 +257,8 @@ static void makePicture(const Request *r)
                 (long long)w * h <= IMAGE_MAX_PIXELS;
     uint8_t *rgba = fits ? stbi_load_from_memory(data, (int)size, &w, &h, &channels, 4) : NULL;
     free(bytes);
-    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    int out_w, out_h;
+    thumbShapeSize(r->shape, &out_w, &out_h);
     uint8_t *out = rgba ? malloc((size_t)out_w * out_h * 3) : NULL;
     if (out && drawPoster(rgba, w, h, out, out_w, out_h)) {
         if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, out, JPEG_QUALITY))
@@ -306,7 +310,8 @@ static bool make(const Request *r)
         }
     }
     bool interrupted = g_stop || g_paused;
-    int out_w = r->large ? THUMB_LARGE_W : THUMB_W, out_h = r->large ? THUMB_LARGE_H : THUMB_H;
+    int out_w, out_h;
+    thumbShapeSize(r->shape, &out_w, &out_h);
     uint8_t *rgb = f && !interrupted ? malloc((size_t)out_w * out_h * 3) : NULL;
     if (rgb) {
         thumbgenConvert(f->y, f->uv, f->width, f->height, f->y_pitch, f->uv_pitch, f->bt709, f->full_range, rgb,
@@ -408,7 +413,7 @@ void thumbgenStop(void)
     g_started = false;
 }
 
-void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool large)
+void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, ThumbShape shape)
 {
     if (!g_started || strlen(path) >= PATH_MAX_LEN || strlen(jpg_path) >= PATH_MAX_LEN)
         return;
@@ -437,7 +442,7 @@ void thumbgenRequest(const char *path, const char *jpg_path, uint64_t key, bool 
     snprintf(r->path, sizeof(r->path), "%s", path);
     snprintf(r->jpg, sizeof(r->jpg), "%s", jpg_path);
     r->key = key;
-    r->large = large;
+    r->shape = shape;
     r->frame = g_frame;
     r->order = g_order++;
     condvarWakeAll(&g_wake);

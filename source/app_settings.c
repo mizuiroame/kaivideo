@@ -363,6 +363,8 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
         appLibraryRefreshHome(app);
     } else {
         settingStep(&app->config, row, delta);
+        if (row == SETTING_HOME_STYLE || row == SETTING_HOME_TILES)
+            appLibraryRefreshHome(app);
         applyLooks(app);
         applyCertificateChecks(app);
         if (row == SETTING_THEME || row == SETTING_BLUR)

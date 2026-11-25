@@ -263,7 +263,13 @@ static bool addItem(JfCatalog *c, const json_t *item)
     plexLocationMake(location, sizeof(location), key, part_id);
     if (isKey(series, strlen(series)))
         snprintf(art, sizeof(art), PLEX_PREFIX "%s/" JF_SERIES_SOURCE, series);
+    char genres[GENRES_TEXT_MAX];
+    genresJoin(json_object_get(item, "Genre"), "tag", genres, sizeof(genres));
+    int at = genreTableFind(&c->series_genres, series);
+    const char *of_series = genres[0] ? NULL : genreTableGenres(&c->series_genres, at);
     LibraryRemote remote = {
+        .genres = of_series ? of_series : genres,
+        .series_overview = genreTableTakeOverview(&c->series_genres, at),
         .overview = textOf(item, "summary"),
         .series_art = art,
         .runtime_ns = numberOf(item, "duration") * MS_TO_NS,
@@ -292,7 +298,14 @@ int plexCatalogAddPage(JfCatalog *c, const char *json, int *total)
     size_t i;
     const json_t *item;
     json_array_foreach(json_object_get(mc, "Metadata"), i, item) {
-        addItem(c, item);
+        if (!strcmp(textOf(item, "type"), "show")) {  // A series: its genres, for its episodes.
+            char key[PLEX_ID_MAX], genres[GENRES_TEXT_MAX];
+            keyOf(item, "ratingKey", key);
+            genresJoin(json_object_get(item, "Genre"), "tag", genres, sizeof(genres));
+            genreTableAdd(&c->series_genres, key, genres, textOf(item, "summary"));
+        } else {
+            addItem(c, item);
+        }
         count++;
     }
     json_decref(root);

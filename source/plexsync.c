@@ -21,6 +21,7 @@
 #define MAX_ITEMS 100000        // Against a server that never says it's done.
 #define PLEX_MOVIE_TYPE 1
 #define PLEX_EPISODE_TYPE 4
+#define PLEX_SHOW_TYPE 2
 #define MS_TO_NS 1000000ll
 #define POSTER_HEIGHT_NUM 3     // Posters are 2:3, wide pictures 16:9.
 #define POSTER_HEIGHT_DEN 2
@@ -143,10 +144,10 @@ bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char
 
 // --- The library ---
 
-static bool readSection(NetClient *net, const PlexSession *s, const char *version, JfCatalog *c, int index,
-                        int *loaded, PlexProgress progress, const volatile bool *cancel)
+// Reads one kind of a library's items (type), a page at a time. Series (type 2) only give their genres.
+static bool readSectionType(NetClient *net, const PlexSession *s, const char *version, JfCatalog *c, int index,
+                            int type, int *loaded, PlexProgress progress, const volatile bool *cancel)
 {
-    int type = c->library.collections[index].kind == COLLECTION_FILMS ? PLEX_MOVIE_TYPE : PLEX_EPISODE_TYPE;
     int start = 0, total = 0;
     c->adding_collection = index;
     for (;;) {
@@ -162,12 +163,24 @@ static bool readSection(NetClient *net, const PlexSession *s, const char *versio
         if (count < 0)
             return false;
         start += count;
-        *loaded += count;
-        if (progress)
-            progress(*loaded, 0);
-        if (count < PLEX_PAGE_ITEMS || start >= total || *loaded >= MAX_ITEMS)
+        if (type != PLEX_SHOW_TYPE) {
+            *loaded += count;
+            if (progress)
+                progress(*loaded, 0);
+        }
+        if (count < PLEX_PAGE_ITEMS || start >= total || *loaded >= MAX_ITEMS || start >= MAX_ITEMS)
             return true;
     }
+}
+
+static bool readSection(NetClient *net, const PlexSession *s, const char *version, JfCatalog *c, int index,
+                        int *loaded, PlexProgress progress, const volatile bool *cancel)
+{
+    if (c->library.collections[index].kind == COLLECTION_FILMS)
+        return readSectionType(net, s, version, c, index, PLEX_MOVIE_TYPE, loaded, progress, cancel);
+    // The series' genres first (their episodes come without them); without them, episodes have none.
+    readSectionType(net, s, version, c, index, PLEX_SHOW_TYPE, loaded, progress, cancel);
+    return readSectionType(net, s, version, c, index, PLEX_EPISODE_TYPE, loaded, progress, cancel);
 }
 
 bool plexNetReadLibrary(NetClient *net, const PlexSession *s, const char *version, JfCatalog *c,

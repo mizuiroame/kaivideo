@@ -67,6 +67,8 @@ typedef enum {
     SETTING_IPTV_COLOR,     // The IPTV list's.
     SETTING_ADDONS_COLOR,   // The addons'.
     SETTING_NET_CERTIFICATE,  // Whether the network folder's certificate must be trusted (https, FTPS).
+    SETTING_HOME_STYLE,     // Home as a Showcase (a large picture over rows) or the classic rows of cards.
+    SETTING_HOME_TILES,     // The Showcase's tiles: mixed, DVD covers, or wide pictures (home.h's HomeTiles).
     SETTING_COUNT,
 } SettingRow;
 
@@ -130,6 +132,8 @@ typedef struct {
     bool update_check;                    // Asks GitHub once a day for a new version.
     int64_t update_checked;               // When it last asked (seconds since 1970); 0: never.
     char update_tag[32];                  // The newer version it found then, or "".
+    bool home_classic;                    // Home as the classic rows of cards, not the Showcase.
+    int home_tiles;                       // HomeTiles: the Showcase's tiles.
 } Config;
 
 void configDefaults(Config *c);

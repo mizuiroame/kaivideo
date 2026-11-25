@@ -35,6 +35,8 @@ typedef struct {
     bool favorite;       // A film marked so, or an episode of a series marked so.
     int collection;      // The server's library it's in (an index in collections), -1 for none.
     int group;           // Its source's category (an Xtream account's), -1 for none.
+    char *genres;        // "Drama, Comedy" as its server names them (its series' for an episode), or NULL.
+    char *series_overview;  // Its series' summary, kept by one of its episodes only; or NULL.
 } LibraryItem;
 
 // What a server says of a video besides its name.
@@ -45,6 +47,8 @@ typedef struct {
     bool favorite;
     int in_collection;  // Its library's index in collections plus 1; 0 for none.
     int in_group;       // Its category's index plus 1 (an Xtream account's); 0 for none.
+    const char *genres; // "Drama, Comedy", or NULL or "" for none.
+    const char *series_overview;  // Its series' summary (given to one episode of each), or NULL.
 } LibraryRemote;
 
 typedef struct {

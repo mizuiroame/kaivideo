@@ -32,6 +32,7 @@
 #include "ui_stats.h"
 #include "ui_style.h"
 #include "sample_paths.h"
+#include "showcase_scenes.h"
 
 // --- A fake player: what the bar and the lists ask of it ---
 
@@ -576,9 +577,8 @@ const uint32_t *thumbGet(const char *path, int64_t size)
 
 const uint32_t *thumbGetLarge(const char *path, int64_t size)
 {
-    (void)path;
     (void)size;
-    return NULL;  // The panel then shows the card's picture.
+    return fakeLarge(path);  // NULL but in the Showcase's scenes: the panel then shows the card's picture.
 }
 
 bool thumbIsNone(const char *path, int64_t size)
@@ -815,6 +815,11 @@ static void downloadsScene(void)
     save("downloads_empty");
 }
 
+static void showcaseSave(const char *name)
+{
+    save(name);
+}
+
 static void libraryScenes(void)
 {
     SysInfo sys = {.has_time = true, .hour = 21, .minute = 47, .has_battery = true, .battery_percent = 82};
@@ -1018,7 +1023,7 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_DISPLAY, SETTING_THEME, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_display");
-    top = (GFX_HEIGHT - (76 + 5 * 48 + 60)) / 2;
+    top = (GFX_HEIGHT - (76 + 7 * 48 + 60)) / 2;
     if (uiLibraryTap((GFX_WIDTH - 760) / 2 + 60, top + 33).kind != LIBHIT_PAGE_BACK) {
         printf("TOUCH: settings_display: Back doesn't answer a tap\n");
         g_problems++;
@@ -1238,6 +1243,8 @@ static void libraryScenes(void)
         g_problems++;
     }
     free(b.items);
+    ShowcaseCtx showcase = {&g_lib, &g_resume, &g_watched, begin, showcaseSave, &g_problems};
+    showcaseScenes(&showcase);
     libraryFree(&g_lib);
     watchedFree(&g_watched);
 }
