@@ -40,6 +40,7 @@ void testPlex(void);
 void testStats(void);
 void testTrickplay(void);
 void testLiveTv(void);
+void testDvr(void);
 void testKinetic(void);
 void testHlsMaster(void);
 void testDownloads(void);

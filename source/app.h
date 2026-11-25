@@ -9,6 +9,7 @@
 
 #include "browser.h"
 #include "downloads.h"
+#include "dvr.h"
 #include "home.h"
 #include "iptv.h"
 #include "iptvhome.h"
@@ -156,6 +157,20 @@ struct App {
     int live_pending;           // L and R while a channel opens: channels to move on once it's let go.
     char live_pending_name[APP_NAME_MAX];  // The channel they lead to, for the loading screen.
     int live_switch;          // L or R while a channel plays: -1 or 1, taken by the main loop.
+    int64_t live_window_from, live_window_to;  // The guide's hours read last (or being read).
+    int live_drag_axis;       // A finger on the guide: 0 not known yet, 1 along the hours, 2 down the channels.
+    int live_drag_rest;       // Pixels along the hours not turned into time yet.
+    // The server's DVR (app_dvr.c): what it records and recorded, as last read (NULL until then),
+    DvrLists *dvr;
+    bool dvr_open;            // the Recordings list over the guide (L),
+    Scroll dvr_scroll;
+    int dvr_confirm;          // its row whose X was pressed once, -1 for none, and what's on it,
+    char dvr_confirm_id[DVR_ID_MAX];
+    bool dvr_choices_open;    // and what can be done with a program (R): its choices and cursor.
+    DvrAction dvr_choices[DVR_DO_COUNT];
+    int dvr_choice_count, dvr_choice_cursor;
+    LiveProgram dvr_program;  // The program they're for,
+    char dvr_channel[LIVE_NAME_MAX];  // and its channel.
     JfSegment segments[JF_SEGMENTS_MAX];  // The playing video's parts to skip (app_skip.c).
     int segment_count;
     bool stats_shown;           // ↓ shows the statistics panel (app_stats.c).
@@ -395,6 +410,26 @@ bool appPlayingLive(const App *app);
 // The channel delta places from the one playing, wrapping (L/R in the player).
 // False if it isn't in the guide, or it's the only one.
 bool appLiveNeighbor(App *app, int delta, char *location, size_t location_size, char *name, size_t name_size);
+
+// app_dvr.c: recording Live TV with the Jellyfin server's DVR.
+// Live TV is the Jellyfin server's here: its DVR records.
+bool appDvrAvailable(const App *app);
+// Once a frame (from appLiveUpdate): what the server answered.
+void appDvrUpdate(App *app, uint64_t now);
+void appDvrExit(App *app);
+// The Live tab's buttons and taps for recording (R, L, their pills, the
+// choices and the Recordings list). True if it took them.
+bool appDvrInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+// Draws the Recordings list (true: the guide isn't drawn) or the choices over it.
+bool appDvrDrawPanel(const App *app);
+void appDvrDrawChoices(const App *app);
+// The help line while the list or the choices show, or NULL.
+const char *appDvrHelp(const App *app);
+// Whether the server will record p (or records it now).
+bool appDvrScheduled(const App *app, const LiveProgram *p);
+// While a Jellyfin channel plays: ZR or its button records what's on now; drawn with the bar.
+bool appDvrPlayerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appDvrPlayerDraw(const App *app, bool bar_shown);
 
 // app_skip.c
 // ZR, or a tap on its button, skips the part playing (intro, credits...).

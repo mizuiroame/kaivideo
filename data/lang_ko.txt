@@ -1940,3 +1940,135 @@ The guide has nothing on now for it.
 
 Watch live
 생방송 보기
+
+%s won't be recorded.
+%s 은(는) 녹화되지 않습니다.
+
+[A] choose  [^v] move  [B] back
+[A] 선택  [^v] 이동  [B] 뒤로
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] 재생  [X] 삭제  [^v] 이동  [B] 편성표로
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] 시청  [^v] 채널  [<>] 편성표  [R] 녹화  [L] 녹화 목록  [ZL][ZR] 탭  [+] 메뉴
+
+[B] back to the guide
+[B] 편성표로
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] 취소  [^v] 이동  [B] 편성표로
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] 시리즈 녹화 중지  [^v] 이동  [B] 편성표로
+
+Already recording %s. To stop it: R on it in the guide.
+%s 은(는) 이미 녹화 중입니다. 멈추려면 편성표에서 그 프로그램에 R.
+
+Asking the server...
+서버에 묻는 중...
+
+Don't record this program
+이 프로그램 녹화 안 함
+
+Every episode
+모든 에피소드
+
+New episodes
+새 에피소드
+
+No program here to record.
+여기에는 녹화할 프로그램이 없습니다.
+
+No tuner free
+남은 튜너 없음
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+아직 녹화나 예약이 없습니다. 편성표의 프로그램에서 R을 누르면 녹화합니다.
+
+On any channel
+모든 채널에서
+
+Record
+녹화
+
+Record the series
+시리즈 녹화
+
+Record this program
+이 프로그램 녹화
+
+RECORDED
+녹화됨
+
+Recording
+녹화 중
+
+Recording %s now.
+지금 %s 녹화 중.
+
+Recording deleted: %s
+녹화를 삭제했습니다: %s
+
+Recording now
+지금 녹화 중
+
+Recordings
+녹화 목록
+
+SCHEDULED
+예약됨
+
+Scheduled
+예약됨
+
+SERIES RECORDED
+녹화 중인 시리즈
+
+Series recorded
+시리즈 녹화 중
+
+Stop recording the series
+시리즈 녹화 중지
+
+The series %s won't be recorded.
+시리즈 %s 은(는) 녹화되지 않습니다.
+
+The server didn't take it. Has its Live TV a folder for recordings?
+서버가 받아들이지 않았습니다. 라이브 TV에 녹화 폴더가 있나요?
+
+The server didn't take it: look at its list again.
+서버가 받아들이지 않았습니다. 목록을 다시 확인하세요.
+
+The server records it on its own. X twice cancels it.
+서버가 알아서 녹화합니다. X를 두 번 누르면 취소합니다.
+
+The server will record %s.
+서버가 %s 을(를) 녹화합니다.
+
+The server will record every episode of %s.
+서버가 %s 의 모든 에피소드를 녹화합니다.
+
+This program can't be recorded.
+이 프로그램은 녹화할 수 없습니다.
+
+Today
+오늘
+
+Tomorrow
+내일
+
+Wait a moment: the server is still answering.
+잠시 기다려 주세요. 서버가 아직 응답 중입니다.
+
+Will record
+녹화 예정
+
+Yesterday
+어제
+
+Your user can't delete recordings on this server.
+이 사용자는 이 서버에서 녹화를 삭제할 수 없습니다.
+
+Your user can't record on this server (it needs Live TV management).
+이 사용자는 이 서버에서 녹화할 수 없습니다(라이브 TV 관리 권한이 필요합니다).

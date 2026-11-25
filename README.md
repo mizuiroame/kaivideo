@@ -43,7 +43,7 @@ The screenshots show made-up films, series and channels.
     to install. [More](docs/network-folder.md)
   - **Jellyfin, Emby and Plex**, one or all three: **X** goes through them.
     It can skip intros and credits, keeps what you watch in sync, and has
-    Live TV with a guide. [More](docs/media-servers.md)
+    Live TV with a day's guide and recording. [More](docs/media-servers.md)
   - **Your own IPTV list**, M3U or Xtream: channels with logos, favorites
     and a guide, and an Xtream account's films and series.
     [More](docs/iptv-and-addons.md#iptv)

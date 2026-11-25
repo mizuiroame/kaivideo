@@ -1940,3 +1940,135 @@ Der Programmführer hat für diesen Sender gerade nichts.
 
 Watch live
 Live ansehen
+
+%s won't be recorded.
+%s wird nicht aufgenommen.
+
+[A] choose  [^v] move  [B] back
+[A] wählen  [^v] bewegen  [B] zurück
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] abspielen  [X] löschen  [^v] bewegen  [B] zurück zum Programm
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] ansehen  [^v] Sender  [<>] Programm  [R] aufnehmen  [L] Aufnahmen  [ZL][ZR] Tabs  [+] Menü
+
+[B] back to the guide
+[B] zurück zum Programm
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] abbrechen  [^v] bewegen  [B] zurück zum Programm
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] Serie nicht mehr aufnehmen  [^v] bewegen  [B] zurück zum Programm
+
+Already recording %s. To stop it: R on it in the guide.
+%s wird schon aufgenommen. Zum Beenden: R darauf im Programm.
+
+Asking the server...
+Frage den Server...
+
+Don't record this program
+Diese Sendung nicht aufnehmen
+
+Every episode
+Alle Folgen
+
+New episodes
+Neue Folgen
+
+No program here to record.
+Hier ist keine Sendung zum Aufnehmen.
+
+No tuner free
+Kein Tuner frei
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+Noch nichts aufgenommen oder geplant: R auf einer Sendung im Programm nimmt sie auf.
+
+On any channel
+Auf jedem Sender
+
+Record
+Aufnehmen
+
+Record the series
+Serie aufnehmen
+
+Record this program
+Diese Sendung aufnehmen
+
+RECORDED
+AUFGENOMMEN
+
+Recording
+Nimmt auf
+
+Recording %s now.
+%s wird jetzt aufgenommen.
+
+Recording deleted: %s
+Aufnahme gelöscht: %s
+
+Recording now
+Nimmt jetzt auf
+
+Recordings
+Aufnahmen
+
+SCHEDULED
+GEPLANT
+
+Scheduled
+Geplant
+
+SERIES RECORDED
+AUFGENOMMENE SERIEN
+
+Series recorded
+Serie wird aufgenommen
+
+Stop recording the series
+Serie nicht mehr aufnehmen
+
+The series %s won't be recorded.
+Die Serie %s wird nicht aufgenommen.
+
+The server didn't take it. Has its Live TV a folder for recordings?
+Der Server hat es nicht angenommen. Hat sein Live-TV einen Ordner für Aufnahmen?
+
+The server didn't take it: look at its list again.
+Der Server hat es nicht angenommen: sieh dir seine Liste noch einmal an.
+
+The server records it on its own. X twice cancels it.
+Der Server nimmt es von selbst auf. Zweimal X bricht es ab.
+
+The server will record %s.
+Der Server nimmt %s auf.
+
+The server will record every episode of %s.
+Der Server nimmt alle Folgen von %s auf.
+
+This program can't be recorded.
+Diese Sendung kann nicht aufgenommen werden.
+
+Today
+Heute
+
+Tomorrow
+Morgen
+
+Wait a moment: the server is still answering.
+Einen Moment: der Server antwortet noch.
+
+Will record
+Wird aufgenommen
+
+Yesterday
+Gestern
+
+Your user can't delete recordings on this server.
+Dein Benutzer darf auf diesem Server keine Aufnahmen löschen.
+
+Your user can't record on this server (it needs Live TV management).
+Dein Benutzer darf auf diesem Server nicht aufnehmen (dafür braucht er die Live-TV-Verwaltung).

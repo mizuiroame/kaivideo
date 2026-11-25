@@ -96,6 +96,7 @@ int main(void)
     testStats();
     testTrickplay();
     testLiveTv();
+    testDvr();
     testHlsMaster();
     testDownloads();
     testLang();

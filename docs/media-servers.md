@@ -109,11 +109,32 @@ guide: a row for each channel and its programs over two hours, with a line at
 the time now.
 
 - **↑** / **↓** change channel, and **◀** / **▶** move through its programs,
-  up to four hours ahead. The strip at the bottom says what the cursor is on.
+  up to a day ahead. Drag the guide sideways to move through the hours. The
+  strip at the bottom says what the cursor is on. The guide is read a few
+  hours at a time as you move through it.
 - **A** watches the channel. Tap a program to put the cursor on it, and tap
   it again to watch.
 - **L** / **R** change channel while it plays or while one opens, skipping as
   many as you press. **B** goes back at once.
+
+### Recording (Jellyfin's DVR)
+
+When the server records Live TV (a recording folder set in its Live TV
+settings, and a user allowed to manage Live TV), KaiVideo can use it:
+
+- **R** (or the **Record** pill in the strip) on a program: **Record this
+  program**, **Record the series** (for programs the guide marks as a series),
+  or, when it's already set, **Don't record this program** and **Stop
+  recording the series**. Programs the server will record have a red dot.
+- **ZR** (or its button) while a channel plays records what's on now.
+- **L** (or the **Recordings** pill) lists what the server will record, the
+  series it records and what it recorded. **A** plays a recording, as any of
+  the server's videos; **X** twice cancels a recording to come, stops a
+  series, or deletes a recording (if your user may delete). **B** goes back
+  to the guide.
+
+The recordings are made by the server, so the console can be off. Plex's DVR
+needs Plex Pass and isn't supported; neither is Emby's.
 
 A channel whose source is an HLS stream of its own plays straight from it, at
 the best quality up to 1080p, with its own sound tracks (**X**) and WebVTT

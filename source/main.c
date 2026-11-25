@@ -1044,6 +1044,8 @@ static bool playerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t n
         openMenu(app, UI_MENU_SUBTITLES, now);
     if (pressed & HidNpadButton_X)
         openMenu(app, UI_MENU_AUDIO, now);
+    if (appDvrPlayerInput(app, pressed, touch, now))  // ZR: a Jellyfin channel's program recorded.
+        return true;
     if (appPlayingLive(app)) {  // Live TV: L and R change channel; what's on now is the only place, no jumps.
         if (pressed & (HidNpadButton_L | HidNpadButton_R)) {
             app->live_switch = (pressed & HidNpadButton_L) ? -1 : 1;
@@ -1217,6 +1219,7 @@ static void drawPlayer(App *app, const GfxVideoFrame *frame, uint64_t now)
                          (int)((left + 999999999) / 1000000000), bar);
     appTrickplayAboveBar(app, bar);
     appSkipDraw(app, bar, upNextShowing(app, NULL));
+    appDvrPlayerDraw(app, bar);
     appStatsUpdate(app, now);
     appStatsDraw(app);
     uiDrawTrackMenu(app->player, app->menu_kind, &app->menu, &app->config);

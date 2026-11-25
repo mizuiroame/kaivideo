@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "dvr.h"
 #include "jellyfin.h"
 #include "livetv.h"
 #include "net.h"
@@ -68,9 +69,29 @@ bool jfSyncTakeCatalog(ServerKind kind, JfCatalog *c);
 
 void jfSyncReport(JfReportKind kind, const char *location, int64_t position_ns, bool paused);
 void jfSyncSetPlayed(const char *location, bool played);
-// Live TV's channels and what's on now and next, into out (replacing its
-// channels), from any thread. How many channels, -1 if the server didn't answer.
-int jfSyncFetchLive(LiveGuide *out, int64_t now_s);
+// Live TV's channels, what's on now and next, and their programs from `from`
+// to `to`, marked as the DVR's timers say, into out (replacing its channels),
+// from any thread. How many channels, -1 if the server didn't answer.
+int jfSyncFetchLive(LiveGuide *out, int64_t now_s, int64_t from, int64_t to);
+
+// --- The Jellyfin server's DVR (jfdvr.c), from any thread; each call waits ---
+
+typedef enum {
+    JF_DVR_DONE,
+    JF_DVR_NOT_ALLOWED,  // The user may not (recording needs Live TV management; deleting, the right to).
+    JF_DVR_REFUSED,      // The server said no (no recording folder, a program gone...).
+    JF_DVR_NO_ANSWER,
+} JfDvrResult;
+
+// Its timers (net: a client of the caller's, or NULL for one of its own). How many, -1 without an answer.
+int jfSyncDvrTimers(NetClient *net, DvrTimer *out, int max);
+// Its timers, series and recordings. False if any didn't come (out has what did).
+bool jfSyncDvrFetch(DvrLists *out);
+// Records a program (series: every episode of its series).
+JfDvrResult jfSyncDvrRecord(const char *program_id, bool series);
+JfDvrResult jfSyncDvrCancel(const char *timer_id);
+JfDvrResult jfSyncDvrCancelSeries(const char *series_id);
+JfDvrResult jfSyncDvrDelete(const char *recording_id);
 // Live TV: the server can close the channel's stream it opened (JfPlan.live_stream_id).
 void jfSyncCloseLiveStream(const char *location, const char *live_stream_id);
 // The address and header for a location's trickplay: its sheet (a JPEG) of

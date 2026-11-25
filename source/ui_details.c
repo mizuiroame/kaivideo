@@ -133,6 +133,11 @@ void uiDrawPreviewBehind(const uint32_t *pixels, int w, int h)
 
 void uiDrawSkipButton(const char *label, bool bar_shown)
 {
+    uiDrawZrButton(label, bar_shown, LIBHIT_SKIP);
+}
+
+void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit)
+{
     int w = uiButtonWidth("ZR") + fontTextWidth(FONT_BOLD, 21, label) + 44;
     int x = GFX_WIDTH - MARGIN - w;
     int y = GFX_HEIGHT - (bar_shown ? UI_PLAYER_BAR_H + SKIP_ABOVE_BAR : SKIP_ABOVE_EDGE) - SKIP_H;
@@ -140,7 +145,7 @@ void uiDrawSkipButton(const char *label, bool bar_shown)
     gfxFillRoundRect(x, y, w, SKIP_H, SKIP_H / 2, COLOR_SURFACE);
     uiDrawButton(x + 16, y + SKIP_H / 2.0f, "ZR", COLOR_SURFACE_HI, COLOR_TEXT);
     fontDrawMiddle(FONT_BOLD, 21, x + 28 + uiButtonWidth("ZR"), y + SKIP_H / 2.0f, label, COLOR_TEXT);
-    uiLibraryAddHit(x, y, w, SKIP_H, LIBHIT_SKIP, 0, 0);
+    uiLibraryAddHit(x, y, w, SKIP_H, hit, 0, 0);
 }
 
 // A series page's pill at the top right, ending at right. Returns its width.

@@ -1940,3 +1940,135 @@ The guide has nothing on now for it.
 
 Watch live
 观看直播
+
+%s won't be recorded.
+%s 不会被录制。
+
+[A] choose  [^v] move  [B] back
+[A] 选择  [^v] 移动  [B] 返回
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] 播放  [X] 删除  [^v] 移动  [B] 返回节目表
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] 观看  [^v] 频道  [<>] 节目表  [R] 录制  [L] 录像  [ZL][ZR] 标签  [+] 菜单
+
+[B] back to the guide
+[B] 返回节目表
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] 取消  [^v] 移动  [B] 返回节目表
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] 停止录制该剧集  [^v] 移动  [B] 返回节目表
+
+Already recording %s. To stop it: R on it in the guide.
+%s 已在录制。要停止：在节目表中对它按 R。
+
+Asking the server...
+正在询问服务器...
+
+Don't record this program
+不录制此节目
+
+Every episode
+所有集
+
+New episodes
+新的集
+
+No program here to record.
+这里没有可录制的节目。
+
+No tuner free
+没有空闲的调谐器
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+还没有录像或预约：在节目表的节目上按 R 即可录制。
+
+On any channel
+任意频道
+
+Record
+录制
+
+Record the series
+录制该剧集
+
+Record this program
+录制此节目
+
+RECORDED
+已录制
+
+Recording
+录制中
+
+Recording %s now.
+正在录制 %s。
+
+Recording deleted: %s
+已删除录像：%s
+
+Recording now
+正在录制
+
+Recordings
+录像
+
+SCHEDULED
+已预约
+
+Scheduled
+已预约
+
+SERIES RECORDED
+录制中的剧集
+
+Series recorded
+剧集已录制
+
+Stop recording the series
+停止录制该剧集
+
+The series %s won't be recorded.
+剧集 %s 不会被录制。
+
+The server didn't take it. Has its Live TV a folder for recordings?
+服务器没有接受。它的直播电视设置了录像文件夹吗？
+
+The server didn't take it: look at its list again.
+服务器没有接受：请再看一下它的列表。
+
+The server records it on its own. X twice cancels it.
+服务器会自动录制。按两次 X 取消。
+
+The server will record %s.
+服务器将录制 %s。
+
+The server will record every episode of %s.
+服务器将录制 %s 的所有集。
+
+This program can't be recorded.
+此节目无法录制。
+
+Today
+今天
+
+Tomorrow
+明天
+
+Wait a moment: the server is still answering.
+请稍候：服务器仍在响应。
+
+Will record
+将录制
+
+Yesterday
+昨天
+
+Your user can't delete recordings on this server.
+你的用户不能删除此服务器上的录像。
+
+Your user can't record on this server (it needs Live TV management).
+你的用户不能在此服务器上录制（需要直播电视管理权限）。

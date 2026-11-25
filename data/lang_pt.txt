@@ -1940,3 +1940,135 @@ O guia não tem nada agora para este canal.
 
 Watch live
 Assistir ao vivo
+
+%s won't be recorded.
+%s não será gravado.
+
+[A] choose  [^v] move  [B] back
+[A] escolher  [^v] mover  [B] voltar
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] reproduzir  [X] apagar  [^v] mover  [B] voltar ao guia
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] assistir  [^v] canal  [<>] guia  [R] gravar  [L] gravações  [ZL][ZR] abas  [+] menu
+
+[B] back to the guide
+[B] voltar ao guia
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] cancelar  [^v] mover  [B] voltar ao guia
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] parar de gravar a série  [^v] mover  [B] voltar ao guia
+
+Already recording %s. To stop it: R on it in the guide.
+%s já está sendo gravado. Para parar: R sobre ele no guia.
+
+Asking the server...
+Perguntando ao servidor...
+
+Don't record this program
+Não gravar este programa
+
+Every episode
+Todos os episódios
+
+New episodes
+Episódios novos
+
+No program here to record.
+Não há programa aqui para gravar.
+
+No tuner free
+Nenhum sintonizador livre
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+Nada gravado nem agendado ainda: R em um programa do guia o grava.
+
+On any channel
+Em qualquer canal
+
+Record
+Gravar
+
+Record the series
+Gravar a série
+
+Record this program
+Gravar este programa
+
+RECORDED
+GRAVADO
+
+Recording
+Gravando
+
+Recording %s now.
+Gravando %s agora.
+
+Recording deleted: %s
+Gravação apagada: %s
+
+Recording now
+Gravando agora
+
+Recordings
+Gravações
+
+SCHEDULED
+AGENDADO
+
+Scheduled
+Agendado
+
+SERIES RECORDED
+SÉRIES GRAVADAS
+
+Series recorded
+Série gravada
+
+Stop recording the series
+Parar de gravar a série
+
+The series %s won't be recorded.
+A série %s não será gravada.
+
+The server didn't take it. Has its Live TV a folder for recordings?
+O servidor não aceitou. A TV ao vivo dele tem uma pasta para gravações?
+
+The server didn't take it: look at its list again.
+O servidor não aceitou: veja a lista dele de novo.
+
+The server records it on its own. X twice cancels it.
+O servidor grava sozinho. X duas vezes cancela.
+
+The server will record %s.
+O servidor vai gravar %s.
+
+The server will record every episode of %s.
+O servidor vai gravar todos os episódios de %s.
+
+This program can't be recorded.
+Este programa não pode ser gravado.
+
+Today
+Hoje
+
+Tomorrow
+Amanhã
+
+Wait a moment: the server is still answering.
+Espere um momento: o servidor ainda está respondendo.
+
+Will record
+Será gravado
+
+Yesterday
+Ontem
+
+Your user can't delete recordings on this server.
+Seu usuário não pode apagar gravações neste servidor.
+
+Your user can't record on this server (it needs Live TV management).
+Seu usuário não pode gravar neste servidor (precisa gerenciar a TV ao vivo).
