@@ -417,6 +417,11 @@ bool hlsBestVariant(const char *playlist, long long max_bitrate, char *out, size
     return true;
 }
 
+bool hlsMayFetch(size_t held, size_t largest, size_t max, bool own)
+{
+    return own || (held <= max && largest <= max - held);
+}
+
 void hlsPlaylistFree(HlsPlaylist *p)
 {
     for (int i = 0; p->urls && i < p->count; i++)

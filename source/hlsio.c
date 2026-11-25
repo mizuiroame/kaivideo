@@ -25,6 +25,8 @@
 #define IO_BUFFER (64 * 1024)
 #define PLAYLIST_MAX (8u * 1024 * 1024)
 #define SEGMENT_MAX (96u * 1024 * 1024)
+#define SUBTITLE_SEGMENT_MAX (2u * 1024 * 1024)  // A WebVTT segment is a few KB.
+#define HELD_MAX (256u * 1024 * 1024)  // Segments kept in memory by a session (a reader's own next one aside).
 #define MASTER_MAX (16u * 1024)
 #define PROBE_BYTES (8 * 1024 * 1024)
 #define PROBE_US (15 * 1000000ll)
@@ -111,6 +113,7 @@ typedef struct {
         size_t size;
     } subtitle_queue[SUBTITLE_QUEUE];
     int subtitle_queued;
+    size_t largest;               // The biggest segment fetched yet: what one more may take (hlsMayFetch).
     int first_segment;            // The first video segment read, -1 before one is: playback's 0.
     int64_t playback_ns;          // Where playback is (hlsSetPlayback), -1 until told.
 } HlsSession;
@@ -197,8 +200,9 @@ static bool fetchSegment(HlsSession *ses, int list, int index, NetResponse *r)
                           .cancel = &ses->abort_fetch, .stall_s = SEGMENT_STALL_S,
                           .any_certificate = ses->any_certificate,
                           .stream = &ses->stream};
+    size_t max = ses->lists[list].list.subtitles ? SUBTITLE_SEGMENT_MAX : SEGMENT_MAX;
     for (int attempt = 0; attempt < FETCH_TRIES && !ses->abort_fetch; attempt++) {
-        if (netFetchText(ses->net, &request, SEGMENT_MAX, r))
+        if (netFetchText(ses->net, &request, max, r))
             return true;
         if (!ses->abort_fetch)
             nanosleep(&(struct timespec){0, RETRY_WAIT_NS}, NULL);
@@ -484,6 +488,49 @@ bool hlsTakeSubtitle(char **data, size_t *size)
 
 // --- The fetching thread ---
 
+// The bytes of the segments kept.
+static size_t heldBytes(const HlsSession *ses)
+{
+    size_t held = 0;
+    for (int i = 0; i < SLOTS; i++)
+        if (ses->slots[i].state == SLOT_READY)
+            held += ses->slots[i].size;
+    return held;
+}
+
+// Whether a reader of the list is at that segment (it waits for it now).
+static bool readerAt(const HlsSession *ses, int list, int index)
+{
+    for (int r = 0; r < READERS; r++)
+        if (ses->readers[r].owner && ses->readers[r].list == list && ses->readers[r].segment == index)
+            return true;
+    return false;
+}
+
+// Lets go of segments no reader wants any more (the oldest first) while one more as big as the largest
+// wouldn't fit. Under the lock.
+static void dropUnwanted(HlsSession *ses)
+{
+    while (!hlsMayFetch(heldBytes(ses), ses->largest, HELD_MAX, false)) {
+        int victim = -1;
+        for (int i = 0; i < SLOTS; i++)
+            if (ses->slots[i].state == SLOT_READY && !wanted(ses, ses->slots[i].list, ses->slots[i].index) &&
+                (victim < 0 || ses->slots[i].index < ses->slots[victim].index))
+                victim = i;
+        if (victim < 0)
+            return;
+        free(ses->slots[victim].data);
+        ses->slots[victim] = (Slot){.state = SLOT_EMPTY};
+    }
+}
+
+// Whether a segment may be fetched now, as far as memory goes. Under the lock.
+static bool roomFor(HlsSession *ses, int list, int index)
+{
+    dropUnwanted(ses);
+    return hlsMayFetch(heldBytes(ses), ses->largest, HELD_MAX, readerAt(ses, list, index));
+}
+
 static void *fetchThread(void *arg)
 {
     HlsSession *ses = arg;
@@ -496,7 +543,7 @@ static void *fetchThread(void *arg)
         if (!ses->failed && subtitleUrgent(ses) && subtitleWork(ses))
             continue;
         int list = 0, index = -1;
-        int slot = !ses->failed && nextSegment(ses, &list, &index) ? freeSlot(ses) : -1;
+        int slot = !ses->failed && nextSegment(ses, &list, &index) && roomFor(ses, list, index) ? freeSlot(ses) : -1;
         if (slot < 0) {
             if (!ses->failed && subtitleWork(ses))
                 continue;
@@ -517,6 +564,8 @@ static void *fetchThread(void *arg)
         ses->slots[slot].state = ok ? SLOT_READY : SLOT_EMPTY;
         ses->slots[slot].data = ok ? r.data : NULL;
         ses->slots[slot].size = ok ? r.size : 0;
+        if (ok && r.size > ses->largest)
+            ses->largest = r.size;
         if (!ok && !aborted && list == 0)
             ses->failed = true;  // A track of its own that fails leaves the picture playing.
         pthread_cond_broadcast(&ses->wake);

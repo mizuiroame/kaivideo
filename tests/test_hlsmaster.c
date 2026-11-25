@@ -150,8 +150,21 @@ static void testWebVtt(void)
     CHECK(webvttAdd(&t, "WEBVTT\n\n", 8, 0) == 0);
 }
 
+// What a session keeps in memory: one more segment ahead only while the largest fits; a reader's own always.
+static void testMayFetch(void)
+{
+    const size_t mb = 1024 * 1024;
+    CHECK(hlsMayFetch(0, 0, 256 * mb, false));
+    CHECK(hlsMayFetch(200 * mb, 56 * mb, 256 * mb, false));
+    CHECK(!hlsMayFetch(200 * mb, 57 * mb, 256 * mb, false));
+    CHECK(hlsMayFetch(200 * mb, 57 * mb, 256 * mb, true));    // A reader waits for it.
+    CHECK(!hlsMayFetch(300 * mb, 1, 256 * mb, false));         // Over already (a reader's own came).
+    CHECK(!hlsMayFetch(1, (size_t)-1, 256 * mb, false));       // No wrap-around.
+}
+
 void testHlsMaster(void)
 {
+    testMayFetch();
     testMasterParse();
     testMasterPlain();
     testListNames();

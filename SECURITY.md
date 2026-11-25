@@ -103,8 +103,9 @@ touches small:
 
 - **Videos** are read by FFmpeg (LGPL build, no GPL parts), only as MP4/MOV,
   Matroska or MPEG-TS: a file can't make FFmpeg follow a playlist to other
-  files. Servers' conversions are HLS lists, read with limits on their size
-  and on each piece.
+  files. Servers' conversions are HLS lists, read with limits on their size,
+  on each piece, and on how much of them is kept in memory (256 MB, past
+  which only the piece being played is fetched).
 - **Subtitles** (SRT, WebVTT, the server's) are read with a limit on cues and
   on every time field; **servers' answers** (JSON) by Jansson, with size
   limits; **network folder listings** with length checks, leaving out names

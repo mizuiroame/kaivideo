@@ -62,6 +62,10 @@ int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base);
 // hours); they keep their numbers. False if out of memory.
 bool hlsPlaylistTrim(HlsPlaylist *p, int first);
 void hlsPlaylistFree(HlsPlaylist *p);
+// Whether a segment may be fetched while held bytes of others are kept, at most max in all: a reader's
+// own next one (own) always is, so playback goes on; one further ahead only if the largest seen so far
+// still fits. So what's kept stays near max, whatever size a server gives its segments.
+bool hlsMayFetch(size_t held, size_t largest, size_t max, bool own);
 // The segments holding length_ns of video from from_ns on; past the end, the last one.
 void hlsPlaylistSpan(const HlsPlaylist *p, int64_t from_ns, int64_t length_ns, int *first, int *last);
 // The segment number of a name made by hlsPlaylistParse, or -1.
