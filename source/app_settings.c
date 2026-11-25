@@ -415,6 +415,7 @@ static void activate(App *app, SettingRow row, uint64_t now)
         jfSyncSignIn();
         break;
     case SETTING_PLEX_SERVER: appShowMessage(app, T("The server comes from your Plex account."), now); break;
+    case SETTING_PLEX_PROFILE: appPlexHomeOpen(app, false, now); break;
     case SETTING_JF_PASSWORD: passwordSignIn(app, now); break;
     case SETTING_JF_SIGN_OUT: signOut(app); break;
     case SETTING_JF_FIND:

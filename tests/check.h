@@ -37,6 +37,7 @@ void testSwFrame(void);
 void testAssCompose(void);
 void testJellyfin(void);
 void testPlex(void);
+void testPlexHome(void);
 void testStats(void);
 void testTrickplay(void);
 void testLiveTv(void);

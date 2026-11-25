@@ -21,7 +21,7 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
     N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
     N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"), N_("Certificate check"),
-    N_("Home style"), N_("Showcase tiles"),
+    N_("Home style"), N_("Showcase tiles"), N_("Profile"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -45,8 +45,8 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
 static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR,
                                             SETTING_JF_TEST, SETTING_JF_SIGN_OUT, SETTING_COUNT};
 static const SettingRow PLEX_ROWS[] = {SETTING_PLEX_CODE, SETTING_SERVER_COLOR, SETTING_COUNT};
-static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_SERVER_COLOR, SETTING_JF_SIGN_OUT,
-                                                 SETTING_COUNT};
+static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_PLEX_PROFILE, SETTING_SERVER_COLOR,
+                                                 SETTING_JF_SIGN_OUT, SETTING_COUNT};
 // Emby has no Quick Connect: a user name and password.
 static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
                                        SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT};

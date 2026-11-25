@@ -30,6 +30,7 @@
 #define POLL_SECONDS 2
 #define SIGN_IN_POLLS 300       // About ten minutes.
 #define REPORTS_MAX 16
+#define FAVORITES_PATH_MAX (FILE_PATH_MAX + PLEX_ID_MAX + 32)  // "<library>_favorites_<profile>.txt"
 
 typedef struct {
     enum { JOB_REPORT, JOB_PLAYED, JOB_END_CONVERSION, JOB_FAVORITE, JOB_CLOSE_LIVE } type;
@@ -51,7 +52,7 @@ static struct {
     pthread_cond_t wake;
     NetClient *net;
     char session_file[FILE_PATH_MAX], catalog_file[FILE_PATH_MAX], version[32];
-    char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX], plex_favorites_file[FILE_PATH_MAX];
+    char plex_file[FILE_PATH_MAX], plex_catalog_file[FILE_PATH_MAX], plex_favorites_stem[FILE_PATH_MAX];
     char emby_file[FILE_PATH_MAX], emby_catalog_file[FILE_PATH_MAX];
     // Under the lock:
     JfSession sessions[2];     // Jellyfin's, then Emby's (FAMILY).
@@ -309,6 +310,7 @@ static bool plexSignIn(unsigned generation)
     pthread_mutex_lock(&g.lock);
     makeClientId(&g.plex_session);
     g.plex_session.token[0] = g.plex_session.server_uri[0] = '\0';
+    g.plex_session.account[0] = g.plex_session.profile[0] = '\0';  // Read again with the new token.
     PlexSession s = g.plex_session;
     pthread_mutex_unlock(&g.lock);
     long long id = 0;
@@ -423,6 +425,18 @@ static void signOut(void)
 }
 
 // --- The library ---
+
+// Plex has no favorites: they're kept beside its library, as "<library>_favorites.txt",
+// and a Plex Home profile other than the account that signed in keeps its own,
+// "<library>_favorites_<profile>.txt". Returns out.
+static const char *favoritesFile(const PlexSession *s, char *out, size_t size)
+{
+    if (plexSessionIsAccount(s))
+        snprintf(out, size, "%s_favorites.txt", g.plex_favorites_stem);
+    else
+        snprintf(out, size, "%s_favorites_%s.txt", g.plex_favorites_stem, s->profile);
+    return out;
+}
 
 static void publish(ServerKind kind, JfCatalog *c)
 {
@@ -553,9 +567,10 @@ static bool readServer(ServerKind kind, JfCatalog *c)
     bool ok;
     if (kind == SERVER_PLEX) {
         PlexSession ps = plexCopy();
+        char favorites[FAVORITES_PATH_MAX];
         ok = plexNetReadLibrary(g.net, &ps, g.version, c, plexProgress, &g.abort_call);
         if (ok)
-            plexFavoritesApply(c, g.plex_favorites_file);
+            plexFavoritesApply(c, favoritesFile(&ps, favorites, sizeof(favorites)));
     } else {
         JfSession s = jfSyncSessionFor(kind);
         snprintf(c->prefix, sizeof(c->prefix), "%s", kind == SERVER_EMBY ? EMBY_PREFIX : JF_PREFIX);
@@ -621,7 +636,9 @@ static bool runPlexJob(const Job *job)
 {
     char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[320];
     if (job->type == JOB_FAVORITE) {  // Kept on the console: Plex has none.
-        plexFavoritesSet(g.plex_favorites_file, job->location, job->flag);
+        PlexSession ps = plexCopy();
+        char favorites[FAVORITES_PATH_MAX];
+        plexFavoritesSet(favoritesFile(&ps, favorites, sizeof(favorites)), job->location, job->flag);
         return true;
     }
     if (!plexLocationIds(job->location, item, part) || job->type == JOB_CLOSE_LIVE)
@@ -796,9 +813,8 @@ bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_librar
     snprintf(g.version, sizeof(g.version), "%s", version);
     snprintf(g.plex_file, sizeof(g.plex_file), "%s", files->plex);
     snprintf(g.plex_catalog_file, sizeof(g.plex_catalog_file), "%s", files->plex_library);
-    // Plex has no favorites: they're kept beside its library, as "<library>_favorites.txt".
     size_t stem = strlen(files->plex_library) > 4 ? strlen(files->plex_library) - 4 : 0;
-    snprintf(g.plex_favorites_file, sizeof(g.plex_favorites_file), "%.*s_favorites.txt", (int)stem, files->plex_library);
+    snprintf(g.plex_favorites_stem, sizeof(g.plex_favorites_stem), "%.*s", (int)stem, files->plex_library);
     g.kind = kind >= 0 && kind < SERVER_KIND_COUNT ? kind : SERVER_JELLYFIN;
     jfSessionLoad(&g.sessions[0], g.session_file);
     jfSessionLoad(&g.sessions[1], g.emby_file);
@@ -1103,10 +1119,45 @@ PlexSession jfSyncPlexSession(void)
     return plexCopy();
 }
 
+void jfSyncPlexUseProfile(const PlexSession *s)
+{
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    g.plex_session = *s;
+    int kept = 0;  // What was waiting to be told to Plex was the profile before's.
+    for (int i = 0; i < g.job_count; i++)
+        if (!plexIsLocation(g.jobs[i].location))
+            g.jobs[kept++] = g.jobs[i];
+    g.job_count = kept;
+    if (g.kind == SERVER_PLEX)
+        showSession();
+    g.want_refresh = true;
+    pthread_cond_broadcast(&g.wake);
+    pthread_mutex_unlock(&g.lock);
+    plexSessionSave(s, g.plex_file);
+    remove(g.plex_catalog_file);  // The profile before's library: it goes at once, this one's is read.
+    JfCatalog empty;
+    jfCatalogInit(&empty);
+    libraryBuild(&empty.library);
+    publish(SERVER_PLEX, &empty);
+}
+
 void jfSyncNotePlexDuration(const char *item, int64_t duration_ns)
 {
     pthread_mutex_lock(&g.lock);
     snprintf(g.plex_item, sizeof(g.plex_item), "%s", item);
     g.plex_duration_ns = duration_ns;
+    pthread_mutex_unlock(&g.lock);
+}
+
+void jfSyncPlexProfile(char *out, size_t size)
+{
+    out[0] = '\0';
+    if (!g.running)
+        return;
+    pthread_mutex_lock(&g.lock);
+    if (signedInLocked(SERVER_PLEX))
+        snprintf(out, size, "%s", g.plex_session.profile);
     pthread_mutex_unlock(&g.lock);
 }

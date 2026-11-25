@@ -23,6 +23,13 @@ In **Settings** (**−**), each server has its own page:
   and enter it. KaiVideo finds your account's server and the address of it
   that answers (your home network first).
 
+  If your account has a **Plex Home** with several profiles, KaiVideo then
+  asks who's watching, as Plex does: choose a profile (a lock means it has a
+  PIN, typed on the PIN pad with the buttons or your fingers). Its library,
+  what it watched and where it left off are its own. Switch later with
+  **Profile** on Plex's page in Settings, or **Switch Plex profile** in the
+  **+** menu. A profile can only be used if the server is shared with it.
+
 Once you're signed in, your library appears. **X** on the library's screens,
 or the button next to KaiVideo's name, goes through the SD card, the
 [network folder](network-folder.md) and each server you're signed in to. The
@@ -86,7 +93,8 @@ it shows at once the next time. **Sign out** ends it.
 - **Live TV**, and pictures of a moment while dragging the bar, come from
   Jellyfin.
 - **Plex** keeps no favorites of its own: KaiVideo keeps them on the console
-  (`config/plex_library_favorites.txt`). Its intro and credits markers come
+  (`config/plex_library_favorites.txt`, and one for each other Plex Home
+  profile). Its intro and credits markers come
   with Plex Pass. On a video Plex converts, text subtitles inside the file
   are drawn onto the picture by the server, as picture subtitles are.
 - **Emby** keeps no place to resume in a video's first seconds.

@@ -55,6 +55,8 @@ typedef enum {
     LIBHIT_LIVE_GROUP_ROW,   // a: a row of the groups (0: all channels).
     LIBHIT_STREAM_ROW,       // a: one of the streams an addon gave.
     LIBHIT_HERO,             // Home's Showcase: the button under the large picture opens what it shows.
+    LIBHIT_PROFILE,          // a: a Plex Home profile in the picker.
+    LIBHIT_PIN_KEY,          // a: a key of the PIN pad (ui_plexhome.h).
 } LibHitKind;
 
 typedef struct {

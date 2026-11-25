@@ -29,6 +29,7 @@
 #include "xtreamvod.h"
 #include "ui_live.h"
 #include "ui_notice.h"
+#include "ui_plexhome.h"
 #include "ui_stats.h"
 #include "ui_style.h"
 #include "sample_paths.h"
@@ -598,6 +599,65 @@ static Watched g_watched;
 static Home g_home;
 static LibView g_view;
 
+// Plex Home's profile picker, and the PIN pad of a profile with one: every
+// profile and key answers a tap where it's drawn. Made-up names.
+static void profilesScene(void)
+{
+    static const char *const NAMES[] = {"Mizu", "Kai", "Little Ones", "Guest Room", "Grandma Rosalind"};
+    PlexHomeUser users[5];
+    memset(users, 0, sizeof(users));
+    for (int i = 0; i < 5; i++) {
+        snprintf(users[i].uuid, sizeof(users[i].uuid), "u%d", i);
+        snprintf(users[i].title, sizeof(users[i].title), "%s", NAMES[i]);
+        users[i].protected_pin = i == 2 || i == 4;
+        users[i].restricted = i == 2;
+    }
+    users[0].admin = true;
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawProfiles(users, 5, 2, "u0", NULL);
+    uiDrawFooterHelp(T("[A] choose  [B] close"));
+    save("plex_profiles");
+    for (int i = 0; i < 5; i++) {
+        bool found = false;
+        for (int y = 0; y < GFX_HEIGHT && !found; y += 4)
+            for (int x = 0; x < GFX_WIDTH && !found; x += 4) {
+                LibHit hit = uiLibraryTap(x, y);
+                found = hit.kind == LIBHIT_PROFILE && hit.a == i;
+            }
+        if (!found) {
+            printf("TOUCH: plex_profiles: profile %d doesn't answer a tap\n", i);
+            g_problems++;
+        }
+    }
+    if (uiLibraryTap(4, 4).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: plex_profiles: a tap beside the panel doesn't close it\n");
+        g_problems++;
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawPinPad(&users[2], 2, 4, T("Wrong PIN."), false);
+    uiDrawFooterHelp(T("[A] press  [B] delete"));
+    save("plex_pin");
+    for (int k = 0; k < UI_PIN_KEYS; k++) {
+        int area = 0;
+        for (int y = 0; y < GFX_HEIGHT; y += 2)
+            for (int x = 0; x < GFX_WIDTH; x += 2) {
+                LibHit hit = uiLibraryTap(x, y);
+                area += hit.kind == LIBHIT_PIN_KEY && hit.a == k;
+            }
+        if (area * 4 < 60 * 60) {  // A key a finger can hit: at least about 60 x 60.
+            printf("TOUCH: plex_pin: key %d is too small for a finger, or doesn't answer\n", k);
+            g_problems++;
+        }
+    }
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawProfiles(NULL, 0, 0, "", T("Reading your Plex Home..."));
+    uiDrawFooterHelp(T("[B] cancel"));
+    save("plex_profiles_loading");
+}
+
 static void buildSampleLibrary(void)
 {
     libraryInit(&g_lib, "sdmc:/Media");
@@ -1087,6 +1147,7 @@ static void libraryScenes(void)
     uiDrawSignInCode(false, "482913", "192.168.0.10:8096", false);
     uiDrawFooterHelp(T("[B] cancel"));
     save("jellyfin_code");
+    profilesScene();
     begin();
     uiDrawLoading("Paper Lanterns (1998)", 1.0f, false);
     uiDrawFooterHelp(T("[B] cancel"));

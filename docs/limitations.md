@@ -66,7 +66,6 @@
 
 ## Plans
 
-- Plex Home profiles.
 - Smoother jumps, and checks with big libraries on the console.
 - **Experiment: skip deblocking on frames nothing refers to**, for 4K HEVC on
   the CPU. Measured on the console with `tools/hevctest` (its "no deblocking"

@@ -105,8 +105,9 @@ void testSettings(void)
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 5 && rows[1] == SETTING_JF_CERTIFICATE &&
           rows[2] == SETTING_SERVER_COLOR && rows[3] == SETTING_JF_TEST && rows[4] == SETTING_JF_SIGN_OUT);
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 2 && rows[0] == SETTING_PLEX_CODE);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 3 && rows[0] == SETTING_PLEX_SERVER &&
-          rows[1] == SETTING_SERVER_COLOR && rows[2] == SETTING_JF_SIGN_OUT);
+    // Signed in to Plex, the Plex Home profile in use (A switches) comes under the server.
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 4 && rows[0] == SETTING_PLEX_SERVER &&
+          rows[1] == SETTING_PLEX_PROFILE && rows[2] == SETTING_SERVER_COLOR && rows[3] == SETTING_JF_SIGN_OUT);
     // Emby has no Quick Connect: a password only.
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[2] == SETTING_JF_PASSWORD &&
           rows[5] == SETTING_JF_TEST);

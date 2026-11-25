@@ -180,6 +180,9 @@ language = 한국어
 [A] choose  [B] cancel  [+] exit
 [A] 선택  [B] 취소  [+] 종료
 
+[A] choose  [B] close
+[A] 선택  [B] 닫기
+
 [A] choose  [B] close  [+] exit
 [A] 선택  [B] 닫기  [+] 종료
 
@@ -221,6 +224,9 @@ language = 한국어
 
 [A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
 [A] 재생  [Y] 처음부터  [X] 시청함  [R] 즐겨찾기  [L] 다운로드  [B] 뒤로
+
+[A] press  [B] delete
+[A] 누르기  [B] 지우기
 
 [A] try again  [X] cancel
 [A] 다시 시도  [X] 취소
@@ -354,6 +360,9 @@ Chapter %d
 Check once a day
 하루에 한 번 확인
 
+Checking the PIN...
+PIN 확인 중...
+
 Chinese
 중국어
 
@@ -420,6 +429,9 @@ Dark
 Dark box
 어두운 상자
 
+Delete
+지우기
+
 DELETED FROM THE CARD
 SD 카드에서 삭제됨
 
@@ -476,6 +488,9 @@ Emby
 
 English
 영어
+
+Enter the PIN
+PIN 입력
 
 Enter the server's address first, or find it on this network.
 먼저 서버 주소를 입력하거나 이 네트워크에서 찾으세요.
@@ -611,6 +626,9 @@ In Favorites
 
 In Jellyfin on your phone or computer, open your
 스마트폰이나 컴퓨터의 Jellyfin에서 프로필을 열고
+
+In use
+사용 중
 
 Indonesian
 인도네시아어
@@ -897,6 +915,9 @@ SD 카드, 네트워크 폴더 또는 Jellyfin, Emby, Plex 서버의 동영상�
 Plex
 Plex
 
+Plex Home
+Plex Home
+
 Plex server, with sound tracks, subtitles and a library of your films and series.
 오디오 트랙, 자막, 영화와 시리즈 라이브러리와 함께 재생합니다.
 
@@ -924,6 +945,9 @@ Press X again to cancel it.
 Press X again to delete it from the card.
 SD 카드에서 삭제하려면 X를 한 번 더 누르세요.
 
+Profile
+프로필
+
 profile, choose Quick Connect and enter this code.
 Quick Connect를 선택한 다음 이 코드를 입력하세요.
 
@@ -938,6 +962,9 @@ Reading more of this catalog...
 
 Reading the guide...
 편성표를 읽는 중...
+
+Reading your Plex Home...
+Plex Home을 읽는 중...
 
 Ready ahead: %.0f MB
 미리 준비됨: %.0f MB
@@ -1041,6 +1068,9 @@ Jellyfin에 로그인
 Sign in to Plex
 Plex에 로그인
 
+Sign in to Plex first.
+먼저 Plex에 로그인하세요.
+
 Sign in with a code
 코드로 로그인
 
@@ -1098,6 +1128,9 @@ Starting...
 Statistics
 통계
 
+Still asking plex.tv...
+plex.tv 응답을 기다리는 중...
+
 Still asking the network...
 네트워크에서 계속 찾는 중...
 
@@ -1124,6 +1157,12 @@ Subtitles: %s
 
 Swedish
 스웨덴어
+
+Switch Plex profile
+Plex 프로필 전환
+
+Switching to %s...
+%s(으)로 전환 중...
 
 Taken off the list.
 목록에서 제거했습니다.
@@ -1157,6 +1196,9 @@ That place can't convert videos.
 
 That port may want a secure connection: write https:// before the address.
 이 포트는 보안 연결이 필요할 수 있습니다. 주소 앞에 https://를 입력하세요.
+
+That profile is no longer in this Plex Home.
+그 프로필은 더 이상 이 Plex Home에 없습니다.
 
 That track can't be played.
 이 트랙은 재생할 수 없습니다.
@@ -1329,8 +1371,17 @@ KaiVideo가 읽을 수 있는 동영상(MP4, MKV, WebM)이 아닙니다.
 This library on the server has no films or episodes KaiVideo found.
 서버의 이 라이브러리에서 KaiVideo가 찾은 영화나 에피소드가 없습니다.
 
+This Plex account has no other profiles.
+이 Plex 계정에는 다른 프로필이 없습니다.
+
 This Plex account has no server.
 이 Plex 계정에는 서버가 없습니다.
+
+This profile has no access to this Plex server.
+이 프로필은 이 Plex 서버에 접근할 수 없습니다.
+
+This profile needs its PIN.
+이 프로필은 PIN이 필요합니다.
 
 This season is in Downloads already (+ menu).
 이 시즌은 이미 다운로드에 있습니다 (+ 메뉴).
@@ -1352,6 +1403,9 @@ This video's sound can't be played.
 
 Thumbnails
 썸네일
+
+Too many wrong PINs. Wait a few minutes and try again.
+잘못된 PIN이 너무 많습니다. 몇 분 후 다시 시도하세요.
 
 Track %d
 트랙 %d
@@ -1419,11 +1473,20 @@ Waiting to download
 Watched
 시청함
 
+Watching as %s. Loading their library...
+%s(으)로 시청 중. 라이브러리를 불러오는 중...
+
 White
 흰색
 
+Who's watching?
+누가 보고 있나요?
+
 Without the password the network folder can't be read.
 비밀번호가 없으면 네트워크 폴더를 읽을 수 없습니다.
+
+Wrong PIN.
+PIN이 틀렸습니다.
 
 Wrong user name or password.
 사용자 이름 또는 비밀번호가 올바르지 않습니다.

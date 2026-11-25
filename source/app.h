@@ -20,6 +20,7 @@
 #include "libview.h"
 #include "menu.h"
 #include "notice.h"
+#include "plexhomesync.h"
 #include "player.h"
 #include "resume.h"
 #include "scroll.h"
@@ -35,6 +36,9 @@
 
 // The + menu, its exit question, or the first run's "Where are your videos?".
 typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT, APP_MENU_WELCOME } AppMenu;
+
+// Plex Home's profiles over the library (app_plexhome.c): being read, chosen, a PIN typed, or switched to.
+typedef enum { PROFILES_NONE, PROFILES_LOADING, PROFILES_PICKER, PROFILES_PIN, PROFILES_SWITCHING } ProfilesView;
 
 typedef struct App App;
 
@@ -187,6 +191,16 @@ struct App {
     uint64_t jf_last_refresh, jf_last_report;
     bool jf_reported_paused;    // What the last report said: a pause or going on is told at once.
 
+    // Plex Home's profiles (app_plexhome.c).
+    int profiles;               // ProfilesView.
+    bool profiles_auto;         // Opened by signing in: with one profile only, it closes without a word.
+    int profiles_cursor;        // The profile under the cursor,
+    int profiles_target;        // the one chosen (its PIN typed, or switched to),
+    int profiles_key;           // and the PIN pad's key under the cursor.
+    char profiles_pin[PLEX_HOME_PIN_DIGITS + 1];  // Typed so far; wiped once sent.
+    char profiles_message[160]; // The PIN pad's: why the last PIN didn't work, or "".
+    PlexHomeStatus profiles_home;  // The profiles read last.
+
     // Downloads (app_downloads.c).
     DownloadList downloads;     // A copy of the download thread's list.
     unsigned dl_changes, dl_finished;  // What the thread's counts were when it was taken.
@@ -263,6 +277,17 @@ void appApplyViewAccent(const App *app);
 void appLibraryShowServer(App *app, ServerKind kind);
 // A server's library came, or its server signed out (c NULL): kept, and shown if it's the one viewed.
 void appLibraryServerCatalog(App *app, ServerKind kind, JfCatalog *c);
+
+// app_plexhome.c: Plex Home's profiles.
+// Reads them and shows them to choose one (automatic: after signing in; it
+// shows nothing unless the Home has more than one profile).
+void appPlexHomeOpen(App *app, bool automatic, uint64_t now);
+// Once a frame: the profiles read, or a switch done (or not).
+void appPlexHomeUpdate(App *app, uint64_t now);
+void appPlexHomeInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appPlexHomeDraw(const App *app);
+const char *appPlexHomeHelp(const App *app);
+void appPlexHomeExit(void);
 
 // app_jellyfin.c
 // Starts the connection if it isn't running. False if the network can't be used.

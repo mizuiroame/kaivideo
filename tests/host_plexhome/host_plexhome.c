@@ -1,0 +1,162 @@
+// Plex Home's flow on a PC through plexsync, as the console does it: the
+// Home's profiles, a switch with a wrong PIN, the right one, a profile without
+// the server, one gone, too many wrong PINs, and back to the owner.
+//
+// Against fake_plextv.py (made-up answers), built with PLEX_TV pointing at it:
+//   docker run --rm -v "$PWD:/w" -w /w kaivideo-host sh tests/host_plexhome/run.sh
+//
+// Against the real plex.tv (personal testing only; nothing secret is printed):
+//   PLEX_TOKEN=<account's> PLEX_SERVER_ID=<server's clientIdentifier> PLEX_PIN=<a test profile's>
+//   host_plexhome live
+// It switches to the first profile with a PIN (one wrong PIN first), reads the
+// server's libraries as it, and switches back to the account's own profile.
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "plexsync.h"
+
+#define VERSION "host"
+#define WRONG_TRIES 3
+
+static int g_failures;
+
+static void expect(bool ok, const char *what)
+{
+    printf("%s %s\n", ok ? "  ok  " : "  FAIL", what);
+    g_failures += !ok;
+}
+
+static const PlexHomeUser *byUuid(const PlexHomeUser *users, int count, const char *uuid)
+{
+    int i = plexHomeFind(users, count, uuid);
+    return i >= 0 ? &users[i] : NULL;
+}
+
+static void fakeFlow(NetClient *net)
+{
+    PlexSession s = {0}, before;
+    snprintf(s.client_id, sizeof(s.client_id), "host-test");
+    snprintf(s.token, sizeof(s.token), "admin-token");
+    snprintf(s.server_id, sizeof(s.server_id), "srv1");
+    snprintf(s.server_token, sizeof(s.server_token), "srv-owner");
+    snprintf(s.account, sizeof(s.account), "own1");
+    snprintf(s.profile, sizeof(s.profile), "own1");
+    snprintf(s.user_name, sizeof(s.user_name), "owner-made-up");
+    PlexHomeUser users[PLEX_HOME_USERS_MAX];
+    char message[160];
+    int n = plexNetHomeUsers(net, &s, VERSION, users, PLEX_HOME_USERS_MAX, NULL);
+    expect(n == 4 && users[0].admin && !strcmp(users[0].uuid, "own1"), "the Home's profiles, the owner first");
+    if (n != 4)
+        return;
+    const PlexHomeUser *kid = byUuid(users, n, "kid1"), *teen = byUuid(users, n, "teen1"),
+                       *nosrv = byUuid(users, n, "nosrv1"), *owner = byUuid(users, n, "own1");
+    expect(kid && kid->protected_pin && teen && !teen->protected_pin, "who has a PIN");
+
+    before = s;
+    expect(plexNetSwitchHome(net, &s, VERSION, kid, "", message, sizeof(message), NULL) == PLEX_SWITCH_WRONG_PIN &&
+               !memcmp(&s, &before, sizeof(s)),
+           "a profile with a PIN, without one: refused, the session as it was");
+    expect(plexNetSwitchHome(net, &s, VERSION, kid, "1111", message, sizeof(message), NULL) == PLEX_SWITCH_WRONG_PIN &&
+               message[0] && !memcmp(&s, &before, sizeof(s)),
+           "a wrong PIN: refused, with why");
+    expect(plexNetSwitchHome(net, &s, VERSION, kid, "2468", message, sizeof(message), NULL) == PLEX_SWITCH_OK,
+           "the right PIN");
+    expect(!strcmp(s.token, "kid1-token") && !strcmp(s.server_token, "srv-kid") && !strcmp(s.profile, "kid1") &&
+               !strcmp(s.user_name, "Kids") && !strcmp(s.server_id, "srv1") && !plexSessionIsAccount(&s) &&
+               !strcmp(s.account, "own1"),
+           "the profile's token, its own token for the same server, and its name");
+    // From the managed profile: its Home again, and a profile without the server.
+    expect(plexNetHomeUsers(net, &s, VERSION, users, PLEX_HOME_USERS_MAX, NULL) == 4,
+           "the profiles, read with the profile's token");
+    before = s;
+    expect(plexNetSwitchHome(net, &s, VERSION, nosrv, "", message, sizeof(message), NULL) == PLEX_SWITCH_NO_SERVER &&
+               message[0] && !memcmp(&s, &before, sizeof(s)),
+           "a profile without this server: refused, the profile before stays");
+    PlexHomeUser gone = *teen;
+    snprintf(gone.uuid, sizeof(gone.uuid), "gone1");
+    expect(plexNetSwitchHome(net, &s, VERSION, &gone, "", message, sizeof(message), NULL) == PLEX_SWITCH_GONE,
+           "a profile no longer in the Home");
+    PlexSwitchResult r = PLEX_SWITCH_OK;
+    for (int i = 0; i <= WRONG_TRIES; i++)
+        r = plexNetSwitchHome(net, &s, VERSION, kid, "9999", message, sizeof(message), NULL);
+    expect(r == PLEX_SWITCH_TOO_MANY && message[0], "too many wrong PINs");
+    expect(plexNetSwitchHome(net, &s, VERSION, owner, "", message, sizeof(message), NULL) == PLEX_SWITCH_OK &&
+               !strcmp(s.token, "admin-token") && !strcmp(s.server_token, "srv-owner") &&
+               !strcmp(s.user_name, "owner-made-up") && plexSessionIsAccount(&s),
+           "back to the owner, under the account's own name");
+}
+
+static void liveFlow(NetClient *net)
+{
+    const char *token = getenv("PLEX_TOKEN"), *server = getenv("PLEX_SERVER_ID"), *pin = getenv("PLEX_PIN");
+    if (!token || !server || !pin) {
+        printf("PLEX_TOKEN, PLEX_SERVER_ID and PLEX_PIN are needed\n");
+        g_failures++;
+        return;
+    }
+    PlexSession s = {0};
+    char message[160];
+    snprintf(s.client_id, sizeof(s.client_id), "kaivideo-host-test");
+    snprintf(s.token, sizeof(s.token), "%s", token);
+    expect(plexNetPickServerOf(net, &s, VERSION, server, message, sizeof(message), NULL), "the account reaches its server");
+    PlexHomeUser users[PLEX_HOME_USERS_MAX];
+    int n = plexNetHomeUsers(net, &s, VERSION, users, PLEX_HOME_USERS_MAX, NULL);
+    printf("        %d profiles\n", n);
+    expect(n >= 2, "a Home with more than one profile");
+    const PlexHomeUser *target = NULL, *owner = NULL;
+    for (int i = 0; i < n; i++) {
+        printf("        profile %d: admin=%d pin=%d managed=%d picture=%d\n", i, users[i].admin, users[i].protected_pin,
+               users[i].restricted, users[i].thumb[0] != '\0');
+        if (!target && !users[i].admin && users[i].protected_pin)
+            target = &users[i];
+        if (users[i].admin)
+            owner = &users[i];
+    }
+    expect(target && owner, "a profile with a PIN, and the owner");
+    if (!target || !owner)
+        return;
+    snprintf(s.account, sizeof(s.account), "%s", owner->uuid);  // As signing in keeps it.
+    snprintf(s.profile, sizeof(s.profile), "%s", owner->uuid);
+    PlexSession before = s;
+    PlexSwitchResult r = plexNetSwitchHome(net, &s, VERSION, target, "", message, sizeof(message), NULL);
+    printf("        without a PIN: result %d\n", r);
+    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "without its PIN: refused");
+    char wrong[8];
+    snprintf(wrong, sizeof(wrong), "%s", strcmp(pin, "0000") ? "0000" : "1111");
+    r = plexNetSwitchHome(net, &s, VERSION, target, wrong, message, sizeof(message), NULL);
+    printf("        a wrong PIN: result %d\n", r);
+    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "a wrong PIN: refused");
+    r = plexNetSwitchHome(net, &s, VERSION, target, pin, message, sizeof(message), NULL);
+    printf("        the right PIN: result %d%s%s\n", r, message[0] ? ": " : "", message);
+    expect(r == PLEX_SWITCH_OK || r == PLEX_SWITCH_NO_SERVER, "the right PIN is taken");
+    if (r == PLEX_SWITCH_OK) {
+        expect(strcmp(s.token, before.token) && strcmp(s.server_token, before.server_token) && !plexSessionIsAccount(&s),
+               "the profile's own tokens");
+        char url[PLEX_URL_MAX];
+        long status = 0;
+        plexServerUrl(&s, VERSION, "/library/sections", url, sizeof(url));
+        expect(plexNetCall(net, &s, VERSION, "/library/sections", false, 30, &status), "its libraries, as it sees them");
+        memset(url, 0, sizeof(url));
+        r = plexNetSwitchHome(net, &s, VERSION, owner, "", message, sizeof(message), NULL);
+        printf("        back to the owner: result %d\n", r);
+        expect(r == PLEX_SWITCH_OK && plexSessionIsAccount(&s), "back to the account's own profile");
+    }
+    memset(&s, 0, sizeof(s));
+    memset(&before, 0, sizeof(before));
+}
+
+int main(int argc, char **argv)
+{
+    if (!netInit())
+        return 1;
+    NetClient *net = netClientOpen();
+    if (argc > 1 && !strcmp(argv[1], "live"))
+        liveFlow(net);
+    else
+        fakeFlow(net);
+    netClientClose(net);
+    netExit();
+    printf("%s\n", g_failures ? "FAILED" : "all good");
+    return g_failures ? 1 : 0;
+}

@@ -69,6 +69,7 @@ typedef enum {
     SETTING_NET_CERTIFICATE,  // Whether the network folder's certificate must be trusted (https, FTPS).
     SETTING_HOME_STYLE,     // Home as a Showcase (a large picture over rows) or the classic rows of cards.
     SETTING_HOME_TILES,     // The Showcase's tiles: mixed, DVD covers, or wide pictures (home.h's HomeTiles).
+    SETTING_PLEX_PROFILE,   // The Plex Home profile in use: A opens the profiles to switch to another.
     SETTING_COUNT,
 } SettingRow;
 

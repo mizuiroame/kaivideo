@@ -20,6 +20,7 @@
 typedef enum {
     ITEM_NONE,  // menu_after_video's "nothing to run".
     ITEM_DOWNLOADS,
+    ITEM_PROFILES,         // Plex Home's profiles, while signed in to Plex.
     ITEM_RESCAN,
     ITEM_SETTINGS,
     ITEM_BACK_TO_LIBRARY,
@@ -34,12 +35,13 @@ typedef enum {
     ITEM_WELCOME_LATER,    // or later.
 } MenuItemId;
 
-#define ITEMS_MAX 6
+#define ITEMS_MAX 7
 
 static const char *itemLabel(MenuItemId id)
 {
     switch (id) {
     case ITEM_DOWNLOADS: return T("Downloads");
+    case ITEM_PROFILES: return T("Switch Plex profile");
     case ITEM_RESCAN: return T("Update the library");
     case ITEM_SETTINGS: return T("Settings");
     case ITEM_BACK_TO_LIBRARY: return T("Back to the library");
@@ -76,6 +78,8 @@ static int items(const App *app, MenuItemId out[ITEMS_MAX], int *screen)
         out[n++] = ITEM_BACK_TO_LIBRARY;
     *screen = n;
     out[n++] = ITEM_DOWNLOADS;
+    if (jfSyncSignedIn(SERVER_PLEX))
+        out[n++] = ITEM_PROFILES;
     if (app->library_root[0])
         out[n++] = ITEM_RESCAN;
     out[n++] = ITEM_SETTINGS;
@@ -170,7 +174,7 @@ static void run(App *app, MenuItemId id, uint64_t now)
         return;
     }
     app->app_menu = APP_MENU_NONE;
-    bool library_item = id == ITEM_DOWNLOADS || id == ITEM_RESCAN || id == ITEM_SETTINGS;
+    bool library_item = id == ITEM_DOWNLOADS || id == ITEM_PROFILES || id == ITEM_RESCAN || id == ITEM_SETTINGS;
     if (app->player && library_item) {  // These live on the library: the video stops first.
         app->menu_after_video = id;
         app->stop_requested = true;
@@ -178,6 +182,7 @@ static void run(App *app, MenuItemId id, uint64_t now)
     }
     switch (id) {
     case ITEM_DOWNLOADS: appDownloadsOpen(app, now); break;
+    case ITEM_PROFILES: appPlexHomeOpen(app, false, now); break;
     case ITEM_RESCAN: appLibraryRescan(app, now); break;
     case ITEM_SETTINGS: appOpenSettings(app); break;
     case ITEM_BACK_TO_LIBRARY: app->stop_requested = true; break;
@@ -250,6 +255,8 @@ void appMenuDraw(const App *app)
 
 const char *appFooterHelp(const App *app)
 {
+    if (app->profiles != PROFILES_NONE)
+        return appPlexHomeHelp(app);
     if (app->app_menu == APP_MENU_WELCOME)
         return T("[A] choose  [B] later  [+] exit");
     if (app->app_menu == APP_MENU_EXIT)

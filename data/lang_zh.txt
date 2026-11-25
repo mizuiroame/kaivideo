@@ -180,6 +180,9 @@ language = 简体中文
 [A] choose  [B] cancel  [+] exit
 [A] 选择  [B] 取消  [+] 退出
 
+[A] choose  [B] close
+[A] 选择  [B] 关闭
+
 [A] choose  [B] close  [+] exit
 [A] 选择  [B] 关闭  [+] 退出
 
@@ -221,6 +224,9 @@ language = 简体中文
 
 [A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
 [A] 播放  [Y] 从头播放  [X] 已观看  [R] 收藏  [L] 下载  [B] 返回
+
+[A] press  [B] delete
+[A] 按下  [B] 删除
 
 [A] try again  [X] cancel
 [A] 重试  [X] 取消
@@ -354,6 +360,9 @@ Chapter %d
 Check once a day
 每天检查一次
 
+Checking the PIN...
+正在验证PIN...
+
 Chinese
 中文
 
@@ -420,6 +429,9 @@ Dark
 Dark box
 深色底框
 
+Delete
+删除
+
 DELETED FROM THE CARD
 已从SD卡删除
 
@@ -476,6 +488,9 @@ Emby
 
 English
 英语
+
+Enter the PIN
+输入PIN
 
 Enter the server's address first, or find it on this network.
 请先输入服务器地址，或在此网络中查找。
@@ -611,6 +626,9 @@ In Favorites
 
 In Jellyfin on your phone or computer, open your
 请在手机或电脑上的Jellyfin中打开你的
+
+In use
+使用中
 
 Indonesian
 印度尼西亚语
@@ -897,6 +915,9 @@ Plays your videos from the SD card, a network folder, or your Jellyfin, Emby or
 Plex
 Plex
 
+Plex Home
+Plex Home
+
 Plex server, with sound tracks, subtitles and a library of your films and series.
 Plex服务器的视频，支持音轨、字幕以及电影和剧集媒体库。
 
@@ -924,6 +945,9 @@ Press X again to cancel it.
 Press X again to delete it from the card.
 再按一次X即可从SD卡删除。
 
+Profile
+个人资料
+
 profile, choose Quick Connect and enter this code.
 个人资料，选择Quick Connect并输入此代码。
 
@@ -938,6 +962,9 @@ Reading more of this catalog...
 
 Reading the guide...
 正在读取节目表...
+
+Reading your Plex Home...
+正在读取你的Plex Home...
 
 Ready ahead: %.0f MB
 已缓冲：%.0f MB
@@ -1041,6 +1068,9 @@ Sign in to Jellyfin
 Sign in to Plex
 登录Plex
 
+Sign in to Plex first.
+请先登录Plex。
+
 Sign in with a code
 使用代码登录
 
@@ -1098,6 +1128,9 @@ Starting...
 Statistics
 统计信息
 
+Still asking plex.tv...
+仍在等待plex.tv...
+
 Still asking the network...
 仍在查询网络...
 
@@ -1124,6 +1157,12 @@ Subtitles: %s
 
 Swedish
 瑞典语
+
+Switch Plex profile
+切换Plex个人资料
+
+Switching to %s...
+正在切换到%s...
 
 Taken off the list.
 已从列表移除。
@@ -1157,6 +1196,9 @@ That place can't convert videos.
 
 That port may want a secure connection: write https:// before the address.
 该端口可能需要安全连接：请在地址前加上 https://。
+
+That profile is no longer in this Plex Home.
+该个人资料已不在此Plex Home中。
 
 That track can't be played.
 无法播放该音轨。
@@ -1329,8 +1371,17 @@ This isn't a video KaiVideo can read (MP4, MKV or WebM).
 This library on the server has no films or episodes KaiVideo found.
 KaiVideo未在服务器的此媒体库中找到电影或单集。
 
+This Plex account has no other profiles.
+此Plex账户没有其他个人资料。
+
 This Plex account has no server.
 此Plex帐户没有服务器。
+
+This profile has no access to this Plex server.
+此个人资料无权访问此Plex服务器。
+
+This profile needs its PIN.
+此个人资料需要PIN。
 
 This season is in Downloads already (+ menu).
 本季已在下载中（+菜单）。
@@ -1352,6 +1403,9 @@ This video's sound can't be played.
 
 Thumbnails
 缩略图
+
+Too many wrong PINs. Wait a few minutes and try again.
+PIN错误次数过多。请等几分钟再试。
 
 Track %d
 音轨%d
@@ -1419,11 +1473,20 @@ Waiting to download
 Watched
 已观看
 
+Watching as %s. Loading their library...
+正在以%s的身份观看。正在加载其媒体库...
+
 White
 白色
 
+Who's watching?
+谁在观看?
+
 Without the password the network folder can't be read.
 没有密码就无法读取网络文件夹。
+
+Wrong PIN.
+PIN错误。
 
 Wrong user name or password.
 用户名或密码错误。

@@ -180,6 +180,9 @@ I video di %s sono nella libreria.
 [A] choose  [B] cancel  [+] exit
 [A] scegli  [B] annulla  [+] esci
 
+[A] choose  [B] close
+[A] scegli  [B] chiudi
+
 [A] choose  [B] close  [+] exit
 [A] scegli  [B] chiudi  [+] esci
 
@@ -221,6 +224,9 @@ I video di %s sono nella libreria.
 
 [A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
 [A] riproduci  [Y] dall'inizio  [X] visto  [R] preferito  [L] scarica  [B] indietro
+
+[A] press  [B] delete
+[A] premi  [B] cancella
 
 [A] try again  [X] cancel
 [A] riprova  [X] annulla
@@ -354,6 +360,9 @@ Capitolo %d
 Check once a day
 Controlla una volta al giorno
 
+Checking the PIN...
+Verifica del PIN...
+
 Chinese
 Cinese
 
@@ -420,6 +429,9 @@ Scuro
 Dark box
 Riquadro scuro
 
+Delete
+Cancella
+
 DELETED FROM THE CARD
 ELIMINATI DALLA SCHEDA
 
@@ -476,6 +488,9 @@ Emby
 
 English
 Inglese
+
+Enter the PIN
+Inserisci il PIN
 
 Enter the server's address first, or find it on this network.
 Prima inserisci l'indirizzo del server, o cercalo in questa rete.
@@ -611,6 +626,9 @@ Nei Preferiti
 
 In Jellyfin on your phone or computer, open your
 In Jellyfin, sul telefono o sul computer, apri il tuo
+
+In use
+In uso
 
 Indonesian
 Indonesiano
@@ -897,6 +915,9 @@ Riproduce i tuoi video da scheda SD, cartella di rete o dal tuo server Jellyfin,
 Plex
 Plex
 
+Plex Home
+Plex Home
+
 Plex server, with sound tracks, subtitles and a library of your films and series.
 Plex, con tracce audio, sottotitoli e una libreria dei tuoi film e serie.
 
@@ -924,6 +945,9 @@ Premi di nuovo X per annullarlo.
 Press X again to delete it from the card.
 Premi di nuovo X per eliminarlo dalla scheda.
 
+Profile
+Profilo
+
 profile, choose Quick Connect and enter this code.
 profilo, scegli Quick Connect e inserisci questo codice.
 
@@ -938,6 +962,9 @@ Lettura di altri titoli del catalogo...
 
 Reading the guide...
 Lettura della guida...
+
+Reading your Plex Home...
+Lettura del tuo Plex Home...
 
 Ready ahead: %.0f MB
 Pronto in anticipo: %.0f MB
@@ -1041,6 +1068,9 @@ Accedi a Jellyfin
 Sign in to Plex
 Accedi a Plex
 
+Sign in to Plex first.
+Prima accedi a Plex.
+
 Sign in with a code
 Accedi con un codice
 
@@ -1098,6 +1128,9 @@ Avvio...
 Statistics
 Statistiche
 
+Still asking plex.tv...
+Ancora in attesa di plex.tv...
+
 Still asking the network...
 Ricerca nella rete in corso...
 
@@ -1124,6 +1157,12 @@ Sottotitoli: %s
 
 Swedish
 Svedese
+
+Switch Plex profile
+Cambia profilo Plex
+
+Switching to %s...
+Passaggio a %s...
 
 Taken off the list.
 Tolto dalla lista.
@@ -1157,6 +1196,9 @@ Quel luogo non può convertire video.
 
 That port may want a secure connection: write https:// before the address.
 Quella porta potrebbe richiedere una connessione sicura: scrivi https:// prima dell'indirizzo.
+
+That profile is no longer in this Plex Home.
+Quel profilo non è più in questo Plex Home.
 
 That track can't be played.
 Impossibile riprodurre quella traccia.
@@ -1329,8 +1371,17 @@ Non è un video che KaiVideo può leggere (MP4, MKV o WebM).
 This library on the server has no films or episodes KaiVideo found.
 KaiVideo non ha trovato film o episodi in questa libreria del server.
 
+This Plex account has no other profiles.
+Questo account Plex non ha altri profili.
+
 This Plex account has no server.
 Questo account Plex non ha server.
+
+This profile has no access to this Plex server.
+Questo profilo non ha accesso a questo server Plex.
+
+This profile needs its PIN.
+Questo profilo richiede il suo PIN.
 
 This season is in Downloads already (+ menu).
 Questa stagione è già nei Download (menu +).
@@ -1352,6 +1403,9 @@ Impossibile riprodurre l'audio di questo video.
 
 Thumbnails
 Miniature
+
+Too many wrong PINs. Wait a few minutes and try again.
+Troppi PIN errati. Attendi qualche minuto e riprova.
 
 Track %d
 Traccia %d
@@ -1419,11 +1473,20 @@ In attesa di download
 Watched
 Visto
 
+Watching as %s. Loading their library...
+Guardi come %s. Caricamento della sua libreria...
+
 White
 Bianco
 
+Who's watching?
+Chi sta guardando?
+
 Without the password the network folder can't be read.
 Senza la password la cartella di rete non si può leggere.
+
+Wrong PIN.
+PIN errato.
 
 Wrong user name or password.
 Nome utente o password errati.
