@@ -456,11 +456,14 @@ void uiDrawTabBar(const LibView *v, const Library *lib, const char *status)
     uiLibraryAddHit(0, 0, MARGIN + 36 + title_w + 12, UI_TAB_BAR_H, LIBHIT_MENU, 0, 0);
     int left = MARGIN + 36 + title_w;
     if (g_source_label[0]) {  // Where the library comes from: X changes it.
+        const char *what = T("Source:");  // As the other Kai apps: "Source: SD card".
         int x = MARGIN + 36 + title_w + 18, key_w = uiButtonWidth("X");
-        int w = key_w + SOURCE_DOT + 8 + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
+        int what_w = fontTextWidth(FONT_REGULAR, 17, what) + 8;
+        int w = key_w + what_w + SOURCE_DOT + 8 + fontTextWidth(FONT_BOLD, 17, g_source_label) + 28;
         gfxFillRoundRect(x, 15, w, 32, 16, COLOR_SURFACE_HI);
         uiDrawButton(x + 8, 31.0f, "X", COLOR_SURFACE, COLOR_TEXT);
-        int dot_x = x + 16 + key_w;  // The source's color.
+        fontDrawMiddle(FONT_REGULAR, 17, x + 16 + key_w, 31.0f, what, COLOR_DIM);
+        int dot_x = x + 16 + key_w + what_w;  // The source's color.
         gfxFillRoundRect(dot_x, 31 - SOURCE_DOT / 2, SOURCE_DOT, SOURCE_DOT, SOURCE_DOT / 2, g_source_color);
         fontDrawMiddle(FONT_BOLD, 17, dot_x + SOURCE_DOT + 8, 31.0f, g_source_label, COLOR_TEXT);
         uiLibraryAddHit(x - 4, 4, w + 8, UI_TAB_BAR_H - 8, LIBHIT_SOURCE, 0, 0);

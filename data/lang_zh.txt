@@ -1862,3 +1862,6 @@ Downloads go to %s until you choose a folder.
 
 No other source yet: add one in Settings.
 还没有其他来源：请在“设置”中添加。
+
+Source:
+来源：

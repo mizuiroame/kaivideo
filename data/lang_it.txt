@@ -1862,3 +1862,6 @@ I download vanno in %s finché non scegli una cartella.
 
 No other source yet: add one in Settings.
 Nessun'altra fonte per ora: aggiungine una in Impostazioni.
+
+Source:
+Origine:

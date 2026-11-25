@@ -1862,3 +1862,6 @@ Os downloads vão para %s até você escolher uma pasta.
 
 No other source yet: add one in Settings.
 Ainda não há outra fonte: adicione uma em Configurações.
+
+Source:
+Fonte:

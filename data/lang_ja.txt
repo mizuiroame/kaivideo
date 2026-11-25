@@ -1862,3 +1862,6 @@ Downloads go to %s until you choose a folder.
 
 No other source yet: add one in Settings.
 ほかのソースはまだありません。「設定」で追加してください。
+
+Source:
+ソース：

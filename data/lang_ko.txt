@@ -1862,3 +1862,6 @@ Downloads go to %s until you choose a folder.
 
 No other source yet: add one in Settings.
 아직 다른 소스가 없습니다. 설정에서 추가하세요.
+
+Source:
+소스:
