@@ -2,6 +2,7 @@
 // draws its own: a plain panel and a Back pill on a page (the help line at
 // the bottom is the app's).
 #include "ui_settings.h"
+#include "ui_brand.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -262,15 +263,6 @@ void uiDrawSettings(const Config *c, SettingsPage page, int cursor, const char *
                     T("Open source (MIT)  \xC2\xB7  github.com/mizuiroame/kaivideo"), COLOR_FAINT);
 }
 
-// A screen with a play symbol: KaiVideo's mark.
-static void drawMark(int x, int y, int size)
-{
-    gfxFillRoundRect(x, y, size, size, 20, COLOR_SURFACE_HI);
-    gfxFillRoundRect(x + size / 6, y + size / 4, size * 2 / 3, size / 2, 6, COLOR_ACCENT);
-    float cx = x + size / 2.0f + 3, cy = y + size / 2.0f;
-    gfxTriangle(cx - 9, cy - 11, cx - 9, cy + 11, cx + 11, cy, COLOR_SURFACE);
-}
-
 void uiDrawSignInCode(bool plex, const char *code, const char *server, bool linked)
 {
     int w = 680, h = 340, x = (GFX_WIDTH - w) / 2, y = (GFX_HEIGHT - h) / 2;
@@ -309,16 +301,14 @@ void uiDrawAbout(const char *version)
     int x = (GFX_WIDTH - ABOUT_W) / 2, y = (GFX_HEIGHT - ABOUT_H) / 2;
     dimScreen();
     panel(x, y, ABOUT_W, ABOUT_H);
-    drawMark(x + PANEL_PAD, y + 32, 84);
+    uiDrawAppIcon(x + PANEL_PAD, y + 32);  // KaiVideo's icon, beside the name and version.
     int text_x = x + PANEL_PAD + 108;
     fontDraw(FONT_BOLD, 34, text_x, y + 36, "KaiVideo", COLOR_TEXT);
     char line[64];
     snprintf(line, sizeof(line), T("Version %s"), version);
     fontDraw(FONT_REGULAR, 20, text_x, y + 84, line, COLOR_DIM);
     int line_y = y + 150;
-    fontDraw(FONT_REGULAR, 18, x + PANEL_PAD, line_y, T("Made by"), COLOR_DIM);
-    fontDraw(FONT_BOLD, 26, x + PANEL_PAD, line_y + 24, "Mizuiro", COLOR_ACCENT);
-    line_y += 82;
+    uiDrawBrandAt(x + ABOUT_W - PANEL_PAD, y + ABOUT_H - 24);  // Mizuiro's mark, at the bottom right.
     for (size_t i = 0; i < sizeof(LINES) / sizeof(LINES[0]); i++, line_y += 28)
         fontDraw(FONT_REGULAR, 19, x + PANEL_PAD, line_y, T(LINES[i]), COLOR_TEXT);
     fontDraw(FONT_BOLD, 18, x + PANEL_PAD, y + ABOUT_H - 46, "github.com/mizuiroame/kaivideo", COLOR_ACCENT);
