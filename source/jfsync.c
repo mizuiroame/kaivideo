@@ -9,6 +9,7 @@
 
 #include <jansson.h>
 
+#include "certtrust.h"
 #include "jfsync_internal.h"
 #include "lang.h"
 #include "livetv.h"
@@ -779,6 +780,8 @@ bool jfSyncStart(const JfSyncFiles *files, const char *version, bool load_librar
     g.kind = kind >= 0 && kind < SERVER_KIND_COUNT ? kind : SERVER_JELLYFIN;
     jfSessionLoad(&g.sessions[0], g.session_file);
     jfSessionLoad(&g.sessions[1], g.emby_file);
+    trustSetAddress(TRUST_JELLYFIN, g.sessions[0].server);  // Each one's Certificate check is for its server.
+    trustSetAddress(TRUST_EMBY, g.sessions[1].server);
     plexSessionLoad(&g.plex_session, g.plex_file);
     showSession();
     g.load_library = load_library;
@@ -891,6 +894,7 @@ bool jfSyncSetServer(const char *text)
     pthread_mutex_lock(&g.lock);
     snprintf(CURRENT.server, sizeof(CURRENT.server), "%s", server);
     snprintf(g.status.server, sizeof(g.status.server), "%s", server);
+    trustSetAddress(FAMILY(g.kind) ? TRUST_EMBY : TRUST_JELLYFIN, server);
     JfSession saved = CURRENT;
     pthread_mutex_unlock(&g.lock);
     jfSessionSave(&saved, sessionFile());

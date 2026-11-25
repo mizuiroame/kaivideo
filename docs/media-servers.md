@@ -47,8 +47,10 @@ server and come back from it, so they match your phone and TV.
 
 A Jellyfin or Emby server outside your home works over **https**. Its
 certificate is checked. For a server with a certificate of its own making,
-turn **Certificate check** off. Plex finds its own way in: its own https
-addresses, or Plex's relay.
+turn **Certificate check** off on that server's page: each server has its
+own, and only that server's address (its name and port) then takes any
+certificate. Plex finds its own way in: its own https addresses, or Plex's
+relay, and its certificates are always checked.
 
 ## What plays as it is, and what's converted
 

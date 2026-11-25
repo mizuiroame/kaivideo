@@ -19,7 +19,7 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Look for an update"), N_("IPTV"), N_("List type"), N_("Address"), N_("User and password"),
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
     N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
-    N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"),
+    N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"), N_("Certificate check"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -32,8 +32,8 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
      SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
-    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_COLOR,
-     SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
+    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_CERTIFICATE,
+     SETTING_NET_COLOR, SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
     {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_CERTIFICATE,
      SETTING_IPTV_COLOR, SETTING_IPTV_LOAD, SETTING_IPTV_FORGET, SETTING_COUNT},
@@ -86,7 +86,9 @@ void configDefaults(Config *c)
     c->blur = BLUR_MEDIUM;
     c->thumbnails = true;
     c->autoplay = true;
-    c->jf_check_certificate = true;
+    for (int k = 0; k < SERVER_KIND_COUNT; k++)
+        c->check_certificate[k] = true;
+    c->net_check_certificate = true;
     c->subtitles = SUBTITLES_MEDIUM;
     c->update_check = true;
 }
@@ -156,8 +158,16 @@ bool configReadLine(Config *c, const char *line)
         c->server_view = readChoice(value, SERVER_KIND_COUNT, SERVER_JELLYFIN);
     else if (isKey(line, length, "jellyfin_quality"))
         c->jf_quality = readChoice(value, QUALITY_COUNT, 0);
-    else if (isKey(line, length, "jellyfin_check_certificate"))
-        c->jf_check_certificate = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "jellyfin_check_certificate")) {
+        // Before 1.18 it was every server's: Emby and the network folder start from it (their own keys
+        // come after it in the file).
+        bool check = strcmp(value, "0") != 0;
+        c->check_certificate[SERVER_JELLYFIN] = c->check_certificate[SERVER_EMBY] = check;
+        c->net_check_certificate = check;
+    } else if (isKey(line, length, "emby_check_certificate"))
+        c->check_certificate[SERVER_EMBY] = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "network_check_certificate"))
+        c->net_check_certificate = strcmp(value, "0") != 0;
     else if (isKey(line, length, "subtitles"))
         c->subtitles = readChoice(value, SUBTITLES_SIZE_COUNT, SUBTITLES_MEDIUM);
     else if (isKey(line, length, "subtitle_color"))
@@ -186,7 +196,10 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "background=%s\n", c->background);
     fprintf(f, "clock24=%d\nautoplay=%d\njellyfin=%d\njellyfin_quality=%d\n", c->clock_24h ? 1 : 0, c->autoplay ? 1 : 0,
             c->use_jellyfin ? 1 : 0, c->jf_quality);
-    fprintf(f, "jellyfin_check_certificate=%d\nserver=%s\n", c->jf_check_certificate ? 1 : 0,
+    fprintf(f, "jellyfin_check_certificate=%d\nemby_check_certificate=%d\nnetwork_check_certificate=%d\n",
+            c->check_certificate[SERVER_JELLYFIN] ? 1 : 0, c->check_certificate[SERVER_EMBY] ? 1 : 0,
+            c->net_check_certificate ? 1 : 0);
+    fprintf(f, "server=%s\n",
             c->server_kind == SERVER_PLEX ? "plex" : c->server_kind == SERVER_EMBY ? "emby" : "jellyfin");
     fprintf(f, "view=%d\nnetwork_view=%d\niptv_view=%d\naddons_view=%d\nwelcomed=%d\n", c->server_view,
             c->use_network ? 1 : 0, c->use_iptv ? 1 : 0, c->use_addons ? 1 : 0, c->welcomed ? 1 : 0);
@@ -303,7 +316,8 @@ bool settingIsChoice(SettingRow row)
            row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
            row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
            row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE ||
-           row == SETTING_NET_COLOR || row == SETTING_IPTV_COLOR || row == SETTING_ADDONS_COLOR;
+           row == SETTING_NET_COLOR || row == SETTING_IPTV_COLOR || row == SETTING_ADDONS_COLOR ||
+           row == SETTING_NET_CERTIFICATE;
 }
 
 static int wrap(int value, int delta, int count)
@@ -322,7 +336,12 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
     case SETTING_UPDATE_AUTO: c->update_check = !c->update_check; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
-    case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
+    case SETTING_JF_CERTIFICATE: {  // For the server Settings shows.
+        int k = inRange(c->server_kind, SERVER_KIND_COUNT);
+        c->check_certificate[k] = !c->check_certificate[k];
+        break;
+    }
+    case SETTING_NET_CERTIFICATE: c->net_check_certificate = !c->net_check_certificate; break;
     case SETTING_NET_COLOR:
     case SETTING_IPTV_COLOR:
     case SETTING_ADDONS_COLOR: {
@@ -354,8 +373,12 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
         snprintf(out, size, "%s", T(QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name));
         break;
     case SETTING_JF_CERTIFICATE:
-        snprintf(out, size, "%s", c->jf_check_certificate ? T("On") : T("Off: any certificate"));
+    case SETTING_NET_CERTIFICATE: {
+        bool check = row == SETTING_NET_CERTIFICATE ? c->net_check_certificate
+                                                    : c->check_certificate[inRange(c->server_kind, SERVER_KIND_COUNT)];
+        snprintf(out, size, "%s", check ? T("On") : T("Off: any certificate"));
         break;
+    }
     case SETTING_LANGUAGE: snprintf(out, size, "%s", c->language_name[0] ? c->language_name : "English"); break;
     case SETTING_NET_COLOR:
     case SETTING_IPTV_COLOR:

@@ -72,11 +72,8 @@ bool netFetchText(NetClient *c, const NetRequest *request, size_t max_bytes, Net
 void netResponseFree(NetResponse *r);
 // Bytes received by every client so far: its growth is the network's speed.
 uint64_t netBytesReceived(void);
-// Off: https servers' certificates aren't checked (a server with its own). On at start.
-void netSetCheckCertificates(bool check);
-// Whether https (and FTPS) servers' certificates are checked now.
-bool netChecksCertificates(void);
-// True for hosts whose certificate is checked even when the setting is off: plex.tv and
+// Which servers' certificates are checked: certtrust.h (each source's own Certificate check).
+// True for hosts whose certificate is checked even when a setting is off: plex.tv and
 // *.plex.direct always have valid ones, and they carry the Plex account's token; github.com
 // and githubusercontent.com, so an update and its checksum can't both be forged.
 bool netAlwaysChecked(const char *url);

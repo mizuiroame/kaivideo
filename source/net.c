@@ -6,6 +6,8 @@
 #include <strings.h>
 
 #include <curl/curl.h>
+
+#include "certtrust.h"
 #ifdef __SWITCH__
 #include <switch.h>
 #endif
@@ -152,18 +154,6 @@ static struct curl_slist *buildHeaders(const NetRequest *r)
     return headers;
 }
 
-static bool g_check_certificates = true;
-
-void netSetCheckCertificates(bool check)
-{
-    __atomic_store_n(&g_check_certificates, check, __ATOMIC_RELAXED);
-}
-
-bool netChecksCertificates(void)
-{
-    return __atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED);
-}
-
 static NetProblem problemOf(CURLcode rc, long status)
 {
     switch (rc) {
@@ -207,7 +197,7 @@ static void limitProtocols(CURL *curl, const char *url)
 static void setOptions(CURL *curl, const NetRequest *r, struct curl_slist *headers, Transfer *t, char *error)
 {
     curl_easy_reset(curl);  // Keeps the connection.
-    bool unchecked = r->any_certificate || !__atomic_load_n(&g_check_certificates, __ATOMIC_RELAXED);
+    bool unchecked = r->any_certificate || !trustChecks(r->url);  // An IPTV list's choice, or the server's.
     if (unchecked && !netAlwaysChecked(r->url)) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);

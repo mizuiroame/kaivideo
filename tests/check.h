@@ -51,4 +51,5 @@ void testIptv(void);
 void testIptvHome(void);
 void testXtreamVod(void);
 void testStremio(void);
+void testCertTrust(void);
 void testFolderList(void);

@@ -17,9 +17,9 @@ void testSettings(void)
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
     // The main page opens the others: the library, each server, playback, display.
     // Every source's page in one order: address, sign-in, options (its color last), test, forget.
-    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_NET_ADDRESS &&
-          rows[2] == SETTING_NET_REMEMBER && rows[3] == SETTING_NET_UNSIGNED && rows[4] == SETTING_NET_COLOR &&
-          rows[5] == SETTING_NET_TEST && rows[6] == SETTING_NET_FORGET);
+    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_NET_ADDRESS &&
+          rows[2] == SETTING_NET_REMEMBER && rows[3] == SETTING_NET_UNSIGNED && rows[4] == SETTING_NET_CERTIFICATE &&
+          rows[5] == SETTING_NET_COLOR && rows[6] == SETTING_NET_TEST && rows[7] == SETTING_NET_FORGET);
     {  // The network folder's color: its own, or an accent, kept.
         Config colors;
         configDefaults(&colors);
@@ -155,12 +155,27 @@ void testSettings(void)
     configDefaults(&cert);
     char shown[32];
     settingValue(&cert, SETTING_JF_CERTIFICATE, shown, sizeof(shown));
-    CHECK(cert.jf_check_certificate && !strcmp(shown, "On") && settingIsChoice(SETTING_JF_CERTIFICATE));
+    CHECK(cert.check_certificate[SERVER_JELLYFIN] && !strcmp(shown, "On") && settingIsChoice(SETTING_JF_CERTIFICATE));
     settingStep(&cert, SETTING_JF_CERTIFICATE, 1);
     settingValue(&cert, SETTING_JF_CERTIFICATE, shown, sizeof(shown));
-    CHECK(!cert.jf_check_certificate && !strcmp(shown, "Off: any certificate"));
-    CHECK(configReadLine(&cert, "jellyfin_check_certificate=1") && cert.jf_check_certificate);
-    CHECK(configReadLine(&cert, "jellyfin_check_certificate=0") && !cert.jf_check_certificate);
+    CHECK(!cert.check_certificate[SERVER_JELLYFIN] && !strcmp(shown, "Off: any certificate"));
+    CHECK(cert.check_certificate[SERVER_EMBY] && cert.net_check_certificate);  // Each its own.
+    CHECK(configReadLine(&cert, "jellyfin_check_certificate=1") && cert.check_certificate[SERVER_JELLYFIN]);
+    // An older file's only key was every server's: Emby and the network folder start from it.
+    CHECK(configReadLine(&cert, "jellyfin_check_certificate=0") && !cert.check_certificate[SERVER_JELLYFIN]);
+    CHECK(!cert.check_certificate[SERVER_EMBY] && !cert.net_check_certificate);
+    CHECK(configReadLine(&cert, "emby_check_certificate=1") && cert.check_certificate[SERVER_EMBY]);
+    CHECK(configReadLine(&cert, "network_check_certificate=1") && cert.net_check_certificate);
+    cert.server_kind = SERVER_EMBY;  // The row is for the server Settings shows.
+    settingStep(&cert, SETTING_JF_CERTIFICATE, 1);
+    CHECK(!cert.check_certificate[SERVER_EMBY] && !cert.check_certificate[SERVER_JELLYFIN]);
+    settingValue(&cert, SETTING_JF_CERTIFICATE, shown, sizeof(shown));
+    CHECK(!strcmp(shown, "Off: any certificate"));
+    settingStep(&cert, SETTING_NET_CERTIFICATE, 1);
+    settingValue(&cert, SETTING_NET_CERTIFICATE, shown, sizeof(shown));
+    CHECK(!cert.net_check_certificate && !strcmp(shown, "Off: any certificate") &&
+          settingIsChoice(SETTING_NET_CERTIFICATE));
+    cert.server_kind = SERVER_JELLYFIN;
     Config quality;
     configDefaults(&quality);
     CHECK(settingQualityBitrate(&quality) == 25000000);  // Auto.

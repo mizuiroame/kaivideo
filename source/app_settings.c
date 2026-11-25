@@ -14,6 +14,7 @@
 #include "approot.h"
 #include "background.h"
 #include "buttons.h"
+#include "certtrust.h"
 #include "ui_style.h"
 #include "font.h"
 #include "jfprobe.h"
@@ -119,6 +120,14 @@ bool appStepSubtitleFont(App *app, int delta, char *note, size_t note_size)
 
 static Color g_theme_accent;  // The accent chosen in Display.
 
+// Each source's own Certificate check (their addresses are given by jfsync.c and davnet.c).
+static void applyCertificateChecks(const App *app)
+{
+    trustSetChecked(TRUST_JELLYFIN, app->config.check_certificate[SERVER_JELLYFIN]);
+    trustSetChecked(TRUST_EMBY, app->config.check_certificate[SERVER_EMBY]);
+    trustSetChecked(TRUST_NETWORK, app->config.net_check_certificate);
+}
+
 static void applyLooks(const App *app)
 {
     themeApply(app->config.theme, app->config.accent);
@@ -164,7 +173,7 @@ void appSettingsStart(App *app)
     mkdir(fonts, 0777);  // Where to put fonts for subtitles, there to be seen.
     if (!loadSubtitleFont(app))
         app->config.subtitle_font[0] = '\0';  // Gone or broken: the built-in one.
-    netSetCheckCertificates(app->config.jf_check_certificate);
+    applyCertificateChecks(app);
     if (app->config.background[0] &&
         !backgroundLoad(app->library_root, app->config.background, app->config.blur))
         app->config.background[0] = '\0';  // Gone or unreadable: not tried again every start.
@@ -355,7 +364,7 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
     } else {
         settingStep(&app->config, row, delta);
         applyLooks(app);
-        netSetCheckCertificates(app->config.jf_check_certificate);
+        applyCertificateChecks(app);
         if (row == SETTING_THEME || row == SETTING_BLUR)
             backgroundSetBlur(app->config.blur);  // Made again over the theme's color, or with the new blur.
     }

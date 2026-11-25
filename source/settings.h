@@ -66,6 +66,7 @@ typedef enum {
     SETTING_NET_COLOR,      // The color the network folder wears (its own, or an accent).
     SETTING_IPTV_COLOR,     // The IPTV list's.
     SETTING_ADDONS_COLOR,   // The addons'.
+    SETTING_NET_CERTIFICATE,  // Whether the network folder's certificate must be trusted (https, FTPS).
     SETTING_COUNT,
 } SettingRow;
 
@@ -115,7 +116,9 @@ typedef struct {
     int server_kind;                     // ServerKind: the one Settings' Media server page is for.
     int server_view;                     // ServerKind: the one the library shows (X goes through them).
     int jf_quality;                      // An index in the quality list; 0 is Auto.
-    bool jf_check_certificate;           // Off: an https server's own certificate is taken too.
+    bool check_certificate[SERVER_KIND_COUNT];  // Each server's (Plex's is always checked): off, its own
+                                         // certificate is taken too.
+    bool net_check_certificate;          // The network folder's (WebDAV over https, FTPS).
     int subtitles;                       // SubtitleSize.
     int subtitle_color;                  // White, Yellow, Cyan, Green.
     int subtitle_style;                  // SubtitleStyle.

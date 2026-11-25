@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "browser.h"
+#include "certtrust.h"
 #include "folderlist.h"
 #include "ftpnet.h"
 #include "lang.h"
@@ -36,6 +37,7 @@ void davUseAccount(const DavAccount *a)
 {
     pthread_mutex_lock(&g_lock);
     g_account = *a;
+    trustSetAddress(TRUST_NETWORK, g_account.address);  // Its Certificate check is for this server.
     pthread_mutex_unlock(&g_lock);
 }
 

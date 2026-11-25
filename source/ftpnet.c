@@ -9,6 +9,7 @@
 
 #include <curl/curl.h>
 
+#include "certtrust.h"
 #include "folderlist.h"
 #include "lang.h"
 #include "net.h"
@@ -86,7 +87,7 @@ static void setup(CURL *c, const DavAccount *a, const char *url)
     curl_easy_setopt(c, CURLOPT_PASSWORD, a->user[0] ? a->password : "");
     if (!strncasecmp(a->address, FTPES, sizeof(FTPES) - 1))
         curl_easy_setopt(c, CURLOPT_USE_SSL, (long)CURLUSESSL_ALL);  // Never falls back to plain FTP.
-    bool check = netChecksCertificates();
+    bool check = trustChecks(a->address);  // The network folder's own Certificate check.
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, check ? 1L : 0L);
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, check ? 2L : 0L);
     curl_easy_setopt(c, CURLOPT_CONNECTTIMEOUT, CONNECT_TIMEOUT_S);
