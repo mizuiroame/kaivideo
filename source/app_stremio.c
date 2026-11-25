@@ -151,6 +151,81 @@ static void takeLoad(App *app, uint64_t now)
     appStremioInstall(app);
 }
 
+// --- More pages of a catalog (its tab asks for the next as the cursor nears its end) ---
+
+#define PAGE_AHEAD_ROWS 2  // Rows of cards before the end that ask for the next page.
+
+// A card's video (a series by its first episode), to find it again in a new library.
+static const char *refPath(const Library *lib, LibraryRef r)
+{
+    if (r.is_show)
+        return r.index >= 0 && (size_t)r.index < lib->show_count && lib->shows[r.index].count > 0
+                   ? lib->items[lib->shows[r.index].episodes[0]].path
+                   : NULL;
+    return r.index >= 0 && (size_t)r.index < lib->count ? lib->items[r.index].path : NULL;
+}
+
+// The library again, with the cursor on the card it was on (a page's titles sort in among the others).
+static void installKeepingCursor(App *app)
+{
+    LibView *v = &app->view;
+    int grid = libviewGrid(v);
+    char path[LIBRARY_PATH_MAX] = "";
+    if (grid >= 0 && v->grid[grid].cursor < libviewGridCount(v, &app->library, grid)) {
+        const char *p = refPath(&app->library, libviewGridRef(v, &app->library, grid, v->grid[grid].cursor));
+        snprintf(path, sizeof(path), "%s", p ? p : "");
+    }
+    appStremioInstall(app);
+    grid = libviewGrid(v);
+    int count = grid >= 0 ? libviewGridCount(v, &app->library, grid) : 0;
+    for (int i = 0; path[0] && i < count; i++) {
+        const char *p = refPath(&app->library, libviewGridRef(v, &app->library, grid, i));
+        if (p && !strcmp(p, path)) {
+            v->grid[grid].cursor = i;
+            libviewGridMove(v, (LibGrid)grid, count, 0, 0);  // Keeps it in view.
+            break;
+        }
+    }
+}
+
+static void askMore(const App *app)
+{
+    const LibView *v = &app->view;
+    int list = v->collection, grid = libviewGrid(v);
+    if (v->tab != TAB_COLLECTION || v->show >= 0 || v->details >= 0 || grid < 0 || list < 0 ||
+        list >= app->stremio.list_count || !app->stremio.lists[list].more || stremioBusy(STREMIO_JOB_PAGE))
+        return;
+    if (v->grid[grid].cursor + PAGE_AHEAD_ROWS * LIBVIEW_COLS >= libviewGridCount(v, &app->library, grid))
+        stremioAskPage(&app->stremio, list);
+}
+
+static void takePage(App *app)
+{
+    int list, received, count;
+    StremioMeta *metas;
+    if (!stremioTakePage(&list, &received, &metas, &count))
+        return;
+    if (list < 0 || list >= app->stremio.list_count || app->stremio.lists[list].received != received) {
+        stremioMetasFree(metas, count);  // The addons were loaded again meanwhile.
+        return;
+    }
+    StremioList *l = &app->stremio.lists[list];
+    if (!metas) {
+        l->more = false;  // Not asked again until the addons are loaded again.
+        appLog("Addons: the next page of a catalog (%d) couldn't be read", list);
+        return;
+    }
+    int added = stremioListAppend(l, &app->stremio, metas, count);
+    appLog("Addons: a catalog's next page brought %d new of %d (%d in all)", added, count, l->count);
+    if (added > 0)
+        installKeepingCursor(app);
+}
+
+bool appStremioReadingMore(const App *app)
+{
+    return app->config.use_addons && stremioBusy(STREMIO_JOB_PAGE);
+}
+
 static void takeEpisodes(App *app)
 {
     char id[STREMIO_ID_MAX * 2];
@@ -305,6 +380,8 @@ void appStremioUpdate(App *app, uint64_t now)
         return;
     takeEpisodes(app);
     takeSearch(app);
+    takePage(app);
+    askMore(app);
     char id[STREMIO_ID_MAX];
     shownStandIn(app, id, sizeof(id));
     if (id[0] && strcmp(id, g_asked_series) && stremioStoreEpisodesState(&app->stremio, id) == STREMIO_EPISODES_UNREAD) {

@@ -919,6 +919,8 @@ void appLibraryDraw(App *app, uint64_t now)
         snprintf(status, sizeof(status), T("Updating the servers' libraries... %d"),app->jf.loaded);  // All signed in.
     else if (libscanBusy(&found))
         snprintf(status, sizeof(status), T("Looking for videos... %zu"),found);
+    else if (appStremioReadingMore(app))
+        snprintf(status, sizeof(status), "%s", T("Reading more of this catalog..."));
     if (app->view.tab == TAB_FILES && app->view.show < 0) {
         uiDrawBackground();
         uiDrawTabBar(&app->view, &app->library, status);

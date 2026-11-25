@@ -249,10 +249,11 @@ static void readResources(const json_t *root, StremioAddon *a)
     }
 }
 
-// Its extras: whether search is one, and whether one is required (search only, or one KaiVideo can't give).
-static bool readExtras(const json_t *c, bool *search, bool *search_only)
+// Its extras: whether search is one, and whether one is required (search only, or one KaiVideo can't give);
+// and whether it takes skip (more pages).
+static bool readExtras(const json_t *c, bool *search, bool *search_only, bool *skip)
 {
-    *search = *search_only = false;
+    *search = *search_only = *skip = false;
     bool usable = true;
     const json_t *extra = json_object_get(c, "extra");
     for (size_t i = 0; json_is_array(extra) && i < json_array_size(extra); i++) {
@@ -262,6 +263,8 @@ static bool readExtras(const json_t *c, bool *search, bool *search_only)
         if (name && !strcmp(name, "search")) {
             *search = true;
             *search_only = *search_only || required;
+        } else if (name && !strcmp(name, "skip")) {
+            *skip = true;
         } else if (required) {
             usable = false;  // A genre or such it must be given.
         }
@@ -270,6 +273,7 @@ static bool readExtras(const json_t *c, bool *search, bool *search_only)
     for (size_t i = 0; json_is_array(supported) && i < json_array_size(supported); i++) {
         const char *name = json_string_value(json_array_get(supported, i));
         *search = *search || (name && !strcmp(name, "search"));
+        *skip = *skip || (name && !strcmp(name, "skip"));
     }
     for (size_t i = 0; json_is_array(required) && i < json_array_size(required); i++) {
         const char *name = json_string_value(json_array_get(required, i));
@@ -293,7 +297,7 @@ static void readCatalogs(const json_t *root, StremioAddon *a)
         jsonCopy(c, "type", d.type, sizeof(d.type));
         jsonCopy(c, "id", d.id, sizeof(d.id));
         jsonCopy(c, "name", d.name, sizeof(d.name));
-        if (!isMovieOrSeries(d.type) || !d.id[0] || !readExtras(c, &d.search, &d.search_only))
+        if (!isMovieOrSeries(d.type) || !d.id[0] || !readExtras(c, &d.search, &d.search_only, &d.skip))
             continue;
         if (!d.name[0])
             snprintf(d.name, sizeof(d.name), "%.*s", (int)sizeof(d.name) - 1, d.id);
@@ -371,6 +375,17 @@ bool stremioCatalogUrl(const StremioAddon *a, const StremioCatalogDef *c, const 
     if (ok && search)
         ok = append(out, size, &n, "/search=") && appendEncoded(out, size, &n, search);
     return ok && append(out, size, &n, ".json");
+}
+
+bool stremioCatalogPageUrl(const StremioAddon *a, const StremioCatalogDef *c, int skip, char *out, size_t size)
+{
+    char page[32];
+    snprintf(page, sizeof(page), "/skip=%d.json", skip > 0 ? skip : 0);
+    if (!stremioCatalogUrl(a, c, NULL, out, size))
+        return false;
+    size_t n = strlen(out) - strlen(".json");  // In place of the first page's ending.
+    out[n] = '\0';
+    return append(out, size, &n, page);
 }
 
 bool stremioResourceUrl(const StremioAddon *a, StremioResource r, const char *type, const char *id, char *out,
@@ -633,6 +648,39 @@ void stremioListFree(StremioList *l)
     stremioMetasFree(l->metas, l->count);
     l->metas = NULL;
     l->count = 0;
+}
+
+// A catalog's list's definition, or NULL.
+static const StremioCatalogDef *listCatalog(const StremioList *l, const StremioStore *s)
+{
+    if (l->addon < 0 || l->addon >= s->addon_count || l->catalog < 0 ||
+        l->catalog >= s->addons[l->addon].catalog_count)
+        return NULL;
+    return &s->addons[l->addon].catalogs[l->catalog];
+}
+
+int stremioListAppend(StremioList *l, const StremioStore *s, StremioMeta *metas, int count)
+{
+    int room = STREMIO_LIST_METAS_MAX - l->count, added = 0;
+    size_t want = (size_t)l->count + (size_t)(count < room ? count : room);
+    StremioMeta *grown = count > 0 && room > 0 ? realloc(l->metas, want * sizeof(StremioMeta)) : NULL;
+    if (grown)
+        l->metas = grown;
+    for (int i = 0; grown && i < count && added < room; i++) {
+        bool known = false;
+        for (int k = 0; !known && k < l->count; k++)  // Pages may overlap when the catalog changed meanwhile.
+            known = !strcmp(l->metas[k].id, metas[i].id);
+        if (known)
+            continue;
+        l->metas[l->count++] = metas[i];
+        memset(&metas[i], 0, sizeof(metas[i]));  // Taken.
+        added++;
+    }
+    stremioMetasFree(metas, count);
+    l->received += count;
+    const StremioCatalogDef *d = listCatalog(l, s);
+    l->more = d && d->skip && added > 0 && l->count < STREMIO_LIST_METAS_MAX;
+    return added;
 }
 
 void stremioStoreFree(StremioStore *s)

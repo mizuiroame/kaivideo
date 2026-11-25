@@ -9,7 +9,7 @@ static const char *const MANIFEST =
     "{\"id\":\"org.example.kites\",\"version\":\"1.0.0\",\"name\":\"Kites\",\"types\":[\"movie\",\"series\"],"
     "\"idPrefixes\":[\"kt\"],"
     "\"resources\":[\"catalog\",{\"name\":\"meta\",\"types\":[\"series\"],\"idPrefixes\":[\"kts\"]},\"stream\"],"
-    "\"catalogs\":[{\"type\":\"movie\",\"id\":\"top\",\"name\":\"Top\",\"extra\":[{\"name\":\"search\"}]},"
+    "\"catalogs\":[{\"type\":\"movie\",\"id\":\"top\",\"name\":\"Top\",\"extra\":[{\"name\":\"search\"},{\"name\":\"skip\"}]},"
     "{\"type\":\"series\",\"id\":\"all shows\",\"name\":\"Shows\"},"
     "{\"type\":\"movie\",\"id\":\"find\",\"extra\":[{\"name\":\"search\",\"isRequired\":true}]},"
     "{\"type\":\"movie\",\"id\":\"genre\",\"extra\":[{\"name\":\"genre\",\"isRequired\":true}]},"
@@ -214,10 +214,48 @@ static void testLocationsAndLibrary(void)
     CHECK(st.list_count == 0 && st.series_count == 0 && !st.found.metas);
 }
 
+// A catalog's later pages: their address, and each added once to its list.
+static void testPages(void)
+{
+    StremioStore s;
+    memset(&s, 0, sizeof(s));
+    CHECK(stremioParseManifest(MANIFEST, "https://addon.example/kites/manifest.json", &s.addons[0]));
+    s.addon_count = 1;
+    CHECK(s.addons[0].catalogs[0].skip && !s.addons[0].catalogs[1].skip);
+    char url[512];
+    CHECK(stremioCatalogPageUrl(&s.addons[0], &s.addons[0].catalogs[1], 100, url, sizeof(url)));
+    CHECK(!strcmp(url, "https://addon.example/kites/catalog/series/all%20shows/skip=100.json"));
+    CHECK(!stremioCatalogPageUrl(&s.addons[0], &s.addons[0].catalogs[1], 100, url, 50));
+
+    StremioList *l = &s.lists[0];
+    s.list_count = 1;
+    CHECK(stremioParseMetas("{\"metas\":[{\"id\":\"kt1\",\"type\":\"movie\",\"name\":\"Paper Boats\"},"
+                            "{\"id\":\"kt2\",\"type\":\"movie\",\"name\":\"Night Desk\"}]}",
+                            &l->metas, &l->count));
+    l->addon = 0;
+    l->catalog = 0;
+    l->received = l->count;
+    StremioMeta *page;
+    int n;
+    CHECK(stremioParseMetas("{\"metas\":[{\"id\":\"kt2\",\"type\":\"movie\",\"name\":\"Night Desk\"},"
+                            "{\"id\":\"kt3\",\"type\":\"movie\",\"name\":\"Kite Hill\"}]}",
+                            &page, &n));
+    CHECK(stremioListAppend(l, &s, page, n) == 1);  // kt2 was there.
+    CHECK(l->count == 3 && l->received == 4 && !strcmp(l->metas[2].id, "kt3") && l->more);
+    CHECK(stremioParseMetas("{\"metas\":[{\"id\":\"kt3\",\"type\":\"movie\",\"name\":\"Kite Hill\"}]}", &page, &n));
+    CHECK(stremioListAppend(l, &s, page, n) == 0 && !l->more);  // Nothing new: the end.
+    CHECK(stremioListAppend(l, &s, NULL, 0) == 0 && l->count == 3);
+    l->catalog = 1;  // A catalog without skip never has more.
+    CHECK(stremioParseMetas("{\"metas\":[{\"id\":\"kt4\",\"type\":\"movie\",\"name\":\"Harbor\"}]}", &page, &n));
+    CHECK(stremioListAppend(l, &s, page, n) == 1 && !l->more);
+    stremioStoreFree(&s);
+}
+
 void testStremio(void)
 {
     testAddonList();
     testManifest();
+    testPages();
     testAnswers();
     testLocationsAndLibrary();
 }

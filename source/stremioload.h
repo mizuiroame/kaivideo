@@ -10,7 +10,14 @@
 
 #include "stremio.h"
 
-typedef enum { STREMIO_JOB_LOAD, STREMIO_JOB_EPISODES, STREMIO_JOB_STREAMS, STREMIO_JOB_SEARCH, STREMIO_JOBS } StremioJob;
+typedef enum {
+    STREMIO_JOB_LOAD,
+    STREMIO_JOB_EPISODES,
+    STREMIO_JOB_STREAMS,
+    STREMIO_JOB_SEARCH,
+    STREMIO_JOB_PAGE,
+    STREMIO_JOBS
+} StremioJob;
 
 #define STREMIO_NOTE_MAX 512
 
@@ -34,6 +41,12 @@ bool stremioTakeStreams(char *video_id, size_t id_size, StremioStream **streams,
 void stremioAskSearch(const StremioStore *s, const char *query);
 // False until it's done: the films and series found (each once).
 bool stremioTakeSearch(StremioList *found);
+
+// The next page of one of the store's lists (an index in its lists), if its catalog gives more.
+void stremioAskPage(const StremioStore *s, int list);
+// False until it came. list: the one asked, and how many it had received then (if that changed, the
+// addons were loaded again meanwhile: the page isn't its). metas NULL if it couldn't be read.
+bool stremioTakePage(int *list, int *received, StremioMeta **metas, int *count);
 
 // Whether a request of that kind is under way.
 bool stremioBusy(StremioJob job);

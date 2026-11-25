@@ -22,6 +22,7 @@
 #define STREMIO_NAME_MAX 96
 #define STREMIO_PREFIXES_MAX 256     // idPrefixes, joined by spaces; "" for any.
 #define STREMIO_METAS_MAX 500        // In one catalog's answer.
+#define STREMIO_LIST_METAS_MAX 3000  // In one catalog, all its pages read.
 #define STREMIO_VIDEOS_MAX 3000      // A series' episodes.
 #define STREMIO_STREAMS_MAX 100
 #define STREMIO_TEXT_MAX (8u << 20)  // An addon's answer bigger than this isn't read.
@@ -34,6 +35,7 @@ typedef struct {
     char name[STREMIO_NAME_MAX];
     bool search;                   // It can be searched (extra "search").
     bool search_only;              // Only searched: it lists nothing by itself.
+    bool skip;                     // It gives pages after the first (extra "skip").
 } StremioCatalogDef;
 
 typedef struct {
@@ -93,6 +95,8 @@ bool stremioParseManifest(const char *json, const char *manifest_url, StremioAdd
 bool stremioHandles(const StremioAddon *a, StremioResource r, const char *type, const char *id);
 // A catalog's address: its first page, or a search (search non-NULL).
 bool stremioCatalogUrl(const StremioAddon *a, const StremioCatalogDef *c, const char *search, char *out, size_t size);
+// The page after the first skip titles it gave: /catalog/<type>/<id>/skip=<skip>.json.
+bool stremioCatalogPageUrl(const StremioAddon *a, const StremioCatalogDef *c, int skip, char *out, size_t size);
 // /meta/<type>/<id>.json or /stream/<type>/<id>.json.
 bool stremioResourceUrl(const StremioAddon *a, StremioResource r, const char *type, const char *id, char *out,
                         size_t size);
@@ -122,6 +126,11 @@ typedef struct {
     char type[16];
     StremioMeta *metas;
     int count;
+    // Where it comes from (an index in the store's addons, and in that addon's catalogs), how many
+    // titles its pages gave so far (the next page's skip), and whether another page may follow.
+    int addon, catalog;
+    int received;
+    bool more;
 } StremioList;
 
 typedef struct {
@@ -143,6 +152,10 @@ typedef struct {
 
 void stremioStoreFree(StremioStore *s);
 void stremioListFree(StremioList *l);
+// Adds a page of a catalog's (count of them, taken: those it has already are freed) to its list, up to
+// STREMIO_LIST_METAS_MAX. Another page may follow if the list's catalog takes skip and this page brought
+// something new. Returns how many were added.
+int stremioListAppend(StremioList *l, const StremioStore *s, StremioMeta *metas, int count);
 // A series' episodes (taken), or failed (NULL).
 void stremioStoreSetEpisodes(StremioStore *s, const char *series_id, StremioVideo *videos, int count);
 StremioEpisodesState stremioStoreEpisodesState(const StremioStore *s, const char *series_id);

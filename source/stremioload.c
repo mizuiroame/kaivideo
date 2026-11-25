@@ -61,8 +61,11 @@ static bool fetch(NetClient *c, Job *j, const char *url, NetResponse *r)
 
 // --- Loading the addons ---
 
-static void readCatalog(NetClient *c, Job *j, const StremioAddon *a, const StremioCatalogDef *d, int addons)
+static void readCatalog(NetClient *c, Job *j, int addon, int catalog)
 {
+    const StremioAddon *a = &j->store.addons[addon];
+    const StremioCatalogDef *d = &a->catalogs[catalog];
+    int addons = j->store.addon_count;
     StremioStore *s = &j->store;
     char url[STREMIO_URL_MAX * 2];
     NetResponse r;
@@ -73,6 +76,10 @@ static void readCatalog(NetClient *c, Job *j, const StremioAddon *a, const Strem
     if (!fetch(c, j, url, &r) || !stremioParseMetas(r.data, &l->metas, &l->count)) {
         addNote(j, a->name, r.error[0] ? r.error : T("a catalog couldn't be read"));
     } else if (l->count > 0) {
+        l->addon = addon;
+        l->catalog = catalog;
+        l->received = l->count;
+        l->more = d->skip;
         snprintf(l->type, sizeof(l->type), "%s", d->type);
         const char *kind = !strcmp(d->type, "series") ? T("Series") : T("Films");
         if (addons > 1)
@@ -110,7 +117,7 @@ static void *loadThread(void *arg)
             addNote(j, a->name, T("it must be set up on its own page first"));
         for (int k = 0; k < a->catalog_count && !a->needs_setup && !j->cancel; k++)
             if (!a->catalogs[k].search_only)
-                readCatalog(c, j, a, &a->catalogs[k], s->addon_count);
+                readCatalog(c, j, i, k);
     }
     if (!c)
         addNote(j, "KaiVideo", T("The network can't be used."));
@@ -305,6 +312,56 @@ static void gather(StremioList *found, StremioMeta *metas, int count)
         }
     }
     stremioMetasFree(metas, count);
+}
+
+// --- A catalog's next page ---
+
+static void *pageThread(void *arg)
+{
+    Job *j = arg;
+    NetClient *c = netClientOpen();
+    int addon = j->list.addon, catalog = j->list.catalog;
+    char url[STREMIO_URL_MAX * 2];
+    NetResponse r;
+    memset(&r, 0, sizeof(r));
+    bool ok = c && addon >= 0 && addon < j->addon_count && catalog >= 0 &&
+              catalog < j->addons[addon].catalog_count &&
+              stremioCatalogPageUrl(&j->addons[addon], &j->addons[addon].catalogs[catalog], j->list.received, url,
+                                    sizeof(url)) &&
+              fetch(c, j, url, &r) && stremioParseMetas(r.data, &j->list.metas, &j->list.count);
+    j->ok = ok;
+    netResponseFree(&r);
+    netClientClose(c);
+    __atomic_store_n(&j->done, true, __ATOMIC_RELEASE);
+    return NULL;
+}
+
+void stremioAskPage(const StremioStore *s, int list)
+{
+    if (list < 0 || list >= s->list_count || !s->lists[list].more)
+        return;
+    Job *j = prepare(STREMIO_JOB_PAGE, s);
+    j->count = list;  // The list it's for (j->list holds the page).
+    j->list.addon = s->lists[list].addon;
+    j->list.catalog = s->lists[list].catalog;
+    j->list.received = s->lists[list].received;
+    start(j, pageThread);
+}
+
+bool stremioTakePage(int *list, int *received, StremioMeta **metas, int *count)
+{
+    Job *j = &g_jobs[STREMIO_JOB_PAGE];
+    if (!finished(j))
+        return false;
+    *list = j->count;
+    *received = j->list.received;
+    *metas = j->ok ? j->list.metas : NULL;
+    *count = j->ok ? j->list.count : 0;
+    if (!j->ok)
+        stremioListFree(&j->list);
+    j->list.metas = NULL;
+    j->list.count = 0;
+    return true;
 }
 
 static void *searchThread(void *arg)

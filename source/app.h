@@ -341,6 +341,8 @@ void appStremioUpdate(App *app, uint64_t now);
 void appStremioInstall(App *app);
 // Searches the addons too.
 void appStremioSearch(App *app, const char *query);
+// Whether a catalog's next page is being read (said where a scan's progress is).
+bool appStremioReadingMore(const App *app);
 // appStartVideo asks: false (and the streams are asked for, to choose one) until one is chosen.
 bool appStremioMayOpen(App *app, const char *path, const char *name, uint64_t now);
 void appStremioStreamsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);

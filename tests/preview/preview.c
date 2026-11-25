@@ -402,6 +402,10 @@ static void liveScene(Player *p)
     uiDrawLibrary(&view, &addon_lib, &home, &resume, true, NULL);
     uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("addons_catalog");
+    begin();  // Its next page on its way, said where a scan's progress is.
+    uiDrawLibrary(&view, &addon_lib, &home, &resume, true, T("Reading more of this catalog..."));
+    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("addons_catalog_more");
     bool catalog_tabs = false;
     for (int x = 0; x < GFX_WIDTH && !catalog_tabs; x += 4) {
         LibHit hit = uiLibraryTap(x, 34);

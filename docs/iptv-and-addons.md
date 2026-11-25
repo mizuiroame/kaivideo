@@ -62,7 +62,8 @@ one removes it. Nuvio's own "plugins" aren't addons and don't work here.
 
 **X** goes to the Addons view, after IPTV. It has a blue pill, one tab per
 catalog, Home with what you were watching, and Search, which asks every addon
-that can be searched.
+that can be searched. A catalog brings its next page as you near its end, when
+its addon gives more than one.
 
 When you play a film or an episode, KaiVideo asks every addon for its streams
 and lists them with each addon's name and details, so you can choose one. It
