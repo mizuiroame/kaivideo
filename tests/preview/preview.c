@@ -1006,7 +1006,7 @@ static void libraryScenes(void)
     uiDrawSettings(&config, SETTINGS_PAGE_ADDONS, SETTING_ADDON_FIRST + 1, "sdmc:/Media/Videos", "1.9.0");
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_addons");
-    int addons_top = (GFX_HEIGHT - (76 + 30 + 4 * 48 + 60)) / 2 + 76 + 30;
+    int addons_top = (GFX_HEIGHT - (76 + 30 + 5 * 48 + 60)) / 2 + 76 + 30;  // Add, two addons, Color, Load.
     LibHit second = uiLibraryTap(GFX_WIDTH / 2 - 200, addons_top + 2 * 48 + 20);
     if (second.kind != LIBHIT_SETTING || second.a != SETTING_ADDON_FIRST + 1) {
         printf("TOUCH: settings_addons: an addon's row doesn't answer a tap (%d %d)\n", second.kind, second.a);
@@ -1051,7 +1051,7 @@ static void libraryScenes(void)
     uiDrawFooterHelp(T("[^v] choose  [<>][A] change  [B] back"));
     save("settings_jellyfin");
     top = (GFX_HEIGHT - (76 + 30 + 7 * 48 + 60)) / 2 + 76 + 30;  // A server's page: a line under its title.
-    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 3 * 48 + 20);
+    LibHit account = uiLibraryTap(GFX_WIDTH / 2 - 200, top + 2 * 48 + 20);  // Server, Find, then Sign in with a code.
     if (account.kind != LIBHIT_SETTING || account.a != SETTING_JF_CODE) {
         printf("TOUCH: settings_jellyfin: the account row doesn't answer a tap\n");
         g_problems++;
