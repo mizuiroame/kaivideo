@@ -119,11 +119,15 @@ const char *homeRowTitle(HomeRowKind kind)
     case HOME_RECENT: return T("Recently added");
     case HOME_SERIES: return T("Series");
     case HOME_FILMS: return T("Films");
+    case HOME_CHANNELS_RECENT: return T("Recently watched");
+    case HOME_CHANNELS_FAVORITES: return T("Favorite channels");
+    case HOME_CHANNELS: return T("All channels");
     default: return "";
     }
 }
 
 const char *homeRowName(const HomeRow *row)
 {
-    return row->kind == HOME_GENRE ? row->genre : homeRowTitle(row->kind);
+    bool named = row->kind == HOME_GENRE || row->kind == HOME_CHANNELS || row->kind == HOME_CATEGORY;
+    return named && row->genre[0] ? row->genre : homeRowTitle(row->kind);
 }

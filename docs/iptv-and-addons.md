@@ -17,9 +17,16 @@ Settings > **IPTV** sets one list:
 Press **Load the channels**. Then **X** goes to the IPTV view, after your
 servers. It has an orange pill and these tabs:
 
-- **Home**: Recently watched, Favorites, then one row per group. **A** watches
-  a channel. **R**, or the button above the row, adds it to the Favorites or
-  takes it out.
+- **Home**: as a Showcase (Settings > Display > Home style), the channel under
+  the cursor shows large, its logo on a blur of its colors, with what's on now
+  (how far into it, and its description when the guide has one) and next.
+  Rows: Recently watched, Favorite channels, one row per group, then with an
+  Xtream account Films, Series and one row per film category. **A** watches a
+  channel, or opens a film's details or a series' page; a tap shows it large
+  first, a second tap opens it. **R**, or its button, adds a channel to the
+  Favorites or takes it out. A film's or series' details are read only once
+  the cursor rests on it. With Home style **Classic**: Recently watched,
+  Favorites, then one row per group, and the button above the row.
 - **Live TV**: the guide, if the list has one. **Y** picks a group.
 - **Films**, **Series** and **Search**, with an Xtream account that has them.
   A series' episodes are read when you open its page. When the provider puts

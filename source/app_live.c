@@ -288,7 +288,7 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 }
 
 // How far the console's clock is from UTC, in seconds.
-static int64_t utcOffset(void)
+int64_t appUtcOffset(void)
 {
     time_t now = time(NULL);
     struct tm local;
@@ -311,7 +311,7 @@ void appLiveDraw(const App *app)
         group = app->iptv_group >= 0 ? app->iptv.groups[app->iptv_group].name : T("All channels");
     int selected = app->config.use_iptv ? appLiveIptvSelected(app) : -1;
     int favorite = selected >= 0 ? appIptvIsFavorite(app, selected) : -1;
-    uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), utcOffset(), app->config.clock_24h, loading, group,
+    uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), appUtcOffset(), app->config.clock_24h, loading, group,
                   app->config.use_iptv, favorite);
     if (app->live_groups_open)
         uiDrawLiveGroups(&app->iptv, app->live_group_cursor, app->iptv_group + 1);

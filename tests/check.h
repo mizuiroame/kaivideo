@@ -50,6 +50,7 @@ void testUpdateRelease(void);
 void testNotice(void);
 void testIptv(void);
 void testIptvHome(void);
+void testIptvShowcase(void);
 void testXtreamVod(void);
 void testStremio(void);
 void testCertTrust(void);

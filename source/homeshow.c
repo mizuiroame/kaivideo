@@ -128,6 +128,6 @@ void homeComputeShowcase(Home *home, const Library *lib, const ResumeList *resum
 void homeSetTiles(Home *home, int tiles)
 {
     for (int r = 0; r < home->count; r++)
-        home->rows[r].wide = tiles == HOME_TILES_LANDSCAPE ||
+        home->rows[r].wide = home->rows[r].channels || tiles == HOME_TILES_LANDSCAPE ||
                              (tiles != HOME_TILES_POSTERS && home->rows[r].kind == HOME_CONTINUE);
 }

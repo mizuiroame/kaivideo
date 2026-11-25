@@ -1031,13 +1031,13 @@ void uiDrawLibrary(const LibView *v, const Library *lib, const Home *home, const
         drawShow(v, lib, resume);
     } else if (v->tab == TAB_SEARCH) {
         drawSearch(v, lib, resume);
+    } else if (showcase) {  // The IPTV list's too: its rows of channels.
+        uiShowcaseDraw(v, lib, home, resume);
     } else if (v->tab == TAB_LIVE || v->tab == TAB_DOWNLOADS || (v->iptv && v->tab == TAB_HOME)) {
-        // Drawn by the app over this (app_live.c, app_dltab.c): it holds what they show.
+        // Drawn by the app over this (app_live.c, app_dltab.c, app_iptvhome.c): it holds what they show.
     } else if (lib->count == 0) {
         drawCentered(status && status[0] ? T("Looking for videos...") : T("No videos here yet"),
                      T("KaiVideo plays MP4, MKV and WebM files (H.264, HEVC, VP9, AV1, VP8)."));
-    } else if (showcase) {
-        uiShowcaseDraw(v, lib, home, resume);
     } else if (v->tab == TAB_HOME) {
         drawHome(v, lib, home, resume);
     } else if (v->tab == TAB_FILMS && lib->film_count == 0) {

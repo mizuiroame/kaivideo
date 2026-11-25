@@ -17,6 +17,7 @@
 #include "libscan.h"
 #include "thumbs.h"
 #include "ui_library.h"
+#include "ui_showcase.h"
 #include "ui_style.h"
 #include "xtreamvod.h"
 
@@ -59,9 +60,16 @@ static void logHome(const App *app, bool showcase)
 
 void appLibraryRefreshHome(App *app)
 {
-    // The Showcase (the default) or the classic rows; the IPTV list's Home is its channels' (app_iptvhome.c).
-    bool showcase = !app->config.home_classic && !app->config.use_iptv;
-    if (showcase) {
+    // The Showcase (the default) or the classic rows. The IPTV list's Showcase has its channels' rows
+    // first; its classic Home is its channels' own (app_iptvhome.c).
+    static Home before;  // As it was: rows that come or go above the cursor don't move it to another.
+    bool showcase = !app->config.home_classic;
+    memcpy(&before, &app->home, sizeof(before));
+    if (showcase && app->config.use_iptv) {
+        homeComputeIptv(&app->home, &app->iptv_home, &app->iptv, &app->library, app->xtream.film_groups,
+                        app->xtream.film_group_count);
+        homeSetTiles(&app->home, app->config.home_tiles);
+    } else if (showcase) {
         homeComputeShowcase(&app->home, &app->library, &app->resume, &app->watched);
         homeSetTiles(&app->home, app->config.home_tiles);
     } else {
@@ -70,6 +78,8 @@ void appLibraryRefreshHome(App *app)
     logHome(app, showcase);
     if (app->view.showcase != showcase)
         libviewSetHomeShowcase(&app->view, showcase);
+    else if (showcase)
+        libviewHomeRebuilt(&app->view, &before, &app->home);
     appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
     if (app->config.use_iptv) {
         libviewSetIptvTabs(&app->view, &app->library);
@@ -585,6 +595,11 @@ static void detailsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t 
 
 static void openSelected(App *app, uint64_t now)
 {
+    int channel = libviewSelectedChannel(&app->view, &app->home);  // The IPTV list's Showcase: plays it.
+    if (channel >= 0) {
+        appLivePlayIptv(app, channel, now);
+        return;
+    }
     LibraryRef ref;
     if (libviewSelected(&app->view, &app->library, &app->home, &ref))
         openRef(app, ref, now);
@@ -809,12 +824,16 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         appLiveGroupsInput(app, pressed, touch, now);
         return;
     }
-    bool iptv_home = app->config.use_iptv && v->tab == TAB_HOME && v->show < 0;
-    if ((iptv_home || (live_tab && app->config.use_iptv)) && (pressed & HidNpadButton_R)) {
+    // The IPTV list's Home: the Showcase (a channel under the cursor in its rows of channels), or its own.
+    bool iptv_showcase = app->config.use_iptv && uiShowcaseShown(v, &app->library, &app->home, true);
+    bool iptv_home = app->config.use_iptv && v->tab == TAB_HOME && v->show < 0 && !iptv_showcase;
+    int showcase_channel = iptv_showcase ? libviewSelectedChannel(v, &app->home) : -1;
+    if ((iptv_home || showcase_channel >= 0 || (live_tab && app->config.use_iptv)) && (pressed & HidNpadButton_R)) {
         // R: the channel under the cursor in the favorites (ZR still changes tab).
         int channel = iptv_home ? iptvHomeChannel(&app->iptv_home, app->iptv_home_view.rows.cursor,
                                                   app->iptv_home_view.cols[app->iptv_home_view.rows.cursor].cursor)
-                                : appLiveIptvSelected(app);
+                      : showcase_channel >= 0 ? showcase_channel
+                                              : appLiveIptvSelected(app);
         if (channel >= 0)
             appIptvToggleFavorite(app, channel, now);
         return;
@@ -886,6 +905,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     buttonInput(app, pressed, now);
     if (hit.kind == LIBHIT_FAVORITE && favorite_here)
         toggleFavorite(app, shown, now);
+    else if (hit.kind == LIBHIT_FAVORITE && showcase_channel >= 0)
+        appIptvToggleFavorite(app, showcase_channel, now);
     else if (hit.kind == LIBHIT_SHOW_DOWNLOAD && season_download)
         appDownloadSeason(app, v->show, v->season, now);
     else if (hit.kind == LIBHIT_LIVE_GROUPS && grouped)
@@ -969,11 +990,13 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawFooterStrip();
     } else {
         appXtreamSetGridLabels(app);
+        appIptvShowcaseFeed(app);
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
                       app->library_root[0] != '\0' || app->config.use_jellyfin || app->config.use_iptv, status);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
             appLiveDraw(app);
-        if (app->view.iptv && app->view.tab == TAB_HOME && app->view.show < 0)
+        if (app->view.iptv && app->view.tab == TAB_HOME && app->view.show < 0 &&
+            !uiShowcaseShown(&app->view, &app->library, &app->home, true))
             appIptvHomeDraw(app);
         if (app->view.tab == TAB_DOWNLOADS && app->view.show < 0)
             appDownloadsDraw(app);

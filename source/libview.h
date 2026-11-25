@@ -158,5 +158,10 @@ void libviewResultsMove(LibView *v, int dy);
 // Keeps a library's cursors within it after it changed (a new scan).
 void libviewClamp(LibView *v, const Library *lib, const Home *home);
 
-// What A opens on the current screen (not Files): false if nothing.
+// What A opens on the current screen (not Files): false if nothing (or a channel).
 bool libviewSelected(const LibView *v, const Library *lib, const Home *home, LibraryRef *out);
+// The IPTV list's channel under the cursor on Home (a row of channels), or -1.
+int libviewSelectedChannel(const LibView *v, const Home *home);
+// Home was made again (before, as it was, to after): each row keeps its place and the cursor its row,
+// found by kind and name, when rows came or went above them (Recently watched, Favorites...).
+void libviewHomeRebuilt(LibView *v, const Home *before, const Home *after);

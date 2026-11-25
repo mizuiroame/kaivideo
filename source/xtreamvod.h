@@ -33,6 +33,7 @@ typedef enum { XTREAM_INFO_UNREAD, XTREAM_INFO_READ, XTREAM_INFO_FAILED } Xtream
 typedef struct {
     char *plot;            // May be NULL.
     char *genre;           // "Drama, Comedy" as the server names them, or NULL.
+    char *backdrop;        // A wide picture's address (backdrop_path), or NULL.
     int64_t runtime_s;     // 0 if unknown.
 } XtreamFilmInfo;
 
@@ -55,6 +56,9 @@ typedef struct {
     char *name;
     char *cover;           // An address, or NULL.
     char *plot;            // May be NULL.
+    char *genre;           // As the server names them, or NULL.
+    char *backdrop;        // A wide picture's address, or NULL.
+    int year;              // From its releaseDate, 0 if unknown.
     int64_t added;
     int group;             // Its category (an index in show_groups), -1 for none.
     XtreamEpisodesState state;

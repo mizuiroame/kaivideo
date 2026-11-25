@@ -294,8 +294,12 @@ const char *appFooterHelp(const App *app)
             return T("[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu");
         return T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_HOME:
-        if (app->config.use_iptv)
+        // The IPTV list's: a channel (its own Home's, or the Showcase's rows of channels), or a film or series.
+        if (app->config.use_iptv && (!app->view.showcase || app->home.count == 0 ||
+                                     libviewSelectedChannel(&app->view, &app->home) >= 0))
             return T("[A] watch  [R] favorite  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu");
+        if (app->config.use_iptv)
+            return T("[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu");
         return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_FILES:
         if (app->config.use_iptv && app->library.count == 0)  // Its view has no Search then.

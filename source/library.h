@@ -37,6 +37,7 @@ typedef struct {
     int group;           // Its source's category (an Xtream account's), -1 for none.
     char *genres;        // "Drama, Comedy" as its server names them (its series' for an episode), or NULL.
     char *series_overview;  // Its series' summary, kept by one of its episodes only; or NULL.
+    char *backdrop;      // A wide picture for the Showcase's large picture (thumbs.h's key), or NULL.
 } LibraryItem;
 
 // What a server says of a video besides its name.
@@ -49,6 +50,7 @@ typedef struct {
     int in_group;       // Its category's index plus 1 (an Xtream account's); 0 for none.
     const char *genres; // "Drama, Comedy", or NULL or "" for none.
     const char *series_overview;  // Its series' summary (given to one episode of each), or NULL.
+    const char *backdrop;  // A wide picture (its series' for an episode), or NULL or "".
 } LibraryRemote;
 
 typedef struct {

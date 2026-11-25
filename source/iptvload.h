@@ -12,7 +12,8 @@
 #include "xtreamvod.h"
 
 #define IPTV_GUIDE_BEFORE_S (2 * 3600)  // Programs kept from this long ago,
-#define IPTV_GUIDE_AFTER_S (24 * 3600)  // to this far ahead.
+#define IPTV_GUIDE_AFTER_S (24 * 3600)  // to this far ahead,
+#define IPTV_GUIDE_DESC_S (6 * 3600)    // with their descriptions to this far ahead.
 
 typedef enum {
     IPTV_LOAD_IDLE,
@@ -34,6 +35,7 @@ typedef struct {
 // What a channel is on: its programs, by start.
 typedef struct {
     LiveProgram (*programs)[XMLTV_PER_CHANNEL];  // One row per channel of the list.
+    char **descs;  // Program j of channel i's description at [i * XMLTV_PER_CHANNEL + j], or NULL.
     int *counts;
     int count;
 } IptvGuide;

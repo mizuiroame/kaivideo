@@ -13,6 +13,7 @@
 #include "lang.h"
 #include "ui_iptvhome.h"
 #include "ui_library.h"
+#include "ui_showcase.h"
 
 #define MARKS_TEXT_MAX ((IPTVHOME_RECENT_MAX + IPTVHOME_FAVORITES_MAX) * (IPTV_NAME_MAX + 12) + 1)
 
@@ -104,6 +105,8 @@ void appIptvHomeWatched(App *app, const char *location)
     iptvMarksWatched(&app->iptv_marks, app->iptv.channels[index].name);
     saveMarks(app, armTicksToNs(armGetSystemTick()));
     appIptvHomeRebuild(app);
+    if (app->config.use_iptv)
+        appLibraryRefreshHome(app);  // The Showcase's Recently watched too.
 }
 
 bool appIptvIsFavorite(const App *app, int channel)
@@ -125,6 +128,8 @@ void appIptvToggleFavorite(App *app, int channel, uint64_t now)
     }
     saveMarks(app, now);
     appIptvHomeRebuild(app);
+    if (app->config.use_iptv)
+        appLibraryRefreshHome(app);  // The Showcase's Favorite channels too.
     appNotify(app, NOTICE_DONE, is ? T("Added to Favorites.") : T("Removed from Favorites."), now);
 }
 
@@ -172,6 +177,46 @@ static const char *nowTitle(const void *ctx, int channel)
             return p->title;
     }
     return NULL;
+}
+
+// What's on a channel now and next, from the list's guide, with its descriptions.
+static void showcasePrograms(const void *ctx, int channel, UiProgram *now, UiProgram *next)
+{
+    const App *app = ctx;
+    const IptvGuide *g = &app->iptv_guide;
+    memset(now, 0, sizeof(*now));
+    memset(next, 0, sizeof(*next));
+    if (channel < 0 || channel >= g->count)
+        return;
+    int64_t now_s = (int64_t)time(NULL);
+    for (int j = 0; j < g->counts[channel]; j++) {
+        const LiveProgram *p = &g->programs[channel][j];
+        if (p->end <= now_s || (p->start <= now_s && now->title))
+            continue;  // Over, or on now with another said first.
+        UiProgram *to = p->start <= now_s ? now : next;
+        to->title = p->title;
+        to->desc = g->descs ? g->descs[(size_t)channel * XMLTV_PER_CHANNEL + j] : NULL;
+        to->start = p->start;
+        to->end = p->end;
+        if (to == next)
+            break;  // By start: the first one ahead is next.
+    }
+}
+
+static bool showcaseFavorite(const void *ctx, int channel)
+{
+    return appIptvIsFavorite(ctx, channel);
+}
+
+void appIptvShowcaseFeed(const App *app)
+{
+    if (!app->config.use_iptv) {
+        uiShowcaseSetChannels(NULL);
+        return;
+    }
+    UiShowcaseChannels c = {&app->iptv, showcasePrograms, showcaseFavorite, app, (int64_t)time(NULL),
+                            appUtcOffset(), app->config.clock_24h};
+    uiShowcaseSetChannels(&c);
 }
 
 void appIptvHomeDraw(const App *app)

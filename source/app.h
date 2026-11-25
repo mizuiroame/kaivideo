@@ -366,6 +366,10 @@ void appIptvToggleFavorite(App *app, int channel, uint64_t now);
 bool appIptvIsFavorite(const App *app, int channel);
 void appIptvHomeInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
 void appIptvHomeDraw(const App *app);
+// The IPTV list's channels and guide for the Showcase's rows of channels (none outside its view).
+void appIptvShowcaseFeed(const App *app);
+// Seconds the local time is ahead of UTC (app_live.c).
+int64_t appUtcOffset(void);
 // A finger moves its rows (up and down), or one of them (across).
 bool appIptvHomeScrollPx(App *app, int px);
 bool appIptvHomeRowScrollPx(App *app, int row, int px);

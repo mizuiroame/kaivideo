@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 
+#include "iptv.h"
 #include "library.h"
 #include "resume.h"
 
@@ -28,5 +29,8 @@ void uiDrawCaseTile(const Library *lib, LibraryRef ref, int x, int y, bool focus
 // A wide tile at (x, y), its name and a line under it; tag: "UP NEXT" or such over the picture, or NULL.
 void uiDrawWideTile(const Library *lib, LibraryRef ref, int x, int y, bool focused, double progress, bool seen,
                     const char *tag);
+// A channel's wide tile at (x, y): its logo on the cards' dark color (its name on its colors without
+// one), its name and what's on now under it, and a thin line of how far into it (progress 0-1, or -1).
+void uiDrawChannelTile(const IptvChannel *c, const char *on_now, double progress, int x, int y, bool focused);
 // The focus frame around a w x h tile at (x, y).
 void uiDrawTileFocus(int x, int y, int w, int h);

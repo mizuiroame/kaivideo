@@ -16,6 +16,7 @@
 typedef struct {
     const char *id;               // Points into ids given (the caller keeps them).
     LiveProgram programs[XMLTV_PER_CHANNEL];
+    char *descs[XMLTV_PER_CHANNEL];  // Each program's description (malloc'd), or NULL.
     int count;
 } Slot;
 
@@ -25,6 +26,7 @@ struct XmltvReader {
     int *slot_of;                 // Each channel's slot, -1 for none.
     int channel_count;
     int64_t from, until;
+    int64_t desc_until;           // Descriptions are kept for programs starting before this (0: none).
     int matched;
     bool started, gzip, inflating, broken;
     z_stream z;
@@ -74,6 +76,9 @@ void xmltvFree(XmltvReader *r)
         return;
     if (r->inflating)
         inflateEnd(&r->z);
+    for (int i = 0; i < r->slot_count; i++)
+        for (int j = 0; j < XMLTV_PER_CHANNEL; j++)
+            free(r->slots[i].descs[j]);
     free(r->slots);
     free(r->slot_of);
     free(r->pending);
@@ -130,20 +135,30 @@ int64_t xmltvParseTime(const char *text)
 
 // --- Programs ---
 
-// Keeps p for slot, by start: the earliest ones when it's full.
-static void keep(Slot *slot, const LiveProgram *p)
+// Keeps p (and desc, taken: freed if p isn't kept) for slot, by start: the earliest ones when it's full.
+static void keep(Slot *slot, const LiveProgram *p, char *desc)
 {
     for (int i = 0; i < slot->count; i++)
-        if (slot->programs[i].start == p->start)
+        if (slot->programs[i].start == p->start) {
+            free(desc);
             return;  // Said twice (guides merged from several sources).
+        }
     int at = slot->count;
     while (at > 0 && slot->programs[at - 1].start > p->start)
         at--;
-    if (at >= XMLTV_PER_CHANNEL)
+    if (at >= XMLTV_PER_CHANNEL) {
+        free(desc);
         return;
+    }
+    if (slot->count == XMLTV_PER_CHANNEL) {  // The last one goes.
+        free(slot->descs[XMLTV_PER_CHANNEL - 1]);
+        slot->descs[XMLTV_PER_CHANNEL - 1] = NULL;
+    }
     int moving = (slot->count < XMLTV_PER_CHANNEL ? slot->count : XMLTV_PER_CHANNEL - 1) - at;
     memmove(&slot->programs[at + 1], &slot->programs[at], (size_t)moving * sizeof(LiveProgram));
+    memmove(&slot->descs[at + 1], &slot->descs[at], (size_t)moving * sizeof(char *));
     slot->programs[at] = *p;
+    slot->descs[at] = desc;
     if (slot->count < XMLTV_PER_CHANNEL)
         slot->count++;
 }
@@ -169,18 +184,30 @@ static void readProgramme(XmltvReader *r, const char *text, size_t length)
     p.end = xmltvParseTime(stop);
     if (!p.start || p.end <= p.start || p.end <= r->from || p.start >= r->until)
         return;
-    bool in_title = false;
-    size_t title_length = 0;
+    // The first <title> and the first <desc> (when descriptions are kept for it).
+    bool want_desc = r->desc_until && p.start < r->desc_until;
+    char desc[XMLTV_DESC_MAX] = "";
+    enum { NONE, TITLE, DESC } in = NONE;
+    size_t title_length = 0, desc_length = 0;
+    bool had_title = false, had_desc = false;
     for (XmlToken t; (t = xmlNext(&x)) != XML_END;) {
-        if (t == XML_OPEN && !strcmp(x.name, "title") && !p.title[0])
-            in_title = true;
-        else if (t == XML_CLOSE && in_title)
-            break;
-        else if (t == XML_TEXT && in_title)
+        if (t == XML_OPEN && in == NONE && !strcmp(x.name, "title") && !had_title)
+            in = TITLE;
+        else if (t == XML_OPEN && in == NONE && want_desc && !strcmp(x.name, "desc") && !had_desc)
+            in = DESC;
+        else if (t == XML_CLOSE && in != NONE) {
+            had_title |= in == TITLE;
+            had_desc |= in == DESC;
+            in = NONE;
+            if (had_title && (had_desc || !want_desc))
+                break;
+        } else if (t == XML_TEXT && in == TITLE)
             title_length = xmlTextAppend(&x, p.title, sizeof(p.title), title_length);
+        else if (t == XML_TEXT && in == DESC)
+            desc_length = xmlTextAppend(&x, desc, sizeof(desc), desc_length);
     }
     r->matched++;
-    keep(slot, &p);
+    keep(slot, &p, desc[0] ? strdup(desc) : NULL);
 }
 
 // Reads the whole <programme> elements in pending, and keeps what may start the next.
@@ -286,6 +313,17 @@ const LiveProgram *xmltvPrograms(const XmltvReader *r, int channel, int *count)
     int slot = channel >= 0 && channel < r->channel_count ? r->slot_of[channel] : -1;
     *count = slot >= 0 ? r->slots[slot].count : 0;
     return slot >= 0 ? r->slots[slot].programs : NULL;
+}
+
+void xmltvKeepDescriptions(XmltvReader *r, int64_t until_s)
+{
+    r->desc_until = until_s;
+}
+
+const char *xmltvDescription(const XmltvReader *r, int channel, int index)
+{
+    int slot = channel >= 0 && channel < r->channel_count ? r->slot_of[channel] : -1;
+    return slot >= 0 && index >= 0 && index < r->slots[slot].count ? r->slots[slot].descs[index] : NULL;
 }
 
 int xmltvMatched(const XmltvReader *r)

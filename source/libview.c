@@ -379,6 +379,39 @@ void libviewClamp(LibView *v, const Library *lib, const Home *home)
     }
 }
 
+int libviewSelectedChannel(const LibView *v, const Home *home)
+{
+    if (v->show >= 0 || v->tab != TAB_HOME || v->home_row < 0 || v->home_row >= home->count)
+        return -1;
+    const HomeRow *row = &home->rows[v->home_row];
+    int c = v->home_cols[v->home_row].cursor;
+    return row->channels && c >= 0 && c < row->count ? row->items[c].index : -1;
+}
+
+void libviewHomeRebuilt(LibView *v, const Home *before, const Home *after)
+{
+    Scroll cols[HOME_ROWS_MAX];
+    memset(cols, 0, sizeof(cols));
+    int row = -1, first = -1;
+    for (int r = 0; r < before->count; r++) {
+        int to = homeFindRow(after, &before->rows[r]);
+        if (to < 0)
+            continue;
+        cols[to] = v->home_cols[r];
+        if (r == v->home_row)
+            row = to;
+        if (r == v->home_first_row)
+            first = to;
+    }
+    memcpy(v->home_cols, cols, sizeof(cols));
+    if (row >= 0) {  // The cursor's row keeps it; the rows in view follow it.
+        v->home_first_row = first >= 0 && first <= row ? first : row;
+        v->home_row = row;
+    }
+    v->home_offset = 0;
+    libviewHomeMove(v, after, 0, 0);
+}
+
 bool libviewSelected(const LibView *v, const Library *lib, const Home *home, LibraryRef *out)
 {
     if (v->show >= 0) {
@@ -388,7 +421,8 @@ bool libviewSelected(const LibView *v, const Library *lib, const Home *home, Lib
     }
     switch (v->tab) {
     case TAB_HOME:
-        if (v->home_row >= home->count || v->home_cols[v->home_row].cursor >= home->rows[v->home_row].count)
+        if (v->home_row >= home->count || v->home_cols[v->home_row].cursor >= home->rows[v->home_row].count ||
+            home->rows[v->home_row].channels)
             return false;
         *out = home->rows[v->home_row].items[v->home_cols[v->home_row].cursor];
         return true;

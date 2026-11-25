@@ -25,6 +25,9 @@ static int64_t g_now;
 
 void iptvGuideFree(IptvGuide *g)
 {
+    for (int i = 0; g->descs && i < g->count * XMLTV_PER_CHANNEL; i++)
+        free(g->descs[i]);
+    free(g->descs);
     free(g->programs);
     free(g->counts);
     memset(g, 0, sizeof(*g));
@@ -144,10 +147,14 @@ static void readGuide(NetClient *c, const IptvList *list, IptvGuide *guide, char
         for (int i = 0; i < list->count; i++)
             ids[i] = list->channels[i].epg_id[0] ? list->channels[i].epg_id : list->channels[i].name;
         r = xmltvBegin(ids, list->count, g_now - IPTV_GUIDE_BEFORE_S, g_now + IPTV_GUIDE_AFTER_S);
+        if (r)
+            xmltvKeepDescriptions(r, g_now + IPTV_GUIDE_DESC_S);
     }
     guide->programs = calloc((size_t)list->count, sizeof(*guide->programs));
     guide->counts = calloc((size_t)list->count, sizeof(int));
-    if (!r || !guide->programs || !guide->counts) {
+    guide->descs = calloc((size_t)list->count * XMLTV_PER_CHANNEL, sizeof(char *));
+    guide->count = list->count;  // For iptvGuideFree.
+    if (!r || !guide->programs || !guide->counts || !guide->descs) {
         snprintf(error, size, "%s", T("Out of memory"));
         iptvGuideFree(guide);
         xmltvFree(r);
@@ -174,8 +181,11 @@ static void readGuide(NetClient *c, const IptvList *list, IptvGuide *guide, char
         if (count > 0)
             memcpy(guide->programs[i], p, (size_t)count * sizeof(LiveProgram));
         guide->counts[i] = count;
+        for (int j = 0; j < count; j++) {  // Out of memory: that one has none.
+            const char *desc = xmltvDescription(r, i, j);
+            guide->descs[(size_t)i * XMLTV_PER_CHANNEL + j] = desc ? strdup(desc) : NULL;
+        }
     }
-    guide->count = list->count;
     pthread_mutex_lock(&g_lock);
     g_status.guide_programs = xmltvMatched(r);
     pthread_mutex_unlock(&g_lock);

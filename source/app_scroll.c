@@ -7,6 +7,7 @@
 #include "scroll.h"
 #include "ui.h"
 #include "ui_library.h"
+#include "ui_showcase.h"
 
 typedef enum {
     SCROLL_NONE,
@@ -85,7 +86,7 @@ static void startScroll(App *app, TouchEvent touch)
         LibHit hit = uiLibraryTap(touch.start_x, touch.start_y);
         bool across = abs(touch.x - touch.start_x) > abs(touch.y - touch.start_y);
         app->scroll_target = hit.kind == LIBHIT_HOME_CARD && across ? SCROLL_HOME_ROW : SCROLL_HOME;
-        if (v->iptv)  // The IPTV view's rows of channels.
+        if (v->iptv && !uiShowcaseShown(v, &app->library, &app->home, true))  // The IPTV view's own Home.
             app->scroll_target = app->scroll_target == SCROLL_HOME_ROW ? SCROLL_IPTV_ROW : SCROLL_IPTV_HOME;
         app->scroll_row = hit.a;
     } else if (libviewGrid(v) >= 0) {

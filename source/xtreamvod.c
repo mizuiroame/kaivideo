@@ -62,6 +62,33 @@ static char *jsonPicture(const json_t *object, const char *key)
     return url;
 }
 
+// backdrop_path: a list of addresses (or one), the first http(s) one; else NULL.
+static char *jsonBackdrop(const json_t *object)
+{
+    const json_t *v = json_object_get(object, "backdrop_path");
+    if (json_is_string(v))
+        return jsonPicture(object, "backdrop_path");
+    for (size_t i = 0; json_is_array(v) && i < json_array_size(v); i++) {
+        json_t *holder = json_pack("{sO}", "u", json_array_get(v, i));
+        char *url = holder ? jsonPicture(holder, "u") : NULL;
+        json_decref(holder);
+        if (url)
+            return url;
+    }
+    return NULL;
+}
+
+// A year from a date ("2024-03-01"), 0 if it doesn't start with one.
+static int jsonYear(const json_t *object, const char *key)
+{
+    const json_t *v = json_object_get(object, key);
+    const char *s = json_is_string(v) ? json_string_value(v) : "";
+    int year = 0, digits = 0;
+    while (digits < 4 && s[digits] >= '0' && s[digits] <= '9')
+        year = year * 10 + (s[digits++] - '0');
+    return digits == 4 && year >= 1880 && year <= 2100 ? year : 0;
+}
+
 // An extension: letters and digits only, else "mp4".
 static void jsonExtension(const json_t *object, const char *key, char out[8])
 {
@@ -124,6 +151,8 @@ static void freeShows(XtreamCatalog *c)
         free(s->name);
         free(s->cover);
         free(s->plot);
+        free(s->genre);
+        free(s->backdrop);
         xtreamEpisodesFree(s->episodes, s->episode_count);
     }
     free(c->shows);
@@ -282,6 +311,11 @@ bool xtreamParseShows(const char *json, XtreamCatalog *c)
         s->name = name;
         s->cover = jsonPicture(item, "cover");
         s->plot = jsonText(item, "plot", 2000);
+        s->genre = jsonText(item, "genre", 200);
+        s->backdrop = jsonBackdrop(item);
+        s->year = jsonYear(item, "releaseDate");
+        if (!s->year)
+            s->year = jsonYear(item, "release_date");
         s->added = jsonNumber(item, "last_modified");
         s->group = groupOf(item, c->show_groups, c->show_group_count);
     }
@@ -383,6 +417,7 @@ bool xtreamParseFilmInfo(const char *json, XtreamFilmInfo *out)
         if (!out->plot)
             out->plot = jsonText(info, "description", 2000);
         out->genre = jsonText(info, "genre", 200);
+        out->backdrop = jsonBackdrop(info);
         long long seconds = jsonNumber(info, "duration_secs");
         if (seconds <= 0) {
             const json_t *clock = json_object_get(info, "duration");
@@ -398,6 +433,7 @@ void xtreamFilmInfoFree(XtreamFilmInfo *info)
 {
     free(info->plot);
     free(info->genre);
+    free(info->backdrop);
     memset(info, 0, sizeof(*info));
 }
 
@@ -529,33 +565,38 @@ static void posterKey(char *out, size_t size, const char *url)
 
 static void addFilm(Library *lib, const XtreamFilm *f)
 {
-    char path[LIBRARY_PATH_MAX], art[POSTER_MAX];
+    char path[LIBRARY_PATH_MAX], art[POSTER_MAX], backdrop[POSTER_MAX];
     if (!xtreamLocation(path, sizeof(path), "movie", f->id, f->ext))
         return;
+    posterKey(backdrop, sizeof(backdrop), f->info.backdrop);
     VideoName name;
     memset(&name, 0, sizeof(name));
     snprintf(name.title, sizeof(name.title), "%s", f->name);
     name.year = f->year;
     posterKey(art, sizeof(art), f->poster);
     LibraryRemote remote = {.art = art, .in_collection = 0, .in_group = f->group + 1, .overview = f->info.plot,
-                            .runtime_ns = f->info.runtime_s * 1000000000ll, .genres = f->info.genre};
+                            .runtime_ns = f->info.runtime_s * 1000000000ll, .genres = f->info.genre,
+                            .backdrop = backdrop};
     libraryAddRemote(lib, path, &name, 0, f->added, &remote);
 }
 
 static void addShow(Library *lib, const XtreamShow *s, const char *unread, const char *failed)
 {
-    char path[LIBRARY_PATH_MAX], art[POSTER_MAX];
+    char path[LIBRARY_PATH_MAX], art[POSTER_MAX], backdrop[POSTER_MAX];
     posterKey(art, sizeof(art), s->cover);
+    posterKey(backdrop, sizeof(backdrop), s->backdrop);
     VideoName name;
     memset(&name, 0, sizeof(name));
     name.is_episode = true;
+    name.year = s->year;
     snprintf(name.show, sizeof(name.show), "%s", s->name);
     if (s->state != XTREAM_EPISODES_READ) {  // A stand-in until they're read.
         if (!xtreamLocation(path, sizeof(path), "show", s->id, NULL))
             return;
         name.season = name.episode = 1;
         snprintf(name.title, sizeof(name.title), "%s", s->state == XTREAM_EPISODES_FAILED ? failed : unread);
-        LibraryRemote remote = {.series_art = art, .overview = s->plot, .in_group = s->group + 1};
+        LibraryRemote remote = {.series_art = art, .overview = s->plot, .in_group = s->group + 1,
+                                .genres = s->genre, .series_overview = s->plot, .backdrop = backdrop};
         libraryAddRemote(lib, path, &name, 0, s->added, &remote);
         return;
     }
@@ -567,7 +608,9 @@ static void addShow(Library *lib, const XtreamShow *s, const char *unread, const
         name.episode = e->episode;
         snprintf(name.title, sizeof(name.title), "%s", e->title ? e->title : "");
         LibraryRemote remote = {.series_art = art, .overview = e->plot ? e->plot : s->plot,
-                                .runtime_ns = e->runtime_s * 1000000000ll, .in_group = s->group + 1};
+                                .runtime_ns = e->runtime_s * 1000000000ll, .in_group = s->group + 1,
+                                .genres = s->genre, .series_overview = i == 0 ? s->plot : NULL,
+                                .backdrop = backdrop};
         libraryAddRemote(lib, path, &name, 0, s->added, &remote);
     }
 }

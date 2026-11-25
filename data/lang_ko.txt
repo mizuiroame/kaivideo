@@ -1925,3 +1925,18 @@ Episodes
 
 %d min left
 %d분 남음
+
+[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 열기  [Y] 검색  [X] 소스  [ZL][ZR] 탭  [-] 설정  [+] 메뉴
+
+Favorite channels
+즐겨찾는 채널
+
+NEXT
+다음
+
+The guide has nothing on now for it.
+편성표에 지금 이 채널의 방송이 없습니다.
+
+Watch live
+생방송 보기

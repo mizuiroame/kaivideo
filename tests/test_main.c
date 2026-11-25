@@ -105,6 +105,7 @@ int main(void)
     testNotice();
     testIptv();
     testIptvHome();
+    testIptvShowcase();
     testXtreamVod();
     testStremio();
     testCertTrust();

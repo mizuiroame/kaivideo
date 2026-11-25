@@ -193,6 +193,41 @@ void uiDrawCaseTile(const Library *lib, LibraryRef ref, int x, int y, bool focus
         uiDrawTileFocus(x, y, w, h);
 }
 
+void uiDrawChannelTile(const IptvChannel *c, const char *on_now, double progress, int x, int y, bool focused)
+{
+    int w = TILE_WIDE_W, h = TILE_WIDE_H;
+    if (focused)
+        drawShadow(x, y, w, h);
+    const uint32_t *logo = uiLibThumbnailsOn() && c->logo[0] ? thumbGet(c->logo, 0) : NULL;
+    bool no_logo = !c->logo[0] || !uiLibThumbnailsOn() || thumbIsNone(c->logo, 0);
+    if (logo) {
+        drawFilled(logo, THUMB_W, THUMB_H, x, y, w, h, WIDE_R);
+    } else if (no_logo) {
+        Color top, bottom;
+        uiLibCardColors(c->name, &top, &bottom);
+        if (clipTo(x, y, w, h, WIDE_R)) {
+            gfxGradientV(x, y, w, h, top, bottom);
+            unclip();
+        }
+        if (textFits(y + 14, 84))
+            uiLibDrawWrapped(FONT_BOLD, 20, x + 14, y + 14, w - 28, 25, 3, c->name, COLOR_TEXT);
+    } else if (clipTo(x, y, w, h, WIDE_R)) {  // Its logo is on its way.
+        gfxFillRect(x, y, w, h, COLOR_SURFACE);
+        unclip();
+    }
+    if (progress >= 0 && textFits(y + h - 4, 4)) {  // A thin line along the bottom: how far into what's on.
+        int done = (int)((w - 2 * WIDE_R) * (progress > 1 ? 1 : progress));
+        gfxFillRect(x + WIDE_R, y + h - 4, w - 2 * WIDE_R, 2, GFX_RGB(0x3A, 0x3B, 0x44));
+        gfxFillRect(x + WIDE_R, y + h - 4, done > 2 ? done : 2, 2, COLOR_ACCENT);
+    }
+    if (focused)
+        uiDrawTileFocus(x, y, w, h);
+    if (textFits(y + h + 8, 22))
+        fontDrawClipped(FONT_BOLD, 17, x + 2, y + h + 8, w - 4, c->name, focused ? COLOR_TEXT : COLOR_DIM);
+    if (on_now && on_now[0] && textFits(y + h + 30, 20))
+        fontDrawClipped(FONT_REGULAR, 15, x + 2, y + h + 30, w - 4, on_now, COLOR_FAINT);
+}
+
 // Under a wide tile: a film's year, an episode's number and title, a series' seasons.
 static void wideLine(const Library *lib, LibraryRef ref, char *out, size_t size)
 {

@@ -1925,3 +1925,18 @@ Episodes
 
 %d min left
 残り%d分
+
+[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 開く  [Y] 検索  [X] ソース  [ZL][ZR] タブ  [-] 設定  [+] メニュー
+
+Favorite channels
+お気に入りのチャンネル
+
+NEXT
+次
+
+The guide has nothing on now for it.
+番組表に今このチャンネルの番組はありません。
+
+Watch live
+ライブで見る

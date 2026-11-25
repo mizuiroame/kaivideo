@@ -1925,3 +1925,18 @@ Episodes
 
 %d min left
 剩余 %d 分钟
+
+[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 打开  [Y] 搜索  [X] 来源  [ZL][ZR] 标签  [-] 设置  [+] 菜单
+
+Favorite channels
+收藏的频道
+
+NEXT
+接下来
+
+The guide has nothing on now for it.
+节目指南中此频道现在没有节目。
+
+Watch live
+观看直播

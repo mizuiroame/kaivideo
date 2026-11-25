@@ -1925,3 +1925,18 @@ Folgen
 
 %d min left
 Noch %d Min.
+
+[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] Öffnen  [Y] Suche  [X] Quelle  [ZL][ZR] Tabs  [-] Einstellungen  [+] Menü
+
+Favorite channels
+Lieblingssender
+
+NEXT
+DANACH
+
+The guide has nothing on now for it.
+Der Programmführer hat für diesen Sender gerade nichts.
+
+Watch live
+Live ansehen

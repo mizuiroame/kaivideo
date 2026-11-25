@@ -1925,3 +1925,18 @@ Episodi
 
 %d min left
 Mancano %d min
+
+[A] open  [Y] search  [X] source  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] apri  [Y] cerca  [X] sorgente  [ZL][ZR] schede  [-] impostazioni  [+] menu
+
+Favorite channels
+Canali preferiti
+
+NEXT
+DOPO
+
+The guide has nothing on now for it.
+La guida non ha nulla in onda ora per questo canale.
+
+Watch live
+Guarda in diretta

@@ -289,6 +289,27 @@ static void realCatalog(const ShowcaseCtx *c, const LibView *before, const Home 
     jfCatalogFree(&catalog);
 }
 
+void showcaseDraw(const ShowcaseCtx *c, const char *name, const LibView *v, const Library *lib, const Home *home,
+                  int frames)
+{
+    draw(c, name, v, lib, home, frames);
+}
+
+void showcaseCheckTaps(const ShowcaseCtx *c, const char *name, const LibView *v, const Home *home)
+{
+    checkTaps(c, name, v, home);
+}
+
+void showcaseProblem(const ShowcaseCtx *c, const char *name, const char *what)
+{
+    problem(c, name, what);
+}
+
+void showcaseMoveTo(LibView *v, const Home *home, int row, int col)
+{
+    moveTo(v, home, row, col);
+}
+
 void showcaseScenes(const ShowcaseCtx *c)
 {
     makePosters();
@@ -393,6 +414,7 @@ void showcaseScenes(const ShowcaseCtx *c)
     libraryFree(&small);
 
     realCatalog(c, &sd_view, &sd_home);
+    iptvShowcaseScenes(c, c->sd, &server, &sd_view, &sd_home);
     uiLibrarySetSource("", COLOR_ACCENT);
     g_large_on = false;
     libraryFree(&server);

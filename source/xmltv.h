@@ -11,6 +11,7 @@
 #include "livetv.h"
 
 #define XMLTV_PER_CHANNEL LIVE_PROGRAMS_PER_CHANNEL
+#define XMLTV_DESC_MAX 320  // A program's description is kept to this (bytes, with its end).
 
 typedef struct XmltvReader XmltvReader;
 
@@ -22,6 +23,11 @@ XmltvReader *xmltvBegin(const char *const *ids, int count, int64_t from_s, int64
 bool xmltvFeed(XmltvReader *r, const void *data, size_t size);
 // The programs kept for channel (an index of the ids), by start; how many in count.
 const LiveProgram *xmltvPrograms(const XmltvReader *r, int channel, int *count);
+// Keeps the descriptions (<desc>, cut to XMLTV_DESC_MAX) of the programs that start before until_s;
+// none are kept unless asked (a big guide's would take much memory).
+void xmltvKeepDescriptions(XmltvReader *r, int64_t until_s);
+// The description kept for program index of channel (as xmltvPrograms gives them), or NULL.
+const char *xmltvDescription(const XmltvReader *r, int channel, int index);
 // Programs read in all (to say whether the guide had anything for the list).
 int xmltvMatched(const XmltvReader *r);
 void xmltvFree(XmltvReader *r);

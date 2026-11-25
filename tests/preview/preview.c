@@ -569,6 +569,8 @@ static void makeFakeThumbs(void)
 const uint32_t *thumbGet(const char *path, int64_t size)
 {
     (void)size;
+    if (fakeLogo(path))
+        return fakeLogo(path);
     unsigned h = 0;
     for (const char *p = path; *p; p++)
         h = h * 31 + (unsigned char)*p;

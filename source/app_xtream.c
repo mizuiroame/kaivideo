@@ -12,10 +12,12 @@
 #include "net.h"
 #include "ui_library.h"
 #include "ui_live.h"
+#include "ui_showcase.h"
 
 #define EPISODES_MAX_BYTES (16u << 20)
 #define FILM_INFO_MAX_BYTES (1u << 20)
 #define STALL_S 20
+#define HERO_SETTLE_FRAMES 20  // The Showcase's cursor rests this long on one before it's asked for.
 
 // One question at a time: a series' episodes, or a film's details.
 static struct {
@@ -301,6 +303,38 @@ static void takeAnswer(App *app)
     g.count = 0;
 }
 
+// The film or series the Showcase's large picture rests on, when its details or episodes weren't read:
+// only that one is asked for, never every one in its rows.
+static void askForShowcase(App *app)
+{
+    static char resting[LIBRARY_PATH_MAX];  // What the cursor is on, and for how many frames.
+    static int frames;
+    LibraryRef ref;
+    if (!uiShowcaseShown(&app->view, &app->library, &app->home, true) ||
+        !libviewSelected(&app->view, &app->library, &app->home, &ref)) {
+        resting[0] = '\0';
+        return;
+    }
+    if (ref.is_show && ((size_t)ref.index >= app->library.show_count || app->library.shows[ref.index].count == 0))
+        return;
+    if (!ref.is_show && (size_t)ref.index >= app->library.count)
+        return;
+    const char *path = app->library.items[ref.is_show ? app->library.shows[ref.index].episodes[0] : ref.index].path;
+    if (strcmp(path, resting)) {
+        snprintf(resting, sizeof(resting), "%s", path);
+        frames = 0;
+    }
+    if (++frames < HERO_SETTLE_FRAMES)
+        return;
+    long long show = xtreamStandInShow(path), film = xtreamFilmOf(path);
+    const XtreamShow *s = show > 0 ? xtreamFindShow(&app->xtream, show) : NULL;
+    const XtreamFilm *f = film > 0 ? xtreamFindFilm(&app->xtream, film) : NULL;
+    if (s && s->state == XTREAM_EPISODES_UNREAD)
+        ask(false, show);
+    else if (f && f->info_state == XTREAM_INFO_UNREAD)
+        ask(true, film);
+}
+
 void appXtreamUpdate(App *app)
 {
     if (!app->config.use_iptv)
@@ -317,6 +351,7 @@ void appXtreamUpdate(App *app)
     long long film = shownFilm(app);
     if (film > 0)
         ask(true, film);  // Only the film opened: not every film of the list.
+    askForShowcase(app);
 }
 
 void appXtreamExit(App *app)
