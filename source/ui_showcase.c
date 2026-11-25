@@ -79,6 +79,31 @@ static bool sameRef(LibraryRef a, LibraryRef b)
     return a.is_show == b.is_show && a.index == b.index;
 }
 
+// A ref that this library has: one kept from another library (the source changed) may point past its
+// end, or at series it doesn't have.
+static bool refIn(const Library *lib, LibraryRef ref)
+{
+    if (ref.index < 0)
+        return false;
+    if (!ref.is_show)
+        return (size_t)ref.index < lib->count;
+    return (size_t)ref.index < lib->show_count && lib->shows[ref.index].count > 0;
+}
+
+// The library the large picture's refs are of: another one (a new source, or the same read again) and
+// they're let go, so nothing fades from a video of the one before.
+static void sameLibrary(const Library *lib)
+{
+    static const LibraryItem *items;
+    static size_t count, show_count;
+    if (lib->items == items && lib->count == count && lib->show_count == show_count)
+        return;
+    items = lib->items;
+    count = lib->count;
+    show_count = lib->show_count;
+    memset(&g_hero, 0, sizeof(g_hero));
+}
+
 // --- The large picture ---
 
 // The file or art its pictures are of: a film's or episode's own, a series' (or its first episode's).
@@ -154,9 +179,12 @@ static void follow(LibraryRef ref)
 void uiShowcaseDrawBackdrop(const LibView *v, const Library *lib, const Home *home)
 {
     LibraryRef ref;
-    if (!selected(v, home, &ref))
+    sameLibrary(lib);
+    if (!selected(v, home, &ref) || !refIn(lib, ref))
         return;
     follow(ref);
+    if (g_hero.has_from && !refIn(lib, g_hero.from))
+        g_hero.has_from = false;
     if (!uiLibThumbnailsOn())
         return;
     bool settled = g_hero.still >= SETTLE_FRAMES, large = false, from_large = false;
@@ -362,7 +390,7 @@ static void drawRow(const LibView *v, const Library *lib, const Home *home, cons
 void uiShowcaseDraw(const LibView *v, const Library *lib, const Home *home, const ResumeList *resume)
 {
     LibraryRef ref;
-    if (selected(v, home, &ref))
+    if (selected(v, home, &ref) && refIn(lib, ref))
         drawHeroText(lib, resume, ref);
     uiTilesSetRegion(ROWS_Y - CLIP_ABOVE, UI_FOOTER_Y);
     // The row in view, and the one under it (and above it, while a finger moves them).

@@ -3,6 +3,7 @@
 // style, and checks that what's drawn answers a tap.
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "font.h"
@@ -16,6 +17,8 @@
 #include "ui_library.h"
 #include "ui_style.h"
 #include "showcase_scenes.h"
+
+#include "jellyfin.h"
 
 #define FAKE_POSTERS 8
 #define DRAWS 40  // Frames drawn before a picture is saved: the large picture is settled and in.
@@ -205,6 +208,87 @@ static void moveTo(LibView *v, const Home *home, int row, int col)
     libviewHomeMove(v, home, col - v->home_cols[v->home_row].cursor, 0);
 }
 
+// KAIVIDEO_REAL_CATALOG=<a server cache file> (a jellyfin_library.txt, kept off the repository): the
+// switch from the card's Showcase to that library, every tile under the cursor in turn. Nothing is
+// saved, so no title of it leaves the run; run it with sanitizers to find what a real library breaks.
+static char *readText(const char *file)
+{
+    FILE *f = fopen(file, "rb");
+    if (!f)
+        return NULL;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    char *text = size > 0 ? malloc((size_t)size + 1) : NULL;
+    if (text) {
+        size_t n = fread(text, 1, (size_t)size, f);
+        text[n] = '\0';
+    }
+    fclose(f);
+    return text;
+}
+
+static void realCatalog(const ShowcaseCtx *c, const LibView *before, const Home *before_home)
+{
+    const char *file = getenv("KAIVIDEO_REAL_CATALOG");
+    if (!file || !file[0])
+        return;
+    (void)before;
+    (void)before_home;
+    static JfCatalog catalog;
+    const char *series = getenv("KAIVIDEO_REAL_SERIES"), *items = getenv("KAIVIDEO_REAL_ITEMS");
+    if (series && items) {  // A server's answers (saved off the repository), read as the sync reads them.
+        jfCatalogInit(&catalog);
+        char *text = readText(series);
+        jfCatalogAddSeriesGenres(&catalog, text ? text : "");
+        free(text);
+        text = readText(items);
+        int total = 0;
+        printf("REAL: page %d\n", jfCatalogAddPage(&catalog, text ? text : "", &total));
+        free(text);
+        libraryBuild(&catalog.library);
+    } else if (!jfCatalogLoad(&catalog, file)) {
+        printf("REAL: %s couldn't be read\n", file);
+        (*c->problems)++;
+        return;
+    }
+    static ResumeList resume;
+    static Watched watched;
+    const ResumeList *use_resume = c->resume;
+    const Watched *use_watched = c->watched;
+    if (getenv("KAIVIDEO_REAL_RESUME") && getenv("KAIVIDEO_REAL_WATCHED")) {  // What was watched, as kept.
+        memset(&resume, 0, sizeof(resume));
+        watchedInit(&watched);
+        resumeLoad(&resume, getenv("KAIVIDEO_REAL_RESUME"));
+        watchedLoad(&watched, getenv("KAIVIDEO_REAL_WATCHED"));
+        jfMergeUserData(&catalog, &resume, &watched);
+        use_resume = &resume;
+        use_watched = &watched;
+    }
+    static Home home;
+    static LibView view;
+    libviewInit(&view);
+    libviewSetTabs(&view, &catalog.library, true, false, false);
+    libviewSetHomeShowcase(&view, true);
+    homeComputeShowcase(&home, &catalog.library, use_resume, use_watched);
+    homeSetTiles(&home, HOME_TILES_MIXED);
+    libviewClamp(&view, &catalog.library, &home);
+    printf("REAL: %zu items, %zu shows, %d rows\n", catalog.library.count, catalog.library.show_count, home.count);
+    int frames = 0;
+    for (int r = 0; r < home.count; r++) {
+        moveTo(&view, &home, r, 0);
+        for (int col = 0; col < home.rows[r].count; col++) {
+            moveTo(&view, &home, r, col);
+            for (int f = 0; f < 3; f++, frames++) {
+                c->begin();
+                uiDrawLibrary(&view, &catalog.library, &home, use_resume, true, NULL);
+            }
+        }
+    }
+    printf("REAL: %d frames drawn\n", frames);
+    jfCatalogFree(&catalog);
+}
+
 void showcaseScenes(const ShowcaseCtx *c)
 {
     makePosters();
@@ -265,6 +349,50 @@ void showcaseScenes(const ShowcaseCtx *c)
     draw(c, "showcase_sd_films", &sd_view, c->sd, &sd_home, DRAWS);
     checkTaps(c, "showcase_sd_films", &sd_view, &sd_home);
 
+    // From the card's series to a library with two films and no series (the network folder's, say): the
+    // large picture it fades from is the card's, which this library doesn't have.
+    moveTo(&sd_view, &sd_home, rowOf(&sd_home, HOME_SERIES), sd_home.rows[rowOf(&sd_home, HOME_SERIES)].count - 1);
+    draw(c, "showcase_sd_series", &sd_view, c->sd, &sd_home, DRAWS);
+    static Library small;
+    static Home small_home;
+    static LibView small_view;
+    libraryInit(&small, "dav:/");
+    libraryAdd(&small, "dav:/clips/Harbor Lights (2019).mkv", 3513374, 1795629842);
+    libraryAdd(&small, "dav:/clips/Paper Boats (2021).mp4", 3513638, 1795629842);
+    libraryBuild(&small);
+    libviewInit(&small_view);
+    libviewSetHomeShowcase(&small_view, true);
+    homeComputeShowcase(&small_home, &small, c->resume, c->watched);
+    homeSetTiles(&small_home, HOME_TILES_MIXED);
+    draw(c, "showcase_small_after_sd", &small_view, &small, &small_home, DRAWS);
+    // X pressed again and again: each source shown a frame or two, the large picture mid-fade each time,
+    // from a big library to the small one and back.
+    static Library big;
+    static Home big_home;
+    static LibView big_view;
+    makeServerLibrary(&big, c->sd);
+    libviewInit(&big_view);
+    libviewSetTabs(&big_view, &big, true, false, false);
+    libviewSetHomeShowcase(&big_view, true);
+    homeComputeShowcase(&big_home, &big, c->resume, c->watched);
+    homeSetTiles(&big_home, HOME_TILES_MIXED);
+    for (int round = 0; round < 6; round++) {
+        int series = rowOf(&big_home, HOME_SERIES);
+        moveTo(&big_view, &big_home, round % 2 ? series : rowOf(&big_home, HOME_FILMS),
+               big_home.rows[round % 2 ? series : rowOf(&big_home, HOME_FILMS)].count - 1);
+        for (int f = 0; f < 1 + round % 3; f++) {
+            c->begin();
+            uiDrawLibrary(&big_view, &big, &big_home, c->resume, true, NULL);
+        }
+        c->begin();
+        uiDrawLibrary(&small_view, &small, &small_home, c->resume, true, NULL);
+        c->begin();
+        uiDrawLibrary(&sd_view, c->sd, &sd_home, c->resume, true, NULL);
+    }
+    libraryFree(&big);
+    libraryFree(&small);
+
+    realCatalog(c, &sd_view, &sd_home);
     uiLibrarySetSource("", COLOR_ACCENT);
     g_large_on = false;
     libraryFree(&server);

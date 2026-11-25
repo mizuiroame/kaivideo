@@ -39,6 +39,23 @@ static const char *libraryRoot(const App *app)
 
 // --- The library and its scan ---
 
+// What Home was made of, once each time it changes: a crash just after leaves a trace in the log.
+static void logHome(const App *app, bool showcase)
+{
+    static char root[LIBRARY_PATH_MAX];
+    static size_t count = (size_t)-1, shows;
+    static int rows = -1;
+    const Library *lib = &app->library;
+    if (!strcmp(root, lib->root) && count == lib->count && shows == lib->show_count && rows == app->home.count)
+        return;
+    snprintf(root, sizeof(root), "%s", lib->root);
+    count = lib->count;
+    shows = lib->show_count;
+    rows = app->home.count;
+    appLog("Home (%s) of %s: %zu videos, %zu series, %d rows", showcase ? "Showcase" : "classic", lib->root,
+           lib->count, lib->show_count, app->home.count);
+}
+
 void appLibraryRefreshHome(App *app)
 {
     // The Showcase (the default) or the classic rows; the IPTV list's Home is its channels' (app_iptvhome.c).
@@ -49,6 +66,7 @@ void appLibraryRefreshHome(App *app)
     } else {
         homeCompute(&app->home, &app->library, &app->resume, &app->watched);
     }
+    logHome(app, showcase);
     if (app->view.showcase != showcase)
         libviewSetHomeShowcase(&app->view, showcase);
     appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
@@ -214,6 +232,11 @@ void appLibraryShowServer(App *app, ServerKind kind)
 // X goes through the card, the network folder (if there's one) and each server signed in, in turn.
 void appLibraryToggleSource(App *app, uint64_t now)
 {
+    appLog("Source: next, from %s", app->config.use_addons    ? "addons"
+                                    : app->config.use_iptv    ? "IPTV"
+                                    : app->config.use_jellyfin ? serverKindName((ServerKind)app->config.server_view)
+                                    : app->config.use_network ? "the network folder"
+                                                              : "the card");
     if (app->config.use_addons) {  // The last: back to the card.
         appLibrarySetSource(app, false);
         return;
