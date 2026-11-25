@@ -114,7 +114,9 @@ touches small:
   on each piece, and on how much of them is kept in memory (256 MB, past
   which only the piece being played is fetched).
 - **Subtitles** (SRT, WebVTT, the server's) are read with a limit on cues and
-  on every time field; **servers' answers** (JSON) by Jansson, with size
+  on every time field; picture ones by FFmpeg's PGS and DVD subtitle decoders,
+  with a VobSub's `.idx` (2 MB at most) and `.sub` (96 MB) read by KaiVideo
+  with bounds on every packet, and at most 24 MB of pictures kept a track; **servers' answers** (JSON) by Jansson, with size
   limits; **network folder listings** with length checks, leaving out names
   with control characters or slashes, `.` and `..`.
 - **Hardening.** The `.nro` is built with `-fstack-protector-strong` and

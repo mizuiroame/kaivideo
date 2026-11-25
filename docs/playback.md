@@ -37,7 +37,12 @@ from a list (**X**). The picture waits a moment for the new sound.
   - an `.srt` file next to the video on the card (`Film.srt` or
     `Film.es.srt`);
   - the text subtitles inside the file: SubRip and ASS in MKV, mov_text in
-    MP4, WebVTT.
+    MP4, WebVTT;
+  - **picture subtitles**, from the card or a network folder: Blu-ray (PGS)
+    and DVD (VobSub) ones inside an MKV, and a VobSub's `Film.idx` and
+    `Film.sub` next to the video (each of its languages shows in the list as
+    "English (VobSub file)" and so on). They're drawn as the disc has them,
+    scaled to the picture; see [Limitations](limitations.md).
 - **Choosing**: pick one from a list (**Y**), or none.
 - **Their look**: size, color, style (outline or a dark box) and **font** are
   at the end of that list. The fonts are:

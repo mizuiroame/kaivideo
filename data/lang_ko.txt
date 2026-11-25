@@ -6,6 +6,9 @@ language = 한국어
  (.srt file)
  (.srt 파일)
 
+ (VobSub file)
+ (VobSub 파일)
+
  The connection isn't encrypted: use https outside your home.
  연결이 암호화되지 않았습니다. 집 밖에서는 https를 사용하세요.
 

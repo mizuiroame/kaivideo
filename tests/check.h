@@ -52,4 +52,7 @@ void testIptvHome(void);
 void testXtreamVod(void);
 void testStremio(void);
 void testCertTrust(void);
+void testPicSubs(void);
+void testVobsub(void);
+void testPicSubsFf(void);
 void testFolderList(void);

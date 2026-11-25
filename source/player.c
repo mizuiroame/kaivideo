@@ -15,7 +15,9 @@
 #include "lang.h"
 #include "livetv.h"
 #include "mediafile.h"
+#include "picsubsff.h"
 #include "subs.h"
+#include "vobsub.h"
 #include "webvtt.h"
 
 #define AUDIO_WAIT_NS 2000000000ull  // How long the picture waits for the sound to start before going alone.
@@ -45,6 +47,8 @@ typedef struct {
     int stream_index;   // The server's number.
     int live_track_plus1;  // A channel's own subtitles (hlsio.h), plus 1; 0 for others.
     int picture_plus1;     // A picture subtitle the server draws on the video: its number plus 1; 0 for others.
+    int vobsub_language;   // A language of the VobSub next to the video (Player.vobsub), -1 for others:
+    PicSubs *pictures;     // its pictures, read when it's first chosen (EXT_READY).
 } ExtSub;
 
 struct Player {
@@ -129,6 +133,9 @@ struct Player {
     uint64_t reopen_since_ns;  // The last jump that asked for it.
     volatile bool ext_cancel;  // Closing: subtitles on their way are dropped.
     int frames_seen;
+    // A VobSub next to the video: its index, and where its .sub is (read when a language is chosen).
+    VobsubIndex vobsub;
+    char vobsub_sub[512];
 };
 
 // The .srt's label: its language from "name.es.srt", and that it's a file.
@@ -179,8 +186,63 @@ static bool loadNetworkSrt(SubTrack *t, const char *path, char *srt, size_t size
     return ok;
 }
 
+// A small file of the card's or the network folder's, read whole. False if it isn't there.
+static bool readWhole(const char *path, size_t max, char **data, size_t *size)
+{
+    char why[160];
+    if (davIsLocation(path))
+        return davReadWhole(path, max, data, size, why, sizeof(why));
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return false;
+    bool ok = fseek(f, 0, SEEK_END) == 0;
+    long length = ok ? ftell(f) : -1;
+    ok = length >= 0 && (size_t)length <= max && fseek(f, 0, SEEK_SET) == 0;
+    *data = ok ? malloc((size_t)length + 1) : NULL;
+    ok = *data && fread(*data, 1, (size_t)length, f) == (size_t)length;
+    fclose(f);
+    if (!ok) {
+        free(*data);
+        *data = NULL;
+        return false;
+    }
+    (*data)[length] = '\0';
+    *size = (size_t)length;
+    return true;
+}
+
+// A VobSub (name.idx and name.sub) next to the video: each of its languages a track, read when chosen.
+static void findVobsub(Player *p, const char *path)
+{
+    char idx[512], *text = NULL;
+    size_t size = 0;
+    if ((strncmp(path, "sdmc:", 5) && !davIsLocation(path)) || !vobsubIdxFor(path, idx, sizeof(idx)))
+        return;  // Only the card's and the network folder's videos have files beside them.
+    if (!readWhole(idx, VOBSUB_IDX_MAX, &text, &size)) {
+        size_t n = strlen(idx);  // "NAME.IDX", as DVD tools write it.
+        memcpy(idx + n - 3, "IDX", 3);
+        if (!readWhole(idx, VOBSUB_IDX_MAX, &text, &size))
+            return;
+    }
+    bool ok = vobsubParseIndex(text, size, &p->vobsub) && vobsubSubFor(idx, p->vobsub_sub, sizeof(p->vobsub_sub));
+    free(text);
+    if (!ok) {
+        vobsubIndexFree(&p->vobsub);
+        return;
+    }
+    for (int i = 0; i < p->vobsub.count && p->ext_count < EXTERNAL_MAX; i++) {
+        ExtSub *e = &p->ext[p->ext_count++];
+        const char *language = subsLanguageName(p->vobsub.languages[i].code);
+        snprintf(e->label, sizeof(e->label), "%s%s", language ? language : T("Subtitles"), T(" (VobSub file)"));
+        e->state = EXT_REMOTE;  // Read when chosen.
+        e->vobsub_language = i;
+    }
+}
+
 static void openSubtitles(Player *p, const char *path)
 {
+    for (int i = 0; i < EXTERNAL_MAX; i++)
+        p->ext[i].vobsub_language = -1;
     char srt[512];
     bool network = davIsLocation(path);
     if (network ? loadNetworkSrt(&p->ext[0].track, path, srt, sizeof(srt))
@@ -189,6 +251,7 @@ static void openSubtitles(Player *p, const char *path)
         p->ext[0].state = EXT_READY;
         labelExternal(p, srt);
     }
+    findVobsub(p, path);
     // An .srt was put there to be seen; else a track the file marks default.
     int preferred = videoSubtitlePreferred(p->video);
     p->subtitle = p->ext_count ? 0 : preferred;
@@ -250,8 +313,11 @@ void playerClose(Player *p)
     pthread_mutex_destroy(&p->ext_lock);
     audioClose(p->audio);
     videoClose(p->video);
-    for (int i = 0; i < p->ext_count; i++)
+    for (int i = 0; i < p->ext_count; i++) {
         subsFree(&p->ext[i].track);
+        picSubsFree(p->ext[i].pictures);
+    }
+    vobsubIndexFree(&p->vobsub);
     free(p);
 }
 
@@ -272,10 +338,31 @@ int playerSubtitle(const Player *p)
     return p->subtitle;
 }
 
+// A VobSub language's pictures: the .sub read whole, and its pictures taken out of it and decoded.
+static PicSubs *readVobsub(Player *p, const ExtSub *e)
+{
+    char *sub = NULL;
+    size_t size = 0;
+    if (!readWhole(p->vobsub_sub, VOBSUB_SUB_MAX, &sub, &size))
+        return NULL;
+    PicSubs *pictures = vobsubDecode(&p->vobsub, e->vobsub_language, (const uint8_t *)sub, size, 0, 0, &p->ext_cancel);
+    free(sub);
+    return pictures;
+}
+
 static void *fetchExternal(void *arg)
 {
     Player *p = arg;
     ExtSub *e = &p->ext[p->ext_loading];
+    if (e->vobsub_language >= 0) {
+        PicSubs *pictures = readVobsub(p, e);
+        pthread_mutex_lock(&p->ext_lock);
+        e->pictures = pictures;
+        e->state = pictures ? EXT_READY : EXT_FAILED;
+        p->ext_thread_done = true;
+        pthread_mutex_unlock(&p->ext_lock);
+        return NULL;
+    }
     NetResponse answer;
     SubTrack track = {0};
     bool ok = jfSyncFetchSubtitle(p->location, e->stream_index, JF_SUBTITLE_PLAY_WAIT_S, &p->ext_cancel, &answer);
@@ -300,7 +387,7 @@ static int externalToFetch(Player *p)
     if (++p->frames_seen < PREFETCH_AFTER_FRAMES)
         return -1;
     for (int i = 0; i < p->ext_count; i++)
-        if (p->ext[i].state == EXT_REMOTE)
+        if (p->ext[i].state == EXT_REMOTE && p->ext[i].vobsub_language < 0)  // A VobSub's only when chosen.
             return i;
     return -1;
 }
@@ -468,18 +555,36 @@ static int videoTrackOf(const Player *p, int track)
     return track - p->ext_count;
 }
 
+// Whether a track of the list brings its own look: ASS, or pictures (the file's or a VobSub's).
+static bool ownLook(const Player *p, int track)
+{
+    if (track >= 0 && track < p->ext_count)
+        return p->ext[track].vobsub_language >= 0;
+    return videoSubtitleStyled(p->video, videoTrackOf(p, track));
+}
+
 bool playerSubtitleColorApplies(const Player *p)
 {
     if (p->subtitle >= 0)
-        return !videoSubtitleStyled(p->video, videoTrackOf(p, p->subtitle));
+        return !ownLook(p, p->subtitle);
     for (int i = 0; i < playerSubtitleCount(p); i++)
-        if (!videoSubtitleStyled(p->video, videoTrackOf(p, i)))
+        if (!ownLook(p, i))
             return true;
     return false;
 }
 
 bool playerSubtitlePicture(Player *p, const AssArea *area, AssPicture *out)
 {
+    if (p->subtitle >= 0 && p->subtitle < p->ext_count && p->ext[p->subtitle].vobsub_language >= 0) {
+        pthread_mutex_lock(&p->ext_lock);  // Set by the thread that reads it; drawn only here after.
+        PicSubs *pictures = p->ext[p->subtitle].state == EXT_READY ? p->ext[p->subtitle].pictures : NULL;
+        pthread_mutex_unlock(&p->ext_lock);
+        if (!pictures) {
+            memset(out, 0, sizeof(*out));
+            return true;  // Still being read: nothing shows.
+        }
+        return picSubsRender(pictures, subtitleTime(p), area, out);
+    }
     int track = videoTrackOf(p, p->subtitle);
     if (p->subtitle < 0 || track < 0)
         return false;

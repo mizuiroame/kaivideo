@@ -6,6 +6,9 @@ language = 简体中文
  (.srt file)
  （.srt文件）
 
+ (VobSub file)
+ （VobSub文件）
+
  The connection isn't encrypted: use https outside your home.
  连接未加密：在家以外的地方请使用https。
 

@@ -56,8 +56,8 @@ The screenshots show made-up films, series and channels.
   video are decoded on the CPU. Plays MP4, MKV, WebM and MPEG-TS.
   [More](docs/playback.md)
 - **Sound tracks and subtitles:** `.srt` files, text subtitles inside the file,
-  and styled ASS subtitles that keep their look, with your choice of size,
-  color and font.
+  styled ASS subtitles that keep their look, with your choice of size, color
+  and font, and Blu-ray and DVD picture subtitles (PGS, VobSub).
 - **Resume, next episode, watched marks**, and a **Playback list** with
   chapters, speed (0.5x to 2x, voices keep their pitch), volume up to 200%,
   picture size, an A-B loop and audio and subtitle delays.

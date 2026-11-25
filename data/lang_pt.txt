@@ -6,6 +6,9 @@ language = Português (Brasil)
  (.srt file)
  (arquivo .srt)
 
+ (VobSub file)
+ (arquivo VobSub)
+
  The connection isn't encrypted: use https outside your home.
  A conexão não é criptografada: use https fora de casa.
 

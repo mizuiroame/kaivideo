@@ -4,9 +4,14 @@
 
 ## Limitations
 
-- **Picture subtitles** (DVD and Blu-ray ones, in MKV) aren't shown from the
-  SD card or a network folder; text ones are. From a server, the server draws
-  them on.
+- **Picture subtitles** from the SD card and a network folder: Blu-ray PGS
+  and DVD VobSub inside an MKV, and a VobSub pair (`Film.idx` + `Film.sub`)
+  next to the video, up to 8 languages, each read when first chosen. Not
+  supported: PGS or VobSub in MP4, a `.sup` file beside the video, DVB
+  subtitles, and a `.sub` over 96 MB. They're drawn as the disc has them
+  (their own size, colors and place): the size, color and font options don't
+  apply, and the subtitle delay does. From a server, the server still draws
+  them on (it converts the video for that).
 - **10-bit AV1** and **12-bit** HEVC can't be played.
 - **HEVC** is decoded on the CPU: the console's decoder service, which
   [libounce](https://github.com/ouncebrew/libounce) uses, doesn't offer it,
@@ -61,9 +66,7 @@
 
 ## Plans
 
-- Plex Home profiles, Xtream categories, and more than the first page of an
-  addon's catalog.
-- **Picture subtitles** (PGS, VobSub) from the SD card.
+- Plex Home profiles.
 - Smoother jumps, and checks with big libraries on the console.
 - **Experiment: skip deblocking on frames nothing refers to**, for 4K HEVC on
   the CPU. Measured on the console with `tools/hevctest` (its "no deblocking"

@@ -6,6 +6,9 @@ language = Italiano
  (.srt file)
  (file .srt)
 
+ (VobSub file)
+ (file VobSub)
+
  The connection isn't encrypted: use https outside your home.
  La connessione non è cifrata: usa https fuori casa.
 

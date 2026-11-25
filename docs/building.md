@@ -40,6 +40,9 @@ docker run --rm -v "$PWD:/build/kaivideo" -w /build/kaivideo kaivideo-host make 
 - **Tests in CI**: on every push and pull request, GitHub Actions builds
   `tests/Dockerfile` and runs `make run` in it (`.github/workflows/tests.yml`).
   The live tests and the previews stay on the PC.
+- **Picture subtitles to try**: `tools/picsubtest/make_picsubs.c` makes a
+  VobSub pair (`.idx` + `.sub`) and an MKV with VobSub inside, from a video of
+  your own and made-up lines (how to run it is at its top).
 - **Icon**: `tools/make_icon.py` draws `icon.jpg`.
 - **Languages**: `tools/lang_check.py` checks a language file against the
   texts in the code. See [Languages](languages.md).

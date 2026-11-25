@@ -13,7 +13,7 @@
 #include "playback.h"
 
 #define VIDEO_QUEUE 3  // Decoded frames waiting to be shown.
-#define VIDEO_SUB_TRACKS 8  // Text subtitle tracks kept from a file.
+#define VIDEO_SUB_TRACKS 8  // Subtitle tracks kept from a file (text, or pictures).
 #define VIDEO_AUDIO_TRACKS 8  // Sound tracks that can be chosen.
 #define VIDEO_CHAPTERS 99     // Chapters kept from a file.
 
@@ -59,7 +59,7 @@ int64_t videoStartNs(const Video *v);
 bool videoFinished(Video *v, char *error, size_t error_size);
 VideoStats videoStats(const Video *v);
 
-// The file's text subtitle tracks, decoded as the file is read (so a line
+// The file's subtitle tracks (text, or pictures: PGS, VobSub), decoded as the file is read (so a line
 // shows once reading has passed it, which is always by its time).
 int videoSubtitleCount(const Video *v);
 // The track's title, or its language, or "Track 2".
@@ -68,11 +68,11 @@ const char *videoSubtitleLabel(const Video *v, int track);
 int videoSubtitlePreferred(const Video *v);
 // The track's text at pos_ns into out ('\n' between lines); false if none.
 bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size);
-// True if the track brings its own look (ASS): see videoSubtitlePicture.
+// True if the track brings its own look (ASS, or pictures): see videoSubtitlePicture.
 bool videoSubtitleStyled(const Video *v, int track);
 // The fonts styled subtitles fall back on, kept by the caller for as long as videos open.
 void videoSetSubtitleFonts(const AssFont *fonts, int count);
-// True if the track is drawn with its styles (ASS): its picture at pos_ns for
+// For a track with its own look (ASS, or pictures): its picture at pos_ns for
 // this area goes in out (out->w is 0 when nothing shows).
 bool videoSubtitlePicture(Video *v, int track, int64_t pos_ns, const AssArea *area, AssPicture *out);
 

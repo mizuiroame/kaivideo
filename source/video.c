@@ -13,8 +13,10 @@
 #include <switch.h>
 
 #include "hlsio.h"
+#include "jellyfin.h"
 #include "lang.h"
 #include "mediafile.h"
+#include "picsubsff.h"
 #include "subs.h"
 #include "swframe.h"
 
@@ -36,12 +38,13 @@ typedef struct {
     int64_t pts_ns;
 } Slot;
 
-// A text subtitle track inside the file, decoded as it is read.
+// A subtitle track inside the file, decoded as it is read: text, or pictures (PGS, VobSub).
 typedef struct {
     int stream;
     AVCodecContext *ctx;   // NULL for a styled track, which libass reads as it is.
     int styled_track;      // Its number in the Video's AssSubs, or NO_STYLED_TRACK.
     SubTrack track;    // Under the Video's lock.
+    PicSubs *pictures; // A picture track's, under the Video's lock; NULL for text.
     char label[64];
     bool preferred;    // Marked default or forced in the file.
 } SubStream;
@@ -60,6 +63,7 @@ struct Video {
     AVCodecContext *software;
     AVFrame *software_frame;
     int max_threads;               // 0: as many as suit the video.
+    bool from_server;              // A Jellyfin, Emby or Plex file: the server draws its picture subtitles.
     int64_t software_last_ns;      // The last frame's time: for a frame without one.
     int64_t frame_ns;
     int64_t clock_ns;              // Where playback last was (SWFRAME_NO_CLOCK after a seek).
@@ -363,7 +367,7 @@ static void doSeek(Video *v, int64_t target_ns)
     pthread_mutex_unlock(&v->lock);
 }
 
-// A subtitle packet: its lines go into its track, with their times.
+// A subtitle packet: its lines (or its pictures) go into its track, with their times.
 static void decodeSubtitle(Video *v, SubStream *s, AVPacket *pkt)
 {
     int64_t pts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
@@ -373,6 +377,15 @@ static void decodeSubtitle(Video *v, SubStream *s, AVPacket *pkt)
         return;
     AVRational tb = v->fmt->streams[s->stream]->time_base, ns = {1, 1000000000};
     int64_t base = av_rescale_q(pts, tb, ns);
+    if (s->pictures) {
+        int canvas_w, canvas_h;
+        picSubsCanvas(s->ctx, v->width, v->height, &canvas_w, &canvas_h);
+        pthread_mutex_lock(&v->lock);
+        picSubsAddDecoded(s->pictures, &sub, base, canvas_w, canvas_h);
+        pthread_mutex_unlock(&v->lock);
+        avsubtitle_free(&sub);
+        return;
+    }
     int64_t start = base + (int64_t)sub.start_display_time * 1000000;
     int64_t end;
     if (sub.end_display_time > sub.start_display_time && sub.end_display_time != UINT32_MAX)
@@ -389,7 +402,7 @@ static void decodeSubtitle(Video *v, SubStream *s, AVPacket *pkt)
         const char *line = r->type == SUBTITLE_ASS && r->ass ? subsAssText(r->ass)
                          : r->type == SUBTITLE_TEXT ? r->text : NULL;
         if (!line)
-            continue;  // A picture subtitle: not drawn.
+            continue;  // A picture in a text track: left out.
         int n = snprintf(text + used, sizeof(text) - used, "%s%s", used ? "\\N" : "", line);
         if (n < 0 || (size_t)n >= sizeof(text) - used)
             break;
@@ -707,20 +720,36 @@ static bool openSubStream(Video *v, SubStream *s, AVStream *st)
     return true;
 }
 
-// The text subtitle tracks (SubRip, ASS, mov_text, WebVTT), up to
-// VIDEO_SUB_TRACKS; picture ones (DVD, Blu-ray) aren't drawn.
+// Whether a stream is a subtitle track KaiVideo shows: text (SubRip, ASS,
+// mov_text, WebVTT), or pictures (Blu-ray PGS, DVD VobSub) for the player.
+static bool shownSubtitle(const Video *v, const AVStream *st, bool *pictures)
+{
+    const AVCodecDescriptor *desc = avcodec_descriptor_get(st->codecpar->codec_id);
+    *pictures = desc && (desc->props & AV_CODEC_PROP_BITMAP_SUB);
+    if (st->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE || !desc)
+        return false;
+    // Pictures: not for thumbnails, nor for a server's file (its list has them, for the server to draw).
+    return (desc->props & AV_CODEC_PROP_TEXT_SUB) || (*pictures && !v->max_threads && !v->from_server);
+}
+
+// The subtitle tracks, up to VIDEO_SUB_TRACKS.
 static void openSubtitles(Video *v)
 {
     if (!v->max_threads)  // Not for thumbnails.
         openStyledSubtitles(v);
     for (unsigned i = 0; i < v->fmt->nb_streams && v->sub_count < VIDEO_SUB_TRACKS; i++) {
         AVStream *st = v->fmt->streams[i];
-        const AVCodecDescriptor *desc = avcodec_descriptor_get(st->codecpar->codec_id);
-        if (st->codecpar->codec_type != AVMEDIA_TYPE_SUBTITLE || !desc || !(desc->props & AV_CODEC_PROP_TEXT_SUB))
+        bool pictures;
+        if (!shownSubtitle(v, st, &pictures))
             continue;
         SubStream *s = &v->subs[v->sub_count];
+        memset(s, 0, sizeof(*s));
         if (!openSubStream(v, s, st))
             continue;
+        if (pictures && !(s->pictures = picSubsCreate())) {
+            avcodec_free_context(&s->ctx);
+            continue;
+        }
         s->stream = (int)i;
         s->preferred = st->disposition & (AV_DISPOSITION_DEFAULT | AV_DISPOSITION_FORCED);
         const AVDictionaryEntry *title = av_dict_get(st->metadata, "title", NULL, 0);
@@ -772,6 +801,7 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     pthread_mutex_init(&v->lock, NULL);
     pthread_cond_init(&v->wake, NULL);
     v->clock_ns = SWFRAME_NO_CLOCK;
+    v->from_server = jfIsRemoteLocation(path);
     v->max_threads = max_threads;
     v->fmt = avformat_alloc_context();
     if (!v->fmt) {
@@ -861,6 +891,7 @@ void videoClose(Video *v)
     for (int i = 0; i < v->sub_count; i++) {
         avcodec_free_context(&v->subs[i].ctx);
         subsFree(&v->subs[i].track);
+        picSubsFree(v->subs[i].pictures);
     }
     assSubsClose(v->styled);
     if (v->fmt)
@@ -1013,13 +1044,20 @@ bool videoSubtitleAt(Video *v, int track, int64_t pos_ns, char *out, size_t size
 
 bool videoSubtitleStyled(const Video *v, int track)
 {
-    return track >= 0 && track < v->sub_count && v->subs[track].styled_track != NO_STYLED_TRACK;
+    return track >= 0 && track < v->sub_count &&
+           (v->subs[track].styled_track != NO_STYLED_TRACK || v->subs[track].pictures);
 }
 
 bool videoSubtitlePicture(Video *v, int track, int64_t pos_ns, const AssArea *area, AssPicture *out)
 {
     if (!videoSubtitleStyled(v, track))
         return false;
+    if (v->subs[track].pictures) {
+        pthread_mutex_lock(&v->lock);
+        bool ok = picSubsRender(v->subs[track].pictures, pos_ns, area, out);
+        pthread_mutex_unlock(&v->lock);
+        return ok;
+    }
     return assSubsRender(v->styled, v->subs[track].styled_track, pos_ns / 1000000, area, out);
 }
 
