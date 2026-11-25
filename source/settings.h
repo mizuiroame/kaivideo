@@ -63,6 +63,9 @@ typedef enum {
     SETTING_ADDON_FIRST,    // An addon added (A twice removes it); one row each, SETTINGS_ADDONS_MAX.
     SETTING_ADDON_LAST = SETTING_ADDON_FIRST + 5,
     SETTING_ADDONS_LOAD,    // Loads their catalogs again.
+    SETTING_NET_COLOR,      // The color the network folder wears (its own, or an accent).
+    SETTING_IPTV_COLOR,     // The IPTV list's.
+    SETTING_ADDONS_COLOR,   // The addons'.
     SETTING_COUNT,
 } SettingRow;
 
@@ -89,6 +92,14 @@ typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleSt
 typedef enum { SUBOPT_SIZE, SUBOPT_COLOR, SUBOPT_STYLE, SUBOPT_FONT, SUBOPT_COUNT } SubtitleOption;
 #define SUBTITLE_FONTS_FOLDER "fonts"  // In the config folder: .ttf and .otf files for subtitles.
 
+// The sources other than the servers that wear a color of their own (Config.source_color).
+typedef enum {
+    SOURCE_COLOR_NETWORK,
+    SOURCE_COLOR_IPTV,
+    SOURCE_COLOR_ADDONS,
+    SOURCE_COLOR_COUNT,
+} SourceColor;
+
 typedef struct {
     int theme, accent;
     char background[SETTINGS_NAME_MAX];  // A file in <library>/Backgrounds, or "" for none.
@@ -110,6 +121,7 @@ typedef struct {
     int subtitle_style;                  // SubtitleStyle.
     char subtitle_font[SETTINGS_NAME_MAX];  // A file in config/fonts, or "" for the built-in font.
     int server_color[SERVER_KIND_COUNT];  // 0: the server's own color; else the accent number + 1.
+    int source_color[SOURCE_COLOR_COUNT];  // The same for the network folder, IPTV and the addons.
     char language[SETTINGS_NAME_MAX];     // Its id: "en", "es", or a file in config/lang; "" is English.
     char language_name[SETTINGS_NAME_MAX];  // Its name, as Settings shows it (not kept: the app sets it).
     bool update_check;                    // Asks GitHub once a day for a new version.
@@ -148,6 +160,8 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size);
 long long settingQualityBitrate(const Config *c);
 // The accent a server's library wears, -1 for the server's own color.
 int settingServerColor(const Config *c, ServerKind kind);
+// The accent chosen for a source (SourceColor), or -1 for its own color.
+int settingSourceColor(const Config *c, int source);
 // How many of the options (from the first) a list offers: subtitles with their
 // own look take only the size.
 int subtitleOptionCount(bool color_applies);

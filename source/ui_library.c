@@ -254,6 +254,7 @@ Color uiServerOwnColor(ServerKind kind)
     }
 }
 
+Color g_source_colors[3] = {UI_NETWORK_OWN_COLOR, UI_IPTV_OWN_COLOR, UI_ADDONS_OWN_COLOR};
 static Color g_server_colors[SERVER_KIND_COUNT];
 static bool g_server_color_set[SERVER_KIND_COUNT];
 

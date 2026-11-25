@@ -1865,3 +1865,6 @@ No other source yet: add one in Settings.
 
 Source:
 来源：
+
+Its own
+自带颜色

@@ -16,8 +16,20 @@ void testSettings(void)
 
     SettingRow rows[SETTINGS_PAGE_MAX_ROWS];
     // The main page opens the others: the library, each server, playback, display.
-    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_NET_ADDRESS &&
-          rows[2] == SETTING_NET_REMEMBER && rows[3] == SETTING_NET_UNSIGNED && rows[5] == SETTING_NET_FORGET);
+    // Every source's page in one order: address, sign-in, options (its color last), test, forget.
+    CHECK(settingsPageRows(SETTINGS_PAGE_NETWORK, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_NET_ADDRESS &&
+          rows[2] == SETTING_NET_REMEMBER && rows[3] == SETTING_NET_UNSIGNED && rows[4] == SETTING_NET_COLOR &&
+          rows[5] == SETTING_NET_TEST && rows[6] == SETTING_NET_FORGET);
+    {  // The network folder's color: its own, or an accent, kept.
+        Config colors;
+        configDefaults(&colors);
+        CHECK(settingSourceColor(&colors, SOURCE_COLOR_NETWORK) == -1 && settingIsChoice(SETTING_NET_COLOR));
+        settingStep(&colors, SETTING_NET_COLOR, 1);
+        settingStep(&colors, SETTING_ADDONS_COLOR, -1);
+        CHECK(settingSourceColor(&colors, SOURCE_COLOR_NETWORK) == 0 &&
+              settingSourceColor(&colors, SOURCE_COLOR_ADDONS) == THEME_ACCENT_COUNT - 1);
+        CHECK(configReadLine(&colors, "iptv_color=3") && settingSourceColor(&colors, SOURCE_COLOR_IPTV) == 2);
+    }
     // The two switches change with the arrows, as Certificate check.
     CHECK(settingIsChoice(SETTING_NET_REMEMBER) && settingIsChoice(SETTING_NET_UNSIGNED) &&
           !settingIsChoice(SETTING_NET_FORGET));
@@ -28,10 +40,10 @@ void testSettings(void)
           rows[7] == SETTING_OPEN_PLAYBACK && rows[8] == SETTING_OPEN_DISPLAY && rows[9] == SETTING_ABOUT);
     // The addons' page: Add, a row an addon, then Load.
     settingsSetAddonCount(0);
-    CHECK(settingsPageRows(SETTINGS_PAGE_ADDONS, false, SERVER_JELLYFIN, rows) == 2 && rows[0] == SETTING_ADDONS_ADD &&
-          rows[1] == SETTING_ADDONS_LOAD);
+    CHECK(settingsPageRows(SETTINGS_PAGE_ADDONS, false, SERVER_JELLYFIN, rows) == 3 && rows[0] == SETTING_ADDONS_ADD &&
+          rows[1] == SETTING_ADDONS_COLOR && rows[2] == SETTING_ADDONS_LOAD);
     settingsSetAddonCount(99);
-    CHECK(settingsPageRows(SETTINGS_PAGE_ADDONS, false, SERVER_JELLYFIN, rows) == SETTINGS_ADDONS_MAX + 2 &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_ADDONS, false, SERVER_JELLYFIN, rows) == SETTINGS_ADDONS_MAX + 3 &&
           rows[1] == SETTING_ADDON_FIRST && rows[SETTINGS_ADDONS_MAX] == SETTING_ADDON_LAST);
     settingsSetAddonCount(0);
     SettingsPage opened;
@@ -40,9 +52,10 @@ void testSettings(void)
     CHECK(settingPageOpener(SETTINGS_PAGE_ADDONS, SERVER_JELLYFIN) == SETTING_OPEN_ADDONS);
     CHECK(settingsPageNote(SETTINGS_PAGE_ADDONS, SERVER_JELLYFIN) != NULL);
     // The IPTV list's page: its type (a choice), address, account, guide, load and forget.
-    CHECK(settingsPageRows(SETTINGS_PAGE_IPTV, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_IPTV_KIND &&
+    CHECK(settingsPageRows(SETTINGS_PAGE_IPTV, false, SERVER_JELLYFIN, rows) == 8 && rows[0] == SETTING_IPTV_KIND &&
           rows[1] == SETTING_IPTV_ADDRESS && rows[2] == SETTING_IPTV_ACCOUNT && rows[3] == SETTING_IPTV_GUIDE &&
-          rows[4] == SETTING_IPTV_CERTIFICATE && rows[5] == SETTING_IPTV_LOAD && rows[6] == SETTING_IPTV_FORGET);
+          rows[4] == SETTING_IPTV_CERTIFICATE && rows[5] == SETTING_IPTV_COLOR && rows[6] == SETTING_IPTV_LOAD &&
+          rows[7] == SETTING_IPTV_FORGET);
     CHECK(settingIsChoice(SETTING_IPTV_KIND) && settingIsChoice(SETTING_IPTV_CERTIFICATE) &&
           !settingIsChoice(SETTING_IPTV_LOAD) &&
           !strcmp(settingsPageTitle(SETTINGS_PAGE_IPTV, SERVER_JELLYFIN), "IPTV") &&
@@ -85,19 +98,19 @@ void testSettings(void)
     CHECK(!strcmp(settingsPageTitle(SETTINGS_PAGE_JELLYFIN, SERVER_EMBY), "Emby"));
     CHECK(settingsPageNote(SETTINGS_PAGE_JELLYFIN, SERVER_PLEX) && !settingsPageNote(SETTINGS_PAGE_MAIN, SERVER_PLEX));
     // Signing in is offered until it's done, and signing out only then.
-    // Every server's page ends with its color.
+    // A server's page: address, sign-in, options with its color, then the test (and signing out last).
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_JELLYFIN, rows) == 7 && rows[0] == SETTING_JF_SERVER &&
-          rows[1] == SETTING_JF_FIND && rows[2] == SETTING_JF_TEST && rows[3] == SETTING_JF_CODE &&
-          rows[4] == SETTING_JF_PASSWORD && rows[5] == SETTING_JF_CERTIFICATE && rows[6] == SETTING_SERVER_COLOR);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 5 && rows[1] == SETTING_JF_TEST &&
-          rows[2] == SETTING_JF_CERTIFICATE && rows[3] == SETTING_JF_SIGN_OUT && rows[4] == SETTING_SERVER_COLOR);
+          rows[1] == SETTING_JF_FIND && rows[2] == SETTING_JF_CODE && rows[3] == SETTING_JF_PASSWORD &&
+          rows[4] == SETTING_JF_CERTIFICATE && rows[5] == SETTING_SERVER_COLOR && rows[6] == SETTING_JF_TEST);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_JELLYFIN, rows) == 5 && rows[1] == SETTING_JF_CERTIFICATE &&
+          rows[2] == SETTING_SERVER_COLOR && rows[3] == SETTING_JF_TEST && rows[4] == SETTING_JF_SIGN_OUT);
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_PLEX, rows) == 2 && rows[0] == SETTING_PLEX_CODE);
     CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_PLEX, rows) == 3 && rows[0] == SETTING_PLEX_SERVER &&
-          rows[1] == SETTING_JF_SIGN_OUT);
+          rows[1] == SETTING_SERVER_COLOR && rows[2] == SETTING_JF_SIGN_OUT);
     // Emby has no Quick Connect: a password only.
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[3] == SETTING_JF_PASSWORD &&
-          rows[2] == SETTING_JF_TEST);
-    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 5 && rows[3] == SETTING_JF_SIGN_OUT);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, false, SERVER_EMBY, rows) == 6 && rows[2] == SETTING_JF_PASSWORD &&
+          rows[5] == SETTING_JF_TEST);
+    CHECK(settingsPageRows(SETTINGS_PAGE_JELLYFIN, true, SERVER_EMBY, rows) == 5 && rows[4] == SETTING_JF_SIGN_OUT);
 
     // A server's color: its own at first, then each accent, for the server the page is for; kept.
     Config colors;
@@ -155,7 +168,7 @@ void testSettings(void)
     CHECK(settingQualityBitrate(&quality) == 420000 && settingIsChoice(SETTING_JF_QUALITY));
     CHECK(configReadLine(&quality, "jellyfin_quality=3") && settingQualityBitrate(&quality) == 20000000);
     CHECK(settingsPageRows(SETTINGS_PAGE_DISPLAY, false, SERVER_JELLYFIN, rows) == 6 && rows[0] == SETTING_LANGUAGE &&
-          rows[1] == SETTING_THEME && rows[5] == SETTING_CLOCK);
+          rows[1] == SETTING_ACCENT && rows[4] == SETTING_CLOCK && rows[5] == SETTING_THEME);
     CHECK(strcmp(settingsPageTitle(SETTINGS_PAGE_DISPLAY, SERVER_JELLYFIN), "Display") == 0);
 
     settingStep(&c, SETTING_THEME, -1);  // Wraps to the last.

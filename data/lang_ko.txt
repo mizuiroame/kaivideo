@@ -1865,3 +1865,6 @@ No other source yet: add one in Settings.
 
 Source:
 소스:
+
+Its own
+고유 색

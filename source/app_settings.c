@@ -14,6 +14,7 @@
 #include "approot.h"
 #include "background.h"
 #include "buttons.h"
+#include "ui_style.h"
 #include "font.h"
 #include "jfprobe.h"
 #include "keyboard_system.h"
@@ -125,6 +126,11 @@ static void applyLooks(const App *app)
     for (int k = 0; k < SERVER_KIND_COUNT; k++) {  // Each server's own color, or the one chosen for it.
         int accent = settingServerColor(&app->config, (ServerKind)k);
         uiSetServerColor((ServerKind)k, accent < 0 ? uiServerOwnColor((ServerKind)k) : themeAccentColor(accent));
+    }
+    static const Color OWN[SOURCE_COLOR_COUNT] = {UI_NETWORK_OWN_COLOR, UI_IPTV_OWN_COLOR, UI_ADDONS_OWN_COLOR};
+    for (int s = 0; s < SOURCE_COLOR_COUNT; s++) {  // The network folder's, IPTV's and the addons' the same way.
+        int accent = settingSourceColor(&app->config, s);
+        g_source_colors[s] = accent < 0 ? OWN[s] : themeAccentColor(accent);
     }
     uiLibrarySetThumbnails(app->config.thumbnails);
     appApplySubtitleStyle(app);

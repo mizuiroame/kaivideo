@@ -1865,3 +1865,6 @@ Ainda não há outra fonte: adicione uma em Configurações.
 
 Source:
 Fonte:
+
+Its own
+A própria

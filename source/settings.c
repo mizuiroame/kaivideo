@@ -19,33 +19,34 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Look for an update"), N_("IPTV"), N_("List type"), N_("Address"), N_("User and password"),
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
     N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
-    N_("Addon"), N_("Load the catalogs"),
+    N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
+static const char *const SOURCE_COLOR_KEYS[SOURCE_COLOR_COUNT] = {"network_color", "iptv_color", "addons_color"};
 static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] = {
     {SETTING_OPEN_LIBRARY, SETTING_OPEN_NETWORK, SETTING_OPEN_JELLYFIN, SETTING_OPEN_EMBY, SETTING_OPEN_PLEX,
      SETTING_OPEN_IPTV, SETTING_OPEN_ADDONS, SETTING_OPEN_PLAYBACK, SETTING_OPEN_DISPLAY, SETTING_ABOUT},
-    {SETTING_LANGUAGE, SETTING_THEME, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_COUNT},
-    {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
-     SETTING_SERVER_COLOR, SETTING_COUNT},
+    {SETTING_LANGUAGE, SETTING_ACCENT, SETTING_BACKGROUND, SETTING_BLUR, SETTING_CLOCK, SETTING_THEME, SETTING_COUNT},
+    {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
+     SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
     {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
-    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_TEST,
-     SETTING_NET_FORGET, SETTING_COUNT},
+    {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_COLOR,
+     SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
     {SETTING_IPTV_KIND, SETTING_IPTV_ADDRESS, SETTING_IPTV_ACCOUNT, SETTING_IPTV_GUIDE, SETTING_IPTV_CERTIFICATE,
-     SETTING_IPTV_LOAD, SETTING_IPTV_FORGET, SETTING_COUNT},
+     SETTING_IPTV_COLOR, SETTING_IPTV_LOAD, SETTING_IPTV_FORGET, SETTING_COUNT},
     {SETTING_COUNT},  // The addons': settingsPageRows makes them.
 };
-static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_TEST, SETTING_JF_CERTIFICATE,
-                                            SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR, SETTING_COUNT};
+static const SettingRow SIGNED_IN_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR,
+                                            SETTING_JF_TEST, SETTING_JF_SIGN_OUT, SETTING_COUNT};
 static const SettingRow PLEX_ROWS[] = {SETTING_PLEX_CODE, SETTING_SERVER_COLOR, SETTING_COUNT};
-static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_JF_SIGN_OUT, SETTING_SERVER_COLOR,
+static const SettingRow PLEX_SIGNED_IN_ROWS[] = {SETTING_PLEX_SERVER, SETTING_SERVER_COLOR, SETTING_JF_SIGN_OUT,
                                                  SETTING_COUNT};
 // Emby has no Quick Connect: a user name and password.
-static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_TEST, SETTING_JF_PASSWORD,
-                                       SETTING_JF_CERTIFICATE, SETTING_SERVER_COLOR, SETTING_COUNT};
+static const SettingRow EMBY_ROWS[] = {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
+                                       SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT};
 static const char *const PAGE_TITLES[SETTINGS_PAGE_COUNT] = {N_("Settings"), N_("Display"), "", N_("Library"),
                                                               N_("Playback"), N_("Network folder"), N_("About"), N_("IPTV"),
                                                               N_("Stremio addons")};
@@ -108,6 +109,11 @@ static bool readServerColor(Config *c, const char *line, size_t length, const ch
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
         if (isKey(line, length, SERVER_COLOR_KEYS[k])) {
             c->server_color[k] = readChoice(value, SERVER_COLOR_COUNT, 0);
+            return true;
+        }
+    for (int s = 0; s < SOURCE_COLOR_COUNT; s++)
+        if (isKey(line, length, SOURCE_COLOR_KEYS[s])) {
+            c->source_color[s] = readChoice(value, SERVER_COLOR_COUNT, 0);
             return true;
         }
     return false;
@@ -190,6 +196,8 @@ void configWrite(const Config *c, FILE *f)
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
         fprintf(f, "%s=%d\n", SERVER_COLOR_KEYS[k], c->server_color[k]);
+    for (int s = 0; s < SOURCE_COLOR_COUNT; s++)
+        fprintf(f, "%s=%d\n", SOURCE_COLOR_KEYS[s], c->source_color[s]);
     if (c->language[0] && !strpbrk(c->language, "\r\n"))
         fprintf(f, "language=%s\n", c->language);
     fprintf(f, "update_check=%d\nupdate_checked=%lld\n", c->update_check ? 1 : 0, (long long)c->update_checked);
@@ -209,10 +217,11 @@ int settingsPageRows(SettingsPage page, bool signed_in, ServerKind kind, Setting
     int n = 0;
     if (page < 0 || page >= SETTINGS_PAGE_COUNT)
         return 0;
-    if (page == SETTINGS_PAGE_ADDONS) {  // Add, each addon, then load them.
+    if (page == SETTINGS_PAGE_ADDONS) {  // Add, each addon, their color, then load them.
         rows[n++] = SETTING_ADDONS_ADD;
         for (int i = 0; i < g_addon_count; i++)
             rows[n++] = (SettingRow)(SETTING_ADDON_FIRST + i);
+        rows[n++] = SETTING_ADDONS_COLOR;
         rows[n++] = SETTING_ADDONS_LOAD;
         return n;
     }
@@ -293,7 +302,8 @@ bool settingIsChoice(SettingRow row)
            row == SETTING_THUMBNAILS || row == SETTING_CLOCK || row == SETTING_AUTOPLAY || row == SETTING_JF_QUALITY ||
            row == SETTING_JF_CERTIFICATE || row == SETTING_SERVER_COLOR || row == SETTING_LANGUAGE ||
            row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
-           row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE;
+           row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE ||
+           row == SETTING_NET_COLOR || row == SETTING_IPTV_COLOR || row == SETTING_ADDONS_COLOR;
 }
 
 static int wrap(int value, int delta, int count)
@@ -313,6 +323,13 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_UPDATE_AUTO: c->update_check = !c->update_check; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     case SETTING_JF_CERTIFICATE: c->jf_check_certificate = !c->jf_check_certificate; break;
+    case SETTING_NET_COLOR:
+    case SETTING_IPTV_COLOR:
+    case SETTING_ADDONS_COLOR: {
+        int s = row - SETTING_NET_COLOR;
+        c->source_color[s] = wrap(c->source_color[s], delta, SERVER_COLOR_COUNT);
+        break;
+    }
     case SETTING_SERVER_COLOR: {  // For the server Settings shows.
         int k = inRange(c->server_kind, SERVER_KIND_COUNT);
         c->server_color[k] = wrap(c->server_color[k], delta, SERVER_COLOR_COUNT);
@@ -340,6 +357,13 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
         snprintf(out, size, "%s", c->jf_check_certificate ? T("On") : T("Off: any certificate"));
         break;
     case SETTING_LANGUAGE: snprintf(out, size, "%s", c->language_name[0] ? c->language_name : "English"); break;
+    case SETTING_NET_COLOR:
+    case SETTING_IPTV_COLOR:
+    case SETTING_ADDONS_COLOR: {
+        int choice = c->source_color[row - SETTING_NET_COLOR];
+        snprintf(out, size, "%s", choice <= 0 ? T("Its own") : themeAccentName(choice - 1));
+        break;
+    }
     case SETTING_SERVER_COLOR: {
         int k = inRange(c->server_kind, SERVER_KIND_COUNT), choice = c->server_color[k];
         if (choice <= 0)
@@ -350,6 +374,11 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
     }
     default: out[0] = '\0'; break;
     }
+}
+
+int settingSourceColor(const Config *c, int source)
+{
+    return source >= 0 && source < SOURCE_COLOR_COUNT ? c->source_color[source] - 1 : -1;
 }
 
 int settingServerColor(const Config *c, ServerKind kind)
