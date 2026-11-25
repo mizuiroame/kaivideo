@@ -2,6 +2,11 @@
 // channel (hlsStartDirect, then FFmpeg through hlsio), and says which open
 // and what's in them.
 //   host_iptv LIST.m3u [FIRST [COUNT]]
+// Built in the kaivideo-host image (FFmpeg, curl and jansson for the PC):
+//   docker run --rm -v "$PWD:/w" -w /w kaivideo-host sh -c "gcc -O1 -DKAIVIDEO_VERSION='\\"test\\"' -Isource
+//     -Ithird_party tests/host_live/host_iptv.c source/hlsio.c source/tsstream.c source/iptv.c source/net.c
+//     source/hlslist.c source/hlsmaster.c source/certtrust.c source/lang.c source/streamheaders.c source/util.c
+//     -o /tmp/host_iptv -lavformat -lavcodec -lavutil -lcurl -ljansson -lpthread -lm && /tmp/host_iptv LIST.m3u"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,20 +22,21 @@ unsigned mediaFileInterrupts(void)
     return 0;
 }
 
-// As main.c's openIptv: HLS first for an .m3u8 address, a stream sent as it is first for the rest.
+// As main.c's openIptv: HLS first for an .m3u8 address, a stream sent as it is first for the rest,
+// with the headers the list asks for (#EXTVLCOPT).
 static const char *startChannel(const IptvChannel *c, char *error, size_t size)
 {
     bool hls_first = strstr(c->url, ".m3u8") != NULL;
     if (!hls_first) {
-        TsStart ts = tsStreamStart(c->url, false, NULL, error, size);
+        TsStart ts = tsStreamStart(c->url, false, &c->headers, NULL, error, size);
         if (ts == TS_STARTED)
             return TS_LOCATION;
         if (ts == TS_FAILED)
             return NULL;
     }
-    if (hlsStartDirect(c->url, 0, NULL, error, size))
+    if (hlsStartDirectAny(c->url, 0, false, &c->headers, NULL, error, size))
         return HLS_LOCATION;
-    if (hls_first && hlsDirectWasNotHls() && tsStreamStart(c->url, false, NULL, error, size) == TS_STARTED)
+    if (hls_first && hlsDirectWasNotHls() && tsStreamStart(c->url, false, &c->headers, NULL, error, size) == TS_STARTED)
         return TS_LOCATION;
     return NULL;
 }

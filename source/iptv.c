@@ -476,7 +476,11 @@ bool xtreamParseAuth(const char *json, XtreamAuth *out)
         text(user, "status", out->status, sizeof(out->status));
         out->expires = number(user, "exp_date");
         out->max_connections = (int)number(user, "max_connections");
-        out->active = number(user, "auth") == 1 && !strcasecmp(out->status, "Active");
+        bool signed_in = number(user, "auth") == 1;
+        out->active = signed_in && !strcasecmp(out->status, "Active");
+        // An account's own status (Expired, Banned, Disabled...) is said as it is, even without auth;
+        // without one, a refused sign-in is the user or password.
+        out->refused = !signed_in && (!out->status[0] || !strcasecmp(out->status, "Active"));
     }
     json_decref(root);
     return ok;

@@ -1566,8 +1566,17 @@ Guide (XMLTV)
 IPTV
 IPTV
 
-List set: Load the channels to see them in Live.
-リストを設定しました。「チャンネルを読み込む」で Live に表示されます。
+List set.
+リストを設定しました。
+
+Now the server's address.
+次はサーバーのアドレスです。
+
+Testing the connection: loading the channels…
+接続をテストしています: チャンネルを読み込み中…
+
+The server says the user or password is wrong.
+サーバーによると、ユーザーまたはパスワードが違います。
 
 List type
 リストの種類

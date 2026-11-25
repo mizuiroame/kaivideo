@@ -27,6 +27,15 @@ typedef struct {
     int64_t runtime_s;     // 0 if unknown.
 } XtreamEpisode;
 
+// A film's details (get_vod_info), read only when its details are opened.
+typedef enum { XTREAM_INFO_UNREAD, XTREAM_INFO_READ, XTREAM_INFO_FAILED } XtreamInfoState;
+
+typedef struct {
+    char *plot;            // May be NULL.
+    char *genre;           // "Drama, Comedy" as the server names them, or NULL.
+    int64_t runtime_s;     // 0 if unknown.
+} XtreamFilmInfo;
+
 typedef struct {
     long long id;
     char *name;
@@ -35,6 +44,8 @@ typedef struct {
     int64_t added;         // Seconds since 1970, 0 if unknown.
     int year;              // 0 if unknown.
     int group;             // Its category (an index in film_groups), -1 for none.
+    XtreamInfoState info_state;
+    XtreamFilmInfo info;   // Once read.
 } XtreamFilm;
 
 typedef enum { XTREAM_EPISODES_UNREAD, XTREAM_EPISODES_READ, XTREAM_EPISODES_FAILED } XtreamEpisodesState;
@@ -80,6 +91,17 @@ void xtreamEpisodesFree(XtreamEpisode *episodes, int count);
 // Gives a series its episodes (taking them), or marks them failed (NULL).
 void xtreamShowSetEpisodes(XtreamCatalog *c, long long show_id, XtreamEpisode *episodes, int count);
 XtreamShow *xtreamFindShow(XtreamCatalog *c, long long show_id);
+// get_vod_info's answer: the film's plot, genres and length. False if it isn't one; an answer with no
+// details ("info": [], as some servers send) is one, with nothing in it.
+bool xtreamParseFilmInfo(const char *json, XtreamFilmInfo *out);
+void xtreamFilmInfoFree(XtreamFilmInfo *info);
+// Gives a film its details (taking them), or marks them failed (NULL): they aren't asked for again.
+void xtreamFilmSetInfo(XtreamCatalog *c, long long film_id, XtreamFilmInfo *info);
+XtreamFilm *xtreamFindFilm(XtreamCatalog *c, long long film_id);
+// The details read in from's films, moved to the same films in to (a list loaded again keeps them).
+void xtreamCatalogKeepInfo(XtreamCatalog *to, XtreamCatalog *from);
+// The film a location is for ("xtream:movie/<id>.<ext>"), or -1 if it isn't one.
+long long xtreamFilmOf(const char *location);
 
 // Locations. kind: "movie", "series" (an episode) or "show" (a series' stand-in, no extension).
 bool xtreamIsLocation(const char *location);

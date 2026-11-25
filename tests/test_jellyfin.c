@@ -398,6 +398,14 @@ static void testHlsLists(void)
     CHECK(hlsPlaylistParse("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:8.3,\nhls/0.ts\n", "http://h/a.m3u8", 0, &p) &&
           !p.ended && p.count == 1);
     hlsPlaylistFree(&p);
+    // A VOD list says it's complete even before its #EXT-X-ENDLIST; EVENT and a bare list don't (an addon's live .m3u8).
+    CHECK(hlsPlaylistComplete("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:8.3,\nhls/0.ts\n"));
+    CHECK(hlsPlaylistComplete("#EXTM3U\n#EXTINF:8.3,\nhls/0.ts\n#EXT-X-ENDLIST\n"));
+    CHECK(!hlsPlaylistComplete("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:EVENT\n#EXTINF:8.3,\nhls/0.ts\n"));
+    CHECK(!hlsPlaylistComplete("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:7\n#EXTINF:6,\nseg7.ts\n"));
+    CHECK(hlsPlaylistParse("#EXTM3U\n#EXT-X-PLAYLIST-TYPE:VOD\n#EXTINF:8.3,\nhls/0.ts\n", "http://h/a.m3u8", 0, &p) &&
+          p.ended);
+    hlsPlaylistFree(&p);
 
     static const char THREE[] = "#EXTM3U\n#EXTINF:3.0,\n0.ts\n#EXTINF:3.0,\n1.ts\n#EXTINF:3.0,\n2.ts\n#EXT-X-ENDLIST\n";
     int first = -1, last = -1;

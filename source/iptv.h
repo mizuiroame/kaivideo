@@ -79,6 +79,8 @@ bool xtreamGuideUrl(const XtreamAccount *a, char *out, size_t size);
 
 typedef struct {
     bool active;          // Signed in, and the account is Active.
+    bool refused;         // The user or password is wrong: auth isn't 1 and no status of the account came
+                          // (real panels answer {"user_info":{"auth":0}}).
     char status[32];      // "Active", "Expired", "Banned", "Disabled"...
     int64_t expires;      // Seconds since 1970; 0 if never or unknown.
     int max_connections;  // 0 if unknown.

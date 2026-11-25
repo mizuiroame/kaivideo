@@ -1566,8 +1566,17 @@ Guia (XMLTV)
 IPTV
 IPTV
 
-List set: Load the channels to see them in Live.
-Lista definida: Carregar os canais para vê-los em Live.
+List set.
+Lista definida.
+
+Now the server's address.
+Agora o endereço do servidor.
+
+Testing the connection: loading the channels…
+Testando a conexão: carregando os canais…
+
+The server says the user or password is wrong.
+O servidor diz que o usuário ou a senha estão errados.
 
 List type
 Tipo de lista

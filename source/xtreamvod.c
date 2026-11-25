@@ -101,6 +101,7 @@ static void freeFilms(XtreamCatalog *c)
     for (int i = 0; i < c->film_count; i++) {
         free(c->films[i].name);
         free(c->films[i].poster);
+        xtreamFilmInfoFree(&c->films[i].info);
     }
     free(c->films);
     c->films = NULL;
@@ -351,6 +352,95 @@ bool xtreamParseEpisodes(const char *json, XtreamEpisode **out, int *count)
     return true;
 }
 
+// "01:30:00" or "90:00" (some servers send no duration_secs): seconds, 0 if it isn't one.
+static int64_t clockSeconds(const char *text)
+{
+    int64_t total = 0;
+    int parts = 0;
+    for (const char *p = text; p && *p; parts++) {
+        if (!isdigit((unsigned char)*p) || parts >= 3)
+            return 0;
+        char *end;
+        long part = strtol(p, &end, 10);
+        total = total * 60 + part;
+        if (*end == ':')
+            end++;
+        else if (*end)
+            return 0;
+        p = end;
+    }
+    return parts >= 2 ? total : 0;
+}
+
+bool xtreamParseFilmInfo(const char *json, XtreamFilmInfo *out)
+{
+    memset(out, 0, sizeof(*out));
+    json_t *root = json ? json_loads(json, 0, NULL) : NULL;
+    const json_t *info = json_object_get(root, "info");
+    bool ok = json_is_object(info) || (json_is_array(info) && json_is_object(json_object_get(root, "movie_data")));
+    if (json_is_object(info)) {
+        out->plot = jsonText(info, "plot", 2000);
+        if (!out->plot)
+            out->plot = jsonText(info, "description", 2000);
+        out->genre = jsonText(info, "genre", 200);
+        long long seconds = jsonNumber(info, "duration_secs");
+        if (seconds <= 0) {
+            const json_t *clock = json_object_get(info, "duration");
+            seconds = json_is_string(clock) ? clockSeconds(json_string_value(clock)) : 0;
+        }
+        out->runtime_s = seconds > 0 && seconds < 100000 ? seconds : 0;
+    }
+    json_decref(root);
+    return ok;
+}
+
+void xtreamFilmInfoFree(XtreamFilmInfo *info)
+{
+    free(info->plot);
+    free(info->genre);
+    memset(info, 0, sizeof(*info));
+}
+
+XtreamFilm *xtreamFindFilm(XtreamCatalog *c, long long film_id)
+{
+    for (int i = 0; i < c->film_count; i++)
+        if (c->films[i].id == film_id)
+            return &c->films[i];
+    return NULL;
+}
+
+void xtreamFilmSetInfo(XtreamCatalog *c, long long film_id, XtreamFilmInfo *info)
+{
+    XtreamFilm *f = xtreamFindFilm(c, film_id);
+    if (!f) {
+        if (info)
+            xtreamFilmInfoFree(info);
+        return;
+    }
+    xtreamFilmInfoFree(&f->info);
+    if (info) {
+        f->info = *info;
+        memset(info, 0, sizeof(*info));
+    }
+    f->info_state = info ? XTREAM_INFO_READ : XTREAM_INFO_FAILED;
+}
+
+void xtreamCatalogKeepInfo(XtreamCatalog *to, XtreamCatalog *from)
+{
+    for (int i = 0; i < from->film_count; i++) {  // Few were read: one look through to for each.
+        XtreamFilm *old = &from->films[i];
+        if (old->info_state != XTREAM_INFO_READ)
+            continue;
+        XtreamFilm *f = xtreamFindFilm(to, old->id);
+        if (f && f->info_state == XTREAM_INFO_UNREAD) {
+            f->info = old->info;
+            f->info_state = XTREAM_INFO_READ;
+            memset(&old->info, 0, sizeof(old->info));
+            old->info_state = XTREAM_INFO_UNREAD;
+        }
+    }
+}
+
 XtreamShow *xtreamFindShow(XtreamCatalog *c, long long show_id)
 {
     for (int i = 0; i < c->show_count; i++)
@@ -412,6 +502,15 @@ bool xtreamParseLocation(const char *location, char *kind, size_t kind_size, lon
     return true;
 }
 
+long long xtreamFilmOf(const char *location)
+{
+    char kind[16], ext[8];
+    long long id;
+    return xtreamParseLocation(location, kind, sizeof(kind), &id, ext, sizeof(ext)) && !strcmp(kind, "movie")
+               ? id
+               : -1;
+}
+
 long long xtreamStandInShow(const char *location)
 {
     char kind[16], ext[8];
@@ -438,7 +537,8 @@ static void addFilm(Library *lib, const XtreamFilm *f)
     snprintf(name.title, sizeof(name.title), "%s", f->name);
     name.year = f->year;
     posterKey(art, sizeof(art), f->poster);
-    LibraryRemote remote = {.art = art, .in_collection = 0, .in_group = f->group + 1};
+    LibraryRemote remote = {.art = art, .in_collection = 0, .in_group = f->group + 1, .overview = f->info.plot,
+                            .runtime_ns = f->info.runtime_s * 1000000000ll, .genres = f->info.genre};
     libraryAddRemote(lib, path, &name, 0, f->added, &remote);
 }
 

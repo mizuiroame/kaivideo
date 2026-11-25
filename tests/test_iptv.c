@@ -120,6 +120,16 @@ static void testXtream(void)
     CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":1,\"status\":\"Expired\"}}", &auth) && !auth.active &&
           !strcmp(auth.status, "Expired"));
     CHECK(!xtreamParseAuth("{\"user_info\":[]}", &auth) && !xtreamParseAuth("<html>", &auth));
+    // A wrong user or password: real panels answer auth 0 and nothing else (a string "0" on some).
+    CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":0}}", &auth) && !auth.active && auth.refused);
+    CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":\"0\",\"status\":\"Active\"}}", &auth) && !auth.active &&
+          auth.refused);
+    // The account's own status stays what's said, with or without auth.
+    CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":0,\"status\":\"Banned\"}}", &auth) && !auth.active &&
+          !auth.refused && !strcmp(auth.status, "Banned"));
+    CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":1,\"status\":\"Disabled\"}}", &auth) && !auth.refused);
+    CHECK(xtreamParseAuth("{\"user_info\":{\"auth\":1,\"status\":\"Active\"}}", &auth) && auth.active &&
+          !auth.refused);
 
     IptvList list;
     memset(&list, 0, sizeof(list));

@@ -1,6 +1,6 @@
 // An Xtream account's films and series in the IPTV view's library (xtreamvod.h):
-// the catalog the load brought, and a series' episodes read on a thread of
-// their own when its page opens.
+// the catalog the load brought, and a series' episodes or a film's details
+// (plot, length, genres) read on a thread of their own when its page opens.
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,22 +14,26 @@
 #include "ui_live.h"
 
 #define EPISODES_MAX_BYTES (16u << 20)
+#define FILM_INFO_MAX_BYTES (1u << 20)
 #define STALL_S 20
 
+// One question at a time: a series' episodes, or a film's details.
 static struct {
     pthread_t thread;
     bool running;          // Started, not joined yet.
-    volatile bool done;    // It finished: episodes and ok are set.
+    volatile bool done;    // It finished: what it asked for and ok are set.
     volatile bool cancel;
-    long long show_id;
+    bool film;             // A film's details (film_id), not a series' episodes (show_id).
+    long long show_id, film_id;
     char url[IPTV_URL_MAX + 256];
     bool any_certificate;
     XtreamEpisode *episodes;
     int count;
+    XtreamFilmInfo info;
     bool ok;
 } g;
 
-static void *readEpisodes(void *arg)
+static void *readAnswer(void *arg)
 {
     (void)arg;
     NetClient *c = netClientOpen();  // The network is held while a list is set (app_iptv.c).
@@ -41,10 +45,16 @@ static void *readEpisodes(void *arg)
     q.any_certificate = g.any_certificate;
     NetResponse r;
     memset(&r, 0, sizeof(r));
-    bool fetched = c && netFetchText(c, &q, EPISODES_MAX_BYTES, &r);
-    g.ok = fetched && xtreamParseEpisodes(r.data, &g.episodes, &g.count);
-    if (!g.ok)
-        appLog("IPTV: series %lld's episodes couldn't be read%s%s", g.show_id, r.error[0] ? ": " : "", r.error);
+    bool fetched = c && netFetchText(c, &q, g.film ? FILM_INFO_MAX_BYTES : EPISODES_MAX_BYTES, &r);
+    if (g.film) {
+        g.ok = fetched && xtreamParseFilmInfo(r.data, &g.info);
+        if (!g.ok)
+            appLog("IPTV: film %lld's details couldn't be read%s%s", g.film_id, r.error[0] ? ": " : "", r.error);
+    } else {
+        g.ok = fetched && xtreamParseEpisodes(r.data, &g.episodes, &g.count);
+        if (!g.ok)
+            appLog("IPTV: series %lld's episodes couldn't be read%s%s", g.show_id, r.error[0] ? ": " : "", r.error);
+    }
     netResponseFree(&r);
     netClientClose(c);
     memset(g.url, 0, sizeof(g.url));
@@ -63,21 +73,26 @@ static void stopReading(void)
     xtreamEpisodesFree(g.episodes, g.count);
     g.episodes = NULL;
     g.count = 0;
+    xtreamFilmInfoFree(&g.info);
 }
 
-static void askEpisodes(long long show_id)
+// Asks for a series' episodes (film false) or a film's details, unless a question is under way.
+static void ask(bool film, long long id)
 {
     char extra[48];
-    snprintf(extra, sizeof(extra), "series_id=%lld", show_id);
-    if (g.running || !xtreamVodApiUrl("get_series_info", extra, g.url, sizeof(g.url)))
+    snprintf(extra, sizeof(extra), film ? "vod_id=%lld" : "series_id=%lld", id);
+    if (g.running || !xtreamVodApiUrl(film ? "get_vod_info" : "get_series_info", extra, g.url, sizeof(g.url)))
         return;
-    g.show_id = show_id;
+    g.film = film;
+    g.show_id = film ? -1 : id;
+    g.film_id = film ? id : -1;
     g.done = false;
     g.ok = false;
     g.episodes = NULL;
     g.count = 0;
+    memset(&g.info, 0, sizeof(g.info));
     g.any_certificate = xtreamVodAnyCertificate();
-    g.running = pthread_create(&g.thread, NULL, readEpisodes, NULL) == 0;
+    g.running = pthread_create(&g.thread, NULL, readAnswer, NULL) == 0;
     if (!g.running)
         memset(g.url, 0, sizeof(g.url));
 }
@@ -235,6 +250,7 @@ void appXtreamTake(App *app, XtreamCatalog *c)
 {
     stopReading();
     showAll(app);
+    xtreamCatalogKeepInfo(c, &app->xtream);  // The films' details read before aren't asked for again.
     xtreamCatalogFree(&app->xtream);
     app->xtream = *c;
     memset(c, 0, sizeof(*c));
@@ -257,25 +273,50 @@ static long long shownStandIn(const App *app)
     return item >= 0 ? xtreamStandInShow(app->library.items[item].path) : -1;
 }
 
+// The film whose details are open, if they weren't read yet: -1 if none.
+static long long shownFilm(App *app)
+{
+    const LibView *v = &app->view;
+    if (v->details < 0 || (size_t)v->details >= app->library.count)
+        return -1;
+    long long id = xtreamFilmOf(app->library.items[v->details].path);
+    const XtreamFilm *f = id > 0 ? xtreamFindFilm(&app->xtream, id) : NULL;
+    return f && f->info_state == XTREAM_INFO_UNREAD ? id : -1;
+}
+
+// What the question brought, into the catalog.
+static void takeAnswer(App *app)
+{
+    pthread_join(g.thread, NULL);
+    g.running = false;
+    if (g.film) {
+        xtreamFilmSetInfo(&app->xtream, g.film_id, g.ok ? &g.info : NULL);
+        xtreamFilmInfoFree(&g.info);  // Not taken: failed, or not one of them any more.
+    } else {
+        xtreamShowSetEpisodes(&app->xtream, g.show_id, g.ok ? g.episodes : NULL, g.ok ? g.count : 0);
+        if (!g.ok)
+            xtreamEpisodesFree(g.episodes, g.count);
+    }
+    g.episodes = NULL;
+    g.count = 0;
+}
+
 void appXtreamUpdate(App *app)
 {
     if (!app->config.use_iptv)
         return;
     if (g.running && __atomic_load_n(&g.done, __ATOMIC_ACQUIRE)) {
-        pthread_join(g.thread, NULL);
-        g.running = false;
-        xtreamShowSetEpisodes(&app->xtream, g.show_id, g.ok ? g.episodes : NULL, g.ok ? g.count : 0);
-        if (!g.ok)
-            xtreamEpisodesFree(g.episodes, g.count);
-        g.episodes = NULL;
-        g.count = 0;
+        takeAnswer(app);
         appXtreamInstall(app);
         return;
     }
     long long show = shownStandIn(app);
     const XtreamShow *s = show > 0 ? xtreamFindShow(&app->xtream, show) : NULL;
     if (s && s->state == XTREAM_EPISODES_UNREAD)
-        askEpisodes(show);
+        ask(false, show);
+    long long film = shownFilm(app);
+    if (film > 0)
+        ask(true, film);  // Only the film opened: not every film of the list.
 }
 
 void appXtreamExit(App *app)

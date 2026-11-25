@@ -72,6 +72,9 @@ static bool readList(NetClient *c, IptvList *list, char *error, size_t size)
     } else if (!xtreamParseAuth(r.data, &auth)) {
         snprintf(error, size, "%s", T("That isn't an Xtream server, or the user or password is wrong."));
         ok = false;
+    } else if (auth.refused) {
+        snprintf(error, size, "%s", T("The server says the user or password is wrong."));
+        ok = false;
     } else if (!auth.active) {
         snprintf(error, size, T("The account isn't active (%s)."), auth.status[0] ? auth.status : "?");
         ok = false;

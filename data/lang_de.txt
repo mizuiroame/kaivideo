@@ -1566,8 +1566,17 @@ Programmführer (XMLTV)
 IPTV
 IPTV
 
-List set: Load the channels to see them in Live.
-Liste gesetzt: Sender laden, um sie in Live zu sehen.
+List set.
+Liste gesetzt.
+
+Now the server's address.
+Jetzt die Adresse des Servers.
+
+Testing the connection: loading the channels…
+Verbindung wird getestet: Sender werden geladen…
+
+The server says the user or password is wrong.
+Der Server sagt, Benutzer oder Passwort sind falsch.
 
 List type
 Listentyp

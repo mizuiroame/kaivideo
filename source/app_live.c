@@ -337,5 +337,5 @@ bool appLiveNeighbor(App *app, int delta, char *location, size_t location_size, 
 
 bool appPlayingLive(const App *app)
 {
-    return app->player && appIsLiveLocation(app->playing_path);
+    return app->player && (appIsLiveLocation(app->playing_path) || app->playing_live_stream);
 }

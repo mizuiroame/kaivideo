@@ -165,9 +165,67 @@ static void testCategories(void)
     CHECK(!c.film_groups && c.film_group_count == 0 && !c.show_groups);
 }
 
+// A film's details (get_vod_info), read when they're opened, and kept when the list loads again.
+static void testFilmInfo(void)
+{
+    XtreamFilmInfo info;
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"plot\":\" Boats at night. \",\"duration_secs\":240,\"duration\":\"00:04:00\","
+                              "\"genre\":\"Drama, Comedy\"},\"movie_data\":{\"stream_id\":101}}", &info));
+    CHECK(!strcmp(info.plot, "Boats at night.") && !strcmp(info.genre, "Drama, Comedy") && info.runtime_s == 240);
+    xtreamFilmInfoFree(&info);
+    CHECK(!info.plot && !info.genre);
+    // No duration_secs: the clock text; a description instead of a plot.
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"description\":\"Desk.\",\"duration\":\"01:30:05\"}}", &info));
+    CHECK(!strcmp(info.plot, "Desk.") && info.runtime_s == 5405 && !info.genre);
+    xtreamFilmInfoFree(&info);
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"duration\":\"95:10\"}}", &info) && info.runtime_s == 5710);
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"duration\":\"1h 30m\",\"duration_secs\":\"0\"}}", &info) &&
+          info.runtime_s == 0);
+    // Some servers have nothing for a film: an answer, with nothing in it.
+    CHECK(xtreamParseFilmInfo("{\"info\":[],\"movie_data\":{\"stream_id\":101}}", &info) && !info.plot);
+    CHECK(!xtreamParseFilmInfo("[]", &info) && !xtreamParseFilmInfo("<html>", &info) &&
+          !xtreamParseFilmInfo(NULL, &info));
+
+    XtreamCatalog c;
+    memset(&c, 0, sizeof(c));
+    CHECK(xtreamParseFilms(FILMS, &c));
+    CHECK(c.films[0].info_state == XTREAM_INFO_UNREAD);
+    CHECK(xtreamFilmOf("xtream:movie/101.mkv") == 101 && xtreamFilmOf("xtream:show/7") == -1 &&
+          xtreamFilmOf("xtream:series/5.mp4") == -1 && xtreamFilmOf("/videos/a.mkv") == -1);
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"plot\":\"Boats.\",\"duration_secs\":5400,\"genre\":\"Drama\"}}", &info));
+    xtreamFilmSetInfo(&c, 101, &info);
+    CHECK(!info.plot && c.films[0].info_state == XTREAM_INFO_READ && !strcmp(c.films[0].info.plot, "Boats."));
+    xtreamFilmSetInfo(&c, 102, NULL);
+    CHECK(c.films[1].info_state == XTREAM_INFO_FAILED);
+    CHECK(xtreamParseFilmInfo("{\"info\":{\"plot\":\"Lost.\"}}", &info));
+    xtreamFilmSetInfo(&c, 999, &info);  // Not one of them: let go.
+    CHECK(!info.plot);
+
+    Library lib;
+    libraryInit(&lib, "iptv:");
+    xtreamFillLibrary(&lib, &c, "Reading", "Failed");
+    libraryBuild(&lib);
+    int film = libraryFind(&lib, "xtream:movie/101.mkv");
+    CHECK(film >= 0 && !strcmp(lib.items[film].overview, "Boats.") && lib.items[film].runtime_ns == 5400000000000ll);
+    CHECK(!strcmp(lib.items[film].genres, "Drama"));
+    CHECK(!lib.items[libraryFind(&lib, "xtream:movie/102.mp4")].overview);
+    libraryFree(&lib);
+
+    XtreamCatalog again;  // The list loaded again: what was read stays.
+    memset(&again, 0, sizeof(again));
+    CHECK(xtreamParseFilms(FILMS, &again));
+    xtreamCatalogKeepInfo(&again, &c);
+    CHECK(again.films[0].info_state == XTREAM_INFO_READ && !strcmp(again.films[0].info.plot, "Boats."));
+    CHECK(again.films[1].info_state == XTREAM_INFO_UNREAD);  // A failure is asked again.
+    CHECK(c.films[0].info_state == XTREAM_INFO_UNREAD && !c.films[0].info.plot);
+    xtreamCatalogFree(&again);
+    xtreamCatalogFree(&c);
+}
+
 void testXtreamVod(void)
 {
     testParse();
+    testFilmInfo();
     testLocations();
     testCategories();
 }

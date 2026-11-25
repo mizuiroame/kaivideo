@@ -1566,8 +1566,17 @@ Guide (XMLTV)
 IPTV
 IPTV
 
-List set: Load the channels to see them in Live.
-列表已设置：加载频道后即可在 Live 中观看。
+List set.
+列表已设置。
+
+Now the server's address.
+接下来输入服务器地址。
+
+Testing the connection: loading the channels…
+正在测试连接：正在加载频道…
+
+The server says the user or password is wrong.
+服务器表示用户名或密码错误。
 
 List type
 列表类型

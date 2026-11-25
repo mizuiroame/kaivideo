@@ -46,6 +46,10 @@ typedef struct {
 // isn't a master list.
 bool hlsBestVariant(const char *playlist, long long max_bitrate, char *out, size_t size);
 
+// The list says it's complete (#EXT-X-ENDLIST, or #EXT-X-PLAYLIST-TYPE:VOD): a video with a length.
+// Else it's live: it grows as the server makes it, and only its window can be played.
+bool hlsPlaylistComplete(const char *playlist);
+
 // From a media playlist found at base. The renamed list starts at the segment
 // holding start_ns, so nothing before it has to be made. False if it has no segments.
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out);

@@ -45,6 +45,14 @@ static void startLoad(App *app)
         iptvLoadStart(&g_account, (int64_t)time(NULL));
 }
 
+// The connection test: the channels are loaded again, and what comes (or why not) is said
+// when it ends (appIptvUpdate). A load still running is replaced, so it can't hide this one.
+static void testNow(App *app, uint64_t now)
+{
+    startLoad(app);
+    appShowMessage(app, T("Testing the connection: loading the channels\xE2\x80\xA6"), now);
+}
+
 void appIptvStart(App *app)
 {
     char path[APPROOT_PATH_MAX + 32];
@@ -118,16 +126,20 @@ static void typeAddress(App *app, uint64_t now)
                   now);
         return;
     }
-    if (strcmp(address, g_account.address))  // Another server: the old one's password isn't sent there.
+    bool other_server = strcmp(address, g_account.address) != 0;
+    if (other_server)  // Another server: the old one's password isn't sent there.
         memset(g_account.password, 0, sizeof(g_account.password));
     snprintf(g_account.address, sizeof(g_account.address), "%s", address);
     if (g_account.kind == IPTV_NONE)
         g_account.kind = IPTV_M3U;
     save(app, now);
-    if (xtream && !g_account.user[0])
+    if (xtream && (!g_account.user[0] || !g_account.password[0])) {  // Another server has none yet.
         appNotify(app, NOTICE_DONE, T("Server set: now its user and password."), now);
-    else
-        appNotify(app, NOTICE_DONE, T("List set: Load the channels to see them in Live."), now);
+        return;
+    }
+    // An M3U list, or the same server with its account: tested at once, as the account is.
+    appNotify(app, NOTICE_DONE, T("List set."), now);
+    testNow(app, now);
 }
 
 static void typeAccount(App *app, uint64_t now)
@@ -147,6 +159,10 @@ static void typeAccount(App *app, uint64_t now)
         snprintf(g_account.password, sizeof(g_account.password), "%s", password);
         save(app, now);
         appNotify(app, NOTICE_DONE, T("Saved: the password is only encoded on the card."), now);
+        if (g_account.address[0])
+            testNow(app, now);  // Every time: a wrong password is said now, not in Live.
+        else
+            appNotify(app, NOTICE_INFO, T("Now the server's address."), now);
     }
     memset(password, 0, sizeof(password));
 }

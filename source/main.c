@@ -375,7 +375,15 @@ static void *openThread(void *arg)
     app->next_audio_plus1 = 0;
     app->next_subtitle_set = false;
     bool iptv = iptvIsLocation(app->playing_path) || (stremioIsLocation(app->playing_path) && app->open_url[0]);
-    if (iptv && !openIptv(app, path, sizeof(path))) {
+    app->playing_live_stream = false;
+    bool iptv_opened = iptv && openIptv(app, path, sizeof(path));
+    if (iptv_opened && stremioIsLocation(app->playing_path)) {
+        // An addon's live .m3u8 (no end in its list) or a stream sent as it is: live, as a channel.
+        app->playing_live_stream = !strcmp(path, TS_LOCATION) || (!strcmp(path, HLS_LOCATION) && hlsIsLive());
+        if (app->playing_live_stream)
+            appLog("  the addon's stream is live: no seeking");
+    }
+    if (iptv && !iptv_opened) {
         if (stremioIsLocation(app->playing_path) && !app->open_cancelled) {  // Not a channel: the addon's stream.
             appLog("  the addon's stream: %s", app->open_error);
             snprintf(app->open_error, sizeof(app->open_error), "%s",

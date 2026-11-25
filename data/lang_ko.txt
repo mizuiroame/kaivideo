@@ -1566,8 +1566,17 @@ Guide (XMLTV)
 IPTV
 IPTV
 
-List set: Load the channels to see them in Live.
-목록 설정됨: 채널 불러오기로 Live에서 볼 수 있습니다.
+List set.
+목록 설정됨.
+
+Now the server's address.
+이제 서버 주소를 입력하세요.
+
+Testing the connection: loading the channels…
+연결을 테스트하는 중: 채널 불러오는 중…
+
+The server says the user or password is wrong.
+서버에 따르면 사용자 또는 비밀번호가 틀렸습니다.
 
 List type
 목록 종류

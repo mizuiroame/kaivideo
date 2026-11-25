@@ -171,6 +171,11 @@ static char *mapUrl(const char *line, size_t n, const char *base)
     return hlsResolveUrl(base, ref, url, sizeof(url)) ? strdup(url) : NULL;
 }
 
+bool hlsPlaylistComplete(const char *playlist)
+{
+    return strstr(playlist, "#EXT-X-ENDLIST") || strstr(playlist, "#EXT-X-PLAYLIST-TYPE:VOD");
+}
+
 bool hlsPlaylistParse(const char *playlist, const char *base, int64_t start_ns, HlsPlaylist *out)
 {
     return hlsPlaylistParseList(playlist, base, start_ns, -1, false, out);
@@ -232,7 +237,7 @@ bool hlsPlaylistParseList(const char *playlist, const char *base, int64_t start_
     }
     out->text[used] = '\0';
     out->size = used;
-    out->ended = strstr(playlist, "#EXT-X-ENDLIST") != NULL;
+    out->ended = hlsPlaylistComplete(playlist);
     const char *sequence = strstr(playlist, MEDIA_SEQUENCE);
     out->sequence = sequence ? strtoll(sequence + sizeof(MEDIA_SEQUENCE) - 1, NULL, 10) : 0;
     out->first = first;
@@ -295,7 +300,7 @@ int hlsPlaylistAppend(HlsPlaylist *p, const char *playlist, const char *base)
     int start = sequence + total > have ? (int)(have > sequence ? have - sequence : 0) : total;
     int added = total - start;
     bool was_ended = p->ended;
-    p->ended = strstr(playlist, "#EXT-X-ENDLIST") != NULL;
+    p->ended = hlsPlaylistComplete(playlist);
     if (added && !grow(p, added))
         return -1;
     // A gap (the list slid past segments never read): numbering goes on from the new ones.

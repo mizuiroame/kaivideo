@@ -62,6 +62,8 @@ struct App {
     char open_subs[JF_TRACK_NAME_MAX + 16];  // And the subtitles.
     JfPlan open_plan;           // How the video being opened or played comes from the server.
     bool playing_converted;
+    bool playing_live_stream;   // An addon's stream that is live (HLS without an end, or MPEG-TS sent as it is):
+                                // played as a channel is, without seeking (appPlayingLive).
     int quality_applied;        // The quality the video playing was opened with.
     pthread_t open_thread;
     volatile bool open_done;
