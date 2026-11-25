@@ -37,6 +37,9 @@ docker run --rm -v "$PWD:/build/kaivideo" -w /build/kaivideo kaivideo-host make 
   check that every control answers a tap where it's drawn.
 - **Live tests**: `tests/host_live/` has tests against real servers (Jellyfin,
   Samba, WebDAV), run on a PC.
+- **Tests in CI**: on every push and pull request, GitHub Actions builds
+  `tests/Dockerfile` and runs `make run` in it (`.github/workflows/tests.yml`).
+  The live tests and the previews stay on the PC.
 - **Icon**: `tools/make_icon.py` draws `icon.jpg`.
 - **Languages**: `tools/lang_check.py` checks a language file against the
   texts in the code. See [Languages](languages.md).
