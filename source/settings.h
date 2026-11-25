@@ -69,6 +69,8 @@ typedef enum {
     SETTING_NET_CERTIFICATE,  // Whether the network folder's certificate must be trusted (https, FTPS).
     SETTING_HOME_STYLE,     // Home as a Showcase (a large picture over rows) or the classic rows of cards.
     SETTING_HOME_TILES,     // The Showcase's tiles: mixed, DVD covers, or wide pictures (home.h's HomeTiles).
+    SETTING_FASTER_4K,      // Lighter deblocking for 4K on the CPU: off, when needed, always (swframe.h).
+    SETTING_HDR,            // HDR videos brought down to SDR colors (hdr.h).
     SETTING_COUNT,
 } SettingRow;
 
@@ -87,6 +89,8 @@ typedef enum {
     SETTINGS_PAGE_COUNT
 } SettingsPage;
 
+// Settings' "Faster 4K", as swframe.h's SwframeFast.
+typedef enum { FASTER_4K_OFF, FASTER_4K_WHEN_NEEDED, FASTER_4K_ALWAYS, FASTER_4K_COUNT } Faster4k;
 typedef enum { SUBTITLES_SMALL, SUBTITLES_MEDIUM, SUBTITLES_LARGE, SUBTITLES_SIZE_COUNT } SubtitleSize;
 typedef enum { SUBTITLE_OUTLINE, SUBTITLE_BOX, SUBTITLE_STYLE_COUNT } SubtitleStyle;
 #define SUBTITLE_COLOR_COUNT 4
@@ -134,6 +138,8 @@ typedef struct {
     char update_tag[32];                  // The newer version it found then, or "".
     bool home_classic;                    // Home as the classic rows of cards, not the Showcase.
     int home_tiles;                       // HomeTiles: the Showcase's tiles.
+    int faster_4k;                        // swframe.h's SwframeFast; when needed by default.
+    bool hdr_to_sdr;                      // HDR videos shown with SDR colors (tone mapped), not washed out.
 } Config;
 
 void configDefaults(Config *c);

@@ -1940,3 +1940,24 @@ The guide has nothing on now for it.
 
 Watch live
 생방송 보기
+
+Always
+항상
+
+Faster 4K (slightly softer)
+더 빠른 4K (약간 부드러움)
+
+Faster 4K: on (lighter deblocking)
+더 빠른 4K: 켜짐 (가벼운 디블로킹)
+
+HDR to SDR colors
+HDR을 SDR 색으로
+
+Picture: %s, shown as it is
+화면: %s, 그대로 표시
+
+Picture: %s, shown with SDR colors
+화면: %s, SDR 색으로 표시
+
+When needed
+필요할 때

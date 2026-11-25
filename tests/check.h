@@ -34,6 +34,7 @@ void testWatched(void);
 void testTrackPrefs(void);
 void testPlayback(void);
 void testSwFrame(void);
+void testHdr(void);
 void testAssCompose(void);
 void testJellyfin(void);
 void testPlex(void);

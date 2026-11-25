@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "check.h"
+#include "hdr.h"
 #include "stats.h"
 
 static const uint64_t MS = 1000000;
@@ -78,6 +79,21 @@ static void testLines(void)
     };
     n = statsFormat(&card, lines);
     CHECK(hasLine(lines, n, "Playing: from the SD card"));
+    CHECK(!hasLine(lines, n, "Faster 4K: on (lighter deblocking)"));  // SDR, deblocked as usual: nothing said.
+    for (int i = 0; i < n; i++)
+        CHECK(strncmp(lines[i], "Picture:", 8) != 0);
+    StatsInfo hdr = card;
+    hdr.hdr = HDR_PQ;
+    hdr.hdr_converted = true;
+    hdr.light_deblock = true;
+    n = statsFormat(&hdr, lines);
+    CHECK(n <= STATS_LINES);
+    CHECK(hasLine(lines, n, "Picture: HDR10, shown with SDR colors"));
+    CHECK(hasLine(lines, n, "Faster 4K: on (lighter deblocking)"));
+    hdr.hdr = HDR_HLG;
+    hdr.hdr_converted = false;
+    n = statsFormat(&hdr, lines);
+    CHECK(hasLine(lines, n, "Picture: HLG, shown as it is"));
     CHECK(hasLine(lines, n, "Frames: measuring..."));
     CHECK(hasLine(lines, n, "Speed: 1.25x"));
     for (int i = 0; i < n; i++)  // Nothing about the network for the card.

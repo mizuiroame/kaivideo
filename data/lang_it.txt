@@ -1940,3 +1940,24 @@ La guida non ha nulla in onda ora per questo canale.
 
 Watch live
 Guarda in diretta
+
+Always
+Sempre
+
+Faster 4K (slightly softer)
+4K più veloce (un po' più morbido)
+
+Faster 4K: on (lighter deblocking)
+4K più veloce: attivo (deblocking più leggero)
+
+HDR to SDR colors
+Colori HDR in SDR
+
+Picture: %s, shown as it is
+Immagine: %s, mostrata così com'è
+
+Picture: %s, shown with SDR colors
+Immagine: %s, mostrata con colori SDR
+
+When needed
+Quando serve

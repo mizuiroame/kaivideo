@@ -114,6 +114,11 @@ static void testFile(const char *path)
     VideoStats stats = videoStats(v);
     printf("    %u decoded, %u shown, %u dropped, %u previews, convert %.2f ms\n", stats.decoded, stats.shown,
            stats.dropped, stats.previews, stats.copy_ms);
+    bool converted = false;
+    int hdr = videoHdr(v, &converted);
+    static const char *const HDR_NAMES[] = {"SDR", "HDR10 (PQ)", "HLG"};
+    printf("    picture: %s%s, lighter deblocking %s\n", HDR_NAMES[hdr >= 0 && hdr <= 2 ? hdr : 0],
+           converted ? " to SDR colors" : "", videoLightDeblock(v) ? "on" : "off");
     videoClose(v);
 }
 

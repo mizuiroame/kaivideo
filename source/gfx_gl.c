@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "gfx.h"
+#include "hdr.h"
 
 #define FLOATS 16             // Per vertex: position 2, uv 2, color 4, a 4, b 4 (b.w is the kind).
 #define MAX_VERTICES (6 * 8192)
@@ -566,33 +567,113 @@ static const char *const VIDEO_FRAGMENT_SHADER =
     "    color = vec4(clamp(to_rgb * yuv, 0.0, 1.0), 1.0);\n"
     "}\n";
 
+// HDR (BT.2020, PQ or HLG) brought down to SDR, as hdr.c does it: to light in
+// nits, to BT.709's colors, the brightest channel through BT.2390's curve
+// (worked out in PQ, from what hdrParams gives), and BT.1886's gamma. highp:
+// PQ needs it.
+static const char *const VIDEO_HDR_FRAGMENT_SHADER =
+    "#version 300 es\n"
+    "precision highp float;\n"
+    "uniform sampler2D plane_y;\n"
+    "uniform sampler2D plane_uv;\n"
+    "uniform vec3 offset;\n"
+    "uniform vec3 scale;\n"
+    "uniform int hlg;\n"         // 1 for HLG, else PQ.
+    "uniform vec3 curve;\n"      // The peak in PQ, the SDR white over it, the knee (hdr.h's HdrParams).
+    "in vec2 uv;\n"
+    "out vec4 color;\n"
+    "const float M1 = 0.1593017578125, M2 = 78.84375, C1 = 0.8359375, C2 = 18.8515625, C3 = 18.6875;\n"
+    "const mat3 YUV_2020 = mat3(1.0, 1.0, 1.0, 0.0, -0.16455, 1.8814, 1.4746, -0.57135, 0.0);\n"
+    "const mat3 TO_709 = mat3(1.6605, -0.1246, -0.0182, -0.5876, 1.1329, -0.1006, -0.0728, -0.0083, 1.1187);\n"
+    "const vec3 LUMA_2020 = vec3(0.2627, 0.6780, 0.0593);\n"
+    "vec3 pqToNits(vec3 e) {\n"
+    "    vec3 p = pow(clamp(e, 0.0, 1.0), vec3(1.0 / M2));\n"
+    "    return 10000.0 * pow(max(p - C1, 0.0) / (C2 - C3 * p), vec3(1.0 / M1));\n"
+    "}\n"
+    "float nitsToPq(float n) {\n"
+    "    float l = pow(clamp(n / 10000.0, 0.0, 1.0), M1);\n"
+    "    return pow((C1 + C2 * l) / (1.0 + C3 * l), M2);\n"
+    "}\n"
+    "vec3 hlgToNits(vec3 e) {\n"
+    "    e = clamp(e, 0.0, 1.0);\n"
+    "    vec3 scene = mix((exp((e - 0.55991073) / 0.17883277) + 0.28466892) / 12.0, e * e / 3.0,\n"
+    "                     vec3(lessThanEqual(e, vec3(0.5))));\n"
+    "    return 1000.0 * pow(max(dot(scene, LUMA_2020), 1e-6), 0.2) * scene;\n"
+    "}\n"
+    "float toneMap(float nits) {\n"
+    "    float e = min(nitsToPq(nits) / curve.x, 1.0);\n"
+    "    if (e > curve.z && curve.z < 1.0) {\n"
+    "        float t = (e - curve.z) / (1.0 - curve.z), t2 = t * t, t3 = t2 * t;\n"
+    "        e = (2.0 * t3 - 3.0 * t2 + 1.0) * curve.z + (t3 - 2.0 * t2 + t) * (1.0 - curve.z) +\n"
+    "            (-2.0 * t3 + 3.0 * t2) * curve.y;\n"
+    "    }\n"
+    "    return min(pqToNits(vec3(e * curve.x)).x, 203.0);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec3 yuv = (vec3(texture(plane_y, uv).r, texture(plane_uv, uv).rg) - offset) * scale;\n"
+    "    vec3 rgb = clamp(YUV_2020 * yuv, 0.0, 1.0);\n"
+    "    vec3 nits = hlg == 1 ? hlgToNits(rgb) : pqToNits(rgb);\n"
+    "    vec3 lin = max(TO_709 * nits, 0.0);\n"
+    "    float peak = max(lin.r, max(lin.g, lin.b));\n"
+    "    lin *= peak > 0.0 ? toneMap(peak) / peak : 0.0;\n"
+    "    color = vec4(pow(clamp(lin / 203.0, 0.0, 1.0), vec3(1.0 / 2.4)), 1.0);\n"
+    "}\n";
+
+// A video program and where its uniforms are (-1 for one it hasn't).
+typedef struct {
+    GLuint program;
+    GLint matrix, offset, scale, hlg, curve;
+} VideoProgram;
+
+static VideoProgram g_video_sdr, g_video_hdr;
 static GLuint g_video_program, g_video_vao, g_video_vbo, g_video_tex[2];
-static GLint g_video_u_matrix, g_video_u_offset, g_video_u_scale;
 static int g_video_w, g_video_h;
 static unsigned g_video_id;
 static bool g_video_has_frame;
 
-static bool videoSetup(void)
+static bool videoProgram(const char *fragment, VideoProgram *out)
 {
-    GLuint vs = compile(GL_VERTEX_SHADER, VIDEO_VERTEX_SHADER), fs = compile(GL_FRAGMENT_SHADER, VIDEO_FRAGMENT_SHADER);
-    if (!vs || !fs)
+    GLuint vs = compile(GL_VERTEX_SHADER, VIDEO_VERTEX_SHADER), fs = compile(GL_FRAGMENT_SHADER, fragment);
+    if (!vs || !fs) {
+        if (vs)
+            glDeleteShader(vs);
+        if (fs)
+            glDeleteShader(fs);
         return false;
-    g_video_program = glCreateProgram();
-    glAttachShader(g_video_program, vs);
-    glAttachShader(g_video_program, fs);
-    glLinkProgram(g_video_program);
+    }
+    GLuint program = glCreateProgram();
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+    glLinkProgram(program);
     glDeleteShader(vs);
     glDeleteShader(fs);
     GLint linked = 0;
-    glGetProgramiv(g_video_program, GL_LINK_STATUS, &linked);
-    if (!linked)
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        glDeleteProgram(program);
         return false;
-    glUseProgram(g_video_program);
-    glUniform1i(glGetUniformLocation(g_video_program, "plane_y"), 2);
-    glUniform1i(glGetUniformLocation(g_video_program, "plane_uv"), 3);
-    g_video_u_matrix = glGetUniformLocation(g_video_program, "to_rgb");
-    g_video_u_offset = glGetUniformLocation(g_video_program, "offset");
-    g_video_u_scale = glGetUniformLocation(g_video_program, "scale");
+    }
+    glUseProgram(program);
+    glUniform1i(glGetUniformLocation(program, "plane_y"), 2);
+    glUniform1i(glGetUniformLocation(program, "plane_uv"), 3);
+    *out = (VideoProgram){
+        .program = program,
+        .matrix = glGetUniformLocation(program, "to_rgb"),
+        .offset = glGetUniformLocation(program, "offset"),
+        .scale = glGetUniformLocation(program, "scale"),
+        .hlg = glGetUniformLocation(program, "hlg"),
+        .curve = glGetUniformLocation(program, "curve"),
+    };
+    return true;
+}
+
+static bool videoSetup(void)
+{
+    if (!videoProgram(VIDEO_FRAGMENT_SHADER, &g_video_sdr))
+        return false;
+    g_video_program = g_video_sdr.program;
+    if (!videoProgram(VIDEO_HDR_FRAGMENT_SHADER, &g_video_hdr))
+        g_video_hdr = (VideoProgram){0};  // HDR is then drawn as SDR is (washed out), as before.
     glGenVertexArrays(1, &g_video_vao);
     glBindVertexArray(g_video_vao);
     glGenBuffers(1, &g_video_vbo);
@@ -622,8 +703,11 @@ static void videoTeardown(void)
         glDeleteBuffers(1, &g_video_vbo);
     if (g_video_vao)
         glDeleteVertexArrays(1, &g_video_vao);
-    if (g_video_program)
-        glDeleteProgram(g_video_program);
+    if (g_video_sdr.program)
+        glDeleteProgram(g_video_sdr.program);
+    if (g_video_hdr.program)
+        glDeleteProgram(g_video_hdr.program);
+    g_video_sdr = g_video_hdr = (VideoProgram){0};
     g_video_tex[0] = g_video_tex[1] = g_video_vbo = g_video_vao = g_video_program = 0;
     g_video_w = g_video_h = 0;
     g_video_has_frame = false;
@@ -664,17 +748,25 @@ void gfxDrawVideo(const GfxVideoFrame *frame, float x, float y, float w, float h
     flush();  // What's batched goes first, under the video.
     if (!g_video_has_frame || frame->id != g_video_id || frame->width != g_video_w || frame->height != g_video_h)
         videoUpload(frame);
-    glUseProgram(g_video_program);
-    // BT.709 (HD) or BT.601 (SD), as columns: Y, U, V.
-    static const float BT709[9] = {1, 1, 1, 0, -0.1873f, 1.8556f, 1.5748f, -0.4681f, 0};
-    static const float BT601[9] = {1, 1, 1, 0, -0.3441f, 1.772f, 1.402f, -0.7141f, 0};
-    glUniformMatrix3fv(g_video_u_matrix, 1, GL_FALSE, frame->bt709 ? BT709 : BT601);
-    if (frame->full_range) {
-        glUniform3f(g_video_u_offset, 0.0f, 128.0f / 255.0f, 128.0f / 255.0f);
-        glUniform3f(g_video_u_scale, 1.0f, 1.0f, 1.0f);
+    bool hdr = frame->hdr != HDR_NONE && g_video_hdr.program;
+    const VideoProgram *vp = hdr ? &g_video_hdr : &g_video_sdr;
+    glUseProgram(vp->program);
+    if (hdr) {
+        HdrParams p = hdrParams((HdrKind)frame->hdr, frame->hdr_peak);
+        glUniform1i(vp->hlg, p.kind == HDR_HLG ? 1 : 0);
+        glUniform3f(vp->curve, p.source_pq, p.max_lum, p.knee);
     } else {
-        glUniform3f(g_video_u_offset, 16.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f);
-        glUniform3f(g_video_u_scale, 255.0f / 219.0f, 255.0f / 224.0f, 255.0f / 224.0f);
+        // BT.709 (HD) or BT.601 (SD), as columns: Y, U, V.
+        static const float BT709[9] = {1, 1, 1, 0, -0.1873f, 1.8556f, 1.5748f, -0.4681f, 0};
+        static const float BT601[9] = {1, 1, 1, 0, -0.3441f, 1.772f, 1.402f, -0.7141f, 0};
+        glUniformMatrix3fv(vp->matrix, 1, GL_FALSE, frame->bt709 ? BT709 : BT601);
+    }
+    if (frame->full_range) {
+        glUniform3f(vp->offset, 0.0f, 128.0f / 255.0f, 128.0f / 255.0f);
+        glUniform3f(vp->scale, 1.0f, 1.0f, 1.0f);
+    } else {
+        glUniform3f(vp->offset, 16.0f / 255.0f, 128.0f / 255.0f, 128.0f / 255.0f);
+        glUniform3f(vp->scale, 255.0f / 219.0f, 255.0f / 224.0f, 255.0f / 224.0f);
     }
     float v[24] = {x, y, 0, 0, x + w, y, 1, 0, x, y + h, 0, 1, x + w, y, 1, 0, x + w, y + h, 1, 1, x, y + h, 0, 1};
     glBindVertexArray(g_video_vao);

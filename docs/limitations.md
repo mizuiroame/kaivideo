@@ -20,8 +20,13 @@
   3840x1600 film at 16 Mb/s decodes at 28 frames per second (in real time for
   24 fps), but a 10-bit 4K remux at 68 Mb/s only at 18, so frames are skipped
   to keep up with the sound.
-- **HDR** on the SD card or a network folder isn't converted: HDR videos
-  play, with washed-out colors. From a server, the server converts them.
+- **HDR** (HDR10, HLG) is brought down to SDR colors on the GPU (Settings >
+  Playback > **HDR to SDR colors**). The picture reaches the GPU in 8 bits,
+  so smooth skies can show some banding; HDR10+ and Dolby Vision's own data
+  are not used (a Dolby Vision file with an HDR10 base plays as HDR10; one
+  without, profile 5, keeps wrong colors). The pictures on the cards are
+  still made without it (washed out). 4K HDR is decoded on the CPU like any
+  4K HEVC (see below).
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
@@ -68,10 +73,11 @@
 
 - Plex Home profiles.
 - Smoother jumps, and checks with big libraries on the console.
-- **Experiment: skip deblocking on frames nothing refers to**, for 4K HEVC on
-  the CPU. Measured on the console with `tools/hevctest` (its "no deblocking"
-  row): about 5% faster (a 68 Mb/s 4K remux from 17.7 to 19.0 fps, a 16 Mb/s
-  3840x1600 film from 27.9 to 29.2), at the cost of a slightly blockier
-  picture on those frames. Not used yet: worth a look on a TV first, and only
-  for videos that can't keep up otherwise. It wouldn't bring a 68 Mb/s remux
-  to real time; letting the server convert it still does.
+- **Faster 4K** (Settings > Playback, "When needed" by default): frames
+  nothing refers to skip their deblocking once a video over 1080p decoded on
+  the CPU starts coming late. Measured on the console with `tools/hevctest`:
+  about 5% faster (a 68 Mb/s 4K remux from 17.7 to 19.0 fps, a 16 Mb/s
+  3840x1600 film from 27.9 to 29.2); on a PC, 8-9% on made-up 4K clips, with
+  those frames at 50-54 dB PSNR (SSIM 0.997-0.999) against the normal
+  picture. It helps a film that is just short of real time; it doesn't bring
+  a 68 Mb/s remux to real time: letting the server convert it still does.

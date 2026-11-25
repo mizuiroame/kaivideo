@@ -88,6 +88,8 @@ typedef struct {
     unsigned id;
     bool bt709;       // HD colors (BT.709); else SD (BT.601).
     bool full_range;  // 0-255 rather than 16-235.
+    int hdr;          // hdr.h's HdrKind (BT.2020, PQ or HLG) to bring down to SDR; 0: none.
+    float hdr_peak;   // Its brightest, in nits.
 } GfxVideoFrame;
 
 // Draws a video frame into a w x h box at x, y (framebuffer pixels),

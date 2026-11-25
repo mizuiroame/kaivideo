@@ -1940,3 +1940,24 @@ Der Programmführer hat für diesen Sender gerade nichts.
 
 Watch live
 Live ansehen
+
+Always
+Immer
+
+Faster 4K (slightly softer)
+Schnelleres 4K (etwas weicher)
+
+Faster 4K: on (lighter deblocking)
+Schnelleres 4K: an (leichteres Deblocking)
+
+HDR to SDR colors
+HDR in SDR-Farben
+
+Picture: %s, shown as it is
+Bild: %s, unverändert gezeigt
+
+Picture: %s, shown with SDR colors
+Bild: %s, mit SDR-Farben gezeigt
+
+When needed
+Bei Bedarf

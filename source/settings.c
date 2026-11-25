@@ -21,7 +21,7 @@ static const char *const LABELS[SETTING_COUNT] = {
     N_("Guide (XMLTV)"), N_("Certificate check"), N_("Load the channels"), N_("Forget this list"),
     N_("Stremio addons"), N_("Add an addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"), N_("Addon"),
     N_("Addon"), N_("Load the catalogs"), N_("Color"), N_("Color"), N_("Color"), N_("Certificate check"),
-    N_("Home style"), N_("Showcase tiles"),
+    N_("Home style"), N_("Showcase tiles"), N_("Faster 4K (slightly softer)"), N_("HDR to SDR colors"),
 };
 #define SERVER_COLOR_COUNT (THEME_ACCENT_COUNT + 1)  // Its own, then each accent.
 static const char *const SERVER_COLOR_KEYS[SERVER_KIND_COUNT] = {"jellyfin_color", "emby_color", "plex_color"};
@@ -34,7 +34,7 @@ static const SettingRow PAGE_ROWS[SETTINGS_PAGE_COUNT][SETTINGS_PAGE_MAX_ROWS] =
     {SETTING_JF_SERVER, SETTING_JF_FIND, SETTING_JF_CODE, SETTING_JF_PASSWORD, SETTING_JF_CERTIFICATE,
      SETTING_SERVER_COLOR, SETTING_JF_TEST, SETTING_COUNT},
     {SETTING_LIBRARY, SETTING_RESCAN, SETTING_THUMBNAILS, SETTING_COUNT},
-    {SETTING_AUTOPLAY, SETTING_JF_QUALITY, SETTING_COUNT},
+    {SETTING_AUTOPLAY, SETTING_FASTER_4K, SETTING_HDR, SETTING_JF_QUALITY, SETTING_COUNT},
     {SETTING_NET_ADDRESS, SETTING_NET_ACCOUNT, SETTING_NET_REMEMBER, SETTING_NET_UNSIGNED, SETTING_NET_CERTIFICATE,
      SETTING_NET_COLOR, SETTING_NET_TEST, SETTING_NET_FORGET, SETTING_COUNT},
     {SETTING_CREDITS, SETTING_UPDATE_AUTO, SETTING_UPDATE_NOW, SETTING_COUNT},
@@ -89,6 +89,8 @@ void configDefaults(Config *c)
     c->blur = BLUR_MEDIUM;
     c->thumbnails = true;
     c->autoplay = true;
+    c->faster_4k = FASTER_4K_WHEN_NEEDED;
+    c->hdr_to_sdr = true;
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
         c->check_certificate[k] = true;
     c->net_check_certificate = true;
@@ -149,6 +151,10 @@ bool configReadLine(Config *c, const char *line)
         c->thumbnails = strcmp(value, "0") != 0;
     else if (isKey(line, length, "autoplay"))
         c->autoplay = strcmp(value, "0") != 0;
+    else if (isKey(line, length, "faster_4k"))
+        c->faster_4k = readChoice(value, FASTER_4K_COUNT, FASTER_4K_WHEN_NEEDED);
+    else if (isKey(line, length, "hdr_to_sdr"))
+        c->hdr_to_sdr = strcmp(value, "0") != 0;
     else if (isKey(line, length, "jellyfin"))
         c->use_jellyfin = strcmp(value, "1") == 0;
     else if (isKey(line, length, "network_view"))
@@ -213,6 +219,7 @@ void configWrite(const Config *c, FILE *f)
     fprintf(f, "blur=%d\nthumbnails=%d\nsubtitles=%d\nsubtitle_color=%d\nsubtitle_style=%d\n", c->blur,
             c->thumbnails ? 1 : 0, c->subtitles, c->subtitle_color, c->subtitle_style);
     fprintf(f, "home_style=%s\nhome_tiles=%d\n", c->home_classic ? "classic" : "showcase", c->home_tiles);
+    fprintf(f, "faster_4k=%d\nhdr_to_sdr=%d\n", c->faster_4k, c->hdr_to_sdr ? 1 : 0);
     if (c->subtitle_font[0] && !strpbrk(c->subtitle_font, "\r\n"))
         fprintf(f, "subtitle_font=%s\n", c->subtitle_font);
     for (int k = 0; k < SERVER_KIND_COUNT; k++)
@@ -325,7 +332,8 @@ bool settingIsChoice(SettingRow row)
            row == SETTING_NET_REMEMBER || row == SETTING_NET_UNSIGNED || row == SETTING_UPDATE_AUTO ||
            row == SETTING_IPTV_KIND || row == SETTING_IPTV_CERTIFICATE ||
            row == SETTING_NET_COLOR || row == SETTING_IPTV_COLOR || row == SETTING_ADDONS_COLOR ||
-           row == SETTING_NET_CERTIFICATE || row == SETTING_HOME_STYLE || row == SETTING_HOME_TILES;
+           row == SETTING_NET_CERTIFICATE || row == SETTING_HOME_STYLE || row == SETTING_HOME_TILES ||
+           row == SETTING_FASTER_4K || row == SETTING_HDR;
 }
 
 static int wrap(int value, int delta, int count)
@@ -344,6 +352,8 @@ void settingStep(Config *c, SettingRow row, int delta)
     case SETTING_HOME_STYLE: c->home_classic = !c->home_classic; break;
     case SETTING_HOME_TILES: c->home_tiles = wrap(c->home_tiles, delta, HOME_TILES_COUNT); break;
     case SETTING_AUTOPLAY: c->autoplay = !c->autoplay; break;
+    case SETTING_FASTER_4K: c->faster_4k = wrap(c->faster_4k, delta, FASTER_4K_COUNT); break;
+    case SETTING_HDR: c->hdr_to_sdr = !c->hdr_to_sdr; break;
     case SETTING_UPDATE_AUTO: c->update_check = !c->update_check; break;
     case SETTING_JF_QUALITY: c->jf_quality = wrap(c->jf_quality, delta, QUALITY_COUNT); break;
     case SETTING_JF_CERTIFICATE: {  // For the server Settings shows.
@@ -384,6 +394,12 @@ void settingValue(const Config *c, SettingRow row, char *out, size_t size)
         break;
     }
     case SETTING_AUTOPLAY: snprintf(out, size, "%s", c->autoplay ? T("On") : T("Off")); break;
+    case SETTING_FASTER_4K: {
+        static const char *const FASTER[FASTER_4K_COUNT] = {N_("Off"), N_("When needed"), N_("Always")};
+        snprintf(out, size, "%s", T(FASTER[inRange(c->faster_4k, FASTER_4K_COUNT)]));
+        break;
+    }
+    case SETTING_HDR: snprintf(out, size, "%s", c->hdr_to_sdr ? T("On") : T("Off")); break;
     case SETTING_UPDATE_AUTO: snprintf(out, size, "%s", c->update_check ? T("On") : T("Off")); break;
     case SETTING_JF_QUALITY:
         snprintf(out, size, "%s", T(QUALITIES[inRange(c->jf_quality, QUALITY_COUNT)].name));

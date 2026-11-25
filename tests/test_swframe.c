@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "check.h"
+#include "settings.h"
 #include "swframe.h"
 #include "thumbgen.h"
 
@@ -138,8 +139,49 @@ static void testThumbFiles(void)
     CHECK(thumbgenFileKind(20000) == THUMB_FILE_PICTURE);
 }
 
+static void testLightDeblock(void)
+{
+    // Settings keeps the same choices.
+    CHECK((int)FASTER_4K_OFF == SWFRAME_FAST_OFF && (int)FASTER_4K_WHEN_NEEDED == SWFRAME_FAST_AUTO &&
+          (int)FASTER_4K_ALWAYS == SWFRAME_FAST_ALWAYS && (int)FASTER_4K_COUNT == SWFRAME_FAST_COUNT);
+    SwframeKeepUp k = {0};
+    // Never at 1080p or under, nor when it's off.
+    CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_ALWAYS, 1920, 1080, 0, 0));
+    CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 1920, 1088, 1000, 500));
+    CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_OFF, 3840, 2160, 1000, 500));
+    CHECK(swframeLightDeblock(&k, SWFRAME_FAST_ALWAYS, 3840, 2160, 0, 0));
+    CHECK(swframeLightDeblock(&k, SWFRAME_FAST_ALWAYS, 3840, 1600, 0, 0));  // A wide film.
+
+    // When needed: a 4K video that keeps up stays as it is.
+    k = (SwframeKeepUp){0};
+    unsigned frames = 0, late = 0;
+    for (; frames < 10 * SWFRAME_KEEPUP_FRAMES; frames++) {
+        if (frames % SWFRAME_KEEPUP_FRAMES == 0)
+            late++;  // One late frame a window: a hiccup, not the CPU.
+        CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 3840, 2160, frames, late));
+    }
+    // It falls behind: on at the end of the window, and it stays on.
+    bool on = false;
+    for (int i = 0; i < SWFRAME_KEEPUP_FRAMES + 1 && !on; i++, frames++) {
+        if (i % 8 == 0)
+            late++;
+        on = swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 3840, 2160, frames, late);
+    }
+    CHECK(on && k.light);
+    CHECK(swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 3840, 2160, frames + 500, late));
+    // Turned off in Settings meanwhile: off at once.
+    CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_OFF, 3840, 2160, frames + 501, late));
+
+    // Counters that went back (counted over again) start a new window.
+    k = (SwframeKeepUp){.frames = 400, .late = 30};
+    CHECK(!swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 3840, 2160, 10, 9));
+    CHECK(k.frames == 10 && k.late == 9);
+    CHECK(swframeLightDeblock(&k, SWFRAME_FAST_AUTO, 3840, 2160, 10 + SWFRAME_KEEPUP_FRAMES, 9 + SWFRAME_KEEPUP_LATE));
+}
+
 void testSwFrame(void)
 {
+    testLightDeblock();
     testRoute();
     testThreads();
     testSkipping();

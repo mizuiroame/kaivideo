@@ -1940,3 +1940,24 @@ The guide has nothing on now for it.
 
 Watch live
 观看直播
+
+Always
+始终
+
+Faster 4K (slightly softer)
+更快的 4K（画面稍软）
+
+Faster 4K: on (lighter deblocking)
+更快的 4K：开启（较轻的去块滤波）
+
+HDR to SDR colors
+HDR 转为 SDR 色彩
+
+Picture: %s, shown as it is
+画面：%s，原样显示
+
+Picture: %s, shown with SDR colors
+画面：%s，以 SDR 色彩显示
+
+When needed
+需要时

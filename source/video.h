@@ -58,6 +58,13 @@ int64_t videoStartNs(const Video *v);
 // True once every frame has been shown, or decoding failed (see error).
 bool videoFinished(Video *v, char *error, size_t error_size);
 VideoStats videoStats(const Video *v);
+// True while frames nothing refers to are decoded without deblocking (swframe.h's lighter deblocking).
+bool videoLightDeblock(const Video *v);
+// The stream's HDR (hdr.h's HdrKind: 0 for none), and whether it's drawn brought down to SDR.
+int videoHdr(const Video *v, bool *converted);
+// For videos opened from now on: Settings' "Faster 4K" (swframe.h's SwframeFast)
+// and whether HDR is brought down to SDR.
+void videoSetPlayback(int faster_4k, bool hdr_to_sdr);
 
 // The file's subtitle tracks (text, or pictures: PGS, VobSub), decoded as the file is read (so a line
 // shows once reading has passed it, which is always by its time).
