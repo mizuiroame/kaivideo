@@ -7,8 +7,11 @@
 #include <string.h>
 
 #include "app.h"
+#include "buttons.h"
 #include "lang.h"
 #include "net.h"
+#include "ui_library.h"
+#include "ui_live.h"
 
 #define EPISODES_MAX_BYTES (16u << 20)
 #define STALL_S 20
@@ -90,12 +93,153 @@ void appXtreamInstall(App *app)
     appLibraryInstallBuilt(app, &built);
 }
 
+// --- Categories (Y on Films or Series) ---
+
+// The categories of Films (grid GRID_FILMS) or Series.
+static const IptvGroup *groupsOf(const App *app, int grid, int *count)
+{
+    *count = grid == GRID_FILMS ? app->xtream.film_group_count : app->xtream.show_group_count;
+    return grid == GRID_FILMS ? app->xtream.film_groups : app->xtream.show_groups;
+}
+
+// Films and Series show every film and series again.
+static void showAll(App *app)
+{
+    for (int grid = GRID_FILMS; grid <= GRID_SERIES; grid++) {
+        libviewSetGridOnly(&app->view, (LibGrid)grid, NULL, 0);
+        free(app->xtream_only[grid]);
+        app->xtream_only[grid] = NULL;
+    }
+}
+
+void appXtreamApplyGroups(App *app)
+{
+    showAll(app);
+    for (int grid = GRID_FILMS; grid <= GRID_SERIES; grid++) {
+        int count, chosen = app->xtream_group[grid] - 1;
+        groupsOf(app, grid, &count);
+        if (chosen >= count)
+            chosen = -1;
+        app->xtream_group[grid] = chosen + 1;
+        bool shows = grid == GRID_SERIES;
+        size_t max = shows ? app->library.show_count : app->library.film_count;
+        int *refs = chosen >= 0 ? malloc((max + 1) * sizeof(int)) : NULL;
+        if (!refs)
+            continue;  // All of them (or out of memory: all of them too).
+        size_t n = libraryGroupRefs(&app->library, shows, chosen, refs, max);
+        app->xtream_only[grid] = refs;
+        libviewSetGridOnly(&app->view, (LibGrid)grid, refs, (int)n);
+    }
+}
+
+// The grid shown, if it's Films or Series and has categories: else -1.
+static int groupedGrid(const App *app)
+{
+    const LibView *v = &app->view;
+    int grid = v->iptv && v->show < 0 ? libviewGrid(v) : -1, count = 0;
+    if (grid == GRID_FILMS || grid == GRID_SERIES)
+        groupsOf(app, grid, &count);
+    return count > 0 ? grid : -1;
+}
+
+bool appXtreamHasGroups(const App *app)
+{
+    return app->config.use_iptv && groupedGrid(app) >= 0;
+}
+
+static const char *allLabel(int grid)
+{
+    return grid == GRID_FILMS ? T("All films") : T("All series");
+}
+
+void appXtreamSetGridLabels(const App *app)
+{
+    for (int grid = GRID_FILMS; grid <= GRID_SERIES; grid++) {
+        int count;
+        const IptvGroup *groups = groupsOf(app, grid, &count);
+        int chosen = app->xtream_group[grid] - 1;
+        const char *label = chosen >= 0 && chosen < count ? groups[chosen].name : allLabel(grid);
+        uiLibrarySetGridGroup((LibGrid)grid, app->config.use_iptv && count > 0 ? label : NULL);
+    }
+}
+
+void appXtreamOpenGroups(App *app)
+{
+    int grid = groupedGrid(app);
+    if (grid < 0)
+        return;
+    app->xtream_groups_open = true;
+    app->xtream_group_cursor = app->xtream_group[grid];
+}
+
+static void chooseGroup(App *app, int grid, int row)
+{
+    int count;
+    groupsOf(app, grid, &count);
+    if (row < 0 || row > count)
+        return;
+    app->xtream_group[grid] = row;  // Row 0: all of them.
+    app->xtream_groups_open = false;
+    app->view.grid[grid].cursor = 0;
+    app->view.grid[grid].first = 0;
+    app->view.grid[grid].offset = 0;
+    appXtreamApplyGroups(app);
+}
+
+void appXtreamGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
+{
+    (void)now;
+    int grid = groupedGrid(app), count = 0;
+    if (grid < 0) {
+        app->xtream_groups_open = false;
+        return;
+    }
+    groupsOf(app, grid, &count);
+    pressed = buttonsRightStickAsDpad(pressed);
+    int rows = count + 1, *cursor = &app->xtream_group_cursor;
+    if (pressed & BUTTONS_UP)
+        *cursor = *cursor > 0 ? *cursor - 1 : 0;
+    if (pressed & BUTTONS_DOWN)
+        *cursor = *cursor + 1 < rows ? *cursor + 1 : rows - 1;
+    if (pressed & BUTTONS_PAGE_UP)
+        *cursor = *cursor > UI_GROUP_ROWS ? *cursor - UI_GROUP_ROWS : 0;
+    if (pressed & BUTTONS_PAGE_DOWN)
+        *cursor = *cursor + UI_GROUP_ROWS < rows ? *cursor + UI_GROUP_ROWS : rows - 1;
+    if (pressed & HidNpadButton_A)
+        chooseGroup(app, grid, *cursor);
+    if (pressed & (HidNpadButton_B | HidNpadButton_Y))
+        app->xtream_groups_open = false;
+    if (touch.type == TOUCH_TAP) {
+        LibHit hit = uiLibraryTap(touch.x, touch.y);
+        if (hit.kind == LIBHIT_LIVE_GROUP_ROW)
+            chooseGroup(app, grid, hit.a);
+        else if (hit.kind == LIBHIT_CLOSE || hit.kind == LIBHIT_LIVE_GROUPS)
+            app->xtream_groups_open = false;
+    }
+}
+
+void appXtreamGroupsDraw(const App *app)
+{
+    int grid = groupedGrid(app), count;
+    if (!app->xtream_groups_open || grid < 0)
+        return;
+    const IptvGroup *groups = groupsOf(app, grid, &count);
+    int all = grid == GRID_FILMS ? app->xtream.film_count : app->xtream.show_count;
+    uiDrawGroupList(T("Categories"), allLabel(grid), all, groups, count, app->xtream_group_cursor,
+                    app->xtream_group[grid]);
+}
+
+// --- The catalog ---
+
 void appXtreamTake(App *app, XtreamCatalog *c)
 {
     stopReading();
+    showAll(app);
     xtreamCatalogFree(&app->xtream);
     app->xtream = *c;
     memset(c, 0, sizeof(*c));
+    app->xtream_group[GRID_FILMS] = app->xtream_group[GRID_SERIES] = 0;  // Another list's categories.
+    app->xtream_groups_open = false;
     if (app->xtream.film_count || app->xtream.show_count)
         appLog("IPTV: %d films, %d series", app->xtream.film_count, app->xtream.show_count);
     appXtreamInstall(app);
@@ -137,5 +281,8 @@ void appXtreamUpdate(App *app)
 void appXtreamExit(App *app)
 {
     stopReading();
+    showAll(app);
     xtreamCatalogFree(&app->xtream);
+    app->xtream_group[GRID_FILMS] = app->xtream_group[GRID_SERIES] = 0;
+    app->xtream_groups_open = false;
 }

@@ -72,6 +72,10 @@ typedef struct {
     Scroll results_scroll;
     Scroll live;      // The Live TV channel under the cursor.
     bool iptv;        // The IPTV list's view: its Home is its channels' (app_iptvhome.c).
+    // Films and Series showing one category (an Xtream account's): its films' item indexes and its
+    // series' show indexes, the app's (libviewSetGridOnly). NULL: all of them.
+    const int *only[GRID_COLLECTIONS];
+    int only_count[GRID_COLLECTIONS];
     int64_t live_at;  // And the time in its guide (livetv.h): 0 for now.
 } LibView;
 
@@ -85,6 +89,9 @@ void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool
 // The IPTV list's view: its Home (rows of channels), its Live TV guide, an Xtream account's
 // Films, Series and Search (when it has them), and Files.
 void libviewSetIptvTabs(LibView *v, const Library *lib);
+// Films or Series (grid) shows only these (item indexes for Films, show indexes for Series; kept by
+// the caller while they show), or all of them again with NULL. The other views' tabs undo it.
+void libviewSetGridOnly(LibView *v, LibGrid grid, const int *refs, int count);
 // Shows a tab of that kind (not a server's library). False if there's none.
 bool libviewShowTab(LibView *v, LibTab kind);
 // Live TV: moves the cursor through count channels.

@@ -134,6 +134,87 @@ void xtreamCatalogFree(XtreamCatalog *c)
 {
     freeFilms(c);
     freeShows(c);
+    free(c->film_groups);
+    free(c->show_groups);
+    c->film_groups = c->show_groups = NULL;
+    c->film_group_count = c->show_group_count = 0;
+}
+
+// --- Categories ---
+
+// A string or a whole number, as text ("" if neither).
+static void jsonIdOf(const json_t *v, char *out, size_t size)
+{
+    if (json_is_string(v))
+        snprintf(out, size, "%s", json_string_value(v));
+    else if (json_is_integer(v))
+        snprintf(out, size, "%lld", (long long)json_integer_value(v));
+    else
+        out[0] = '\0';
+}
+
+static void jsonId(const json_t *object, const char *key, char *out, size_t size)
+{
+    jsonIdOf(json_object_get(object, key), out, size);
+}
+
+bool xtreamParseVodCategories(const char *json, XtreamCatalog *c, bool shows)
+{
+    json_t *root = json ? json_loads(json, 0, NULL) : NULL;
+    if (!json_is_array(root)) {
+        json_decref(root);
+        return false;
+    }
+    IptvGroup **groups = shows ? &c->show_groups : &c->film_groups;
+    int *count = shows ? &c->show_group_count : &c->film_group_count;
+    free(*groups);
+    *count = 0;
+    size_t total = json_array_size(root) < IPTV_GROUPS_MAX ? json_array_size(root) : IPTV_GROUPS_MAX;
+    *groups = total ? calloc(total, sizeof(IptvGroup)) : NULL;
+    for (size_t i = 0; *groups && i < json_array_size(root) && *count < (int)total; i++) {
+        const json_t *item = json_array_get(root, i);
+        IptvGroup *g = &(*groups)[*count];
+        jsonId(item, "category_id", g->id, sizeof(g->id));
+        char *name = jsonText(item, "category_name", IPTV_GROUP_MAX - 1);
+        if (g->id[0] && name) {
+            snprintf(g->name, sizeof(g->name), "%s", name);
+            g->count = 0;
+            (*count)++;
+        } else {
+            memset(g, 0, sizeof(*g));
+        }
+        free(name);
+    }
+    json_decref(root);
+    return true;
+}
+
+// The category an item names (category_id, or the first of category_ids), counted: -1 if none of groups.
+static int groupOf(const json_t *item, IptvGroup *groups, int count)
+{
+    char id[IPTV_ID_MAX];
+    jsonId(item, "category_id", id, sizeof(id));
+    if (!id[0])
+        jsonIdOf(json_array_get(json_object_get(item, "category_ids"), 0), id, sizeof(id));
+    for (int g = 0; id[0] && g < count; g++)
+        if (!strcmp(groups[g].id, id)) {
+            groups[g].count++;
+            return g;
+        }
+    return -1;
+}
+
+// Drops the categories nothing is in, so that every one offered shows something. moved: each old
+// index's new one.
+static void dropEmptyGroups(IptvGroup *groups, int *count, int moved[IPTV_GROUPS_MAX])
+{
+    int kept = 0;
+    for (int g = 0; g < *count; g++) {
+        moved[g] = groups[g].count > 0 ? kept : -1;
+        if (groups[g].count > 0)
+            groups[kept++] = groups[g];
+    }
+    *count = kept;
 }
 
 bool xtreamParseFilms(const char *json, XtreamCatalog *c)
@@ -144,6 +225,8 @@ bool xtreamParseFilms(const char *json, XtreamCatalog *c)
         return false;
     }
     freeFilms(c);
+    for (int g = 0; g < c->film_group_count; g++)
+        c->film_groups[g].count = 0;
     size_t total = json_array_size(root);
     total = total < XTREAM_FILMS_MAX ? total : XTREAM_FILMS_MAX;
     c->films = total ? calloc(total, sizeof(XtreamFilm)) : NULL;
@@ -162,8 +245,13 @@ bool xtreamParseFilms(const char *json, XtreamCatalog *c)
         jsonExtension(item, "container_extension", f->ext);
         f->poster = jsonPicture(item, "stream_icon");
         f->added = jsonNumber(item, "added");
+        f->group = groupOf(item, c->film_groups, c->film_group_count);
     }
     json_decref(root);
+    int moved[IPTV_GROUPS_MAX];
+    dropEmptyGroups(c->film_groups, &c->film_group_count, moved);
+    for (int i = 0; i < c->film_count; i++)
+        c->films[i].group = c->films[i].group >= 0 ? moved[c->films[i].group] : -1;
     return true;
 }
 
@@ -175,6 +263,8 @@ bool xtreamParseShows(const char *json, XtreamCatalog *c)
         return false;
     }
     freeShows(c);
+    for (int g = 0; g < c->show_group_count; g++)
+        c->show_groups[g].count = 0;
     size_t total = json_array_size(root);
     total = total < XTREAM_SHOWS_MAX ? total : XTREAM_SHOWS_MAX;
     c->shows = total ? calloc(total, sizeof(XtreamShow)) : NULL;
@@ -192,8 +282,13 @@ bool xtreamParseShows(const char *json, XtreamCatalog *c)
         s->cover = jsonPicture(item, "cover");
         s->plot = jsonText(item, "plot", 2000);
         s->added = jsonNumber(item, "last_modified");
+        s->group = groupOf(item, c->show_groups, c->show_group_count);
     }
     json_decref(root);
+    int moved[IPTV_GROUPS_MAX];
+    dropEmptyGroups(c->show_groups, &c->show_group_count, moved);
+    for (int i = 0; i < c->show_count; i++)
+        c->shows[i].group = c->shows[i].group >= 0 ? moved[c->shows[i].group] : -1;
     return true;
 }
 
@@ -343,7 +438,7 @@ static void addFilm(Library *lib, const XtreamFilm *f)
     snprintf(name.title, sizeof(name.title), "%s", f->name);
     name.year = f->year;
     posterKey(art, sizeof(art), f->poster);
-    LibraryRemote remote = {.art = art, .in_collection = 0};
+    LibraryRemote remote = {.art = art, .in_collection = 0, .in_group = f->group + 1};
     libraryAddRemote(lib, path, &name, 0, f->added, &remote);
 }
 
@@ -360,7 +455,7 @@ static void addShow(Library *lib, const XtreamShow *s, const char *unread, const
             return;
         name.season = name.episode = 1;
         snprintf(name.title, sizeof(name.title), "%s", s->state == XTREAM_EPISODES_FAILED ? failed : unread);
-        LibraryRemote remote = {.series_art = art, .overview = s->plot};
+        LibraryRemote remote = {.series_art = art, .overview = s->plot, .in_group = s->group + 1};
         libraryAddRemote(lib, path, &name, 0, s->added, &remote);
         return;
     }
@@ -372,7 +467,7 @@ static void addShow(Library *lib, const XtreamShow *s, const char *unread, const
         name.episode = e->episode;
         snprintf(name.title, sizeof(name.title), "%s", e->title ? e->title : "");
         LibraryRemote remote = {.series_art = art, .overview = e->plot ? e->plot : s->plot,
-                                .runtime_ns = e->runtime_s * 1000000000ll};
+                                .runtime_ns = e->runtime_s * 1000000000ll, .in_group = s->group + 1};
         libraryAddRemote(lib, path, &name, 0, s->added, &remote);
     }
 }

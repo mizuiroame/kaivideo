@@ -15,5 +15,13 @@
 // favorite: whether the IPTV channel under the cursor is a favorite (an R pill, LIBHIT_FAVORITE), -1 for none.
 void uiDrawLiveTab(const LibView *v, const LiveGuide *guide, int64_t now_s, int64_t utc_offset_s, bool clock_24h,
                    bool loading, const char *group, bool iptv, int favorite);
+#define UI_GROUP_ROWS 10  // Rows of a list of groups in view (a page of them).
+
 // The IPTV list's groups over the guide: row 0 is all its channels. cursor and chosen are rows.
 void uiDrawLiveGroups(const IptvList *list, int cursor, int chosen);
+// The same for any groups (an Xtream account's categories): title over them, row 0 is all of them
+// (all, with all_count in it), then each group with its count.
+void uiDrawGroupList(const char *title, const char *all, int all_count, const IptvGroup *groups, int count,
+                     int cursor, int chosen);
+// A group's pill w wide at x, y: the Y button, its name and a chevron; a tap is LIBHIT_LIVE_GROUPS.
+void uiDrawGroupPill(int x, int y, int w, const char *group);

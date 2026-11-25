@@ -300,15 +300,19 @@ static void liveScene(Player *p)
     iptvHomeFree(&iptv_home);
     // An Xtream account's films and series (made-up), in the IPTV view's tabs.
     static const char *const FILMS_JSON =
-        "[{\"name\":\"Paper Boats (2019)\",\"stream_id\":1,\"stream_icon\":\"http://img.example/1.jpg\"},"
-        "{\"name\":\"Night Desk (2021)\",\"stream_id\":2,\"stream_icon\":\"http://img.example/2.jpg\"},"
-        "{\"name\":\"Harbor Lights\",\"stream_id\":3},"
-        "{\"name\":\"The Quiet Workshop (2017)\",\"stream_id\":4,\"stream_icon\":\"http://img.example/4.jpg\"},"
-        "{\"name\":\"Morning Lanterns (2022)\",\"stream_id\":5,\"stream_icon\":\"http://img.example/5.jpg\"},"
-        "{\"name\":\"Kite Hill (2015)\",\"stream_id\":6,\"stream_icon\":\"http://img.example/6.jpg\"}]";
+        "[{\"name\":\"Paper Boats (2019)\",\"stream_id\":1,\"stream_icon\":\"http://img.example/1.jpg\",\"category_id\":\"1\"},"
+        "{\"name\":\"Night Desk (2021)\",\"stream_id\":2,\"stream_icon\":\"http://img.example/2.jpg\",\"category_id\":\"2\"},"
+        "{\"name\":\"Harbor Lights\",\"stream_id\":3,\"category_id\":\"2\"},"
+        "{\"name\":\"The Quiet Workshop (2017)\",\"stream_id\":4,\"stream_icon\":\"http://img.example/4.jpg\",\"category_id\":\"3\"},"
+        "{\"name\":\"Morning Lanterns (2022)\",\"stream_id\":5,\"stream_icon\":\"http://img.example/5.jpg\",\"category_id\":\"1\"},"
+        "{\"name\":\"Kite Hill (2015)\",\"stream_id\":6,\"stream_icon\":\"http://img.example/6.jpg\",\"category_id\":\"1\"}]";
+    static const char *const FILM_CATEGORIES_JSON =
+        "[{\"category_id\":\"1\",\"category_name\":\"Family\"},{\"category_id\":\"2\",\"category_name\":\"Drama\"},"
+        "{\"category_id\":\"3\",\"category_name\":\"Documentaries\"}]";
     static const char *const SHOWS_JSON =
         "[{\"name\":\"Evening Report\",\"series_id\":7,\"cover\":\"http://img.example/7.jpg\",\"plot\":\"News.\"}]";
     static XtreamCatalog vod;
+    xtreamParseVodCategories(FILM_CATEGORIES_JSON, &vod, false);
     xtreamParseFilms(FILMS_JSON, &vod);
     xtreamParseShows(SHOWS_JSON, &vod);
     static Library vod_lib;
@@ -319,10 +323,38 @@ static void liveScene(Player *p)
     libviewSetIptvTabs(&view, &vod_lib);
     libviewShowTab(&view, TAB_FILMS);
     uiLibrarySetSource("IPTV", UI_IPTV_COLOR);
+    uiLibrarySetGridGroup(GRID_FILMS, T("All films"));
     begin();
     uiDrawLibrary(&view, &vod_lib, &home, &resume, true, NULL);
-    uiDrawFooterHelp(T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    uiDrawFooterHelp(T("[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu"));
     save("iptv_films");
+    if (uiLibraryTap(200, 90).kind != LIBHIT_LIVE_GROUPS) {
+        printf("TOUCH: iptv_films: the category pill doesn't answer a tap\n");
+        g_problems++;
+    }
+    // One category chosen, and the list of them.
+    static int family[8];
+    int family_count = (int)libraryGroupRefs(&vod_lib, false, 0, family, 8);
+    libviewSetGridOnly(&view, GRID_FILMS, family, family_count);
+    uiLibrarySetGridGroup(GRID_FILMS, vod.film_groups[0].name);
+    begin();
+    uiDrawLibrary(&view, &vod_lib, &home, &resume, true, NULL);
+    uiDrawFooterHelp(T("[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    save("iptv_films_category");
+    begin();
+    uiDrawLibrary(&view, &vod_lib, &home, &resume, true, NULL);
+    uiDrawGroupList(T("Categories"), T("All films"), vod.film_count, vod.film_groups, vod.film_group_count, 1, 1);
+    uiDrawFooterHelp(T("[A] choose  [^v] category  [B] back"));
+    save("iptv_categories");
+    for (int r = 0; r <= vod.film_group_count; r++) {
+        LibHit hit = uiLibraryTap(400, 120 + r * 52 + 26);
+        if (hit.kind != LIBHIT_LIVE_GROUP_ROW || hit.a != r) {
+            printf("TOUCH: iptv_categories: row %d doesn't answer a tap\n", r);
+            g_problems++;
+        }
+    }
+    libviewSetGridOnly(&view, GRID_FILMS, NULL, 0);
+    uiLibrarySetGridGroup(GRID_FILMS, NULL);
     bool vod_tabs[TAB_COUNT] = {false};
     for (int x = 0; x < GFX_WIDTH; x += 4) {
         LibHit hit = uiLibraryTap(x, 34);

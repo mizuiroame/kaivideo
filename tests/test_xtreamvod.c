@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "check.h"
+#include "libview.h"
 #include "xtreamvod.h"
 
 static const char *const FILMS =
@@ -103,8 +104,70 @@ static void testLocations(void)
     xtreamVodSetAccount(NULL, false);
 }
 
+// The provider's categories: films and series in them, the empty ones dropped, and Films or Series
+// showing one of them.
+static void testCategories(void)
+{
+    XtreamCatalog c;
+    memset(&c, 0, sizeof(c));
+    CHECK(xtreamParseVodCategories("[{\"category_id\":\"3\",\"category_name\":\"Drama\"},"
+                                   "{\"category_id\":4,\"category_name\":\" Comedy \"},"
+                                   "{\"category_id\":\"5\",\"category_name\":\"Empty\"},"
+                                   "{\"category_name\":\"No id\"},{\"category_id\":\"6\"}]",
+                                   &c, false));
+    CHECK(c.film_group_count == 3 && !strcmp(c.film_groups[1].name, "Comedy") && !strcmp(c.film_groups[1].id, "4"));
+    CHECK(!xtreamParseVodCategories("{}", &c, false) && c.film_group_count == 3);
+    CHECK(xtreamParseFilms("[{\"name\":\"Paper Boats\",\"stream_id\":1,\"category_id\":\"4\"},"
+                           "{\"name\":\"Night Desk\",\"stream_id\":2,\"category_id\":\"3\"},"
+                           "{\"name\":\"Kite Hill\",\"stream_id\":3,\"category_ids\":[4]},"
+                           "{\"name\":\"Harbor Lights\",\"stream_id\":4,\"category_id\":\"99\"}]",
+                           &c));
+    CHECK(c.film_group_count == 2);  // "Empty" had none.
+    CHECK(!strcmp(c.film_groups[0].name, "Drama") && c.film_groups[0].count == 1);
+    CHECK(!strcmp(c.film_groups[1].name, "Comedy") && c.film_groups[1].count == 2);
+    CHECK(c.films[0].group == 1 && c.films[1].group == 0 && c.films[2].group == 1 && c.films[3].group == -1);
+    CHECK(xtreamParseVodCategories("[{\"category_id\":\"8\",\"category_name\":\"Kids\"}]", &c, true));
+    CHECK(xtreamParseShows("[{\"name\":\"Evening Report\",\"series_id\":7,\"category_id\":\"8\"},"
+                           "{\"name\":\"Low Tide\",\"series_id\":9}]",
+                           &c));
+    CHECK(c.show_group_count == 1 && c.show_groups[0].count == 1);
+    CHECK(c.shows[0].group == 0 && c.shows[1].group == -1);
+
+    Library lib;
+    libraryInit(&lib, "iptv:");
+    xtreamFillLibrary(&lib, &c, "Reading", "Failed");
+    libraryBuild(&lib);
+    int refs[8];
+    CHECK(libraryGroupRefs(&lib, false, 1, refs, 8) == 2);  // Comedy, by title: Kite Hill, Paper Boats.
+    CHECK(!strcmp(lib.items[refs[0]].name.title, "Kite Hill") && !strcmp(lib.items[refs[1]].name.title, "Paper Boats"));
+    CHECK(libraryGroupRefs(&lib, false, 1, refs, 1) == 1);
+    CHECK(libraryGroupRefs(&lib, true, 0, refs, 8) == 1 && !strcmp(lib.shows[refs[0]].name, "Evening Report"));
+    CHECK(libraryGroupRefs(&lib, true, 1, refs, 8) == 0);
+
+    LibView v;
+    libviewInit(&v);
+    libviewSetIptvTabs(&v, &lib);
+    CHECK(libviewGridCount(&v, &lib, GRID_FILMS) == 4);
+    libraryGroupRefs(&lib, false, 1, refs, 8);
+    libviewSetGridOnly(&v, GRID_FILMS, refs, 2);
+    CHECK(libviewGridCount(&v, &lib, GRID_FILMS) == 2 && libviewGridCount(&v, &lib, GRID_SERIES) == 2);
+    LibraryRef r = libviewGridRef(&v, &lib, GRID_FILMS, 1);
+    CHECK(!r.is_show && r.index == refs[1]);
+    v.grid[GRID_FILMS].cursor = 3;
+    libviewClamp(&v, &lib, &(Home){0});
+    CHECK(v.grid[GRID_FILMS].cursor == 1);
+    libviewSetGridOnly(&v, GRID_COLLECTIONS, refs, 2);  // Not Films or Series: nothing.
+    CHECK(v.only[GRID_FILMS] == refs);
+    libviewSetTabs(&v, &lib, false, false, false);  // Another view: all of them again.
+    CHECK(libviewGridCount(&v, &lib, GRID_FILMS) == 4 && !v.only[GRID_FILMS]);
+    libraryFree(&lib);
+    xtreamCatalogFree(&c);
+    CHECK(!c.film_groups && c.film_group_count == 0 && !c.show_groups);
+}
+
 void testXtreamVod(void)
 {
     testParse();
     testLocations();
+    testCategories();
 }

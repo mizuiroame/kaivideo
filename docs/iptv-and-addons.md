@@ -22,7 +22,8 @@ servers. It has an orange pill and these tabs:
   takes it out.
 - **Live TV**: the guide, if the list has one. **Y** picks a group.
 - **Films**, **Series** and **Search**, with an Xtream account that has them.
-  A series' episodes are read when you open its page.
+  A series' episodes are read when you open its page. When the provider puts
+  them in categories, **Y** (or the pill above the cards) picks one.
 
 **Guide (XMLTV)** uses another guide than the list's own. **Certificate check
 Off** accepts any certificate from the list, its guide and its channels. Many

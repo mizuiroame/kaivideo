@@ -171,6 +171,9 @@ Die Videos von %s sind in der Bibliothek.
 [^v] choose  [>][A] open  [B] close
 [^v] Wählen  [>][A] Öffnen  [B] Schließen
 
+[A] choose  [^v] category  [B] back
+[A] wählen  [^v] Kategorie  [B] zurück
+
 [A] choose  [B] cancel  [+] exit
 [A] Wählen  [B] Abbrechen  [+] Beenden
 
@@ -185,6 +188,9 @@ Die Videos von %s sind in der Bibliothek.
 
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] Öffnen  [B] Nach oben  [X] Ordner wählen  [-] Abbrechen
+
+[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] Öffnen  [Y] Kategorien  [ZL][ZR] Tabs  [-] Einstellungen  [+] Menü
 
 [A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
 [A] Öffnen  [Y] Suche  [ZL][ZR] Tabs  [-] Einstellungen  [+] Menü
@@ -264,6 +270,12 @@ Zu Downloads hinzugefügt: Der Server konvertiert es zuerst, mit %.0f Mb/s.
 Added to Favorites.
 Zu Favoriten hinzugefügt.
 
+All films
+Alle Filme
+
+All series
+Alle Serien
+
 Allow without signing (old NAS)
 Ohne Signierung erlauben (alter NAS)
 
@@ -320,6 +332,9 @@ Wird abgebrochen...
 
 Catalan
 Katalanisch
+
+Categories
+Kategorien
 
 CC
 CC

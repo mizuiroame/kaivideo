@@ -70,6 +70,7 @@ bool libraryAdd(Library *lib, const char *path, int64_t size, int64_t added)
     item->added = added;
     item->show = -1;
     item->collection = -1;
+    item->group = -1;
     return true;
 }
 
@@ -89,6 +90,7 @@ bool libraryAddRemote(Library *lib, const char *path, const VideoName *name, int
     item->favorite = remote->favorite;
     int collection = remote->in_collection - 1;
     item->collection = collection >= 0 && collection < lib->collection_count ? collection : -1;
+    item->group = remote->in_group > 0 ? remote->in_group - 1 : -1;
     return true;
 }
 
@@ -132,6 +134,18 @@ size_t libraryCollectionRefs(const Library *lib, int collection, LibraryRef *out
     if (collection < 0 || collection >= lib->collection_count)
         return 0;
     return gatherRefs(lib, out, max, inCollection, collection);
+}
+
+size_t libraryGroupRefs(const Library *lib, bool shows, int group, int *out, size_t max)
+{
+    size_t n = 0;
+    for (size_t i = 0; shows && i < lib->show_count && n < max; i++)
+        if (lib->shows[i].group == group)
+            out[n++] = (int)i;
+    for (size_t i = 0; !shows && i < lib->film_count && n < max; i++)
+        if (lib->items[lib->films[i]].group == group)
+            out[n++] = lib->films[i];
+    return n;
 }
 
 size_t libraryFavorites(const Library *lib, LibraryRef *out, size_t max)
@@ -229,6 +243,7 @@ static void buildShows(Library *lib, Keyed *episodes, size_t count)
         if (!show->episodes)
             break;
         show->collection = lib->items[episodes[i].item].collection;
+        show->group = lib->items[episodes[i].item].group;
         int last_season = -1;
         for (size_t j = i; j < end; j++) {
             LibraryItem *item = &lib->items[episodes[j].item];

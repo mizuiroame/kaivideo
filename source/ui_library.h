@@ -51,7 +51,7 @@ typedef enum {
     LIBHIT_DOWNLOAD_DELETE,  // a: its delete button.
     LIBHIT_DOWNLOADS,        // The header's downloads pill: the Downloads panel.
     LIBHIT_DOWNLOADS_CLEAR,  // The Clear button of the Downloads tab's deleted ones.
-    LIBHIT_LIVE_GROUPS,      // The Live tab's group pill: the IPTV list's groups.
+    LIBHIT_LIVE_GROUPS,      // The Live tab's group pill (the IPTV list's groups), or Films' or Series' (categories).
     LIBHIT_LIVE_GROUP_ROW,   // a: a row of the groups (0: all channels).
     LIBHIT_STREAM_ROW,       // a: one of the streams an addon gave.
 } LibHitKind;
@@ -83,6 +83,9 @@ void uiLibraryClipHits(int top, int bottom);
 // The header's pill says this ("SD card", "Jellyfin"); "" leaves it out.
 // Where the library comes from, with its color.
 void uiLibrarySetSource(const char *label, Color color);
+// Films or Series show a pill with this category's name over their cards (an Xtream account's,
+// in the IPTV view), Y or a tap lists them (LIBHIT_LIVE_GROUPS); NULL: none.
+void uiLibrarySetGridGroup(LibGrid grid, const char *group);
 // Each server's color: its own (its name is shown beside it, not its logo),
 // or the one chosen for it.
 Color uiServerColor(ServerKind kind);

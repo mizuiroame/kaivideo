@@ -34,6 +34,7 @@ typedef struct {
     char *poster;          // An address, or NULL.
     int64_t added;         // Seconds since 1970, 0 if unknown.
     int year;              // 0 if unknown.
+    int group;             // Its category (an index in film_groups), -1 for none.
 } XtreamFilm;
 
 typedef enum { XTREAM_EPISODES_UNREAD, XTREAM_EPISODES_READ, XTREAM_EPISODES_FAILED } XtreamEpisodesState;
@@ -44,22 +45,34 @@ typedef struct {
     char *cover;           // An address, or NULL.
     char *plot;            // May be NULL.
     int64_t added;
+    int group;             // Its category (an index in show_groups), -1 for none.
     XtreamEpisodesState state;
     XtreamEpisode *episodes;
     int episode_count;
 } XtreamShow;
 
+// The provider's categories (get_vod_categories, get_series_categories) are
+// IptvGroups: name, category id, and how many films or series are in each.
 typedef struct {
     XtreamFilm *films;
     int film_count;
     XtreamShow *shows;
     int show_count;
+    IptvGroup *film_groups;  // Only those with films in them, in the provider's order.
+    int film_group_count;
+    IptvGroup *show_groups;  // The same for the series.
+    int show_group_count;
 } XtreamCatalog;
 
 void xtreamCatalogFree(XtreamCatalog *c);
-// get_vod_streams' answer, as c's films (replacing them). False if it isn't one.
+// get_vod_categories' answer (shows false) or get_series_categories' (true), as c's categories for
+// the films or series parsed after it (replacing them). False if it isn't one.
+bool xtreamParseVodCategories(const char *json, XtreamCatalog *c, bool shows);
+// get_vod_streams' answer, as c's films (replacing them), each in the category it names; the categories
+// none of them is in are dropped. False if it isn't one.
 bool xtreamParseFilms(const char *json, XtreamCatalog *c);
-// get_series' answer, as c's series (replacing them, none of their episodes read). False if it isn't one.
+// get_series' answer, as c's series (replacing them, none of their episodes read), in their categories
+// as the films are. False if it isn't one.
 bool xtreamParseShows(const char *json, XtreamCatalog *c);
 // get_series_info's answer: the series' episodes, by season and number. False if it isn't one.
 bool xtreamParseEpisodes(const char *json, XtreamEpisode **out, int *count);

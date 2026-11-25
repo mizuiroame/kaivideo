@@ -43,9 +43,10 @@ void appLibraryRefreshHome(App *app)
 {
     homeCompute(&app->home, &app->library, &app->resume, &app->watched);
     appLiveRebuild(app);  // The server's channels in its view, the IPTV list's in its own.
-    if (app->config.use_iptv)
+    if (app->config.use_iptv) {
         libviewSetIptvTabs(&app->view, &app->library);
-    else
+        appXtreamApplyGroups(app);  // Films and Series in the category chosen.
+    } else
         libviewSetTabs(&app->view, &app->library, app->config.use_jellyfin || app->config.use_addons,  // Libraries are tabs.
                        app->live.count > 0, appDownloadsTabShown(app));
     libviewClamp(&app->view, &app->library, &app->home);
@@ -781,6 +782,17 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         appLiveOpenGroups(app);
         return;
     }
+    // An Xtream account's categories, over Films or Series: Y there, as for the Live tab's groups.
+    bool grouped = appXtreamHasGroups(app);
+    if (grouped && app->xtream_groups_open) {
+        appXtreamGroupsInput(app, pressed, touch, now);
+        return;
+    }
+    app->xtream_groups_open = false;
+    if (grouped && (pressed & HidNpadButton_Y)) {
+        appXtreamOpenGroups(app);
+        return;
+    }
     if (pressed & (BUTTONS_TAB_LEFT | BUTTONS_TAB_RIGHT)) {
         libviewNextTab(v, (pressed & BUTTONS_TAB_LEFT) ? -1 : 1);
         return;  // A tap this frame was aimed at the old tab.
@@ -835,6 +847,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         toggleFavorite(app, shown, now);
     else if (hit.kind == LIBHIT_SHOW_DOWNLOAD && season_download)
         appDownloadSeason(app, v->show, v->season, now);
+    else if (hit.kind == LIBHIT_LIVE_GROUPS && grouped)
+        appXtreamOpenGroups(app);
     else if (hit.kind != LIBHIT_NONE)
         tapInput(app, hit, now);
     else if (touch.type == TOUCH_DRAG)
@@ -911,6 +925,7 @@ void appLibraryDraw(App *app, uint64_t now)
         uiDrawBrowser(&app->browser, &app->resume, BROWSE_FILES);
         uiDrawFooterStrip();
     } else {
+        appXtreamSetGridLabels(app);
         uiDrawLibrary(&app->view, &app->library, &app->home, &app->resume,
                       app->library_root[0] != '\0' || app->config.use_jellyfin || app->config.use_iptv, status);
         if (app->view.tab == TAB_LIVE && app->view.show < 0)
@@ -919,6 +934,7 @@ void appLibraryDraw(App *app, uint64_t now)
             appIptvHomeDraw(app);
         if (app->view.tab == TAB_DOWNLOADS && app->view.show < 0)
             appDownloadsDraw(app);
+        appXtreamGroupsDraw(app);
         drawShowButtons(app);
     }
     if (app->view.details >= 0 && (size_t)app->view.details < app->library.count) {

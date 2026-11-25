@@ -14,6 +14,7 @@
 #include "ui_buttons.h"
 #include "ui_style.h"
 #include "ui_library_shared.h"
+#include "ui_live.h"
 #include "util.h"
 
 #define TAB_GAP 28             // The header, as KaiPlayer's and KaiRadio's.
@@ -49,6 +50,9 @@
 #define GRID_CARD_W ((GFX_WIDTH - 2 * MARGIN - (LIBVIEW_COLS - 1) * GAP) / LIBVIEW_COLS)
 #define GRID_CARD_H 128
 #define GRID_ROW_H LIBVIEW_GRID_ROW_PX
+#define GRID_GROUP_Y 76       // An Xtream account's category pill, over Films or Series,
+#define GRID_GROUP_W 340
+#define GRID_GROUP_H 36       // and how far it puts the cards down.
 #define LIST_ROW_H LIBVIEW_LIST_ROW_PX
 #define CLIP_ABOVE 8          // A list drawn between rows: room above its first for a focused card's ring.
 #define SHOW_LIST_Y 196        // A series' episodes.
@@ -243,6 +247,14 @@ void uiLibrarySetSource(const char *label, Color color)
 {
     g_source_label = label;
     g_source_color = color;
+}
+
+static const char *g_grid_group[GRID_COLLECTIONS];
+
+void uiLibrarySetGridGroup(LibGrid grid, const char *group)
+{
+    if (grid >= 0 && grid < GRID_COLLECTIONS)
+        g_grid_group[grid] = group;
 }
 
 Color uiServerOwnColor(ServerKind kind)
@@ -784,16 +796,27 @@ static void drawHome(const LibView *v, const Library *lib, const Home *home, con
 
 // --- Films and Series ---
 
+// Over Films or Series, the category shown, when there are categories: the cards go down to make room.
+static int drawGridGroup(const LibView *v, int grid)
+{
+    const char *group = grid < GRID_COLLECTIONS && v->iptv ? g_grid_group[grid] : NULL;
+    if (!group)
+        return GRID_Y;
+    uiDrawGroupPill(MARGIN - 4, GRID_GROUP_Y, GRID_GROUP_W, group);
+    return GRID_Y + GRID_GROUP_H;
+}
+
 static void drawGrid(const LibView *v, int grid, const Library *lib, const ResumeList *resume)
 {
     int count = libviewGridCount(v, lib, grid);
     const Scroll *s = &v->grid[grid];
-    int first = s->first * LIBVIEW_COLS, top = GRID_Y - CLIP_ABOVE;
+    int grid_y = drawGridGroup(v, grid);
+    int first = s->first * LIBVIEW_COLS, top = grid_y - CLIP_ABOVE;
     gfxSetClip(0, top, GFX_WIDTH, GFX_HEIGHT - top);
     // A row more than fit, cut by the screen's bottom: there's more (two between rows).
     for (int i = first; i < count && i < first + (LIBVIEW_GRID_ROWS + 2) * LIBVIEW_COLS; i++) {
         int col = i % LIBVIEW_COLS, row = (i - first) / LIBVIEW_COLS;
-        int x = MARGIN + col * (GRID_CARD_W + GAP), y = GRID_Y + row * GRID_ROW_H - s->offset;
+        int x = MARGIN + col * (GRID_CARD_W + GAP), y = grid_y + row * GRID_ROW_H - s->offset;
         if (y >= GFX_HEIGHT)
             break;
         LibraryRef ref = libviewGridRef(v, lib, grid, i);
@@ -802,7 +825,7 @@ static void drawGrid(const LibView *v, int grid, const Library *lib, const Resum
     }
     gfxResetClip();
     int rows = (count + LIBVIEW_COLS - 1) / LIBVIEW_COLS;
-    drawScrollbar(GRID_Y, LIBVIEW_GRID_ROWS * GRID_ROW_H - 20, s->first, s->offset, GRID_ROW_H, LIBVIEW_GRID_ROWS,
+    drawScrollbar(grid_y, LIBVIEW_GRID_ROWS * GRID_ROW_H - 20, s->first, s->offset, GRID_ROW_H, LIBVIEW_GRID_ROWS,
                   rows);
 }
 

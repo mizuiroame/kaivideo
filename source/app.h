@@ -122,6 +122,10 @@ struct App {
     unsigned iptv_seen;         // The load whose result was taken.
     int iptv_group;             // An index of its groups, -1 for all its channels.
     XtreamCatalog xtream;       // An Xtream account's films and series (app_xtream.c).
+    int xtream_group[GRID_COLLECTIONS];   // The category Films and Series show (by grid), plus 1; 0 for all,
+    int *xtream_only[GRID_COLLECTIONS];   // and what's in it in the library (LibView.only), or NULL.
+    bool xtream_groups_open;    // The categories show over Films or Series (Y),
+    int xtream_group_cursor;    // and the row under the cursor: 0 is all of them, then each category.
     // Stremio addons (app_stremio.c): what they gave, and the streams to choose from.
     StremioStore stremio;
     bool streams_open;          // The list of streams shows over the library.
@@ -312,6 +316,16 @@ void appXtreamInstall(App *app);
 // Once a frame: a series' episodes read when its page opens.
 void appXtreamUpdate(App *app);
 void appXtreamExit(App *app);
+// What Films and Series show after the library or the category changed (appLibraryRefreshHome).
+void appXtreamApplyGroups(App *app);
+// Whether Films or Series is shown with categories to choose from (Y opens them).
+bool appXtreamHasGroups(const App *app);
+// The categories' pills' names for ui_library.c, each frame.
+void appXtreamSetGridLabels(const App *app);
+// The categories over Films or Series: opened, their buttons and taps, and drawn.
+void appXtreamOpenGroups(App *app);
+void appXtreamGroupsInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now);
+void appXtreamGroupsDraw(const App *app);
 // app_library.c: a library made for the IPTV or Addons view replaces the app's (taken).
 void appLibraryInstallBuilt(App *app, Library *built);
 // The Stremio addons' view.

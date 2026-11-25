@@ -29,10 +29,20 @@ static void addTab(LibView *v, LibTab kind, int collection)
         v->tabs[v->tab_count++] = (LibTabRef){kind, collection};
 }
 
+void libviewSetGridOnly(LibView *v, LibGrid grid, const int *refs, int count)
+{
+    if (grid < 0 || grid >= GRID_COLLECTIONS)
+        return;
+    v->only[grid] = refs;
+    v->only_count[grid] = refs ? count : 0;
+}
+
 void libviewSetTabs(LibView *v, const Library *lib, bool server, bool live, bool downloads)
 {
     v->tab_count = 0;
     v->iptv = false;
+    libviewSetGridOnly(v, GRID_FILMS, NULL, 0);  // Categories are the IPTV view's.
+    libviewSetGridOnly(v, GRID_SERIES, NULL, 0);
     if (server && (lib->collection_count > 0 || live)) {
         addTab(v, TAB_HOME, -1);
         for (int i = 0; i < lib->collection_count; i++)
@@ -132,7 +142,8 @@ int libviewGrid(const LibView *v)
 
 int libviewGridCount(const LibView *v, const Library *lib, int grid)
 {
-    (void)v;
+    if (grid >= 0 && grid < GRID_COLLECTIONS && v->only[grid])
+        return v->only_count[grid];
     if (grid == GRID_FILMS)
         return (int)lib->film_count;
     if (grid == GRID_SERIES)
@@ -143,7 +154,8 @@ int libviewGridCount(const LibView *v, const Library *lib, int grid)
 
 LibraryRef libviewGridRef(const LibView *v, const Library *lib, int grid, int index)
 {
-    (void)v;
+    if (grid >= 0 && grid < GRID_COLLECTIONS && v->only[grid])
+        return (LibraryRef){grid == GRID_SERIES, v->only[grid][index]};
     if (grid == GRID_FILMS)
         return (LibraryRef){false, lib->films[index]};
     if (grid == GRID_SERIES)

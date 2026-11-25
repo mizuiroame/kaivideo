@@ -277,6 +277,13 @@ const char *appFooterHelp(const App *app)
                    : T("[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu");
     switch (app->view.tab) {
     case TAB_DOWNLOADS: return appDownloadsHelp(app);
+    case TAB_FILMS:
+    case TAB_SERIES:
+        if (app->xtream_groups_open && appXtreamHasGroups(app))
+            return T("[A] choose  [^v] category  [B] back");
+        if (appXtreamHasGroups(app))
+            return T("[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu");
+        return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_SEARCH: return T("[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_LIVE:
         if (app->live_groups_open)

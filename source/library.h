@@ -34,6 +34,7 @@ typedef struct {
     int blocked;         // Why the console can't play it (JfPlayability), 0 if it can.
     bool favorite;       // A film marked so, or an episode of a series marked so.
     int collection;      // The server's library it's in (an index in collections), -1 for none.
+    int group;           // Its source's category (an Xtream account's), -1 for none.
 } LibraryItem;
 
 // What a server says of a video besides its name.
@@ -43,6 +44,7 @@ typedef struct {
     int blocked;
     bool favorite;
     int in_collection;  // Its library's index in collections plus 1; 0 for none.
+    int in_group;       // Its category's index plus 1 (an Xtream account's); 0 for none.
 } LibraryRemote;
 
 typedef struct {
@@ -53,6 +55,7 @@ typedef struct {
     int64_t added;          // Its newest episode's time.
     bool favorite;
     int collection;         // Its first episode's.
+    int group;              // Its first episode's.
 } LibraryShow;
 
 // A film or episode (an item), or a series.
@@ -131,6 +134,9 @@ int libraryAddCollection(Library *lib, const char *name, CollectionKind kind);
 // What a library's tab shows (built): its series by name, then its films by
 // title. Returns how many (at most max).
 size_t libraryCollectionRefs(const Library *lib, int collection, LibraryRef *out, size_t max);
+// The films in a category, by title (item indexes), or its series by name (show indexes), when
+// shows (built). Returns how many (at most max).
+size_t libraryGroupRefs(const Library *lib, bool shows, int group, int *out, size_t max);
 // Favorite series by name, then favorite films by title. Returns how many (at most max).
 size_t libraryFavorites(const Library *lib, LibraryRef *out, size_t max);
 // Marks a film, or a series and its episodes.

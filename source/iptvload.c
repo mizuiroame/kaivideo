@@ -102,8 +102,16 @@ static void readCatalog(NetClient *c, XtreamCatalog *catalog)
     char url[IPTV_URL_MAX + 256];
     NetResponse r;
     memset(&r, 0, sizeof(r));
+    // The categories first, so the films and series are put in them as they're read. Without them,
+    // Films and Series just show everything.
+    if (!g_cancel && xtreamApiUrl(&x, "get_vod_categories", NULL, url, sizeof(url)) && fetchText(c, url, &r))
+        xtreamParseVodCategories(r.data, catalog, false);
+    netResponseFree(&r);
     if (!g_cancel && xtreamApiUrl(&x, "get_vod_streams", NULL, url, sizeof(url)) && fetchText(c, url, &r))
         xtreamParseFilms(r.data, catalog);
+    netResponseFree(&r);
+    if (!g_cancel && xtreamApiUrl(&x, "get_series_categories", NULL, url, sizeof(url)) && fetchText(c, url, &r))
+        xtreamParseVodCategories(r.data, catalog, true);
     netResponseFree(&r);
     if (!g_cancel && xtreamApiUrl(&x, "get_series", NULL, url, sizeof(url)) && fetchText(c, url, &r))
         xtreamParseShows(r.data, catalog);

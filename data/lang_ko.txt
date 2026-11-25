@@ -171,6 +171,9 @@ language = 한국어
 [^v] choose  [>][A] open  [B] close
 [^v] 선택  [>][A] 열기  [B] 닫기
 
+[A] choose  [^v] category  [B] back
+[A] 선택  [^v] 카테고리  [B] 뒤로
+
 [A] choose  [B] cancel  [+] exit
 [A] 선택  [B] 취소  [+] 종료
 
@@ -185,6 +188,9 @@ language = 한국어
 
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] 열기  [B] 상위 폴더  [X] 이 폴더 사용  [-] 취소
+
+[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 열기  [Y] 카테고리  [ZL][ZR] 탭  [-] 설정  [+] 메뉴
 
 [A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
 [A] 열기  [Y] 검색  [ZL][ZR] 탭  [-] 설정  [+] 메뉴
@@ -264,6 +270,12 @@ Added to Downloads: the server converts it first, at %.0f Mb/s.
 Added to Favorites.
 즐겨찾기에 추가했습니다.
 
+All films
+모든 영화
+
+All series
+모든 시리즈
+
 Allow without signing (old NAS)
 서명 없이 허용 (오래된 NAS)
 
@@ -320,6 +332,9 @@ Cancelling...
 
 Catalan
 카탈루냐어
+
+Categories
+카테고리
 
 CC
 CC

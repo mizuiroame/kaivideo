@@ -171,6 +171,9 @@ language = 日本語
 [^v] choose  [>][A] open  [B] close
 [^v] 選ぶ  [>][A] 開く  [B] 閉じる
 
+[A] choose  [^v] category  [B] back
+[A] 選ぶ  [^v] カテゴリ  [B] 戻る
+
 [A] choose  [B] cancel  [+] exit
 [A] 決定  [B] キャンセル  [+] 終了
 
@@ -185,6 +188,9 @@ language = 日本語
 
 [A] open  [B] folder above  [X] use this folder  [-] cancel
 [A] 開く  [B] 上のフォルダー  [X] このフォルダーを使う  [-] キャンセル
+
+[A] open  [Y] categories  [ZL][ZR] tabs  [-] settings  [+] menu
+[A] 開く  [Y] カテゴリ  [ZL][ZR] タブ  [-] 設定  [+] メニュー
 
 [A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu
 [A] 開く  [Y] 検索  [ZL][ZR] タブ  [-] 設定  [+] メニュー
@@ -276,6 +282,12 @@ Address
 Address: \\PC\Videos (shared folder), 192.168.0.10:8098 (WebDAV or web), ftp://nas or sftp://nas
 アドレス: \\PC\Videos（共有フォルダー）、192.168.0.10:8098（WebDAV または Web）、ftp://nas または sftp://nas
 
+All films
+すべての映画
+
+All series
+すべてのシリーズ
+
 Allow without signing (old NAS)
 署名なしを許可（古いNAS）
 
@@ -332,6 +344,9 @@ Cancelling...
 
 Catalan
 カタルーニャ語
+
+Categories
+カテゴリ
 
 CC
 CC
