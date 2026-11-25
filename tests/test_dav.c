@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -339,9 +340,41 @@ static void testDates(void)
     free(e);
 }
 
+// A new address: another server forgets the old one's user, password and
+// SFTP key, and says so (its certificate is checked again); a new path on the
+// same server keeps them.
+static void testSetAddress(void)
+{
+    DavAccount a;
+    memset(&a, 0, sizeof(a));
+    snprintf(a.address, sizeof(a.address), "https://nas:8443/videos/");
+    snprintf(a.user, sizeof(a.user), "me");
+    snprintf(a.password, sizeof(a.password), "secret");
+    snprintf(a.host_key, sizeof(a.host_key), "SHA256:abc");
+    CHECK(!davSetAddress(&a, "HTTPS://NAS:8443/films/"));
+    CHECK_STR(a.address, "HTTPS://NAS:8443/films/");
+    CHECK_STR(a.user, "me");
+    CHECK_STR(a.password, "secret");
+    CHECK_STR(a.host_key, "SHA256:abc");
+
+    CHECK(davSetAddress(&a, "https://nas:8444/films/"));  // Another port.
+    CHECK_STR(a.address, "https://nas:8444/films/");
+    CHECK(!a.user[0] && !a.password[0] && !a.host_key[0]);
+
+    snprintf(a.user, sizeof(a.user), "me");
+    CHECK(davSetAddress(&a, "http://nas:8444/films/"));  // Another scheme.
+    CHECK(!a.user[0]);
+    CHECK(davSetAddress(&a, "http://other:8444/films/"));  // Another host.
+
+    memset(&a, 0, sizeof(a));  // The first address: no server before it.
+    CHECK(davSetAddress(&a, "sftp://nas/"));
+    CHECK_STR(a.address, "sftp://nas/");
+}
+
 void testDav(void)
 {
     testDates();
+    testSetAddress();
     testAddresses();
     testUrls();
     testMd4();

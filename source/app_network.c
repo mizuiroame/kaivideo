@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "approot.h"
+#include "certtrust.h"
 #include "davnet.h"
 #include "net.h"
 #include "smbnet.h"
@@ -104,12 +105,13 @@ static void typeAddress(App *app, uint64_t now)
     } else if (result == SYSTEM_KEYBOARD_OK && !davNormalizeAddress(text, address, sizeof(address))) {
         appNotify(app, NOTICE_ERROR, T("That isn't a network folder's address: \\\\PC\\Videos, smb://, http://, https://, ftp://, ftps://, ftpes:// or sftp://."), now);
     } else if (result == SYSTEM_KEYBOARD_OK) {
-        if (!davSameServer(address, a.address)) {  // Another server: the old one's password isn't sent there.
-            a.user[0] = '\0';
-            memset(a.password, 0, sizeof(a.password));
-            a.host_key[0] = 0;  // And an SFTP server's key is met anew.
+        // Another server: no user, password or SFTP key of the old one (davSetAddress),
+        // and its certificate is checked again, as in KaiPlayer and KaiReader.
+        if (davSetAddress(&a, address) && !app->config.net_check_certificate) {
+            app->config.net_check_certificate = true;
+            trustSetChecked(TRUST_NETWORK, true);
+            appSaveSettings(app);
         }
-        memcpy(a.address, address, sizeof(a.address));
         save(app, &a, now);
         appNotify(app, NOTICE_DONE, T("Network folder set: test the connection, or open it in Files."), now);
     }

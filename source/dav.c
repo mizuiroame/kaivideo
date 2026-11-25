@@ -122,6 +122,18 @@ bool davSameServer(const char *a, const char *b)
     return n == serverLength(b) && !strncasecmp(a, b, n);
 }
 
+bool davSetAddress(DavAccount *a, const char *address)
+{
+    bool other = !davSameServer(address, a->address);
+    if (other) {
+        a->user[0] = '\0';
+        memset(a->password, 0, sizeof(a->password));
+        a->host_key[0] = '\0';
+    }
+    snprintf(a->address, sizeof(a->address), "%s", address);
+    return other;
+}
+
 bool davSmbParts(const char *address, char *server, size_t server_size, char *share, size_t share_size, char *folder,
                  size_t folder_size)
 {

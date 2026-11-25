@@ -90,6 +90,11 @@ void davShownAddress(const char *address, char *out, size_t size);
 bool davUrlOf(const char *address, const char *location, char *out, size_t size);
 // Same scheme, host and port: a password typed for one isn't sent to the other.
 bool davSameServer(const char *a, const char *b);
+// Puts a new (normalized) address in a's. Another server (davSameServer):
+// the old one's user and password aren't sent there and an SFTP key is met
+// anew; true then, so its certificate is checked again too. A path changed on
+// the same server keeps them all (false).
+bool davSetAddress(DavAccount *a, const char *address);
 // "Basic <base64 of user:password>", or "" without a user. False if too long.
 bool davAuthorization(const DavAccount *a, char *out, size_t size);
 
