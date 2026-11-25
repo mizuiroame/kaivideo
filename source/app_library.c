@@ -18,6 +18,7 @@
 #include "thumbs.h"
 #include "ui_library.h"
 #include "ui_style.h"
+#include "xtreamvod.h"
 
 #define BUTTONS_TAB_LEFT (HidNpadButton_L | HidNpadButton_ZL)
 #define BUTTONS_TAB_RIGHT (HidNpadButton_R | HidNpadButton_ZR)
@@ -419,12 +420,15 @@ static void playItem(App *app, int item, uint64_t now)
     appStartVideo(app, it->path, name, now);
 }
 
-// A series opens its page; a video on the server its details; one on the card plays.
+// A series opens its page; a video on a server or an Xtream film its details; one on the card plays.
 static void openRef(App *app, LibraryRef ref, uint64_t now)
 {
-    if (ref.is_show)
+    if (ref.is_show) {
         libviewOpenShow(&app->view, &app->library, ref.index, -1);
-    else if (jfIsRemoteLocation(app->library.items[ref.index].path))
+        return;
+    }
+    const char *path = app->library.items[ref.index].path;
+    if (jfIsRemoteLocation(path) || xtreamFilmOf(path) > 0)
         app->view.details = ref.index;
     else
         playItem(app, ref.index, now);
