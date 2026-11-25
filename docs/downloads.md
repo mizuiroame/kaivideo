@@ -50,7 +50,7 @@ too. It shows downloads in three parts:
 ## Marks and the pill
 
 A film or episode downloaded has a mark beside its watched circle and on its
-card:
+card, in the classic Home and on the Showcase's tiles (posters and wide ones):
 
 - an SD card in a filled circle: it's on the card;
 - a ring that fills: it's coming, and the ring is faint while it waits;

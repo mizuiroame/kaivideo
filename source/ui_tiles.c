@@ -11,6 +11,7 @@
 #include "thumbs.h"
 #include "ui_library.h"
 #include "ui_library_shared.h"
+#include "ui_downloads.h"
 #include "ui_style.h"
 
 #define CASE_R 5            // The case's corners,
@@ -25,6 +26,7 @@
 #define SHADOW_ALPHA 110
 #define SEEN_R 10
 #define WIDE_R 8
+#define DL_VEIL_ALPHA 150   // A download on its way: the picture darkened this much where the veil can't be whole.
 
 // Tiles are drawn only between these (the rows' place under the large picture): their own round
 // clips are cut to it, and drawing returns to it after them.
@@ -151,6 +153,32 @@ static void drawFrameCover(const Library *lib, LibraryRef ref, int x, int y, int
         uiLibDrawWrapped(FONT_BOLD, 16, x + 10, y + h - 66, w - 18, 20, 3, name, COLOR_TEXT);
 }
 
+// A downloaded video's mark, as the classic cards wear it: on the card, a disc at (cx, cy) on the picture's
+// top left; on its way, a veil over the picture (x, y, w, h) with how far it came. Nothing for a series.
+static void drawDownload(const Library *lib, LibraryRef ref, float cx, float cy, float r, int x, int y, int w, int h,
+                         int radius)
+{
+    double fraction = 0;
+    UiDownloadMark mark =
+        ref.is_show ? UI_DL_NONE : (UiDownloadMark)uiLibDownloadMark(lib->items[ref.index].path, &fraction);
+    if (mark == UI_DL_NONE)
+        return;
+    if (mark == UI_DL_DONE) {
+        if (textFits((int)(cy - r - 3), (int)(2 * r + 6))) {
+            gfxFillCircle((int)cx, (int)cy, (int)r + 3, GFX_RGB(0, 0, 0));
+            uiDrawDownloadMark(cx, cy, r, mark, fraction);
+        }
+        return;
+    }
+    if (textFits(y, h)) {  // Whole in the rows' place: the veil as the classic cards have it.
+        uiDrawDownloadVeil(x, y, w, h, radius, mark, fraction);
+        unclip();  // It leaves the screen unclipped: back to the rows' place.
+    } else if (clipTo(x, y, w, h, radius)) {  // Cut by the edge: only darkened.
+        gfxBlendRect(x, y, w, h, GFX_RGB(0, 0, 0), DL_VEIL_ALPHA);
+        unclip();
+    }
+}
+
 // --- Tiles ---
 
 void uiDrawTileFocus(int x, int y, int w, int h)
@@ -187,6 +215,7 @@ void uiDrawCaseTile(const Library *lib, LibraryRef ref, int x, int y, bool focus
     gfxFillRect(cx, cy, 1, ch, GFX_RGB(0x0B, 0x0C, 0x0F));  // The cover's edge against the spine.
     if (progress >= 0)
         drawProgress(cx + 8, y + h - 12, cw - 16, progress);
+    drawDownload(lib, ref, cx + 15.0f, y + 15.0f, 9.5f, cx, cy, cw, ch, COVER_R);
     if (seen && textFits(y, 32))
         drawSeen(x + w - 16.0f, y + 16.0f);
     if (focused)
@@ -272,6 +301,7 @@ void uiDrawWideTile(const Library *lib, LibraryRef ref, int x, int y, bool focus
         fontDraw(FONT_BOLD, 13, x + 12, y + h - 36, tag, COLOR_TEXT);
     if (progress >= 0)
         drawProgress(x + 12, y + h - 14, w - 24, progress);
+    drawDownload(lib, ref, x + 18.0f, y + 18.0f, 10.5f, x, y, w, h, WIDE_R);
     if (seen && textFits(y, 36))
         drawSeen(x + w - 18.0f, y + 18.0f);
     if (focused)
