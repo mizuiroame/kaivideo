@@ -68,21 +68,28 @@ touches small:
   and an `https://` address can't be redirected to plain `http://`. A
   server's token is sent only to that server: never to another host an HLS
   list names, and a sign-in isn't re-sent to wherever a redirect points.
-  Certificates are checked unless you turn **Certificate check** off, and never
-  stop being checked for plex.tv and `*.plex.direct`.
+  Certificates are checked unless you turn **Certificate check** off. Each
+  source has its own (Jellyfin, Emby, the network folder, the IPTV list), and
+  turning it off takes any certificate only from that source's server (its
+  host and port; for an IPTV list, its list, guide and channels), never from
+  another. plex.tv and `*.plex.direct` are always checked.
 - **What's kept on the card**, in `config/`: your settings, what you watched,
-  the libraries found, and the sessions:
+  the libraries found, and the sessions. Nothing there is encrypted: whoever
+  has the card (or a copy of it) can read all of it.
   - A server's session (`jellyfin.txt`, `emby.txt`, `plex.txt`) is its access
     token, not your password. Whoever has the card can use that token until
     you sign out (which ends it on the server) or remove the device in the
     server's settings.
-  - The network folder's password is never kept as typed. For a shared
-    folder (SMB), `network.txt` holds its NT hash, what Windows signs in with:
-    the password can't be read from it, but the hash still opens that share.
-    For WebDAV, FTP and SFTP it's only encoded, since they send the password
-    itself. An SFTP server's key fingerprint is kept the first time, and a
+  - The network folder's password, with **Remember the password** on, is in
+    `network.txt`. For a shared folder (SMB) that's its NT hash, what Windows
+    signs in with: the password's letters can't be read back from it, but
+    **the hash is as good as the password for that share** (and for any other
+    place the same account and password work), so treat the file as the
+    password itself. For WebDAV, FTP and SFTP the password is only encoded,
+    since they send the password itself: anyone can decode it. An SFTP server's key fingerprint is kept the first time, and a
     server with another key is refused before any password is sent. With
-    **Remember the password** off, nothing of it is written. Give KaiVideo
+    **Remember the password** off, nothing of the password is written: it's
+    asked for once each time KaiVideo starts and uses the folder. Give KaiVideo
     [a user of its own](docs/network-folder.md#a-user-of-its-own) that can
     only read the folder.
   - The IPTV account (`iptv.txt`) keeps an Xtream password only encoded, not
@@ -115,8 +122,17 @@ touches small:
   UndefinedBehaviorSanitizer.
 - **Libraries.** FFmpeg, libsmb2, FreeType, HarfBuzz, FriBidi, Jansson and
   the others are listed with their versions and licenses in
-  [docs/legal.md](docs/legal.md). libcurl comes from devkitPro's packages
-  (7.69.1, older than upstream's).
+  [docs/legal.md](docs/legal.md).
 
-The main remaining risk is in FFmpeg's demuxers and decoders, which parse
-every video. Only play files from sources you trust.
+**The clearest known risk is libcurl.** KaiVideo uses the libcurl that
+devkitPro's packages give for the Switch: 7.69.1, from March 2020. Many
+vulnerabilities have been fixed in curl since (several of them in its TLS,
+cookie, redirect and protocol handling), and that version has them. KaiVideo
+limits what it asks of curl (only http and https, or FTP and FTPS for the
+network folder; no cookies; https never redirected to http; sizes and times
+limited), which keeps many of them out of reach, but not all. It stays until
+devkitPro updates its package; KaiVideo will move to the new one then. Until
+then, use servers, lists and addons you trust, and prefer your home network.
+
+The other main risk is in FFmpeg's demuxers and decoders, which parse every
+video. Only play files from sources you trust.

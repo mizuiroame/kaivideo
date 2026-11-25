@@ -1005,11 +1005,11 @@ Russian
 S%02dE%02d · %s
 S%02dE%02d · %s
 
+Saved on the card as its hash, which opens this share just as the password does.
+ハッシュとしてカードに保存しました。このハッシュでもパスワードと同じように共有フォルダーを開けます。
+
 Saved until KaiVideo closes: the password isn't kept on the card.
 KaiVideoを閉じるまで保持します。パスワードはカードに保存されません。
-
-Saved: the card keeps the password's hash, not the password.
-保存しました。カードにはパスワードではなく、そのハッシュが保存されます。
 
 Saved: the password is only encoded on the card. Use a user that can only read the videos.
 保存しました。カード上のパスワードはエンコードされているだけです。動画を読むことしかできないユーザーを使ってください。

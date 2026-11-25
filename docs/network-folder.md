@@ -45,7 +45,12 @@ In **Settings > Network folder**:
    signed, so nobody on the network can change what's read. Some old NAS and
    folders open to guests can't sign; KaiVideo then says so, and this lets it
    connect anyway. Turn it on only for such a folder on your home network.
-5. **Test the connection**: it says how many folders and videos are at the
+5. **Certificate check** (on, `https://`, `ftpes://` and `ftps://`): the
+   server's certificate must be trusted. For a NAS with a certificate of its
+   own making, turn it off: only this folder's server is then taken with any
+   certificate, not your media servers or anything else.
+6. **Color**: the color its library wears.
+7. **Test the connection**: it says how many folders and videos are at the
    top, or what went wrong.
 
 Then:
@@ -98,10 +103,11 @@ only.
 
 ## Good to know
 
-- **The password** is never kept as typed, in `config/network.txt`. For a
-  shared folder (SMB) the card keeps its hash, what Windows signs in with: the
-  password itself can't be read from it, but the hash still opens that share,
-  so use [a user of its own](#a-user-of-its-own). For WebDAV it's only encoded
+- **The password**, with **Remember the password** on, is in
+  `config/network.txt`, and the card isn't encrypted. For a shared folder
+  (SMB) the card keeps its hash, what Windows signs in with: the password's
+  letters can't be read back from it, but the hash is as good as the password
+  for that share, so use [a user of its own](#a-user-of-its-own). For WebDAV it's only encoded
   (WebDAV, FTP and SFTP send the password itself), so anyone with the card can
   read it. With **Remember the password** off, none of it is on the card. A
   file from an older KaiVideo is changed to this the first time it's read.

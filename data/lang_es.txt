@@ -969,11 +969,11 @@ Ruso
 S%02dE%02d · %s
 T%02dE%02d · %s
 
+Saved on the card as its hash, which opens this share just as the password does.
+Guardada en la tarjeta como su hash, que abre esta carpeta igual que la contraseña.
+
 Saved until KaiVideo closes: the password isn't kept on the card.
 Guardada hasta que KaiVideo se cierre: la contraseña no se guarda en la tarjeta.
-
-Saved: the card keeps the password's hash, not the password.
-Guardada: la tarjeta tiene el hash de la contraseña, no la contraseña.
 
 Saved: the password is only encoded on the card. Use a user that can only read the videos.
 Guardada: en la tarjeta la contraseña solo está codificada. Usa un usuario que solo pueda leer los videos.

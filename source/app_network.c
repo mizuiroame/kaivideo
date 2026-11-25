@@ -124,7 +124,7 @@ static void sayHowKept(App *app, const DavAccount *a, uint64_t now)
     if (a->forget_password)
         appNotify(app, NOTICE_DONE, T("Saved until KaiVideo closes: the password isn't kept on the card."), now);
     else if (davIsSmbAddress(a->address))
-        appNotify(app, NOTICE_DONE, T("Saved: the card keeps the password's hash, not the password."), now);
+        appNotify(app, NOTICE_DONE, T("Saved on the card as its hash, which opens this share just as the password does."), now);
     else
         appNotify(app, NOTICE_DONE, T("Saved: the password is only encoded on the card. Use a user that can only read the videos."), now);
 }

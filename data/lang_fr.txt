@@ -969,11 +969,11 @@ Russe
 S%02dE%02d · %s
 S%02dE%02d · %s
 
+Saved on the card as its hash, which opens this share just as the password does.
+Enregistré sur la carte sous forme d'empreinte (hash), qui ouvre ce partage tout comme le mot de passe.
+
 Saved until KaiVideo closes: the password isn't kept on the card.
 Enregistré jusqu'à la fermeture de KaiVideo : le mot de passe n'est pas gardé sur la carte.
-
-Saved: the card keeps the password's hash, not the password.
-Enregistré : la carte garde l'empreinte (hash) du mot de passe, pas le mot de passe.
 
 Saved: the password is only encoded on the card. Use a user that can only read the videos.
 Enregistré : sur la carte, le mot de passe est seulement encodé. Utilisez un utilisateur qui peut seulement lire les vidéos.
