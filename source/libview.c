@@ -412,6 +412,14 @@ void libviewHomeRebuilt(LibView *v, const Home *before, const Home *after)
     libviewHomeMove(v, after, 0, 0);
 }
 
+bool libviewOpensDetails(const Library *lib, int item, bool server)
+{
+    if (item < 0 || (size_t)item >= lib->count)
+        return false;
+    const LibraryItem *it = &lib->items[item];
+    return server || (it->show >= 0 && it->overview && it->overview[0]);
+}
+
 bool libviewSelected(const LibView *v, const Library *lib, const Home *home, LibraryRef *out)
 {
     if (v->show >= 0) {

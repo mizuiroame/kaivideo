@@ -9,6 +9,7 @@
 #include "check.h"
 #include "home.h"
 #include "library.h"
+#include "libview.h"
 #include "nfo.h"
 
 #define NFO_ROOT TMP_ROOT "/nfolib"
@@ -203,7 +204,13 @@ static void checkScanned(const Library *lib)
         CHECK(!strcmp(it->name.title, "Dry Creek") && it->overview && !strcmp(it->overview, "The well runs dry."));
         CHECK(it->name.season == 1 && it->name.episode == 2 && it->runtime_ns == 44 * 60000000000ll);
         CHECK(endsWith(it->art, "Season 1/Prairie.Road.S01E02-thumb.jpg"));
+        CHECK(libviewOpensDetails(lib, dry, false));  // A shows its plot first, as a server's episode's.
     }
+    // An episode without an .nfo plays at once; a film with a plot too (Home's large picture shows it).
+    int plain = find(lib, "TV/Prairie Road/Season 1/Prairie.Road.S01E01.mkv");
+    CHECK(plain >= 0 && !libviewOpensDetails(lib, plain, false) && libviewOpensDetails(lib, plain, true));
+    CHECK(harbor >= 0 && !libviewOpensDetails(lib, harbor, false));
+    CHECK(!libviewOpensDetails(lib, -1, true) && !libviewOpensDetails(lib, (int)lib->count, true));
     // A broken .nfo, and one that's only an address: the file's name stands.
     int odd = find(lib, "Odd/Broken One (2001).mkv"), url = find(lib, "Odd/Just A Link (2002).mkv");
     CHECK(odd >= 0 && !strcmp(lib->items[odd].name.title, "Half Written") && lib->items[odd].name.year == 2001);

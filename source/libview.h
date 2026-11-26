@@ -160,6 +160,10 @@ void libviewClamp(LibView *v, const Library *lib, const Home *home);
 
 // What A opens on the current screen (not Files): false if nothing (or a channel).
 bool libviewSelected(const LibView *v, const Library *lib, const Home *home, LibraryRef *out);
+// Whether A on a film or episode opens its details (its summary, and the buttons to play it) rather than
+// playing it: a server's video (server: its location is one), or an episode on the card or the network
+// folder whose .nfo gave it a plot, so the plot can be read as a server's episode's is.
+bool libviewOpensDetails(const Library *lib, int item, bool server);
 // The IPTV list's channel under the cursor on Home (a row of channels), or -1.
 int libviewSelectedChannel(const LibView *v, const Home *home);
 // Home was made again (before, as it was, to after): each row keeps its place and the cursor its row,

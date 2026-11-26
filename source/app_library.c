@@ -430,7 +430,8 @@ static void playItem(App *app, int item, uint64_t now)
     appStartVideo(app, it->path, name, now);
 }
 
-// A series opens its page; a video on a server or an Xtream film its details; one on the card plays.
+// A series opens its page; a video on a server, an Xtream film or an episode with an .nfo's plot its
+// details; another on the card plays.
 static void openRef(App *app, LibraryRef ref, uint64_t now)
 {
     if (ref.is_show) {
@@ -438,7 +439,7 @@ static void openRef(App *app, LibraryRef ref, uint64_t now)
         return;
     }
     const char *path = app->library.items[ref.index].path;
-    if (jfIsRemoteLocation(path) || xtreamFilmOf(path) > 0)
+    if (libviewOpensDetails(&app->library, ref.index, jfIsRemoteLocation(path) || xtreamFilmOf(path) > 0))
         app->view.details = ref.index;
     else
         playItem(app, ref.index, now);

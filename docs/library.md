@@ -85,6 +85,10 @@ TV/
   title replaces the one from its file name; a `tvshow.nfo` title names the
   series. Ratings, cast and the web addresses of artwork are left out: only
   pictures next to the videos are shown.
+- **Episodes**: on a series' page, an episode is listed by its `.nfo` title;
+  **A** (or a tap) on one whose `.nfo` has a plot opens its details first, with
+  the plot, as a server's episode does, and **A** there plays it. Episodes
+  without a plot play at once.
 - **When**: `.nfo` files are read only while the library is scanned (at start,
   or **Update the library**), and what they said is kept in `library.txt`, so
   after editing one, update the library. A broken `.nfo`, or one that's only a

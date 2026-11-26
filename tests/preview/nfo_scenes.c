@@ -7,6 +7,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#include "gfx.h"
 #include "home.h"
 #include "lang.h"
 #include "library.h"
@@ -134,6 +135,50 @@ static int refCol(const Library *lib, const HomeRow *row, const char *name)
     return 0;
 }
 
+#define EPISODE_ROW_Y(e) (196 + (e) * LIBVIEW_LIST_ROW_PX + LIBVIEW_LIST_ROW_PX / 2)  // ui_library.c's rows.
+
+// A Showcase's series opened (A on Episodes): its episodes by the .nfo files' titles; A or a tap on one with
+// an .nfo's plot opens its details with the plot, as a server's episode does, and A there plays it.
+static void seriesPageScenes(const ShowcaseCtx *c, LibView *view, const Library *lib, const Home *home,
+                             const LibraryShow *show)
+{
+    LibraryRef chosen;
+    if (!libviewSelected(view, lib, home, &chosen) || !chosen.is_show || &lib->shows[chosen.index] != show) {
+        showcaseProblem(c, "showcase_sd_nfo_show", "the large picture isn't on Prairie Road");
+        return;
+    }
+    libviewOpenShow(view, lib, chosen.index, -1);
+    libviewShowMove(view, lib, 0, 1);  // The second episode: Harvest Fair.
+    c->begin();
+    uiDrawLibrary(view, lib, home, c->resume, true, NULL);
+    uiDrawFooterHelp(T("[A] play  [X] watched  [<>] season  [B] back  [Y] search  [ZL][ZR] tabs  [+] menu"));
+    c->save("showcase_sd_nfo_show");
+    int item = libviewShowItem(view, lib);
+    LibHit row = uiLibraryTap(GFX_WIDTH / 2, EPISODE_ROW_Y(1));
+    if (item < 0 || strcmp(lib->items[item].name.title, "Harvest Fair") || row.kind != LIBHIT_EPISODE || row.a != 1)
+        showcaseProblem(c, "showcase_sd_nfo_show", "the second episode isn't Harvest Fair, or doesn't answer a tap");
+    if (item < 0 || !libviewOpensDetails(lib, item, false)) {
+        showcaseProblem(c, "showcase_sd_nfo_show", "A on an episode with an .nfo's plot plays it at once");
+        return;
+    }
+
+    c->begin();
+    uiDrawLibrary(view, lib, home, c->resume, true, NULL);
+    uiDrawDetails(lib, item, c->resume, "", false, NULL);
+    uiDrawFooterHelp(T("[A] play  [Y] from the start  [X] watched  [B] back"));
+    c->save("showcase_sd_nfo_episode");
+    bool played = false, marked = false;
+    for (int y = 0; y < GFX_HEIGHT; y += 4)
+        for (int x = 0; x < GFX_WIDTH; x += 8) {
+            LibHitKind kind = uiLibraryTap(x, y).kind;
+            played = played || kind == LIBHIT_DETAILS_PLAY;
+            marked = marked || kind == LIBHIT_DETAILS_WATCHED;
+        }
+    if (!played || !marked || uiLibraryTap(10, 10).kind != LIBHIT_CLOSE)
+        showcaseProblem(c, "showcase_sd_nfo_episode", "Play, Watched or the outside doesn't answer a tap");
+    view->show = -1;
+}
+
 void nfoShowcaseScenes(const ShowcaseCtx *c)
 {
     system("rm -rf " NFO_ROOT);
@@ -164,6 +209,8 @@ void nfoShowcaseScenes(const ShowcaseCtx *c)
     showcaseMoveTo(&view, &home, series, refCol(&lib, &home.rows[series], "Prairie Road"));
     showcaseDraw(c, "showcase_sd_nfo_series", &view, &lib, &home, DRAWS);
     showcaseCheckTaps(c, "showcase_sd_nfo_series", &view, &home);
+
+    seriesPageScenes(c, &view, &lib, &home, &lib.shows[home.rows[series].items[view.home_cols[series].cursor].index]);
 
     homeSetTiles(&home, HOME_TILES_LANDSCAPE);
     libviewClamp(&view, &lib, &home);
