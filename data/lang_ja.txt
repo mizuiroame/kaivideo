@@ -1962,9 +1962,6 @@ Watch live
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] シリーズ録画をやめる  [^v] 移動  [B] 番組表へ戻る
 
-Already recording %s. To stop it: R on it in the guide.
-%s はすでに録画中です。止めるには番組表でその番組に R。
-
 Asking the server...
 サーバーに問い合わせ中...
 
@@ -2072,3 +2069,9 @@ Your user can't delete recordings on this server.
 
 Your user can't record on this server (it needs Live TV management).
 このユーザーはこのサーバーで録画できません（ライブ TV の管理権限が必要です）。
+
+Stop recording
+録画を停止
+
+Recording stopped: %s. What was recorded stays in Recordings.
+録画を停止しました: %s。録画済みの部分は録画一覧に残ります。

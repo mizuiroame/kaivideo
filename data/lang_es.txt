@@ -1962,9 +1962,6 @@ Ver en vivo
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] dejar de grabar la serie  [^v] mover  [B] volver a la guía
 
-Already recording %s. To stop it: R on it in the guide.
-Ya se graba %s. Para detenerlo: R sobre él en la guía.
-
 Asking the server...
 Preguntando al servidor...
 
@@ -2072,3 +2069,9 @@ Tu usuario no puede borrar grabaciones en este servidor.
 
 Your user can't record on this server (it needs Live TV management).
 Tu usuario no puede grabar en este servidor (necesita administrar la TV en vivo).
+
+Stop recording
+Detener grabación
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Grabación detenida: %s. Lo ya grabado queda en Grabaciones.

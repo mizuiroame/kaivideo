@@ -1962,9 +1962,6 @@ Live ansehen
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] Serie nicht mehr aufnehmen  [^v] bewegen  [B] zurück zum Programm
 
-Already recording %s. To stop it: R on it in the guide.
-%s wird schon aufgenommen. Zum Beenden: R darauf im Programm.
-
 Asking the server...
 Frage den Server...
 
@@ -2072,3 +2069,9 @@ Dein Benutzer darf auf diesem Server keine Aufnahmen löschen.
 
 Your user can't record on this server (it needs Live TV management).
 Dein Benutzer darf auf diesem Server nicht aufnehmen (dafür braucht er die Live-TV-Verwaltung).
+
+Stop recording
+Aufnahme beenden
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Aufnahme beendet: %s. Das bisher Aufgenommene bleibt unter Aufnahmen.

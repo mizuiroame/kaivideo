@@ -133,18 +133,19 @@ void uiDrawPreviewBehind(const uint32_t *pixels, int w, int h)
 
 void uiDrawSkipButton(const char *label, bool bar_shown)
 {
-    uiDrawZrButton(label, bar_shown, LIBHIT_SKIP);
+    uiDrawZrButton(label, bar_shown, LIBHIT_SKIP, false, false);
 }
 
-void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit)
+void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit, bool red, bool dim)
 {
     int w = uiButtonWidth("ZR") + fontTextWidth(FONT_BOLD, 21, label) + 44;
     int x = GFX_WIDTH - MARGIN - w;
     int y = GFX_HEIGHT - (bar_shown ? UI_PLAYER_BAR_H + SKIP_ABOVE_BAR : SKIP_ABOVE_EDGE) - SKIP_H;
     gfxFillRoundRect(x - 2, y - 2, w + 4, SKIP_H + 4, SKIP_H / 2 + 2, COLOR_SURFACE_HI);  // An edge against the picture.
-    gfxFillRoundRect(x, y, w, SKIP_H, SKIP_H / 2, COLOR_SURFACE);
-    uiDrawButton(x + 16, y + SKIP_H / 2.0f, "ZR", COLOR_SURFACE_HI, COLOR_TEXT);
-    fontDrawMiddle(FONT_BOLD, 21, x + 28 + uiButtonWidth("ZR"), y + SKIP_H / 2.0f, label, COLOR_TEXT);
+    gfxFillRoundRect(x, y, w, SKIP_H, SKIP_H / 2, red ? COLOR_ERROR : COLOR_SURFACE);
+    uiDrawButton(x + 16, y + SKIP_H / 2.0f, "ZR", red ? COLOR_SURFACE : COLOR_SURFACE_HI, COLOR_TEXT);
+    fontDrawMiddle(FONT_BOLD, 21, x + 28 + uiButtonWidth("ZR"), y + SKIP_H / 2.0f, label,
+                   dim ? COLOR_DIM : red ? COLOR_BG : COLOR_TEXT);
     uiLibraryAddHit(x, y, w, SKIP_H, hit, 0, 0);
 }
 

@@ -128,8 +128,9 @@ void uiDrawShowFavorite(bool favorite);
 void uiDrawShowDownload(const char *label, bool done, bool favorite_shown, bool favorite);
 // "Skip intro" (ZR) at the bottom right of a playing video, above the bar when it shows.
 void uiDrawSkipButton(const char *label, bool bar_shown);
-// The same kind of button over the video, for another ZR action: a tap on it is hit.
-void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit);
+// The same kind of button over the video, for another ZR action: a tap on it is hit; red: filled red
+// (a recording to stop); dim: it waits (its label says for what).
+void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit, bool red, bool dim);
 // A trickplay picture (w x h) above the progress bar, where a finger drags it (fraction 0-1).
 void uiDrawSeekPreview(const uint32_t *pixels, int w, int h, double fraction);
 // The same over the whole screen, while a jump's picture is awaited.

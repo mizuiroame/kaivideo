@@ -425,6 +425,8 @@ bool appDvrDrawPanel(const App *app);
 void appDvrDrawChoices(const App *app);
 // The help line while the list or the choices show, or NULL.
 const char *appDvrHelp(const App *app);
+// The guide's marks, with what this console did lately over them (the server's lists may lag).
+void appDvrMarkGuide(LiveGuide *g);
 // Whether the server will record p (or records it now).
 bool appDvrScheduled(const App *app, const LiveProgram *p);
 // While a Jellyfin channel plays: ZR or its button records what's on now; drawn with the bar.

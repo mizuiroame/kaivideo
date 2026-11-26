@@ -515,6 +515,17 @@ static void liveScene(Player *p)
     uiDrawPlayerStatus();
     uiDrawPlayerBar(p, "KaiVideo Test One  \xC2\xB7  The Quiet Workshop", NULL, -1);
     save("player_live");
+    // A Jellyfin channel's program being recorded: ZR (or a tap) stops it.
+    begin();
+    drawPicture();
+    uiDrawPlayerStatus();
+    uiDrawPlayerBar(p, "KaiVideo Test One  \xC2\xB7  The Quiet Workshop", NULL, -1);
+    uiDrawZrButton(T("Stop recording"), true, LIBHIT_DVR_RECORD, true, false);
+    save("player_live_recording");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 30, GFX_HEIGHT - UI_PLAYER_BAR_H - 90).kind != LIBHIT_DVR_RECORD) {
+        printf("TOUCH: player_live_recording: Stop recording doesn't answer a tap\n");
+        g_problems++;
+    }
     p->live = false;
 }
 

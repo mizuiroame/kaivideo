@@ -3,7 +3,8 @@
 // and a series, sees them in the timers and marked in the guide, cancels
 // them, and (with WAIT) records what's on now until it ends, finds it among
 // the recordings, reads a piece of it and deletes it.
-//   JF_URL=http://192.168.0.10:8096 JF_TOKEN=... JF_USER=<user id> host_dvr CHANNEL [WAIT]
+//   JF_URL=http://192.168.0.10:8096 JF_TOKEN=... JF_USER=<user id> host_dvr CHANNEL [wait | stop LONG_CHANNEL]
+// stop: records what's on LONG_CHANNEL now and stops it part way, saying what the server kept.
 // CHANNEL: the name of a channel with short programs (the test server's
 // "KT Hora Exacta"). The token is never printed; for personal testing only.
 // Build (in tests/, image kaivideo-host):
@@ -223,6 +224,51 @@ static void tryRecording(LiveGuide *g, const char *channel)
     expect(gone, "it's gone");
 }
 
+#define STOP_AFTER_S 40  // A recording stopped this long after it started.
+
+// What's on now recorded, then stopped part way (its timer cancelled, as the player's Stop recording
+// does): what the server keeps of it, which is then deleted.
+static void tryStop(LiveGuide *g, const char *channel)
+{
+    static DvrLists d;
+    int64_t now_s = (int64_t)time(NULL);
+    jfSyncFetchLive(g, now_s, now_s, now_s + LIVE_WINDOW_S);
+    const LiveChannel *c = findChannel(g, channel);
+    const LiveProgram *p = c && c->program_count && c->programs[0].start <= now_s ? &c->programs[0] : NULL;
+    expect(p && p->id[0] && p->end > now_s + STOP_AFTER_S + 15, "a program on now, long enough to stop part way");
+    if (!p)
+        return;
+    char id[LIVE_PROGRAM_ID_MAX], name[LIVE_NAME_MAX];
+    snprintf(id, sizeof(id), "%s", p->id);
+    snprintf(name, sizeof(name), "%s", p->title);
+    expect(jfSyncDvrRecord(id, false) == JF_DVR_DONE, "recording what's on now");
+    sleep(STOP_AFTER_S);
+    expect(readLists(&d), "the DVR's lists came");
+    const DvrTimer *t = dvrTimerFor(&d, id);
+    expect(t && t->state == DVR_RECORDING, "its timer records");
+    expect(t && jfSyncDvrCancel(t->id) == JF_DVR_DONE, "stopped it (its timer cancelled)");
+    sleep(5);
+    expect(readLists(&d) && !dvrTimerFor(&d, id), "its timer went");
+    const DvrRecording *r = NULL;
+    for (int wait = 0; !r && wait < LISTED_WAIT_S; wait += WAIT_STEP_S) {
+        if (wait)
+            sleep(WAIT_STEP_S);
+        readLists(&d);
+        for (int i = 0; i < d.recording_count && !r; i++)
+            if (!strcmp(d.recordings[i].name, name))
+                r = &d.recordings[i];
+    }
+    printf("        what was recorded before it stopped: %s", r ? "kept" : "not among the recordings");
+    if (r)
+        printf(", %d min (recording: %d)", dvrMinutes(r->start, r->end), r->recording);
+    printf("\n");
+    if (r) {
+        char rid[DVR_ID_MAX];
+        snprintf(rid, sizeof(rid), "%s", r->id);
+        expect(jfSyncDvrDelete(rid) == JF_DVR_DONE, "deleted what was kept");
+    }
+}
+
 int main(int argc, char **argv)
 {
     const char *url = getenv("JF_URL"), *token = getenv("JF_TOKEN"), *user = getenv("JF_USER");
@@ -240,7 +286,9 @@ int main(int argc, char **argv)
     tryGuide(&g, argv[1], now_s);
     tryProgram(&g, argv[1], now_s);
     trySeries(&g, argv[1], now_s);
-    if (argc > 2)
+    if (argc > 2 && !strcmp(argv[2], "stop") && argc > 3)
+        tryStop(&g, argv[3]);
+    else if (argc > 2)
         tryRecording(&g, argv[1]);
     liveGuideFree(&g);
     printf("%d failures\n", g_failures);

@@ -1962,9 +1962,6 @@ Guarda in diretta
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] smetti di registrare la serie  [^v] sposta  [B] torna alla guida
 
-Already recording %s. To stop it: R on it in the guide.
-%s è già in registrazione. Per fermarla: R su di esso nella guida.
-
 Asking the server...
 Chiedo al server...
 
@@ -2072,3 +2069,9 @@ Il tuo utente non può eliminare registrazioni su questo server.
 
 Your user can't record on this server (it needs Live TV management).
 Il tuo utente non può registrare su questo server (serve la gestione della TV in diretta).
+
+Stop recording
+Ferma registrazione
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Registrazione fermata: %s. Quanto già registrato resta in Registrazioni.

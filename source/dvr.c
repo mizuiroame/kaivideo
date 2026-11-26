@@ -192,6 +192,43 @@ void dvrMarkGuide(LiveGuide *g, const DvrTimer *timers, int count)
     }
 }
 
+void dvrKnow(DvrKnown *k, const char *program_id, bool scheduled, int64_t until)
+{
+    if (!program_id[0] || strlen(program_id) >= LIVE_PROGRAM_ID_MAX)
+        return;
+    int at = 0;  // Its own entry, or else the one that ends first (an empty one ends at 0).
+    for (int i = 0; i < DVR_KNOWN_MAX; i++) {
+        if (!strcmp(k->entries[i].program_id, program_id)) {
+            at = i;
+            break;
+        }
+        if (k->entries[i].until < k->entries[at].until)
+            at = i;
+    }
+    copy(k->entries[at].program_id, sizeof(k->entries[at].program_id), program_id);
+    k->entries[at].scheduled = scheduled;
+    k->entries[at].until = until;
+}
+
+int dvrKnownOf(const DvrKnown *k, const char *program_id, int64_t now_s)
+{
+    for (int i = 0; program_id[0] && i < DVR_KNOWN_MAX; i++)
+        if (k->entries[i].until > now_s && !strcmp(k->entries[i].program_id, program_id))
+            return k->entries[i].scheduled;
+    return -1;
+}
+
+void dvrMarkKnown(LiveGuide *g, const DvrKnown *k, int64_t now_s)
+{
+    for (int i = 0; i < g->pool_count; i++) {
+        int known = dvrKnownOf(k, g->pool[i].id, now_s);
+        if (known == 1)
+            g->pool[i].marks |= LIVE_TIMER;
+        else if (known == 0)
+            g->pool[i].marks &= (unsigned char)~(LIVE_TIMER | LIVE_SERIES_TIMER);
+    }
+}
+
 int dvrChoices(const LiveProgram *p, int64_t now_s, DvrAction out[DVR_DO_COUNT])
 {
     int n = 0;

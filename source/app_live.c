@@ -112,6 +112,7 @@ void appLiveRebuild(App *app)
     }
     if (app->dvr)  // Marks made since the guide was read stay.
         dvrMarkGuide(&g, app->dvr->timers, app->dvr->timer_count);
+    appDvrMarkGuide(&g);
     liveGuideFree(&app->live);
     app->live = g;
     libviewLiveMove(&app->view, app->live.count, 0);

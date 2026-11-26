@@ -66,6 +66,25 @@ const DvrTimer *dvrTimerFor(const DvrLists *d, const char *program_id);
 // replacing the marks they had; LIVE_IS_SERIES stays.
 void dvrMarkGuide(LiveGuide *g, const DvrTimer *timers, int count);
 
+// What this console did to programs lately (recorded, or stopped), as the server took it: it holds
+// over the guide's marks and the lists read (which may lag, or not come) until each program ends.
+#define DVR_KNOWN_MAX 16
+
+typedef struct {
+    struct {
+        char program_id[LIVE_PROGRAM_ID_MAX];
+        bool scheduled;
+        int64_t until;  // When the program ends: then it's forgotten.
+    } entries[DVR_KNOWN_MAX];
+} DvrKnown;
+
+// Keeps that program_id is (or isn't) recorded until `until`, in its own entry or the soonest to end's.
+void dvrKnow(DvrKnown *k, const char *program_id, bool scheduled, int64_t until);
+// 1: recorded, 0: not, -1: nothing known (or its program is over).
+int dvrKnownOf(const DvrKnown *k, const char *program_id, int64_t now_s);
+// The guide's marks (LIVE_TIMER) as known here, over what it had.
+void dvrMarkKnown(LiveGuide *g, const DvrKnown *k, int64_t now_s);
+
 // What can be done with a program of the guide.
 typedef enum {
     DVR_DO_RECORD,         // Record this program.

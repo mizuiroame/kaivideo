@@ -32,11 +32,16 @@ static struct {
     char id[DVR_ID_MAX];     // The program, timer, series or recording.
     bool by_program;         // id is a program's: the timer (or its series) is found by it.
     char name[LIVE_NAME_MAX];
-    bool on_now;             // The program is on now (recording starts at once).
+    bool on_now;             // The program is on now (recording starts at once, or stops).
+    int64_t until;           // When the program ends (what came of it is kept until then),
+    char program[LIVE_PROGRAM_ID_MAX];  // and its id ("" when it isn't about one).
     JfDvrResult result;
     DvrLists *lists;         // What the server has after it, if it came.
     bool fetched;
 } g_job;
+
+// What this console last did to programs, as the server took it (dvr.h).
+static DvrKnown g_known;
 
 bool appDvrAvailable(const App *app)
 {
@@ -81,7 +86,7 @@ static void *work(void *arg)
 
 // Asks the server something. False (said) if it's still busy with the last.
 static bool startJob(App *app, JobKind kind, const char *id, bool by_program, const char *name, bool on_now,
-                     uint64_t now)
+                     int64_t until, uint64_t now)
 {
     if (g_job.started) {
         if (kind != JOB_FETCH)
@@ -97,6 +102,9 @@ static bool startJob(App *app, JobKind kind, const char *id, bool by_program, co
     snprintf(g_job.name, sizeof(g_job.name), "%s", name);
     g_job.by_program = by_program;
     g_job.on_now = on_now;
+    g_job.until = until;
+    bool program = by_program || kind == JOB_RECORD || kind == JOB_RECORD_SERIES;
+    snprintf(g_job.program, sizeof(g_job.program), "%s", program ? id : "");
     g_job.busy = true;
     g_job.started = pthread_create(&g_job.thread, NULL, work, NULL) == 0;
     if (!g_job.started)
@@ -121,7 +129,10 @@ static void tell(App *app, uint64_t now)
         switch (g_job.kind) {
         case JOB_RECORD: fmt = g_job.on_now ? T("Recording %s now.") : T("The server will record %s."); break;
         case JOB_RECORD_SERIES: fmt = T("The server will record every episode of %s."); break;
-        case JOB_CANCEL: fmt = T("%s won't be recorded."); break;
+        case JOB_CANCEL:
+            fmt = g_job.on_now ? T("Recording stopped: %s. What was recorded stays in Recordings.")
+                               : T("%s won't be recorded.");
+            break;
         case JOB_CANCEL_SERIES: fmt = T("The series %s won't be recorded."); break;
         case JOB_DELETE: fmt = T("Recording deleted: %s"); break;
         default: return;
@@ -150,6 +161,10 @@ void appDvrUpdate(App *app, uint64_t now)
         return;
     pthread_join(g_job.thread, NULL);
     g_job.started = false;
+    appLog("  DVR: job %d %s: result %d, lists %s (%d timers)", (int)g_job.kind, g_job.id, (int)g_job.result,
+           g_job.fetched ? "read" : "not read", g_job.lists ? g_job.lists->timer_count : -1);
+    if (g_job.result == JF_DVR_DONE && g_job.program[0] && g_job.until)
+        dvrKnow(&g_known, g_job.program, g_job.kind == JOB_RECORD || g_job.kind == JOB_RECORD_SERIES, g_job.until);
     if (g_job.fetched) {  // The lists swap: the thread's become the app's.
         DvrLists *old = app->dvr;
         app->dvr = g_job.lists;
@@ -158,6 +173,8 @@ void appDvrUpdate(App *app, uint64_t now)
         dvrMarkGuide(&app->live, app->dvr->timers, app->dvr->timer_count);
         settle(app, 1);
     }
+    dvrMarkKnown(&app->live_server, &g_known, (int64_t)time(NULL));
+    dvrMarkKnown(&app->live, &g_known, (int64_t)time(NULL));
     tell(app, now);
     if (g_job.kind != JOB_FETCH)
         appLiveReadSoon(app);  // Programs a series added are marked too.
@@ -176,7 +193,21 @@ void appDvrExit(App *app)
 
 bool appDvrScheduled(const App *app, const LiveProgram *p)
 {
+    int known = dvrKnownOf(&g_known, p->id, (int64_t)time(NULL));
+    if (known >= 0)
+        return known == 1;
     return (p->marks & LIVE_TIMER) || (app->dvr && dvrTimerFor(app->dvr, p->id));
+}
+
+// The server is being asked about program_id now.
+static bool askingAbout(const char *program_id)
+{
+    return g_job.started && program_id[0] && !strcmp(g_job.program, program_id);
+}
+
+void appDvrMarkGuide(LiveGuide *g)
+{
+    dvrMarkKnown(g, &g_known, (int64_t)time(NULL));
 }
 
 // --- What to do with a program (R) ---
@@ -208,7 +239,7 @@ static void choose(App *app, int row, uint64_t now)
     static const JobKind KINDS[DVR_DO_COUNT] = {JOB_RECORD, JOB_RECORD_SERIES, JOB_CANCEL, JOB_CANCEL_SERIES};
     DvrAction a = app->dvr_choices[row];
     bool by_program = a == DVR_DO_CANCEL || a == DVR_DO_CANCEL_SERIES;
-    if (startJob(app, KINDS[a], p->id, by_program, p->title, on_now, now))
+    if (startJob(app, KINDS[a], p->id, by_program, p->title, on_now, p->end, now))
         app->dvr_choices_open = false;
 }
 
@@ -253,8 +284,10 @@ void appDvrDrawChoices(const App *app)
     if (!app->dvr_choices_open)
         return;
     const char *labels[DVR_DO_COUNT];
-    for (int i = 0; i < app->dvr_choice_count; i++)
-        labels[i] = dvrActionLabel(app->dvr_choices[i]);
+    bool on_now = app->dvr_program.start <= (int64_t)time(NULL);
+    for (int i = 0; i < app->dvr_choice_count; i++)  // What's on now and recording: it stops.
+        labels[i] = on_now && app->dvr_choices[i] == DVR_DO_CANCEL ? T("Stop recording")
+                                                                   : dvrActionLabel(app->dvr_choices[i]);
     char when[48], line[TEXT_MAX];
     liveTimeRange(&app->dvr_program, appUtcOffset(), app->config.clock_24h, when, sizeof(when));
     snprintf(line, sizeof(line), "%s  \xC2\xB7  %s", when, app->dvr_channel);
@@ -352,7 +385,7 @@ static void openList(App *app, uint64_t now)
     app->dvr_confirm = -1;
     app->dvr_scroll = (Scroll){0, 0, 0};
     settle(app, 1);
-    startJob(app, JOB_FETCH, "", false, "", false, now);
+    startJob(app, JOB_FETCH, "", false, "", false, 0, now);
 }
 
 static void playRecording(App *app, const DvrRecording *rec, uint64_t now)
@@ -396,9 +429,14 @@ static void removeRow(App *app, const Rows *r, int row, uint64_t now)
     }
     app->dvr_confirm = -1;
     switch (r->section[row]) {
-    case SECTION_TIMERS: startJob(app, JOB_CANCEL, id, false, d->timers[i].name, false, now); break;
-    case SECTION_SERIES: startJob(app, JOB_CANCEL_SERIES, id, false, d->series[i].name, false, now); break;
-    default: startJob(app, JOB_DELETE, id, false, d->recordings[i].name, false, now); break;
+    case SECTION_TIMERS: {
+        const DvrTimer *t = &d->timers[i];
+        if (startJob(app, JOB_CANCEL, id, false, t->name, t->start <= (int64_t)time(NULL), t->end, now))
+            snprintf(g_job.program, sizeof(g_job.program), "%s", t->program_id);
+        break;
+    }
+    case SECTION_SERIES: startJob(app, JOB_CANCEL_SERIES, id, false, d->series[i].name, false, 0, now); break;
+    default: startJob(app, JOB_DELETE, id, false, d->recordings[i].name, false, 0, now); break;
     }
 }
 
@@ -651,13 +689,12 @@ bool appDvrPlayerInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t no
     bool tapped = touch.type == TOUCH_TAP && uiLibraryTap(touch.x, touch.y).kind == LIBHIT_DVR_RECORD;
     if (!(pressed & HidNpadButton_ZR) && !tapped)
         return false;
-    if (appDvrScheduled(app, p)) {
-        char line[TEXT_MAX + LIVE_NAME_MAX];
-        snprintf(line, sizeof(line), T("Already recording %s. To stop it: R on it in the guide."), p->title);
-        appNotify(app, NOTICE_INFO, line, now);
-    } else {
-        startJob(app, JOB_RECORD, p->id, false, p->title, true, now);
-    }
+    if (g_job.started)
+        return true;  // One thing at a time: the button says the server is being asked.
+    if (appDvrScheduled(app, p))  // Recording (set here or from the guide): it stops.
+        startJob(app, JOB_CANCEL, p->id, true, p->title, true, p->end, now);
+    else
+        startJob(app, JOB_RECORD, p->id, false, p->title, true, p->end, now);
     return true;
 }
 
@@ -667,5 +704,10 @@ void appDvrPlayerDraw(const App *app, bool bar_shown)
     const LiveProgram *p = c ? onNow(c, (int64_t)time(NULL)) : NULL;
     if (!bar_shown || !p || !p->id[0] || app->menu.open || app->app_menu != APP_MENU_NONE)
         return;
-    uiDrawZrButton(appDvrScheduled(app, p) ? T("Recording") : T("Record"), bar_shown, LIBHIT_DVR_RECORD);
+    if (askingAbout(p->id))
+        uiDrawZrButton(T("Asking the server..."), bar_shown, LIBHIT_DVR_RECORD, false, true);
+    else if (appDvrScheduled(app, p))
+        uiDrawZrButton(T("Stop recording"), bar_shown, LIBHIT_DVR_RECORD, true, false);
+    else
+        uiDrawZrButton(T("Record"), bar_shown, LIBHIT_DVR_RECORD, false, false);
 }

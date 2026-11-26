@@ -1962,9 +1962,6 @@ Watch live
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] 시리즈 녹화 중지  [^v] 이동  [B] 편성표로
 
-Already recording %s. To stop it: R on it in the guide.
-%s 은(는) 이미 녹화 중입니다. 멈추려면 편성표에서 그 프로그램에 R.
-
 Asking the server...
 서버에 묻는 중...
 
@@ -2072,3 +2069,9 @@ Your user can't delete recordings on this server.
 
 Your user can't record on this server (it needs Live TV management).
 이 사용자는 이 서버에서 녹화할 수 없습니다(라이브 TV 관리 권한이 필요합니다).
+
+Stop recording
+녹화 중지
+
+Recording stopped: %s. What was recorded stays in Recordings.
+녹화를 중지했습니다: %s. 이미 녹화된 부분은 녹화 목록에 남습니다.

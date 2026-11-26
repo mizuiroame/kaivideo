@@ -124,8 +124,43 @@ static void testBody(void)
     CHECK(!dvrTimerBody("[]", "p2", body, sizeof(body)) && !dvrTimerBody(NULL, "p2", body, sizeof(body)));
 }
 
+// What the console did lately holds over the guide's marks until the program ends.
+static void testKnown(void)
+{
+    const int64_t now = 1795082400;
+    static DvrKnown k;
+    CHECK(dvrKnownOf(&k, "p1", now) == -1 && dvrKnownOf(&k, "", now) == -1);
+    dvrKnow(&k, "p1", true, now + 600);
+    CHECK(dvrKnownOf(&k, "p1", now) == 1 && dvrKnownOf(&k, "p1", now + 600) == -1);  // Over: forgotten.
+    dvrKnow(&k, "p1", false, now + 600);  // Stopped: the same entry.
+    CHECK(dvrKnownOf(&k, "p1", now) == 0);
+    for (int i = 0; i < DVR_KNOWN_MAX + 4; i++) {  // Full: the soonest to end goes.
+        char id[8];
+        snprintf(id, sizeof(id), "q%d", i);
+        dvrKnow(&k, id, true, now + 1000 + i);
+    }
+    CHECK(dvrKnownOf(&k, "p1", now) == -1 && dvrKnownOf(&k, "q0", now) == -1);
+    CHECK(dvrKnownOf(&k, "q19", now) == 1);
+
+    static DvrKnown m;
+    dvrKnow(&m, "a", true, now + 600);
+    dvrKnow(&m, "b", false, now + 600);
+    LiveGuide g;
+    liveGuideInit(&g);
+    CHECK(liveGuideReserve(&g, 1, 3));
+    LiveChannel c = {.id = "c1"};
+    LiveProgram programs[3] = {{.title = "A", .id = "a"},
+                               {.title = "B", .id = "b", .marks = LIVE_TIMER | LIVE_SERIES_TIMER | LIVE_IS_SERIES},
+                               {.title = "C", .id = "c", .marks = LIVE_TIMER}};
+    CHECK(liveGuideAdd(&g, &c, programs, 3));
+    dvrMarkKnown(&g, &m, now);
+    CHECK(g.pool[0].marks == LIVE_TIMER && g.pool[1].marks == LIVE_IS_SERIES && g.pool[2].marks == LIVE_TIMER);
+    liveGuideFree(&g);
+}
+
 void testDvr(void)
 {
+    testKnown();
     testParse();
     testMarksAndChoices();
     testBody();

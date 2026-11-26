@@ -1962,9 +1962,6 @@ Regarder en direct
 [X] stop recording the series  [^v] move  [B] back to the guide
 [X] arrêter la série  [^v] bouger  [B] retour au guide
 
-Already recording %s. To stop it: R on it in the guide.
-%s est déjà enregistré. Pour l'arrêter : R dessus dans le guide.
-
 Asking the server...
 Question au serveur...
 
@@ -2072,3 +2069,9 @@ Votre utilisateur ne peut pas supprimer d'enregistrements sur ce serveur.
 
 Your user can't record on this server (it needs Live TV management).
 Votre utilisateur ne peut pas enregistrer sur ce serveur (il faut gérer la TV en direct).
+
+Stop recording
+Arrêter l'enregistrement
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Enregistrement arrêté : %s. Ce qui a été enregistré reste dans Enregistrements.
