@@ -173,7 +173,7 @@ static void liveScene(Player *p)
     for (int i = 0; i < 4; i++)  // The server's: they can be recorded.
         for (int j = 0; j < channels[i].program_count; j++)
             channels[i].programs[j].id[0] = 'p';
-    LiveGuide guide = {channels, 4};
+    LiveGuide guide = {.channels = channels, .count = 4};
     static LibView view;
     static Library lib;   // The tab doesn't need videos.
     static Home home;
