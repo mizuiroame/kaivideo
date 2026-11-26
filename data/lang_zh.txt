@@ -177,6 +177,9 @@ language = 简体中文
 [A] choose  [^v] category  [B] back
 [A] 选择  [^v] 分类  [B] 返回
 
+[A] choose  [B] back  [+] exit
+[A] 选择  [B] 返回  [+] 退出
+
 [A] choose  [B] cancel  [+] exit
 [A] 选择  [B] 取消  [+] 退出
 
@@ -1475,6 +1478,9 @@ Watched
 
 Watching as %s. Loading their library...
 正在以%s的身份观看。正在加载其媒体库...
+
+Which media server?
+哪个媒体服务器?
 
 White
 白色

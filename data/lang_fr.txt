@@ -177,6 +177,9 @@ Les vidéos de %s sont dans la bibliothèque.
 [A] choose  [^v] category  [B] back
 [A] choisir  [^v] catégorie  [B] retour
 
+[A] choose  [B] back  [+] exit
+[A] choisir  [B] retour  [+] quitter
+
 [A] choose  [B] cancel  [+] exit
 [A] choisir  [B] annuler  [+] quitter
 
@@ -1475,6 +1478,9 @@ Vu
 
 Watching as %s. Loading their library...
 Vous regardez en tant que %s. Chargement de sa bibliothèque...
+
+Which media server?
+Quel serveur multimédia ?
 
 White
 Blanc

@@ -8,7 +8,8 @@
 // Against the real plex.tv (personal testing only; nothing secret is printed):
 //   PLEX_TOKEN=<account's> PLEX_SERVER_ID=<server's clientIdentifier> PLEX_PIN=<a test profile's>
 //   host_plexhome live
-// It switches to the first managed profile with a PIN (one wrong PIN first),
+// It switches to the first managed profile with a PIN (one wrong PIN first
+// with PLEX_TRY_WRONG=1),
 // reads the server's libraries as it, and switches back to the account's own
 // profile (with PLEX_OWNER_PIN if the owner has one; else it checks it's asked for).
 #include <stdio.h>
@@ -103,6 +104,67 @@ static long rawSwitchStatus(NetClient *net, const PlexSession *s, const char *uu
     return r.status;
 }
 
+// Tells the server, as the session's profile, that the longest film was left
+// at a point, as KaiVideo's player does when it stops, and reads the library
+// again (as the app does) to see the point kept for that profile.
+static void checkProgress(NetClient *net, const PlexSession *s, const char *who)
+{
+    JfCatalog c;
+    jfCatalogInit(&c);
+    bool read = plexNetReadLibrary(net, s, VERSION, &c, NULL, NULL);
+    int best = -1;
+    for (size_t i = 0; read && i < c.library.count; i++)
+        if (!c.library.items[i].name.is_episode && (best < 0 || c.library.items[i].runtime_ns >
+                                                                   c.library.items[best].runtime_ns))
+            best = (int)i;
+    char what[96];
+    printf("        %s: library read=%d, %zu videos in %d libraries\n", who, read, c.library.count,
+           c.library.collection_count);
+    snprintf(what, sizeof(what), "%s: the library has a film", who);
+    expect(best >= 0, what);
+    if (best < 0) {
+        for (int i = 0; i < c.library.collection_count; i++) {  // What the server answers, as is.
+            static const char *const QUERIES[] = {"", "?type=1", "?type=4"};
+            for (int q = 0; q < 3; q++) {
+                char p[128], url[PLEX_URL_MAX];
+                snprintf(p, sizeof(p), "/library/sections/%s/all%s", c.view_ids[i], QUERIES[q]);
+                plexServerUrl(s, VERSION, p, url, sizeof(url));
+                NetRequest request = {.url = url, .accept_json = true, .timeout_s = 30};
+                NetResponse r;
+                bool ok = netFetchText(net, &request, 1 << 20, &r);
+                const char *size = ok ? strstr(r.data, "\"size\"") : NULL;
+                printf("        library %d%s: status %ld %.12s\n", i, QUERIES[q], r.status, size ? size : "");
+                if (ok)
+                    netResponseFree(&r);
+            }
+        }
+        jfCatalogFree(&c);
+        return;
+    }
+    char item[PLEX_ID_MAX], part[PLEX_ID_MAX], path[320];
+    plexLocationIds(c.library.items[best].path, item, part);
+    int64_t duration = c.library.items[best].runtime_ns, at = duration / 3;
+    long status = 0;
+    plexTimelinePath(path, sizeof(path), item, "playing", at, duration);
+    bool told = plexNetCall(net, s, VERSION, path, false, 30, &status);
+    plexTimelinePath(path, sizeof(path), item, "stopped", at, duration);
+    told = told && plexNetCall(net, s, VERSION, path, false, 30, &status);
+    snprintf(what, sizeof(what), "%s: the server is told where it stopped (status %ld)", who, status);
+    expect(told, what);
+    jfCatalogFree(&c);
+    jfCatalogInit(&c);
+    read = plexNetReadLibrary(net, s, VERSION, &c, NULL, NULL);
+    int64_t kept = -1;
+    for (size_t i = 0; read && i < c.library.count; i++)
+        if (strstr(c.library.items[i].path, item) == c.library.items[i].path + strlen(PLEX_PREFIX))
+            kept = c.users[i].position_ns;
+    printf("        %s: left at %llds of %llds, the server keeps %llds\n", who, (long long)(at / 1000000000),
+           (long long)(duration / 1000000000), (long long)(kept / 1000000000));
+    snprintf(what, sizeof(what), "%s: the library read again has where it was left", who);
+    expect(kept > at - 2000000000ll && kept < at + 2000000000ll, what);
+    jfCatalogFree(&c);
+}
+
 static void liveFlow(NetClient *net)
 {
     const char *token = getenv("PLEX_TOKEN"), *server = getenv("PLEX_SERVER_ID"), *pin = getenv("PLEX_PIN");
@@ -135,14 +197,20 @@ static void liveFlow(NetClient *net)
         return;
     snprintf(s.account, sizeof(s.account), "%s", owner->uuid);  // As signing in keeps it.
     snprintf(s.profile, sizeof(s.profile), "%s", owner->uuid);
+    checkProgress(net, &s, "the owner");
     PlexSession before = s;
     char wrong[8];
     snprintf(wrong, sizeof(wrong), "%s", strcmp(pin, "0000") ? "0000" : "1111");
-    long status = rawSwitchStatus(net, &s, target->uuid, wrong);
-    printf("        plex.tv's status for a wrong PIN: %ld\n", status);
-    PlexSwitchResult r = plexNetSwitchHome(net, &s, VERSION, target, wrong, message, sizeof(message), NULL);
-    printf("        a wrong PIN: result %d\n", r);
-    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "a wrong PIN: refused, the session as it was");
+    long status = 0;
+    PlexSwitchResult r = PLEX_SWITCH_OK;
+    if (getenv("PLEX_TRY_WRONG")) {  // plex.tv counts wrong PINs: only when asked (a few runs lock it a while).
+        status = rawSwitchStatus(net, &s, target->uuid, wrong);
+        printf("        plex.tv's status for a wrong PIN: %ld\n", status);
+        r = plexNetSwitchHome(net, &s, VERSION, target, wrong, message, sizeof(message), NULL);
+        printf("        a wrong PIN: result %d\n", r);
+        expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)),
+               "a wrong PIN: refused, the session as it was");
+    }
     r = plexNetSwitchHome(net, &s, VERSION, target, pin, message, sizeof(message), NULL);
     printf("        the right PIN: result %d%s%s\n", r, message[0] ? ": " : "", message);
     expect(r == PLEX_SWITCH_OK, "the right PIN is taken");
@@ -153,6 +221,7 @@ static void liveFlow(NetClient *net)
            "the profile's own tokens, for the same server");
     status = 0;
     expect(plexNetCall(net, &s, VERSION, "/library/sections", false, 30, &status), "its libraries, as it sees them");
+    checkProgress(net, &s, "the profile");
     expect(plexNetHomeUsers(net, &s, VERSION, users, PLEX_HOME_USERS_MAX, NULL) == n,
            "the profiles, read with the profile's token");
     PlexSession managed = s;

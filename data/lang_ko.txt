@@ -177,6 +177,9 @@ language = 한국어
 [A] choose  [^v] category  [B] back
 [A] 선택  [^v] 카테고리  [B] 뒤로
 
+[A] choose  [B] back  [+] exit
+[A] 선택  [B] 뒤로  [+] 종료
+
 [A] choose  [B] cancel  [+] exit
 [A] 선택  [B] 취소  [+] 종료
 
@@ -1475,6 +1478,9 @@ Watched
 
 Watching as %s. Loading their library...
 %s(으)로 시청 중. 라이브러리를 불러오는 중...
+
+Which media server?
+어떤 미디어 서버인가요?
 
 White
 흰색

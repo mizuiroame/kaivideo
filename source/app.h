@@ -35,7 +35,8 @@
 #define APP_FAVORITE_CHANGES 8
 
 // The + menu, its exit question, or the first run's "Where are your videos?".
-typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT, APP_MENU_WELCOME } AppMenu;
+// The welcome's media servers: which one is set up (APP_MENU_WELCOME_SERVER).
+typedef enum { APP_MENU_NONE, APP_MENU_MAIN, APP_MENU_EXIT, APP_MENU_WELCOME, APP_MENU_WELCOME_SERVER } AppMenu;
 
 // Plex Home's profiles over the library (app_plexhome.c): being read, chosen, a PIN typed, or switched to.
 typedef enum { PROFILES_NONE, PROFILES_LOADING, PROFILES_PICKER, PROFILES_PIN, PROFILES_SWITCHING } ProfilesView;
@@ -179,6 +180,7 @@ struct App {
     bool settings_open, about_open;
     int settings_page;          // SettingsPage.
     bool settings_from_welcome; // Opened by the welcome on a page: B there goes back to it.
+    bool welcome_server;        // That page is a server's, chosen from the welcome's media servers: back to them.
     int settings_cursor;        // The SettingRow under the cursor.
 
     // Jellyfin (app_jellyfin.c).

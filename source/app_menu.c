@@ -33,6 +33,10 @@ typedef enum {
     ITEM_WELCOME_IPTV,     // an IPTV list,
     ITEM_WELCOME_ADDONS,   // Stremio addons,
     ITEM_WELCOME_LATER,    // or later.
+    ITEM_SERVER_JELLYFIN,  // The welcome's media servers: Jellyfin,
+    ITEM_SERVER_EMBY,      // Emby,
+    ITEM_SERVER_PLEX,      // Plex,
+    ITEM_SERVER_BACK,      // or back to the welcome.
 } MenuItemId;
 
 #define ITEMS_MAX 7
@@ -53,6 +57,10 @@ static const char *itemLabel(MenuItemId id)
     case ITEM_WELCOME_IPTV: return T("An IPTV list");
     case ITEM_WELCOME_ADDONS: return T("Stremio addons");
     case ITEM_WELCOME_LATER: return T("Later");
+    case ITEM_SERVER_JELLYFIN: return serverKindName(SERVER_JELLYFIN);
+    case ITEM_SERVER_EMBY: return serverKindName(SERVER_EMBY);
+    case ITEM_SERVER_PLEX: return serverKindName(SERVER_PLEX);
+    case ITEM_SERVER_BACK: return T("Back");
     default: return T("Cancel");
     }
 }
@@ -67,6 +75,12 @@ static int items(const App *app, MenuItemId out[ITEMS_MAX], int *screen)
         for (MenuItemId id = ITEM_WELCOME_CARD; id <= ITEM_WELCOME_LATER; id++)
             out[n++] = id;
         *screen = n - 1;  // "Later" under a line.
+        return n;
+    }
+    if (app->app_menu == APP_MENU_WELCOME_SERVER) {
+        for (MenuItemId id = ITEM_SERVER_JELLYFIN; id <= ITEM_SERVER_BACK; id++)
+            out[n++] = id;
+        *screen = n - 1;  // "Back" under a line, as the welcome's "Later".
         return n;
     }
     if (app->app_menu == APP_MENU_EXIT) {
@@ -118,8 +132,9 @@ void appWelcomeTick(App *app)
     if (app->config.welcomed)
         return;
     if (sourceSet(app)) {  // A folder chosen, a server signed in: nothing more to ask.
-        if (app->app_menu == APP_MENU_WELCOME)
+        if (app->app_menu == APP_MENU_WELCOME || app->app_menu == APP_MENU_WELCOME_SERVER)
             app->app_menu = APP_MENU_NONE;
+        app->welcome_server = false;
         welcomeAnswered(app);
         return;
     }
@@ -132,9 +147,11 @@ void appWelcomeTick(App *app)
         appLibraryShowIptv(app);
     else if (appStremioConfigured())
         appLibraryShowAddons(app);
-    else {  // Back to it when what it opened was left without one (a sign-in failed, the picker cancelled).
-        app->app_menu = APP_MENU_WELCOME;
-        app->app_menu_cursor = 0;
+    else {  // Back to it when what it opened was left without one (a sign-in failed, the picker cancelled):
+        // a server's page, to the media servers (on that server); anything else, to the welcome.
+        app->app_menu = app->welcome_server ? APP_MENU_WELCOME_SERVER : APP_MENU_WELCOME;
+        app->app_menu_cursor = app->welcome_server ? app->config.server_kind : 0;
+        app->welcome_server = false;
     }
 }
 
@@ -154,7 +171,21 @@ static void runWelcome(App *app, MenuItemId id, uint64_t now)
     switch (id) {
     case ITEM_WELCOME_CARD: appOpenPicker(app); break;
     case ITEM_WELCOME_NETWORK: appOpenSettingsAt(app, SETTINGS_PAGE_NETWORK); break;
-    case ITEM_WELCOME_SERVER: appOpenJellyfinSettings(app, now); break;
+    case ITEM_WELCOME_SERVER:  // Which one, first (as Settings lists them).
+        app->app_menu = APP_MENU_WELCOME_SERVER;
+        app->app_menu_cursor = 0;
+        break;
+    case ITEM_SERVER_JELLYFIN:
+    case ITEM_SERVER_EMBY:
+    case ITEM_SERVER_PLEX:
+        app->config.server_kind = (int)(id - ITEM_SERVER_JELLYFIN);  // ServerKind's order.
+        appOpenJellyfinSettings(app, now);
+        app->welcome_server = true;  // B on its page comes back to the servers.
+        break;
+    case ITEM_SERVER_BACK:
+        app->app_menu = APP_MENU_WELCOME;
+        app->app_menu_cursor = 2;  // On "A media server", where it was.
+        return;
     case ITEM_WELCOME_IPTV: appOpenSettingsAt(app, SETTINGS_PAGE_IPTV); break;
     case ITEM_WELCOME_ADDONS: appOpenSettingsAt(app, SETTINGS_PAGE_ADDONS); break;
     default:
@@ -219,6 +250,8 @@ void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     if (pressed & HidNpadButton_B) {
         if (app->app_menu == APP_MENU_WELCOME)
             run(app, ITEM_WELCOME_LATER, now);  // B answers "later", as the row does.
+        else if (app->app_menu == APP_MENU_WELCOME_SERVER)
+            run(app, ITEM_SERVER_BACK, now);  // And here, "back", as its row does.
         else
             app->app_menu = APP_MENU_NONE;
         return;
@@ -232,7 +265,7 @@ void appMenuInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     LibHit hit = uiLibraryTap(touch.x, touch.y);
     if (hit.kind == LIBHIT_MENU_ITEM && hit.a < n)
         run(app, ids[hit.a], now);
-    else if (hit.kind == LIBHIT_CLOSE && app->app_menu != APP_MENU_WELCOME)
+    else if (hit.kind == LIBHIT_CLOSE && app->app_menu != APP_MENU_WELCOME && app->app_menu != APP_MENU_WELCOME_SERVER)
         app->app_menu = APP_MENU_NONE;  // A stray touch beside the welcome doesn't answer it.
 }
 
@@ -247,6 +280,8 @@ void appMenuDraw(const App *app)
         labels[i] = itemLabel(ids[i]);
     if (app->app_menu == APP_MENU_WELCOME)
         uiDrawMenu(T("Welcome! Where are your videos?"), NULL, labels, n, screen, app->app_menu_cursor);
+    else if (app->app_menu == APP_MENU_WELCOME_SERVER)
+        uiDrawMenu(T("Which media server?"), NULL, labels, n, screen, app->app_menu_cursor);
     else if (app->app_menu == APP_MENU_EXIT)
         uiDrawMenu(T("Exit KaiVideo?"), NULL, labels, n, 0, app->app_menu_cursor);
     else
@@ -259,6 +294,8 @@ const char *appFooterHelp(const App *app)
         return appPlexHomeHelp(app);
     if (app->app_menu == APP_MENU_WELCOME)
         return T("[A] choose  [B] later  [+] exit");
+    if (app->app_menu == APP_MENU_WELCOME_SERVER)
+        return T("[A] choose  [B] back  [+] exit");
     if (app->app_menu == APP_MENU_EXIT)
         return T("[A] choose  [B] cancel  [+] exit");
     if (app->app_menu == APP_MENU_MAIN)

@@ -177,6 +177,9 @@ language = 日本語
 [A] choose  [^v] category  [B] back
 [A] 選ぶ  [^v] カテゴリ  [B] 戻る
 
+[A] choose  [B] back  [+] exit
+[A] 決定  [B] 戻る  [+] 終了
+
 [A] choose  [B] cancel  [+] exit
 [A] 決定  [B] キャンセル  [+] 終了
 
@@ -1553,6 +1556,9 @@ Watched
 
 Watching as %s. Loading their library...
 %s として視聴中。ライブラリを読み込んでいます...
+
+Which media server?
+どのメディアサーバーですか?
 
 White
 ホワイト

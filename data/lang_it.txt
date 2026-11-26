@@ -177,6 +177,9 @@ I video di %s sono nella libreria.
 [A] choose  [^v] category  [B] back
 [A] scegli  [^v] categoria  [B] indietro
 
+[A] choose  [B] back  [+] exit
+[A] scegli  [B] indietro  [+] esci
+
 [A] choose  [B] cancel  [+] exit
 [A] scegli  [B] annulla  [+] esci
 
@@ -1475,6 +1478,9 @@ Visto
 
 Watching as %s. Loading their library...
 Guardi come %s. Caricamento della sua libreria...
+
+Which media server?
+Quale server multimediale?
 
 White
 Bianco

@@ -1228,6 +1228,25 @@ static void libraryScenes(void)
     uiDrawMenu(T("Welcome! Where are your videos?"), NULL, welcome, 6, 5, 0);
     uiDrawFooterHelp(T("[A] choose  [B] later  [+] exit"));
     save("welcome");
+    // Its media servers: each answers a tap, and so does Back.
+    const char *servers[] = {"Jellyfin", "Emby", "Plex", T("Back")};
+    begin();
+    uiDrawLibrary(&g_view, &g_lib, &g_home, &g_resume, true, NULL);
+    uiDrawMenu(T("Which media server?"), NULL, servers, 4, 3, 2);
+    uiDrawFooterHelp(T("[A] choose  [B] back  [+] exit"));
+    save("welcome_servers");
+    for (int i = 0; i < 4; i++) {
+        bool found = false;
+        for (int y = 0; y < GFX_HEIGHT && !found; y += 4)
+            for (int x = 0; x < GFX_WIDTH && !found; x += 8) {
+                LibHit hit = uiLibraryTap(x, y);
+                found = hit.kind == LIBHIT_MENU_ITEM && hit.a == i;
+            }
+        if (!found) {
+            printf("TOUCH: welcome_servers: row %d doesn't answer a tap\n", i);
+            g_problems++;
+        }
+    }
     themeApply(0, 0);
 
     libraryScene("lib_no_folder", false, NULL, NULL);
