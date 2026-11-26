@@ -18,7 +18,7 @@ KaiRadio.
 | **Y** | Search |
 | **−** | Settings |
 | **L** | On a server's film or episode (its panel) or series' page: download it, or the season |
-| **+** | The menu: Downloads, Update the library, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
+| **+** | The menu: Downloads, Switch Plex profile (signed in to Plex), Update the library, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
 - **Live TV**: **↑** / **↓** change channel, **◀** / **▶** move through the
   guide (a day ahead) and **A** watches the channel. On a Jellyfin server,

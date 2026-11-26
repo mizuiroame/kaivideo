@@ -42,8 +42,8 @@ The screenshots show made-up films, series and channels.
     FTP, SFTP or a web server's folder list, browsed and played with nothing
     to install. [More](docs/network-folder.md)
   - **Jellyfin, Emby and Plex**, one or all three: **X** goes through them.
-    It can skip intros and credits, keeps what you watch in sync, and has
-    Live TV with a day's guide and recording. [More](docs/media-servers.md)
+    It can skip intros and credits, keeps what you watch in sync, has
+    Live TV with a day's guide and recording, and Plex Home profiles. [More](docs/media-servers.md)
   - **Your own IPTV list**, M3U or Xtream: channels with logos, favorites
     and a guide, and an Xtream account's films and series.
     [More](docs/iptv-and-addons.md#iptv)
@@ -53,7 +53,8 @@ The screenshots show made-up films, series and channels.
 - **Downloads** from your server to the card, to watch without the network,
   synced back when the network returns. [More](docs/downloads.md)
 - **Hardware decoding** of H.264, VP9, AV1 (up to 4K) and VP8. HEVC and 10-bit
-  video are decoded on the CPU. Plays MP4, MKV, WebM and MPEG-TS.
+  video are decoded on the CPU. HDR is shown with SDR colors. Plays MP4, MKV,
+  WebM and MPEG-TS.
   [More](docs/playback.md)
 - **Sound tracks and subtitles:** `.srt` files, text subtitles inside the file,
   styled ASS subtitles that keep their look, with your choice of size, color

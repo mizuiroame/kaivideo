@@ -19,15 +19,20 @@
 - **4K HEVC** is at the CPU's limit. Measured on the console, a 10-bit
   3840x1600 film at 16 Mb/s decodes at 28 frames per second (in real time for
   24 fps), but a 10-bit 4K remux at 68 Mb/s only at 18, so frames are skipped
-  to keep up with the sound.
-- **HDR** (HDR10, HLG) is brought down to SDR colors on the GPU (Settings >
-  Playback > **HDR to SDR colors**). The picture reaches the GPU in 8 bits,
-  so smooth skies can show some banding; HDR10+ and Dolby Vision's own data
-  are not used (a Dolby Vision file with an HDR10 base plays as HDR10; one
-  without, profile 5, keeps wrong colors). The pictures on the cards follow
-  the setting as it was when they were made: turning it off or on later
-  doesn't make them again. 4K HDR is decoded on the CPU like any
-  4K HEVC (see below).
+  to keep up with the sound. [Faster 4K](playback.md#hdr-and-4k) skips some
+  deblocking: measured on the console with `tools/hevctest`, about 5% faster
+  (the remux from 17.7 to 19.0 fps, the 3840x1600 film from 27.9 to 29.2); on
+  a PC, 8-9% on made-up 4K clips, with those frames at 50-54 dB PSNR (SSIM
+  0.997-0.999) against the normal picture. It helps a film that is just short
+  of real time; it doesn't bring a 68 Mb/s remux to real time: letting the
+  server convert it still does.
+- **HDR** (HDR10, HLG) is [shown with SDR colors](playback.md#hdr-and-4k), but
+  the picture reaches the GPU in 8 bits, so smooth skies can show some
+  banding. HDR10+ and Dolby Vision's own data are not used (a Dolby Vision
+  file with an HDR10 base plays as HDR10; one without, profile 5, keeps wrong
+  colors). The pictures on the cards follow the setting as it was when they
+  were made: turning it off or on later doesn't make them again. 4K HDR is
+  decoded on the CPU like any 4K HEVC.
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and
   the first round of pictures take longer.
@@ -73,11 +78,3 @@
 ## Plans
 
 - Smoother jumps, and checks with big libraries on the console.
-- **Faster 4K** (Settings > Playback, "When needed" by default): frames
-  nothing refers to skip their deblocking once a video over 1080p decoded on
-  the CPU starts coming late. Measured on the console with `tools/hevctest`:
-  about 5% faster (a 68 Mb/s 4K remux from 17.7 to 19.0 fps, a 16 Mb/s
-  3840x1600 film from 27.9 to 29.2); on a PC, 8-9% on made-up 4K clips, with
-  those frames at 50-54 dB PSNR (SSIM 0.997-0.999) against the normal
-  picture. It helps a film that is just short of real time; it doesn't bring
-  a 68 Mb/s remux to real time: letting the server convert it still does.
