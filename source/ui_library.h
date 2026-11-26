@@ -58,6 +58,8 @@ typedef enum {
     LIBHIT_DVR_RECORDINGS,   // The Live tab's Recordings pill (L): the server's recordings.
     LIBHIT_DVR_RECORD,       // Its Record pill (R), or the player's (ZR): record the program.
     LIBHIT_LIVE_CHOICE,      // a: a row of the choices for a program (record it...).
+    LIBHIT_PROFILE,          // a: a Plex Home profile in the picker.
+    LIBHIT_PIN_KEY,          // a: a key of the PIN pad (ui_plexhome.h).
 } LibHitKind;
 
 typedef struct {

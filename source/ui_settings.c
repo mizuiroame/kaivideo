@@ -177,7 +177,7 @@ static void rowValue(SettingRow row, const Config *c, const char *library_root, 
         snprintf(out, size, "%s", (int)row - SETTING_ADDON_FIRST == g_addon_armed ? T("A again: remove") : T("A: remove"));
     } else if (row == SETTING_UPDATE_NOW) {
         snprintf(out, size, "%s", g_update_now);
-    } else if (row == SETTING_JF_SIGN_OUT) {
+    } else if (row == SETTING_JF_SIGN_OUT || row == SETTING_PLEX_PROFILE) {
         snprintf(out, size, "%s", g_jf_user);
     } else if (row == SETTING_OPEN_JELLYFIN || row == SETTING_OPEN_EMBY || row == SETTING_OPEN_PLEX) {
         SettingsPage page;

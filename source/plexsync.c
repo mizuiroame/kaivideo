@@ -8,6 +8,7 @@
 #include <jansson.h>
 
 #include "lang.h"
+#include "plexhome.h"
 
 #define API_TIMEOUT_S 30L
 #define PROBE_TIMEOUT_S 5L      // An address of the server that doesn't answer in this is passed over.
@@ -28,8 +29,8 @@
 #define WIDE_HEIGHT_NUM 9
 #define WIDE_HEIGHT_DEN 16
 
-static void tvUrl(const PlexSession *s, const char *version, const char *path, bool with_token, char *out,
-                  size_t size)
+void plexTvUrl(const PlexSession *s, const char *version, const char *path, bool with_token, char *out,
+               size_t size)
 {
     char query[PLEX_QUERY_MAX];
     plexClientQuery(s->client_id, version, with_token ? s->token : NULL, query, sizeof(query));
@@ -58,7 +59,7 @@ bool plexNetStartPin(NetClient *net, const PlexSession *s, const char *version, 
                      size_t code_size, const volatile bool *cancel)
 {
     char url[PLEX_URL_MAX];
-    tvUrl(s, version, "/api/v2/pins?strong=false", false, url, sizeof(url));
+    plexTvUrl(s, version, "/api/v2/pins?strong=false", false, url, sizeof(url));
     NetResponse r;
     if (!fetchJson(net, url, "{}", SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r))
         return false;
@@ -70,13 +71,17 @@ bool plexNetStartPin(NetClient *net, const PlexSession *s, const char *version, 
 static void readUserName(NetClient *net, PlexSession *s, const char *version, const volatile bool *cancel)
 {
     char url[PLEX_URL_MAX];
-    tvUrl(s, version, "/api/v2/user", true, url, sizeof(url));
+    plexTvUrl(s, version, "/api/v2/user", true, url, sizeof(url));
     NetResponse r;
     if (!fetchJson(net, url, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r))
         return;
     json_t *root = json_loads(r.data, 0, NULL);
     const char *name = json_string_value(json_object_get(root, "username"));
+    const char *uuid = json_string_value(json_object_get(root, "uuid"));
     snprintf(s->user_name, sizeof(s->user_name), "%s", name ? name : "");
+    // Signing in: the account is the profile in use (Plex Home's profiles switch from it).
+    snprintf(s->account, sizeof(s->account), "%s", uuid && strlen(uuid) < sizeof(s->account) ? uuid : "");
+    snprintf(s->profile, sizeof(s->profile), "%s", s->account);
     json_decref(root);
     netResponseFree(&r);
 }
@@ -85,7 +90,7 @@ bool plexNetPollPin(NetClient *net, PlexSession *s, const char *version, long lo
 {
     char path[64], url[PLEX_URL_MAX];
     snprintf(path, sizeof(path), "/api/v2/pins/%lld", id);
-    tvUrl(s, version, path, false, url, sizeof(url));
+    plexTvUrl(s, version, path, false, url, sizeof(url));
     NetResponse r;
     if (!fetchJson(net, url, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r))
         return false;
@@ -122,8 +127,14 @@ static bool reachServer(NetClient *net, PlexSession *s, const char *version, con
 bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char *error, size_t error_size,
                        const volatile bool *cancel)
 {
+    return plexNetPickServerOf(net, s, version, "", error, error_size, cancel);
+}
+
+bool plexNetPickServerOf(NetClient *net, PlexSession *s, const char *version, const char *server_id, char *error,
+                         size_t error_size, const volatile bool *cancel)
+{
     char url[PLEX_URL_MAX];
-    tvUrl(s, version, "/api/v2/resources?includeHttps=1&includeRelay=1", true, url, sizeof(url));
+    plexTvUrl(s, version, "/api/v2/resources?includeHttps=1&includeRelay=1", true, url, sizeof(url));
     NetResponse r;
     if (!fetchJson(net, url, NULL, RESOURCES_MAX_BYTES, API_TIMEOUT_S, cancel, &r)) {
         snprintf(error, error_size, "%s", r.status ? T("plex.tv refused that.") : T("plex.tv can't be reached."));
@@ -133,6 +144,15 @@ bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char
     int count = servers ? plexResourcesParse(r.data, servers, SERVERS_MAX) : -1;
     netResponseFree(&r);
     bool ok = false;
+    if (server_id[0]) {  // That one only: another would be another library.
+        int at = count > 0 ? plexHomePickServer(servers, count, server_id) : -1;
+        ok = at >= 0 && reachServer(net, s, version, &servers[at], cancel);
+        if (!ok)
+            snprintf(error, error_size, "%s",
+                     at < 0 ? T("This profile has no access to this Plex server.") : T("Your Plex server doesn't answer."));
+        free(servers);
+        return ok;
+    }
     for (int i = 0; i < count && !ok; i++)
         ok = reachServer(net, s, version, &servers[i], cancel);
     free(servers);
@@ -140,6 +160,83 @@ bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char
         snprintf(error, error_size, "%s",
                  count <= 0 ? T("This Plex account has no server.") : T("Your Plex server doesn't answer."));
     return ok;
+}
+
+// --- Plex Home ---
+
+int plexNetHomeUsers(NetClient *net, const PlexSession *s, const char *version, PlexHomeUser *users, int max,
+                     const volatile bool *cancel)
+{
+    char url[PLEX_URL_MAX];
+    plexTvUrl(s, version, "/api/v2/home/users", true, url, sizeof(url));
+    NetResponse r;
+    if (!fetchJson(net, url, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r))
+        return -1;
+    int count = plexHomeUsersParse(r.data, users, max);
+    netResponseFree(&r);
+    return count;
+}
+
+// The user name of the account a token is for ("" for a managed profile, or without an answer).
+static void readProfileName(NetClient *net, const PlexSession *s, const char *version, char *out, size_t size,
+                            const volatile bool *cancel)
+{
+    char url[PLEX_URL_MAX];
+    out[0] = '\0';
+    plexTvUrl(s, version, "/api/v2/user", true, url, sizeof(url));
+    NetResponse r;
+    if (!fetchJson(net, url, NULL, SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r))
+        return;
+    json_t *root = json_loads(r.data, 0, NULL);
+    const char *name = json_string_value(json_object_get(root, "username"));
+    snprintf(out, size, "%s", name ? name : "");
+    json_decref(root);
+    netResponseFree(&r);
+}
+
+// The profile's token, from plex.tv. Its PIN goes in the address's query, never in a log.
+static PlexSwitchResult askSwitch(NetClient *net, const PlexSession *s, const char *version, const PlexHomeUser *user,
+                                  const char *pin, char *token, size_t token_size, const volatile bool *cancel)
+{
+    char path[PLEX_HOME_PATH_MAX], url[PLEX_URL_MAX];
+    if (!plexHomeSwitchPath(user->uuid, pin, path, sizeof(path)))
+        return pin[0] ? PLEX_SWITCH_WRONG_PIN : PLEX_SWITCH_REFUSED;
+    plexTvUrl(s, version, path, true, url, sizeof(url));
+    NetResponse r;
+    bool ok = fetchJson(net, url, "{}", SMALL_MAX_BYTES, API_TIMEOUT_S, cancel, &r);
+    memset(url, 0, sizeof(url));
+    memset(path, 0, sizeof(path));
+    if (!ok)
+        return plexHomeSwitchError(r.status);
+    ok = plexHomeSwitchToken(r.data, token, token_size);
+    memset(r.data, 0, r.size);
+    netResponseFree(&r);
+    return ok ? PLEX_SWITCH_OK : PLEX_SWITCH_REFUSED;
+}
+
+PlexSwitchResult plexNetSwitchHome(NetClient *net, PlexSession *s, const char *version, const PlexHomeUser *user,
+                                   const char *pin, char *message, size_t message_size, const volatile bool *cancel)
+{
+    PlexSession next = *s;
+    PlexSwitchResult result =
+        askSwitch(net, s, version, user, pin, next.token, sizeof(next.token), cancel);
+    if (result != PLEX_SWITCH_OK) {
+        snprintf(message, message_size, "%s", plexHomeSwitchMessage(result));
+        return result;
+    }
+    // The profile's token is for plex.tv: the server wants the one plex.tv gives it for that server.
+    if (!plexNetPickServerOf(net, &next, version, s->server_id, message, message_size, cancel)) {
+        memset(&next, 0, sizeof(next));
+        return PLEX_SWITCH_NO_SERVER;
+    }
+    char username[PLEX_NAME_MAX];
+    readProfileName(net, &next, version, username, sizeof(username), cancel);
+    plexHomeName(username, user->title, next.user_name, sizeof(next.user_name));
+    snprintf(next.profile, sizeof(next.profile), "%s", user->uuid);
+    *s = next;
+    memset(&next, 0, sizeof(next));
+    message[0] = '\0';
+    return PLEX_SWITCH_OK;
 }
 
 // --- The library ---

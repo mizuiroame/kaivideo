@@ -1438,6 +1438,7 @@ int main(int argc, char **argv)
     EXIT_STEP("thumbnails");
     appDownloadsExit(&app);  // Before the servers' thread: it may be telling one what was watched.
     EXIT_STEP("downloads");
+    appPlexHomeExit();  // Before the servers' thread: a switch done hands it the profile's session.
     jfSyncStop();
     EXIT_STEP("servers");
     appStopUpdates();  // A download under way stops; the .nro in use is left as it was.

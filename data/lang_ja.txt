@@ -177,8 +177,14 @@ language = 日本語
 [A] choose  [^v] category  [B] back
 [A] 選ぶ  [^v] カテゴリ  [B] 戻る
 
+[A] choose  [B] back  [+] exit
+[A] 決定  [B] 戻る  [+] 終了
+
 [A] choose  [B] cancel  [+] exit
 [A] 決定  [B] キャンセル  [+] 終了
+
+[A] choose  [B] close
+[A] 決定  [B] 閉じる
 
 [A] choose  [B] close  [+] exit
 [A] 決定  [B] 閉じる  [+] 終了
@@ -221,6 +227,9 @@ language = 日本語
 
 [A] play  [Y] from the start  [X] watched  [R] favorite  [L] download  [B] back
 [A] 再生  [Y] 最初から  [X] 視聴済み  [R] お気に入り  [L] ダウンロード  [B] 戻る
+
+[A] press  [B] delete
+[A] 押す  [B] 削除
 
 [A] try again  [X] cancel
 [A] 再試行  [X] キャンセル
@@ -366,6 +375,9 @@ Chapter %d
 Check once a day
 1日1回確認
 
+Checking the PIN...
+PIN を確認しています...
+
 Chinese
 中国語
 
@@ -432,6 +444,9 @@ Dark
 Dark box
 暗い背景
 
+Delete
+削除
+
 DELETED FROM THE CARD
 SDカードから削除済み
 
@@ -491,6 +506,9 @@ English
 
 Enter the folder's address first.
 先にフォルダーのアドレスを入力してください。
+
+Enter the PIN
+PIN を入力
 
 Enter the server's address first, or find it on this network.
 先にサーバーのアドレスを入力するか、このネットワークで探してください。
@@ -629,6 +647,9 @@ In Favorites
 
 In Jellyfin on your phone or computer, open your
 スマートフォンかパソコンの Jellyfin でプロフィールを開き、
+
+In use
+使用中
 
 Indonesian
 インドネシア語
@@ -933,6 +954,9 @@ SDカード、ネットワークフォルダー、Jellyfin、Emby、Plex サー�
 Plex
 Plex
 
+Plex Home
+Plex Home
+
 Plex server, with sound tracks, subtitles and a library of your films and series.
 音声トラック、字幕、映画とシリーズのライブラリーにも対応しています。
 
@@ -960,6 +984,9 @@ Press X again to cancel it.
 Press X again to delete it from the card.
 もう一度Xを押すとSDカードから削除します。
 
+Profile
+プロフィール
+
 profile, choose Quick Connect and enter this code.
 Quick Connect を選んでこのコードを入力してください。
 
@@ -974,6 +1001,9 @@ Reading more of this catalog...
 
 Reading the guide...
 番組表を読み込んでいます...
+
+Reading your Plex Home...
+Plex Home を読み込んでいます...
 
 Ready ahead: %.0f MB
 先読み: %.0f MB
@@ -1080,6 +1110,9 @@ Jellyfin にログイン
 Sign in to Plex
 Plex にログイン
 
+Sign in to Plex first.
+先に Plex にログインしてください。
+
 Sign in with a code
 コードでログイン
 
@@ -1137,6 +1170,9 @@ Starting...
 Statistics
 統計情報
 
+Still asking plex.tv...
+plex.tv の応答を待っています...
+
 Still asking the network...
 ネットワークに問い合わせ中です...
 
@@ -1163,6 +1199,12 @@ Subtitles: %s
 
 Swedish
 スウェーデン語
+
+Switch Plex profile
+Plex プロフィールを切り替え
+
+Switching to %s...
+%s に切り替えています...
 
 Taken off the list.
 リストから外しました。
@@ -1211,6 +1253,9 @@ That place can't convert videos.
 
 That port may want a secure connection: write https:// before the address.
 そのポートは安全な接続が必要かもしれません。アドレスの前に https:// を付けてください。
+
+That profile is no longer in this Plex Home.
+そのプロフィールはこの Plex Home にもうありません。
 
 That shared folder isn't on the computer. Check the share's name after the computer's.
 その共有フォルダーはパソコンにありません。パソコン名のあとの共有名を確認してください。
@@ -1401,8 +1446,17 @@ KaiVideo で読み込める動画（MP4、MKV、WebM）ではありません。
 This library on the server has no films or episodes KaiVideo found.
 サーバーのこのライブラリーには、KaiVideo が見つけられる映画やエピソードがありません。
 
+This Plex account has no other profiles.
+この Plex アカウントには他のプロフィールがありません。
+
 This Plex account has no server.
 この Plex アカウントにはサーバーがありません。
+
+This profile has no access to this Plex server.
+このプロフィールはこの Plex サーバーにアクセスできません。
+
+This profile needs its PIN.
+このプロフィールには PIN が必要です。
 
 This season is in Downloads already (+ menu).
 このシーズンはすでに「ダウンロード」にあります（+メニュー）。
@@ -1424,6 +1478,9 @@ This video's sound can't be played.
 
 Thumbnails
 サムネイル
+
+Too many wrong PINs. Wait a few minutes and try again.
+PIN の誤りが多すぎます。数分待ってからもう一度お試しください。
 
 Track %d
 トラック%d
@@ -1497,11 +1554,23 @@ Waiting to download
 Watched
 視聴済み
 
+Watching as %s. Loading their library...
+%s として視聴中。ライブラリを読み込んでいます...
+
+Which media server?
+どのメディアサーバーですか?
+
 White
 ホワイト
 
+Who's watching?
+誰が見ますか?
+
 Without the password the network folder can't be read.
 パスワードがないとネットワークフォルダーを読めません。
+
+Wrong PIN.
+PIN が違います。
 
 Wrong user name or password.
 ユーザー名またはパスワードが違います。

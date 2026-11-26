@@ -774,10 +774,14 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
     // Over the library the right stick moves like the d-pad too, a row or card at a time (the owner found
     // it doing nothing on Home and the tabs' grids, and jumping a page in Files); paging is left and right.
     pressed = buttonsRightStickAsDpad(pressed);
-    if (app->app_menu != APP_MENU_NONE || app->settings_open)
+    if (app->app_menu != APP_MENU_NONE || app->settings_open || app->profiles != PROFILES_NONE)
         kineticStop(&app->kinetic);
     else
         appLibraryGlide(app, pressed, &touch, now);
+    if (app->profiles != PROFILES_NONE) {  // Plex Home's profiles, over everything.
+        appPlexHomeInput(app, pressed, touch, now);
+        return;
+    }
     if (app->app_menu != APP_MENU_NONE) {
         appMenuInput(app, pressed, touch, now);
         return;
@@ -1017,5 +1021,6 @@ void appLibraryDraw(App *app, uint64_t now)
         appStremioStreamsDraw(app);
     appSettingsDraw(app);
     appMenuDraw(app);
+    appPlexHomeDraw(app);
     uiDrawFooterHelp(appFooterHelp(app));
 }

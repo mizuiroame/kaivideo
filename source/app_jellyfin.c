@@ -44,6 +44,8 @@ static void finishSignIn(App *app, uint64_t now)
     app->settings_open = false;
     appLibraryShowServer(app, (ServerKind)app->config.server_kind);  // The one just signed in.
     appNotify(app, NOTICE_DONE, message, now);
+    if (app->config.server_kind == SERVER_PLEX)
+        appPlexHomeOpen(app, true, now);  // A Plex Home: who's watching? (Nothing shows with one profile.)
 }
 
 static void sayNewError(App *app, uint64_t now)
@@ -73,6 +75,7 @@ static void takeProbe(App *app, uint64_t now)
 void appJellyfinUpdate(App *app, uint64_t now)
 {
     takeProbe(app, now);
+    appPlexHomeUpdate(app, now);
     if (!jfSyncRunning())
         return;
     jfSyncGetStatus(&app->jf);

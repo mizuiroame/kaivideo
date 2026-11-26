@@ -11,7 +11,9 @@
 
 #include "jellyfin.h"
 
+#ifndef PLEX_TV  // A host test builds with a made-up plex.tv (tests/host_plexhome).
 #define PLEX_TV "https://plex.tv"
+#endif
 #define PLEX_LINK_PAGE "plex.tv/link"
 #define PLEX_PRODUCT "KaiVideo"
 #define PLEX_ID_MAX 48
@@ -30,6 +32,8 @@ typedef struct {
     char server_id[PLEX_ID_MAX];
     char server_token[PLEX_TOKEN_MAX];  // For the server; the account's own on a server it owns.
     char server_uri[PLEX_URI_MAX];      // The address that answered last, no slash at the end.
+    char account[PLEX_ID_MAX];          // The uuid of the account that signed in ("" from before 1.18),
+    char profile[PLEX_ID_MAX];          // and of the Plex Home profile in use: token is that profile's.
 } PlexSession;
 
 bool plexIsLocation(const char *path);
@@ -100,5 +104,7 @@ void plexFavoritesApply(JfCatalog *c, const char *file);
 // Adds a location to the file, or takes it out. False if it can't be written.
 bool plexFavoritesSet(const char *file, const char *location, bool favorite);
 
+// True while the profile in use is the account that signed in (or none was chosen).
+bool plexSessionIsAccount(const PlexSession *s);
 bool plexSessionLoad(PlexSession *s, const char *file);
 bool plexSessionSave(const PlexSession *s, const char *file);

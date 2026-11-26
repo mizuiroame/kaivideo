@@ -11,12 +11,18 @@
 #include "jellyfin.h"
 #include "net.h"
 #include "plex.h"
+#include "plexhome.h"
 
 #define PLEX_URL_MAX 2048
 
 // The address of a server path (which may hold a query), with KaiVideo's
 // names and the server's token in it.
 void plexServerUrl(const PlexSession *s, const char *version, const char *path, char *out, size_t size);
+
+// The address of a plex.tv path (which may hold a query), with KaiVideo's
+// names, and the account's (or profile's) token when with_token.
+void plexTvUrl(const PlexSession *s, const char *version, const char *path, bool with_token, char *out,
+               size_t size);
 
 // Asks plex.tv for a code to type at plex.tv/link.
 bool plexNetStartPin(NetClient *net, const PlexSession *s, const char *version, long long *id, char *code,
@@ -27,6 +33,10 @@ bool plexNetPollPin(NetClient *net, PlexSession *s, const char *version, long lo
 // address of it that answers, into s. False, with the reason, if none answers.
 bool plexNetPickServer(NetClient *net, PlexSession *s, const char *version, char *error, size_t error_size,
                        const volatile bool *cancel);
+// The same for one server (its clientIdentifier), as the token in s sees it:
+// a Plex Home profile's switch keeps the server in use. "": any, as above.
+bool plexNetPickServerOf(NetClient *net, PlexSession *s, const char *version, const char *server_id, char *error,
+                         size_t error_size, const volatile bool *cancel);
 
 // Called as pages come: videos read so far, and how many the library has (0 if unknown).
 typedef void (*PlexProgress)(int loaded, int total);
@@ -62,3 +72,12 @@ int plexNetFetchMarkers(NetClient *net, const PlexSession *s, const char *versio
 // An external subtitle file (a stream id) of a location.
 bool plexNetFetchSubtitle(NetClient *net, const PlexSession *s, const char *version, int stream_id,
                           const volatile bool *cancel, NetResponse *out);
+
+// Plex Home (plexhomesync.c runs these on its thread). The Home's profiles into users; returns
+// how many, -1 if plex.tv didn't answer or the answer can't be read.
+int plexNetHomeUsers(NetClient *net, const PlexSession *s, const char *version, PlexHomeUser *users, int max,
+                     const volatile bool *cancel);
+// Switches s to user (its token, its server token, its name) keeping the
+// server in use. s is left as it was unless it worked; then why, in message.
+PlexSwitchResult plexNetSwitchHome(NetClient *net, PlexSession *s, const char *version, const PlexHomeUser *user,
+                                   const char *pin, char *message, size_t message_size, const volatile bool *cancel);

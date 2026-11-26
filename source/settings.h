@@ -71,6 +71,7 @@ typedef enum {
     SETTING_HOME_TILES,     // The Showcase's tiles: mixed, DVD covers, or wide pictures (home.h's HomeTiles).
     SETTING_FASTER_4K,      // Lighter deblocking for 4K on the CPU: off, when needed, always (swframe.h).
     SETTING_HDR,            // HDR videos brought down to SDR colors (hdr.h).
+    SETTING_PLEX_PROFILE,   // The Plex Home profile in use: A opens the profiles to switch to another.
     SETTING_COUNT,
 } SettingRow;
 

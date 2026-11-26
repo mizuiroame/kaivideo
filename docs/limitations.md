@@ -72,7 +72,6 @@
 
 ## Plans
 
-- Plex Home profiles.
 - Smoother jumps, and checks with big libraries on the console.
 - **Faster 4K** (Settings > Playback, "When needed" by default): frames
   nothing refers to skip their deblocking once a video over 1080p decoded on

@@ -535,6 +535,8 @@ static void readSessionLine(PlexSession *s, const char *line)
         {"server_id=", offsetof(PlexSession, server_id), PLEX_ID_MAX},
         {"server_token=", offsetof(PlexSession, server_token), PLEX_TOKEN_MAX},
         {"server_uri=", offsetof(PlexSession, server_uri), PLEX_URI_MAX},
+        {"account=", offsetof(PlexSession, account), PLEX_ID_MAX},
+        {"profile=", offsetof(PlexSession, profile), PLEX_ID_MAX},
     };
     for (size_t i = 0; i < sizeof(FIELDS) / sizeof(FIELDS[0]); i++) {
         size_t n = strlen(FIELDS[i].key);
@@ -543,6 +545,11 @@ static void readSessionLine(PlexSession *s, const char *line)
             return;
         }
     }
+}
+
+bool plexSessionIsAccount(const PlexSession *s)
+{
+    return !s->profile[0] || !strcmp(s->profile, s->account);
 }
 
 bool plexSessionLoad(PlexSession *s, const char *file)
@@ -567,6 +574,7 @@ bool plexSessionSave(const PlexSession *s, const char *file)
         return false;
     fprintf(f, "client=%s\ntoken=%s\nuser=%s\nserver_name=%s\nserver_id=%s\nserver_token=%s\nserver_uri=%s\n",
             s->client_id, s->token, s->user_name, s->server_name, s->server_id, s->server_token, s->server_uri);
+    fprintf(f, "account=%s\nprofile=%s\n", s->account, s->profile);
     return fclose(f) == 0;
 }
 
