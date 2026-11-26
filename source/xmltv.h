@@ -10,7 +10,7 @@
 
 #include "livetv.h"
 
-#define XMLTV_PER_CHANNEL LIVE_PROGRAMS_PER_CHANNEL
+#define XMLTV_PER_CHANNEL 16  // Programs kept for each of an IPTV list's channels.
 #define XMLTV_DESC_MAX 320  // A program's description is kept to this (bytes, with its end).
 
 typedef struct XmltvReader XmltvReader;

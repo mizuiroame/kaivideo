@@ -20,8 +20,7 @@
 #define SUBTITLE_MAX_BYTES (16u * 1024 * 1024)
 #define PAGE_MAX_BYTES (32u * 1024 * 1024)
 #define SMALL_MAX_BYTES (256u * 1024)
-#define LIVE_GUIDE_AHEAD_S (4 * 3600)  // Programs read for the guide: now and the next hours.
-#define LIVE_PROGRAMS_MAX 3000
+#define LIVE_NOW_CHANNELS_S 60  // What's on now, when the guide's hours are later: programs on in this minute.
 #define SEGMENTS_TIMEOUT_S 5L    // Parts to skip are a nicety: opening doesn't wait long for them.
 #define IMAGE_QUALITY 85
 #define IMAGE_FORMAT "Jpg"  // What stb_image reads, whatever the server would prefer.
@@ -119,13 +118,25 @@ static void isoTime(int64_t s, char *out, size_t size)
     strftime(out, size, "%Y-%m-%dT%H:%M:%SZ", &tm);
 }
 
-int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
+// Programs from `from` to `to`, for the guide (or only what's on now).
+static bool fetchPrograms(NetClient *net, const JfSession *s, int64_t from, int64_t to, NetResponse *r)
+{
+    char path[512], min_end[32], max_start[32];
+    isoTime(from, min_end, sizeof(min_end));
+    isoTime(to, max_start, sizeof(max_start));
+    snprintf(path, sizeof(path),
+             "/LiveTv/Programs?UserId=%s&MinEndDate=%s&MaxStartDate=%s&EnableImages=false&SortBy=StartDate&Limit=%d",
+             s->user_id, min_end, max_start, LIVE_PROGRAMS_MAX);
+    return fetchWith(net, s, path, PAGE_MAX_BYTES, r);
+}
+
+int jfSyncFetchLive(LiveGuide *out, int64_t now_s, int64_t from, int64_t to)
 {
     JfSession s = jfSyncSessionFor(SERVER_JELLYFIN);  // Live TV comes from Jellyfin.
     if (!jfSyncIsUp() || !s.token[0])
         return -1;
     NetClient *net = netClientOpen();
-    char path[512], from[32], to[32];
+    char path[256];
     NetResponse r;
     int count = -1;
     snprintf(path, sizeof(path), "/LiveTv/Channels?userId=%s&EnableImages=false&Limit=%d", s.user_id, LIVE_CHANNELS_MAX);
@@ -133,13 +144,19 @@ int jfSyncFetchLive(LiveGuide *out, int64_t now_s)
         count = liveGuideSetChannels(out, r.data);
         netResponseFree(&r);
     }
-    isoTime(now_s, from, sizeof(from));
-    isoTime(now_s + LIVE_GUIDE_AHEAD_S, to, sizeof(to));
-    snprintf(path, sizeof(path), "/LiveTv/Programs?UserId=%s&MinEndDate=%s&MaxStartDate=%s&EnableImages=false&Limit=%d",
-             s.user_id, from, to, LIVE_PROGRAMS_MAX);
-    if (count > 0 && fetchWith(net, &s, path, PAGE_MAX_BYTES, &r)) {
-        liveGuideSetPrograms(out, r.data, now_s);
+    if (count > 0 && fetchPrograms(net, &s, from, to, &r)) {
+        liveGuideSetPrograms(out, r.data, now_s, from, to);
         netResponseFree(&r);
+        // The hours shown are later: what's on now still names the channel in the player.
+        if (from > now_s && fetchPrograms(net, &s, now_s, now_s + LIVE_NOW_CHANNELS_S, &r)) {
+            liveGuideSetNow(out, r.data, now_s);
+            netResponseFree(&r);
+        }
+        DvrTimer *timers = malloc(DVR_TIMERS_MAX * sizeof(DvrTimer));
+        int marked = timers ? jfSyncDvrTimers(net, timers, DVR_TIMERS_MAX) : -1;
+        if (marked >= 0)  // Programs say it too, but timers made a moment ago may not be in them yet.
+            dvrMarkGuide(out, timers, marked);
+        free(timers);
     }
     netClientClose(net);
     return count;

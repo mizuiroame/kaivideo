@@ -144,9 +144,11 @@ static void liveScene(Player *p)
     static const char *const NEXT[] = {"Paper Boats", "Morning Lanterns", "Harbor Weather", "Post-Game"};
     static const char *const LATER[] = {"Lantern Makers", "Tide Tables", "Night Desk", "Highlights", "Quiet Hours"};
     static LiveChannel channels[4];
+    static LiveProgram pool[4][16];
     const int64_t now = 1795082400 + 600;
     for (int i = 0; i < 4; i++) {
         LiveChannel *c = &channels[i];
+        c->programs = pool[i];
         snprintf(c->id, sizeof(c->id), "c%d", i);
         snprintf(c->name, sizeof(c->name), "%s", NAMES[i]);
         snprintf(c->number, sizeof(c->number), "%d", i + 1);
@@ -167,7 +169,11 @@ static void liveScene(Player *p)
     channels[3].now.title[0] = '\0';
     memmove(&channels[3].programs[0], &channels[3].programs[1], (size_t)(channels[3].program_count - 1) * sizeof(LiveProgram));
     channels[3].program_count--;  // No guide for now on the last channel, only later.
-    LiveGuide guide = {channels, 4};
+    channels[1].programs[1].marks = LIVE_TIMER;  // The server will record it: a red dot.
+    for (int i = 0; i < 4; i++)  // The server's: they can be recorded.
+        for (int j = 0; j < channels[i].program_count; j++)
+            channels[i].programs[j].id[0] = 'p';
+    LiveGuide guide = {.channels = channels, .count = 4};
     static LibView view;
     static Library lib;   // The tab doesn't need videos.
     static Home home;
@@ -180,9 +186,13 @@ static void liveScene(Player *p)
     uiLibrarySetSource("Jellyfin", uiServerColor(SERVER_JELLYFIN));
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1);
-    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1, true);
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu"));
     save("live_tab");
+    if (uiLibraryTap(MARGIN + 80, 84 + 13).kind != LIBHIT_DVR_RECORDINGS) {
+        printf("TOUCH: live_tab: the Recordings pill doesn't answer a tap\n");
+        g_problems++;
+    }
     const int row2_y = 116 + 76 + 38;  // The middle of the second channel's row.
     if (uiLibraryTap(100, row2_y).kind != LIBHIT_LIVE_ROW) {
         printf("TOUCH: live_tab: a channel's name doesn't answer a tap\n");
@@ -198,14 +208,65 @@ static void liveScene(Player *p)
     view.live_at = liveStep(&channels[1], view.live_at, now, 1);
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1);
-    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu"));
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1, true);
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu"));
     save("live_guide_later");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, 631).kind != LIBHIT_DVR_RECORD) {
+        printf("TOUCH: live_guide_later: the Record pill doesn't answer a tap\n");
+        g_problems++;
+    }
+    // What can be done with it (R).
+    static const char *const CHOICES[] = {"Don't record this program", "Record the series"};
+    const char *labels[2] = {T(CHOICES[0]), T(CHOICES[1])};
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, NULL, false, -1, true);
+    uiDrawLiveChoices("Morning Lanterns", "4:30 AM - 5:00 AM  \xC2\xB7  KaiVideo Test Two", labels, 2, 0);
+    uiDrawFooterHelp(T("[A] choose  [^v] move  [B] back"));
+    save("live_record_choices");
+    if (uiLibraryTap(GFX_WIDTH / 2, 360).kind != LIBHIT_LIVE_CHOICE || uiLibraryTap(40, 600).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: live_record_choices: a choice, or outside them, doesn't answer a tap\n");
+        g_problems++;
+    }
+    // Tomorrow's hours, not read yet.
+    LiveGuide later = guide;
+    later.from = now;
+    later.to = now + 6 * 3600;
+    view.live_at = now + 20 * 3600;
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawLiveTab(&view, &later, now, -6 * 3600, false, false, NULL, false, -1, true);
+    uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu"));
+    save("live_guide_tomorrow");
     view.live_at = 0;
+    // The server's recordings (L): what it will record, its series, what it recorded.
+    static const UiDownloadRow REC_ROWS[] = {
+        {.title = "SCHEDULED \xC2\xB7 2", .header = true, .progress = -1},
+        {.title = "Clima y Tr\xC3\xA1" "fico", .detail = "Today 4:30 AM - 4:40 AM  \xC2\xB7  KT Hora Exacta",
+         .state = "Recording now", .done = true, .progress = -1},
+        {.title = "Resumen Nacional", .detail = "Tomorrow 9:00 PM - 9:05 PM  \xC2\xB7  KT Hora Exacta  \xC2\xB7  Series",
+         .state = "Scheduled", .progress = -1},
+        {.title = "SERIES RECORDED \xC2\xB7 1", .header = true, .progress = -1},
+        {.title = "Resumen Nacional", .detail = "KT Hora Exacta", .state = "Every episode", .progress = -1},
+        {.title = "RECORDED \xC2\xB7 1", .header = true, .progress = -1},
+        {.title = "Noticiero Matutino", .detail = "Yesterday 8:00 AM - 8:30 AM  \xC2\xB7  KT Noticias 24",
+         .state = "30 min", .progress = -1},
+    };
+    Scroll rec_scroll = {6, 0, 0};
+    begin();
+    uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
+    uiDrawRecordingsTop(T("Recordings"), "Jellyfin");
+    uiDrawDownloadsTab(REC_ROWS, 7, &rec_scroll, 6, "", "");
+    uiDrawFooterHelp(T("[A] play  [X] delete  [^v] move  [B] back to the guide"));
+    save("live_recordings");
+    if (uiLibraryTap(MARGIN + 30, 64 + 26).kind != LIBHIT_CLOSE) {
+        printf("TOUCH: live_recordings: its back arrow doesn't answer a tap\n");
+        g_problems++;
+    }
     // An IPTV list's group (made-up), and its groups over the guide.
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 0);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 0, false);
     uiDrawFooterHelp(T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs"));
     save("live_iptv");
     if (uiLibraryTap(GFX_WIDTH - MARGIN - 20, 631).kind != LIBHIT_FAVORITE) {
@@ -221,7 +282,7 @@ static void liveScene(Player *p)
     IptvList groups_list = {.channels = NULL, .count = 100, .groups = groups, .group_count = 7};
     begin();
     uiDrawLibrary(&view, &lib, &home, &resume, true, NULL);
-    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 1);
+    uiDrawLiveTab(&view, &guide, now, -6 * 3600, false, false, "News", true, 1, false);
     uiDrawLiveGroups(&groups_list, 2, 1);
     uiDrawFooterHelp(T("[A] choose  [B] back"));
     save("live_groups");
@@ -454,6 +515,17 @@ static void liveScene(Player *p)
     uiDrawPlayerStatus();
     uiDrawPlayerBar(p, "KaiVideo Test One  \xC2\xB7  The Quiet Workshop", NULL, -1);
     save("player_live");
+    // A Jellyfin channel's program being recorded: ZR (or a tap) stops it.
+    begin();
+    drawPicture();
+    uiDrawPlayerStatus();
+    uiDrawPlayerBar(p, "KaiVideo Test One  \xC2\xB7  The Quiet Workshop", NULL, -1);
+    uiDrawZrButton(T("Stop recording"), true, LIBHIT_DVR_RECORD, true, false);
+    save("player_live_recording");
+    if (uiLibraryTap(GFX_WIDTH - MARGIN - 30, GFX_HEIGHT - UI_PLAYER_BAR_H - 90).kind != LIBHIT_DVR_RECORD) {
+        printf("TOUCH: player_live_recording: Stop recording doesn't answer a tap\n");
+        g_problems++;
+    }
     p->live = false;
 }
 

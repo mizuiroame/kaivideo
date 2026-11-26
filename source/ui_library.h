@@ -55,6 +55,9 @@ typedef enum {
     LIBHIT_LIVE_GROUP_ROW,   // a: a row of the groups (0: all channels).
     LIBHIT_STREAM_ROW,       // a: one of the streams an addon gave.
     LIBHIT_HERO,             // Home's Showcase: the button under the large picture opens what it shows.
+    LIBHIT_DVR_RECORDINGS,   // The Live tab's Recordings pill (L): the server's recordings.
+    LIBHIT_DVR_RECORD,       // Its Record pill (R), or the player's (ZR): record the program.
+    LIBHIT_LIVE_CHOICE,      // a: a row of the choices for a program (record it...).
 } LibHitKind;
 
 typedef struct {
@@ -125,6 +128,9 @@ void uiDrawShowFavorite(bool favorite);
 void uiDrawShowDownload(const char *label, bool done, bool favorite_shown, bool favorite);
 // "Skip intro" (ZR) at the bottom right of a playing video, above the bar when it shows.
 void uiDrawSkipButton(const char *label, bool bar_shown);
+// The same kind of button over the video, for another ZR action: a tap on it is hit; red: filled red
+// (a recording to stop); dim: it waits (its label says for what).
+void uiDrawZrButton(const char *label, bool bar_shown, LibHitKind hit, bool red, bool dim);
 // A trickplay picture (w x h) above the progress bar, where a finger drags it (fraction 0-1).
 void uiDrawSeekPreview(const uint32_t *pixels, int w, int h, double fraction);
 // The same over the whole screen, while a jump's picture is awaited.

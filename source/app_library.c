@@ -821,6 +821,8 @@ void appLibraryInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
         return;
     }
     bool live_tab = v->tab == TAB_LIVE && v->show < 0;
+    if (live_tab && appDvrInput(app, pressed, touch, now))  // Recording: R, L, and what they open.
+        return;
     if (live_tab && app->live_groups_open) {  // The IPTV list's groups take the buttons until one is chosen.
         appLiveGroupsInput(app, pressed, touch, now);
         return;

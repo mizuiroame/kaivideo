@@ -1961,3 +1961,138 @@ Picture: %s, shown with SDR colors
 
 When needed
 必要なときだけ
+
+%s won't be recorded.
+%s は録画されません。
+
+[A] choose  [^v] move  [B] back
+[A] 選ぶ  [^v] 移動  [B] 戻る
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] 再生  [X] 削除  [^v] 移動  [B] 番組表へ戻る
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] 視聴  [^v] チャンネル  [<>] 番組表  [R] 録画  [L] 録画一覧  [ZL][ZR] タブ  [+] メニュー
+
+[B] back to the guide
+[B] 番組表へ戻る
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] 取り消し  [^v] 移動  [B] 番組表へ戻る
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] シリーズ録画をやめる  [^v] 移動  [B] 番組表へ戻る
+
+Asking the server...
+サーバーに問い合わせ中...
+
+Don't record this program
+この番組を録画しない
+
+Every episode
+すべてのエピソード
+
+New episodes
+新しいエピソード
+
+No program here to record.
+ここには録画できる番組がありません。
+
+No tuner free
+空きチューナーなし
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+録画も予約もまだありません。番組表の番組で R を押すと録画します。
+
+On any channel
+どのチャンネルでも
+
+Record
+録画
+
+Record the series
+シリーズを録画
+
+Record this program
+この番組を録画
+
+RECORDED
+録画済み
+
+Recording
+録画中
+
+Recording %s now.
+%s を今録画しています。
+
+Recording deleted: %s
+録画を削除しました: %s
+
+Recording now
+録画中
+
+Recordings
+録画一覧
+
+SCHEDULED
+予約済み
+
+Scheduled
+予約済み
+
+SERIES RECORDED
+シリーズ録画
+
+Series recorded
+シリーズ録画中
+
+Stop recording the series
+シリーズ録画をやめる
+
+The series %s won't be recorded.
+シリーズ %s は録画されません。
+
+The server didn't take it. Has its Live TV a folder for recordings?
+サーバーが受け付けませんでした。ライブ TV に録画用フォルダーはありますか？
+
+The server didn't take it: look at its list again.
+サーバーが受け付けませんでした。一覧をもう一度見てください。
+
+The server records it on its own. X twice cancels it.
+サーバーが自動で録画します。X を 2 回押すと取り消します。
+
+The server will record %s.
+サーバーが %s を録画します。
+
+The server will record every episode of %s.
+サーバーが %s の全エピソードを録画します。
+
+This program can't be recorded.
+この番組は録画できません。
+
+Today
+今日
+
+Tomorrow
+明日
+
+Wait a moment: the server is still answering.
+少々お待ちください。サーバーがまだ応答中です。
+
+Will record
+録画予約
+
+Yesterday
+昨日
+
+Your user can't delete recordings on this server.
+このユーザーはこのサーバーで録画を削除できません。
+
+Your user can't record on this server (it needs Live TV management).
+このユーザーはこのサーバーで録画できません（ライブ TV の管理権限が必要です）。
+
+Stop recording
+録画を停止
+
+Recording stopped: %s. What was recorded stays in Recordings.
+録画を停止しました: %s。録画済みの部分は録画一覧に残ります。

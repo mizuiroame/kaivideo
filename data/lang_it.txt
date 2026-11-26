@@ -1961,3 +1961,138 @@ Immagine: %s, mostrata con colori SDR
 
 When needed
 Quando serve
+
+%s won't be recorded.
+%s non verrà registrato.
+
+[A] choose  [^v] move  [B] back
+[A] scegli  [^v] sposta  [B] indietro
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] riproduci  [X] elimina  [^v] sposta  [B] torna alla guida
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] guarda  [^v] canale  [<>] guida  [R] registra  [L] registrazioni  [ZL][ZR] schede  [+] menu
+
+[B] back to the guide
+[B] torna alla guida
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] annulla  [^v] sposta  [B] torna alla guida
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] smetti di registrare la serie  [^v] sposta  [B] torna alla guida
+
+Asking the server...
+Chiedo al server...
+
+Don't record this program
+Non registrare questo programma
+
+Every episode
+Tutti gli episodi
+
+New episodes
+Nuovi episodi
+
+No program here to record.
+Nessun programma da registrare qui.
+
+No tuner free
+Nessun sintonizzatore libero
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+Niente registrato o programmato: R su un programma della guida lo registra.
+
+On any channel
+Su qualsiasi canale
+
+Record
+Registra
+
+Record the series
+Registra la serie
+
+Record this program
+Registra questo programma
+
+RECORDED
+REGISTRATI
+
+Recording
+In registrazione
+
+Recording %s now.
+Registrazione di %s in corso.
+
+Recording deleted: %s
+Registrazione eliminata: %s
+
+Recording now
+In registrazione ora
+
+Recordings
+Registrazioni
+
+SCHEDULED
+PROGRAMMATI
+
+Scheduled
+Programmato
+
+SERIES RECORDED
+SERIE REGISTRATE
+
+Series recorded
+Serie registrata
+
+Stop recording the series
+Smetti di registrare la serie
+
+The series %s won't be recorded.
+La serie %s non verrà registrata.
+
+The server didn't take it. Has its Live TV a folder for recordings?
+Il server non l'ha accettato. La sua TV in diretta ha una cartella per le registrazioni?
+
+The server didn't take it: look at its list again.
+Il server non l'ha accettato: guarda di nuovo il suo elenco.
+
+The server records it on its own. X twice cancels it.
+Il server lo registra da solo. X due volte lo annulla.
+
+The server will record %s.
+Il server registrerà %s.
+
+The server will record every episode of %s.
+Il server registrerà tutti gli episodi di %s.
+
+This program can't be recorded.
+Questo programma non si può registrare.
+
+Today
+Oggi
+
+Tomorrow
+Domani
+
+Wait a moment: the server is still answering.
+Un momento: il server sta ancora rispondendo.
+
+Will record
+Verrà registrato
+
+Yesterday
+Ieri
+
+Your user can't delete recordings on this server.
+Il tuo utente non può eliminare registrazioni su questo server.
+
+Your user can't record on this server (it needs Live TV management).
+Il tuo utente non può registrare su questo server (serve la gestione della TV in diretta).
+
+Stop recording
+Ferma registrazione
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Registrazione fermata: %s. Quanto già registrato resta in Registrazioni.

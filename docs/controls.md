@@ -21,7 +21,9 @@ KaiRadio.
 | **+** | The menu: Downloads, Update the library, Settings, Exit (**+** again asks to exit, and **+** once more exits) |
 
 - **Live TV**: **↑** / **↓** change channel, **◀** / **▶** move through the
-  guide and **A** watches the channel.
+  guide (a day ahead) and **A** watches the channel. On a Jellyfin server,
+  **R** records the program (or its series) and **L** lists the recordings
+  ([more](media-servers.md#recording-jellyfins-dvr)).
 - **A series**: **◀** / **▶** change the season, and **X** marks the episode
   watched or not (or tap its circle on the right).
 - **Files**: **◀** / **▶** on the D-pad move a page, and the path at the top
@@ -40,7 +42,7 @@ KaiRadio.
 | **◀** / **▶** | Back or forward 10 seconds |
 | **L** / **R** | Back or forward 1 minute (on Live TV: the channel before or after) |
 | **ZL** | Start over |
-| **ZR** | **Skip intro** (or recap, or credits) when its button shows; in an episode's last 30 seconds, play the next one now |
+| **ZR** | **Skip intro** (or recap, or credits) when its button shows; in an episode's last 30 seconds, play the next one now; on a Jellyfin channel, record what's on |
 | **↑** | The [Playback list](playback.md#the-playback-list) |
 | **↓** | Statistics |
 | **X** | The list of sound tracks |

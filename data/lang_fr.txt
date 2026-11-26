@@ -1961,3 +1961,138 @@ Image : %s, affichée en couleurs SDR
 
 When needed
 Si nécessaire
+
+%s won't be recorded.
+%s ne sera pas enregistré.
+
+[A] choose  [^v] move  [B] back
+[A] choisir  [^v] bouger  [B] retour
+
+[A] play  [X] delete  [^v] move  [B] back to the guide
+[A] lire  [X] supprimer  [^v] bouger  [B] retour au guide
+
+[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu
+[A] regarder  [^v] chaîne  [<>] guide  [R] enregistrer  [L] enregistrements  [ZL][ZR] onglets  [+] menu
+
+[B] back to the guide
+[B] retour au guide
+
+[X] cancel  [^v] move  [B] back to the guide
+[X] annuler  [^v] bouger  [B] retour au guide
+
+[X] stop recording the series  [^v] move  [B] back to the guide
+[X] arrêter la série  [^v] bouger  [B] retour au guide
+
+Asking the server...
+Question au serveur...
+
+Don't record this program
+Ne pas enregistrer ce programme
+
+Every episode
+Tous les épisodes
+
+New episodes
+Nouveaux épisodes
+
+No program here to record.
+Aucun programme ici à enregistrer.
+
+No tuner free
+Aucun tuner libre
+
+Nothing recorded or scheduled yet: R on a program of the guide records it.
+Rien d'enregistré ni de prévu : R sur un programme du guide l'enregistre.
+
+On any channel
+Sur n'importe quelle chaîne
+
+Record
+Enregistrer
+
+Record the series
+Enregistrer la série
+
+Record this program
+Enregistrer ce programme
+
+RECORDED
+ENREGISTRÉ
+
+Recording
+Enregistrement
+
+Recording %s now.
+Enregistrement de %s en cours.
+
+Recording deleted: %s
+Enregistrement supprimé : %s
+
+Recording now
+En cours d'enregistrement
+
+Recordings
+Enregistrements
+
+SCHEDULED
+PRÉVU
+
+Scheduled
+Prévu
+
+SERIES RECORDED
+SÉRIES ENREGISTRÉES
+
+Series recorded
+Série enregistrée
+
+Stop recording the series
+Arrêter d'enregistrer la série
+
+The series %s won't be recorded.
+La série %s ne sera pas enregistrée.
+
+The server didn't take it. Has its Live TV a folder for recordings?
+Le serveur ne l'a pas accepté. Son TV en direct a-t-il un dossier d'enregistrements ?
+
+The server didn't take it: look at its list again.
+Le serveur ne l'a pas accepté : regardez sa liste à nouveau.
+
+The server records it on its own. X twice cancels it.
+Le serveur l'enregistre seul. X deux fois l'annule.
+
+The server will record %s.
+Le serveur enregistrera %s.
+
+The server will record every episode of %s.
+Le serveur enregistrera tous les épisodes de %s.
+
+This program can't be recorded.
+Ce programme ne peut pas être enregistré.
+
+Today
+Aujourd'hui
+
+Tomorrow
+Demain
+
+Wait a moment: the server is still answering.
+Un instant : le serveur répond encore.
+
+Will record
+Sera enregistré
+
+Yesterday
+Hier
+
+Your user can't delete recordings on this server.
+Votre utilisateur ne peut pas supprimer d'enregistrements sur ce serveur.
+
+Your user can't record on this server (it needs Live TV management).
+Votre utilisateur ne peut pas enregistrer sur ce serveur (il faut gérer la TV en direct).
+
+Stop recording
+Arrêter l'enregistrement
+
+Recording stopped: %s. What was recorded stays in Recordings.
+Enregistrement arrêté : %s. Ce qui a été enregistré reste dans Enregistrements.

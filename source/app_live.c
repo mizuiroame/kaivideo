@@ -16,10 +16,12 @@
 #define SHOWN_REFRESH_NS (60ull * 1000000000ull)    // While its tab shows: what's on changes.
 #define IDLE_REFRESH_NS (600ull * 1000000000ull)    // Otherwise: just whether there are channels.
 
+static int64_t g_read_from, g_read_to;  // The hours the thread reads.
+
 static void *readGuide(void *arg)
 {
     App *app = arg;
-    app->live_read_count = jfSyncFetchLive(&app->live_incoming, (int64_t)time(NULL));
+    app->live_read_count = jfSyncFetchLive(&app->live_incoming, (int64_t)time(NULL), g_read_from, g_read_to);
     __atomic_store_n(&app->live_reading, false, __ATOMIC_RELEASE);
     return NULL;
 }
@@ -51,22 +53,23 @@ bool appIsLiveLocation(const char *location)
     return liveIsLocation(location) || iptvIsLocation(location);
 }
 
-// What's on an IPTV channel now and next, and its programs not over yet.
-static void iptvPrograms(const App *app, int index, LiveChannel *c, int64_t now_s)
+// What's on an IPTV channel now and next, and its programs not over yet (into
+// programs, XMLTV_PER_CHANNEL of them at most): how many.
+static int iptvPrograms(const App *app, int index, LiveChannel *c, LiveProgram *programs, int64_t now_s)
 {
     const IptvGuide *g = &app->iptv_guide;
-    if (index >= g->count)
-        return;
-    for (int j = 0; j < g->counts[index] && c->program_count < LIVE_PROGRAMS_PER_CHANNEL; j++) {
+    int count = 0;
+    for (int j = 0; index < g->count && j < g->counts[index] && count < XMLTV_PER_CHANNEL; j++) {
         const LiveProgram *p = &g->programs[index][j];
         if (p->end <= now_s)
             continue;
-        c->programs[c->program_count++] = *p;
+        programs[count++] = *p;
         if (p->start <= now_s)
             c->now = *p;
         else if (!c->next.title[0] && !c->next.start)
             c->next = *p;
     }
+    return count;
 }
 
 void appLiveRebuild(App *app)
@@ -81,25 +84,35 @@ void appLiveRebuild(App *app)
     LiveGuide g;
     liveGuideInit(&g);
     int total = server + iptv < LIVE_CHANNELS_MAX ? server + iptv : LIVE_CHANNELS_MAX;
-    g.channels = total > 0 ? calloc((size_t)total, sizeof(LiveChannel)) : NULL;
-    if (total > 0 && !g.channels)
+    int programs = server ? app->live_server.pool_count : 0;
+    if (iptv > 0)
+        programs += (total - (server < total ? server : total)) * XMLTV_PER_CHANNEL;
+    if (!liveGuideReserve(&g, total, programs))
         total = 0;
-    int n = 0;
-    for (int i = 0; i < server && n < total; i++)
-        g.channels[n++] = app->live_server.channels[i];
+    for (int i = 0; i < server && g.count < total; i++) {
+        const LiveChannel *c = &app->live_server.channels[i];
+        liveGuideAdd(&g, c, c->programs, c->program_count);
+    }
+    if (server) {  // The hours the server's programs were read for.
+        g.from = app->live_server.from;
+        g.to = app->live_server.to;
+    }
     int64_t now_s = (int64_t)time(NULL);
-    for (int i = 0; app->config.use_iptv && i < app->iptv.count && n < total; i++) {
+    LiveProgram kept[XMLTV_PER_CHANNEL];
+    for (int i = 0; app->config.use_iptv && i < app->iptv.count && g.count < total; i++) {
         const IptvChannel *ic = &app->iptv.channels[i];
         if (group >= 0 && ic->group != group)
             continue;
-        LiveChannel *c = &g.channels[n++];
-        iptvLocation(c->id, sizeof(c->id), i);
-        snprintf(c->name, sizeof(c->name), "%.90s", ic->name);  // The guide's rows hold less.
-        snprintf(c->number, sizeof(c->number), "%s", ic->number);
-        c->logo = ic->logo[0] ? ic->logo : NULL;
-        iptvPrograms(app, i, c, now_s);
+        LiveChannel c = {0};
+        iptvLocation(c.id, sizeof(c.id), i);
+        snprintf(c.name, sizeof(c.name), "%.90s", ic->name);  // The guide's rows hold less.
+        snprintf(c.number, sizeof(c.number), "%s", ic->number);
+        c.logo = ic->logo[0] ? ic->logo : NULL;
+        liveGuideAdd(&g, &c, kept, iptvPrograms(app, i, &c, kept, now_s));
     }
-    g.count = n;
+    if (app->dvr)  // Marks made since the guide was read stay.
+        dvrMarkGuide(&g, app->dvr->timers, app->dvr->timer_count);
+    appDvrMarkGuide(&g);
     liveGuideFree(&app->live);
     app->live = g;
     libviewLiveMove(&app->view, app->live.count, 0);
@@ -161,18 +174,42 @@ void appLiveOpenGroups(App *app)
     app->live_group_cursor = app->iptv_group + 1;
 }
 
+// The guide's view moved to hours it hasn't read: they're read next (once for each).
+static void followView(App *app)
+{
+    int64_t now_s = (int64_t)time(NULL), from, to;
+    int64_t view_from = liveGridStart(now_s, app->view.live_at, appUtcOffset());
+    LiveGuide asked = {.from = app->live_window_from, .to = app->live_window_to};
+    if (!liveWindowFor(&app->live_server, now_s, view_from, &from, &to) ||
+        !liveWindowFor(&asked, now_s, view_from, &from, &to))
+        return;  // Read, or being read (or asked for in vain: the next refresh asks again).
+    app->live_window_from = from;
+    app->live_window_to = to;
+    app->live_read_soon = true;
+}
+
 void appLiveUpdate(App *app, uint64_t now)
 {
     static bool joined = true;
     if (!joined)
         joined = takeGuide(app);
+    appDvrUpdate(app, now);
     bool signed_in = app->config.use_jellyfin && jfSyncSignedIn(SERVER_JELLYFIN);  // Live TV is Jellyfin's.
+    if (signed_in && liveShown(app))
+        followView(app);
     uint64_t every = liveShown(app) ? SHOWN_REFRESH_NS : IDLE_REFRESH_NS;
     bool due = !app->live_read_at || now - app->live_read_at >= every || app->live_read_soon;
     if (!signed_in || !joined || app->player || !due)
         return;
     app->live_read_soon = false;
     app->live_read_at = now;
+    int64_t now_s = (int64_t)time(NULL);
+    if (app->live_window_to <= now_s) {  // Nothing asked yet, or hours gone by: from now.
+        app->live_window_from = now_s;
+        app->live_window_to = now_s + LIVE_WINDOW_S;
+    }
+    g_read_from = app->live_window_from;
+    g_read_to = app->live_window_to;
     liveGuideInit(&app->live_incoming);
     app->live_reading = true;
     joined = pthread_create(&app->live_thread, NULL, readGuide, app) != 0;
@@ -189,6 +226,7 @@ void appLiveExit(App *app)
 {
     if (app->live_read_at && app->live_reading)
         pthread_join(app->live_thread, NULL);
+    appDvrExit(app);
     liveGuideFree(&app->live);
     liveGuideFree(&app->live_server);
     liveGuideFree(&app->live_incoming);
@@ -223,14 +261,12 @@ void appLivePlayIptv(App *app, int index, uint64_t now)
 {
     if (index < 0 || index >= app->iptv.count)
         return;
-    LiveChannel *c = calloc(1, sizeof(*c));  // Its programs make it big for the stack.
-    if (!c)
-        return;
-    iptvLocation(c->id, sizeof(c->id), index);
-    snprintf(c->name, sizeof(c->name), "%.90s", app->iptv.channels[index].name);
-    iptvPrograms(app, index, c, (int64_t)time(NULL));
-    playLive(app, c, now);
-    free(c);
+    LiveChannel c = {0};
+    LiveProgram kept[XMLTV_PER_CHANNEL];
+    iptvLocation(c.id, sizeof(c.id), index);
+    snprintf(c.name, sizeof(c.name), "%.90s", app->iptv.channels[index].name);
+    iptvPrograms(app, index, &c, kept, (int64_t)time(NULL));  // What's on now names it.
+    playLive(app, &c, now);
 }
 
 int appLiveIptvSelected(const App *app)
@@ -259,6 +295,33 @@ static void tapProgram(App *app, LibHit hit, uint64_t now)
     v->live_at = c->programs[hit.b].start > now_s ? c->programs[hit.b].start : 0;
 }
 
+#define DRAG_AXIS_PX 12  // A finger's first pixels say whether it goes along the hours or down the channels.
+
+// A finger on the guide: down the channels as the other lists, or along the hours (from the grid).
+static void dragGuide(App *app, TouchEvent touch, uint64_t now)
+{
+    int ax = touch.x - touch.start_x, ay = touch.y - touch.start_y;
+    if (app->live_drag_axis == 0) {
+        if (abs(ax) < DRAG_AXIS_PX && abs(ay) < DRAG_AXIS_PX)
+            return;
+        app->live_drag_axis = abs(ax) > abs(ay) && touch.start_x >= uiLiveGridX() ? 1 : 2;
+        app->live_drag_rest = ax;  // What it moved before it was known counts too.
+    } else {
+        app->live_drag_rest += touch.dx;
+    }
+    if (app->live_drag_axis == 2) {
+        appLibraryDrag(app, touch, now);  // The guide follows the finger, as the other lists.
+        return;
+    }
+    // Along the hours: to the left goes later, the width of the grid two hours.
+    int64_t px_per_step = uiLiveGridW() / (LIVE_GRID_SPAN_S / LIVE_GRID_STEP_S) / 6;  // Five minutes.
+    int64_t steps = -app->live_drag_rest / px_per_step;
+    if (steps) {
+        app->live_drag_rest += (int)(steps * px_per_step);
+        app->view.live_at = liveShift(app->view.live_at, (int64_t)time(NULL), steps * (LIVE_GRID_STEP_S / 6));
+    }
+}
+
 void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
 {
     LibView *v = &app->view;
@@ -283,7 +346,10 @@ void appLiveInput(App *app, uint64_t pressed, TouchEvent touch, uint64_t now)
             appIptvToggleFavorite(app, appLiveIptvSelected(app), now);
         }
     } else if (touch.type == TOUCH_DRAG) {
-        appLibraryDrag(app, touch, now);  // The guide follows the finger, as the other lists.
+        dragGuide(app, touch, now);
+    } else if (touch.type == TOUCH_DRAG_END || touch.type == TOUCH_PRESS) {
+        app->live_drag_axis = 0;
+        app->live_drag_rest = 0;
     }
 }
 
@@ -311,8 +377,11 @@ void appLiveDraw(const App *app)
         group = app->iptv_group >= 0 ? app->iptv.groups[app->iptv_group].name : T("All channels");
     int selected = app->config.use_iptv ? appLiveIptvSelected(app) : -1;
     int favorite = selected >= 0 ? appIptvIsFavorite(app, selected) : -1;
+    if (appDvrDrawPanel(app))
+        return;
     uiDrawLiveTab(&app->view, &app->live, (int64_t)time(NULL), appUtcOffset(), app->config.clock_24h, loading, group,
-                  app->config.use_iptv, favorite);
+                  app->config.use_iptv, favorite, appDvrAvailable(app));
+    appDvrDrawChoices(app);
     if (app->live_groups_open)
         uiDrawLiveGroups(&app->iptv, app->live_group_cursor, app->iptv_group + 1);
 }

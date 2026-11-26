@@ -286,12 +286,16 @@ const char *appFooterHelp(const App *app)
         return T("[A] open  [Y] search  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_SEARCH: return T("[Y] type a search  [A] open  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_LIVE:
+        if (appDvrHelp(app))
+            return appDvrHelp(app);
         if (app->live_groups_open)
             return T("[A] choose  [^v] group  [B] back");
         if (app->config.use_iptv && app->iptv.group_count > 0)
             return T("[A] watch  [^v] channel  [<>] guide  [Y] groups  [R] favorite  [ZL][ZR] tabs");
         if (app->config.use_iptv)
             return T("[A] watch  [^v] channel  [<>] guide  [R] favorite  [ZL][ZR] tabs  [+] menu");
+        if (appDvrAvailable(app))
+            return T("[A] watch  [^v] channel  [<>] guide  [R] record  [L] recordings  [ZL][ZR] tabs  [+] menu");
         return T("[A] watch  [^v] channel  [<>] guide  [ZL][ZR] tabs  [-] settings  [+] menu");
     case TAB_HOME:
         // The IPTV list's: a channel (its own Home's, or the Showcase's rows of channels), or a film or series.
