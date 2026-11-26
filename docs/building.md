@@ -43,6 +43,6 @@ docker run --rm -v "$PWD:/build/kaivideo" -w /build/kaivideo kaivideo-host make 
 - **Picture subtitles to try**: `tools/picsubtest/make_picsubs.c` makes a
   VobSub pair (`.idx` + `.sub`) and an MKV with VobSub inside, from a video of
   your own and made-up lines (how to run it is at its top).
-- **Icon**: `tools/make_icon.py` draws `icon.jpg`.
+- **Icon**: `tools/make_icon.py` copies `icon.jpg` from `switch2homebrew-submit/icons/kaivideo.jpg`, which `switch2homebrew-submit/tools/make_app_icons.py` makes for all the Kai apps.
 - **Languages**: `tools/lang_check.py` checks a language file against the
   texts in the code. See [Languages](languages.md).

@@ -1,30 +1,27 @@
-"""Draws KaiVideo's icon (icon.jpg, 256x256): a flat screen with a play button cut out.
+"""KaiVideo's icon (icon.jpg, 256x256) is no longer drawn here: all the Kai apps' icons
+come from one script, switch2homebrew-submit/tools/make_app_icons.py, which writes
+switch2homebrew-submit/icons/kaivideo.jpg. This copies that file to icon.jpg.
 
 Usage: python tools/make_icon.py [OUT]
+       (run make_app_icons.py first after changing the symbol or its colors)
 """
+import shutil
 import sys
+from pathlib import Path
 
-from icon_render import Canvas, capsule, polygon, round_rect, save_icon, union
-
-PINK = (255, 107, 154)
-CORNER = 7.0
-
-
-def draw() -> Canvas:
-    canvas = Canvas()
-    screen = round_rect(36, 54, 220, 174, 20)
-    stand = union(round_rect(116, 170, 140, 200, 2), capsule((92, 201), (164, 201), 6))
-    symbol = union(screen, stand)
-    canvas.long_shadow(symbol)
-    canvas.fill(symbol, PINK)
-    play = polygon([(113, 93 + 2), (113, 135 - 2), (149, 114)]) - CORNER
-    canvas.cut(play)
-    return canvas
+SUBMIT = Path(__file__).resolve().parents[2] / "switch2homebrew-submit"
+SOURCE = SUBMIT / "icons" / "kaivideo.jpg"
 
 
-def main() -> None:
-    save_icon(draw().result(), sys.argv[1] if len(sys.argv) > 1 else "icon.jpg")
+def main() -> int:
+    out = sys.argv[1] if len(sys.argv) > 1 else "icon.jpg"
+    if not SOURCE.is_file():
+        print(f"{SOURCE} not found: run python {SUBMIT / 'tools' / 'make_app_icons.py'} first")
+        return 1
+    shutil.copyfile(SOURCE, out)
+    print(f"{SOURCE} -> {out}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
