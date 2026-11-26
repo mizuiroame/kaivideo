@@ -31,7 +31,11 @@ static const char RECORDINGS[] =
     "\"StartDate\":\"2026-11-18T10:00:00Z\",\"EndDate\":\"2026-11-18T10:10:00Z\",\"CanDelete\":true},"
     "{\"Id\":\"r2\",\"Name\":\"Resumen Nacional\",\"EpisodeTitle\":\"E12\",\"Status\":\"InProgress\","
     "\"StartDate\":\"2026-11-19T10:00:00Z\",\"EndDate\":\"2026-11-19T10:05:00Z\",\"CanDelete\":false},"
-    "{\"Id\":\"r3\",\"Name\":\"Old\",\"DateCreated\":\"2026-11-01T08:00:00Z\"}"
+    "{\"Id\":\"r3\",\"Name\":\"Old\",\"DateCreated\":\"2026-11-01T08:00:00Z\"},"
+    // As Jellyfin 10.11 answers for a recorded episode: a library episode, no channel nor times.
+    "{\"Name\":\"Mesa de An\u00e1lisis S01E425\",\"Id\":\"481289b8b145a9d56825cf5733462361\","
+    "\"DateCreated\":\"2026-11-25T22:18:54.0000000Z\",\"Container\":\"ts\",\"ChannelId\":null,"
+    "\"RunTimeTicks\":759840000,\"Type\":\"Episode\",\"SeriesName\":\"Mesa de An\u00e1lisis\",\"MediaType\":\"Video\"}"
     "],\"TotalRecordCount\":3}";
 
 static void testParse(void)
@@ -52,9 +56,12 @@ static void testParse(void)
     CHECK(!strcmp(series[1].id, "s2") && series[1].new_only);
     CHECK(dvrParseSeries("{}", series, 4) == -1);
 
-    DvrRecording recs[4];
-    CHECK(dvrParseRecordings(RECORDINGS, recs, 4) == 3);
-    CHECK(!strcmp(recs[0].id, "r2") && recs[0].recording && !recs[0].can_delete);  // The latest first.
+    DvrRecording all[5], *recs = all + 1;
+    CHECK(dvrParseRecordings(RECORDINGS, all, 5) == 4);
+    // The latest first: the episode recorded, by its series' name, its length from the server's ticks.
+    CHECK(!strcmp(all[0].name, "Mesa de An\xC3\xA1lisis") && dvrMinutes(all[0].start, all[0].end) == 1);
+    CHECK(all[0].can_delete && !all[0].recording && !all[0].channel[0]);  // Not said: the server decides.
+    CHECK(!strcmp(recs[0].id, "r2") && recs[0].recording && !recs[0].can_delete);
     CHECK(!strcmp(recs[0].episode, "E12"));
     CHECK(!strcmp(recs[1].id, "r1") && recs[1].can_delete && dvrMinutes(recs[1].start, recs[1].end) == 10);
     CHECK(!strcmp(recs[2].id, "r3") && recs[2].start > 0 && dvrMinutes(recs[2].start, recs[2].end) == 0);

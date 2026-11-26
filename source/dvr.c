@@ -11,6 +11,7 @@
 #include "lang.h"
 
 #define SECONDS_PER_MINUTE 60
+#define TICKS_PER_SECOND 10000000  // The server's times are in 100 ns ticks.
 
 static const char *textOf(const json_t *object, const char *key)
 {
@@ -149,15 +150,23 @@ int dvrParseRecordings(const char *json, DvrRecording *out, int max)
             count--;
             continue;
         }
-        copy(r->name, sizeof(r->name), textOf(item, "Name"));
+        // Jellyfin 10.11 keeps a recorded episode as a library episode: its series' name, and the file's
+        // as its own ("Show S01E425"); no channel or times, only when it was made and how long it is.
+        const char *series = textOf(item, "SeriesName");
+        copy(r->name, sizeof(r->name), series[0] ? series : textOf(item, "Name"));
         copy(r->episode, sizeof(r->episode), textOf(item, "EpisodeTitle"));
         copy(r->channel, sizeof(r->channel), textOf(item, "ChannelName"));
         r->start = jfParseDate(textOf(item, "StartDate"));
         r->end = jfParseDate(textOf(item, "EndDate"));
         if (!r->start)
             r->start = jfParseDate(textOf(item, "DateCreated"));
+        json_int_t ticks = json_integer_value(json_object_get(item, "RunTimeTicks"));
+        if (!r->end && r->start && ticks > 0)
+            r->end = r->start + (int64_t)(ticks / TICKS_PER_SECOND);
         r->recording = !strcmp(textOf(item, "Status"), "InProgress");
-        r->can_delete = json_is_true(json_object_get(item, "CanDelete"));
+        // Without the server saying, it may be deleted: the server refuses if not (and that's said).
+        const json_t *can = json_object_get(item, "CanDelete");
+        r->can_delete = can ? json_is_true(can) : true;
     }
     json_decref(root);
     qsort(out, (size_t)count, sizeof(DvrRecording), latestFirst);

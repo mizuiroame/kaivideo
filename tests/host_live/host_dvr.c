@@ -22,6 +22,7 @@
 
 #define WAIT_STEP_S 15
 #define AFTER_END_S 45   // The server closes a recording a moment after its program ends.
+#define LISTED_WAIT_S 300  // How long the server may take to list it.
 #define SOON_S 60        // A program to schedule starts at least this far ahead.
 
 static int g_failures;
@@ -185,11 +186,15 @@ static void tryRecording(LiveGuide *g, const char *channel)
     printf("        waiting %d s for it to end\n", (int)(end + AFTER_END_S - (int64_t)time(NULL)));
     while ((int64_t)time(NULL) < end + AFTER_END_S)
         sleep(WAIT_STEP_S);
-    expect(readLists(&d), "the DVR's lists came");
     const DvrRecording *r = NULL;
-    for (int i = 0; i < d.recording_count && !r; i++)
-        if (!strcmp(d.recordings[i].name, name) && !d.recordings[i].recording)
-            r = &d.recordings[i];
+    for (int wait = 0; !r && wait < LISTED_WAIT_S; wait += WAIT_STEP_S) {  // The server's library takes it in.
+        if (wait)
+            sleep(WAIT_STEP_S);
+        readLists(&d);
+        for (int i = 0; i < d.recording_count && !r; i++)
+            if (!strcmp(d.recordings[i].name, name) && !d.recordings[i].recording)
+                r = &d.recordings[i];
+    }
     expect(r != NULL, "it's among the recordings, done");
     if (!r)
         return;
