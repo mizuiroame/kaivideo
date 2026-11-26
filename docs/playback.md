@@ -98,8 +98,9 @@ The delays and the loop are for the video playing.
 - **HDR** videos (HDR10 and HLG) are shown with SDR colors: their light is
   brought down to what the screen shows (tone mapping, on the GPU), so they
   no longer look washed out. Everything up to about 100 nits stays as it was
-  mastered; brighter parts are squeezed under the screen's white. **HDR to
-  SDR colors** in Settings > Playback turns it off.
+  mastered; brighter parts are squeezed under the screen's white. The
+  pictures on the library's cards and Home's large picture are made the same
+  way. **HDR to SDR colors** in Settings > Playback turns it off.
 - **Faster 4K (slightly softer)**, in Settings > Playback: for 4K HEVC (and
   H.264 or VP9 over 1080p) decoded on the CPU, frames that no other frame
   refers to skip their deblocking filter, about 5-9% faster. **When needed**

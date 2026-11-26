@@ -271,6 +271,18 @@ static void makePicture(const Request *r)
         stbi_image_free(rgba);
 }
 
+static bool isAddress(const char *path)
+{
+    return !strncmp(path, "http://", 7) || !strncmp(path, "https://", 8) ||
+           !strncmp(path, XTREAM_POSTER_PREFIX, sizeof(XTREAM_POSTER_PREFIX) - 1);
+}
+
+bool thumbgenIsFrame(const char *path)
+{
+    return strncmp(path, LIBRARY_PICTURE_PREFIX, sizeof(LIBRARY_PICTURE_PREFIX) - 1) && !isAddress(path) &&
+           !xtreamIsLocation(path) && strncmp(path, "stremio:", 8) && !jfIsRemoteLocation(path);
+}
+
 // Makes one picture. False only when paused or stopped meanwhile (asked again later).
 static bool make(const Request *r)
 {
@@ -278,8 +290,7 @@ static bool make(const Request *r)
         makePicture(r);
         return !g_stop && !g_paused;
     }
-    if (!strncmp(r->path, "http://", 7) || !strncmp(r->path, "https://", 8) ||
-        !strncmp(r->path, XTREAM_POSTER_PREFIX, sizeof(XTREAM_POSTER_PREFIX) - 1)) {
+    if (isAddress(r->path)) {
         makeUrl(r);
         return !g_stop && !g_paused;
     }
@@ -313,9 +324,14 @@ static bool make(const Request *r)
     int out_w, out_h;
     thumbShapeSize(r->shape, &out_w, &out_h);
     uint8_t *rgb = f && !interrupted ? malloc((size_t)out_w * out_h * 3) : NULL;
+    // An HDR frame (when Settings brings HDR down to SDR) is brought down here too, as the player draws it.
+    HdrLut *hdr = rgb && f->hdr != HDR_NONE ? malloc(sizeof(HdrLut)) : NULL;
+    if (hdr)
+        hdrLutInit(hdr, (HdrKind)f->hdr, f->hdr_peak);
     if (rgb) {
-        thumbgenConvert(f->y, f->uv, f->width, f->height, f->y_pitch, f->uv_pitch, f->bt709, f->full_range, rgb,
-                        out_w, out_h);
+        thumbgenConvert(f->y, f->uv, f->width, f->height, f->y_pitch, f->uv_pitch, f->bt709, f->full_range, hdr,
+                        rgb, out_w, out_h);
+        free(hdr);
         if (!stbi_write_jpg(r->jpg, out_w, out_h, 3, rgb, JPEG_QUALITY))
             remove(r->jpg);
         free(rgb);

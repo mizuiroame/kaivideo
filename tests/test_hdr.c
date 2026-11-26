@@ -1,5 +1,6 @@
 // HDR shown on an SDR screen: which streams are HDR, and the tone mapping.
 #include <math.h>
+#include <stdlib.h>
 
 #include "check.h"
 #include "hdr.h"
@@ -109,8 +110,49 @@ static void testPixels(void)
     CHECK(out[0] > 0.8f && out[0] < 1.0f && NEAR(out[0], out[2], 0.002f));
 }
 
+// The tables thumbnails use against hdrPixel (the shader's maths), over a
+// grid of R'G'B' values: the same 8-bit level nearly always, one off now and
+// then, and never more than a few (a channel BT.709 clips to black, just under it).
+static void testLut(void)
+{
+    static const struct { HdrKind kind; float peak; } CASES[] = {
+        {HDR_PQ, 1000}, {HDR_PQ, 4000}, {HDR_PQ, 400}, {HDR_PQ, 10000}, {HDR_HLG, HDR_DEFAULT_PEAK_NITS}};
+    static HdrLut lut;
+    for (size_t k = 0; k < sizeof(CASES) / sizeof(CASES[0]); k++) {
+        hdrLutInit(&lut, CASES[k].kind, CASES[k].peak);
+        HdrParams p = hdrParams(CASES[k].kind, CASES[k].peak);
+        int worst = 0, off = 0, over_one = 0, count = 0;
+        enum { STEPS = 60 };
+        for (int r = 0; r <= STEPS; r++)
+            for (int g = 0; g <= STEPS; g++)
+                for (int b = 0; b <= STEPS; b++) {
+                    float in[3] = {(float)r / STEPS, (float)g / STEPS, (float)b / STEPS}, want[3];
+                    uint8_t got[3];
+                    hdrPixel(&p, in, want);
+                    hdrLutPixel(&lut, in, got);
+                    for (int c = 0; c < 3; c++) {
+                        int diff = abs(got[c] - (int)(want[c] * 255.0f + 0.5f));
+                        worst = diff > worst ? diff : worst;
+                        off += diff > 0;
+                        over_one += diff > 1;
+                        count++;
+                    }
+                }
+        CHECK(worst <= 3 && off * 100 < count && over_one * 10000 < count);
+    }
+    // Black is black, and the peak's white is white.
+    uint8_t out[3];
+    hdrLutInit(&lut, HDR_PQ, 1000);
+    hdrLutPixel(&lut, (const float[3]){0, 0, 0}, out);
+    CHECK(out[0] == 0 && out[1] == 0 && out[2] == 0);
+    float white = hdrNitsToPq(1000);
+    hdrLutPixel(&lut, (const float[3]){white, white, white}, out);
+    CHECK(out[0] == 255 && out[1] == 255 && out[2] == 255);
+}
+
 void testHdr(void)
 {
+    testLut();
     testDetect();
     testPeak();
     testTransfers();

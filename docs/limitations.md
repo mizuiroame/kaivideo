@@ -24,8 +24,9 @@
   Playback > **HDR to SDR colors**). The picture reaches the GPU in 8 bits,
   so smooth skies can show some banding; HDR10+ and Dolby Vision's own data
   are not used (a Dolby Vision file with an HDR10 base plays as HDR10; one
-  without, profile 5, keeps wrong colors). The pictures on the cards are
-  still made without it (washed out). 4K HDR is decoded on the CPU like any
+  without, profile 5, keeps wrong colors). The pictures on the cards follow
+  the setting as it was when they were made: turning it off or on later
+  doesn't make them again. 4K HDR is decoded on the CPU like any
   4K HEVC (see below).
 - **Big libraries**: tried with a few dozen videos on the console (and with
   thousands of names on a PC). With hundreds of videos, the first scan and

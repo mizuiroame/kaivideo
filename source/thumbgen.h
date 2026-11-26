@@ -7,6 +7,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "hdr.h"
+
 #define THUMB_W 384
 #define THUMB_H 216
 #define THUMB_LARGE_W 960         // For the details panel.
@@ -35,6 +37,10 @@ typedef enum {
 bool thumbgenStart(void);
 void thumbgenStop(void);
 
+// True if path's picture is one of its own frames (a video on the card or a
+// network folder), not a server's, an address's or a folder's picture.
+bool thumbgenIsFrame(const char *path);
+
 // What a file of this size in the thumbnails' folder is.
 ThumbFileKind thumbgenFileKind(long long size);
 
@@ -51,9 +57,11 @@ void thumbgenNextFrame(void);
 void thumbgenPause(bool paused);
 
 // Turns an NV12 frame (w x h, pitches in bytes) into an RGB picture of
-// out_w x out_h, cropped to fill it. Exposed for tests.
+// out_w x out_h, cropped to fill it. hdr: an HDR frame's tables (hdr.h),
+// to bring it down to SDR colors as the player's shader does; NULL for SDR
+// (then bt709 picks the matrix). Exposed for tests.
 void thumbgenConvert(const uint8_t *y, const uint8_t *uv, int w, int h, int y_pitch, int uv_pitch, bool bt709,
-                     bool full_range, uint8_t *rgb, int out_w, int out_h);
+                     bool full_range, const HdrLut *hdr, uint8_t *rgb, int out_w, int out_h);
 // An RGB picture of w x h into one of out_w x out_h: its middle, cropped to
 // that shape, each output pixel the average of those under it.
 void thumbgenFit(const uint8_t *rgb, int w, int h, uint8_t *out, int out_w, int out_h);

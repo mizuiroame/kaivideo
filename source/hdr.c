@@ -145,12 +145,93 @@ static float unit(float v)
     return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
+void hdrYuvToRgb(float y, float cb, float cr, float rgb[3])
+{
+    // BT.2020's non-constant luminance matrix.
+    rgb[0] = unit(y + 1.4746f * cr);
+    rgb[1] = unit(y - 0.16455f * cb - 0.57135f * cr);
+    rgb[2] = unit(y + 1.8814f * cb);
+}
+
 void hdrPixelYuv8(const HdrParams *p, uint8_t y, uint8_t cb, uint8_t cr, uint8_t rgb[3])
 {
-    // Limited range, BT.2020's (non-constant luminance) matrix.
-    float l = (y - 16.0f) / 219.0f, u = (cb - 128.0f) / 224.0f, v = (cr - 128.0f) / 224.0f;
-    float in[3] = {unit(l + 1.4746f * v), unit(l - 0.16455f * u - 0.57135f * v), unit(l + 1.8814f * u)}, out[3];
+    float in[3], out[3];  // Limited range.
+    hdrYuvToRgb((y - 16.0f) / 219.0f, (cb - 128.0f) / 224.0f, (cr - 128.0f) / 224.0f, in);
     hdrPixel(p, in, out);
     for (int c = 0; c < 3; c++)
         rgb[c] = toByte(out[c]);
+}
+
+void hdrLutInit(HdrLut *t, HdrKind kind, float source_peak_nits)
+{
+    t->p = hdrParams(kind, source_peak_nits);
+    for (int i = 0; i <= HDR_LUT_SIGNAL; i++) {
+        float e = (float)i / HDR_LUT_SIGNAL;
+        t->light[i] = kind == HDR_HLG ? hdrHlgToScene(e) : hdrPqToNits(e);
+    }
+    for (int i = 0; i <= HDR_LUT_TONE; i++)
+        t->tone[i] = hdrToneMap(&t->p, t->p.source_peak * i / HDR_LUT_TONE);
+    // toByte(powf(v, 1 / 2.4)) is level k from ((k - 0.5) / 255)^2.4 on.
+    for (int k = 1; k <= 255; k++)
+        t->level[k - 1] = powf((k - 0.5f) / 255.0f, SCREEN_GAMMA);
+    t->level[255] = 2.0f;  // Past any light (it's at most 1).
+    // A step of the fourth root spans less than a level, so from a step's start
+    // the level is found in a move or two.
+    int k = 0;
+    for (int i = 0; i <= HDR_LUT_LEVEL; i++) {
+        float w = (float)i / HDR_LUT_LEVEL, v = w * w * w * w;
+        while (t->level[k] <= v)
+            k++;
+        t->level_at[i] = (uint8_t)k;
+    }
+}
+
+// A table over 0-1 in steps of 1 / steps, read between its steps.
+static float lookUp(const float *table, int steps, float x)
+{
+    float at = x * steps;
+    if (!(at > 0))
+        return table[0];
+    if (at >= steps)
+        return table[steps];
+    int i = (int)at;
+    return table[i] + (table[i + 1] - table[i]) * (at - i);
+}
+
+// The 8-bit level of light v (of the SDR white): how many levels start at or under it.
+static uint8_t levelOf(const HdrLut *t, float v)
+{
+    if (!(v > 0))
+        return 0;
+    if (v >= 1)
+        return 255;
+    int k = t->level_at[(int)(sqrtf(sqrtf(v)) * HDR_LUT_LEVEL)];
+    while (t->level[k] <= v)
+        k++;
+    return (uint8_t)k;
+}
+
+void hdrLutPixel(const HdrLut *t, const float rgb2020[3], uint8_t out[3])
+{
+    float nits[3], lin[3];
+    for (int c = 0; c < 3; c++)
+        nits[c] = lookUp(t->light, HDR_LUT_SIGNAL, rgb2020[c]);
+    if (t->p.kind == HDR_HLG) {  // Scene light to the display's, as toNits does.
+        float ys = KR_2020 * nits[0] + KG_2020 * nits[1] + KB_2020 * nits[2];
+        float gain = HDR_DEFAULT_PEAK_NITS * (ys > 0 ? powf(ys, HLG_GAMMA_MINUS_ONE) : 0);
+        for (int c = 0; c < 3; c++)
+            nits[c] *= gain;
+    }
+    float peak = 0;
+    for (int r = 0; r < 3; r++) {
+        lin[r] = TO_709[r][0] * nits[0] + TO_709[r][1] * nits[1] + TO_709[r][2] * nits[2];
+        if (lin[r] < 0)
+            lin[r] = 0;
+        if (lin[r] > peak)
+            peak = lin[r];
+    }
+    // As hdrPixel: the brightest channel through the curve (over the peak, as the peak), the others following.
+    float scale = peak > 0 ? lookUp(t->tone, HDR_LUT_TONE, peak / t->p.source_peak) / peak / HDR_SDR_WHITE_NITS : 0;
+    for (int c = 0; c < 3; c++)
+        out[c] = levelOf(t, lin[c] * scale);
 }

@@ -1274,6 +1274,7 @@ int main(int argc, char **argv)
     app.aspect = PLAYBACK_ASPECT_ORIGINAL;
     char folder[BROWSER_PATH_MAX];
     loadSettings(&app, folder, sizeof(folder));
+    videoSetPlayback(app.config.faster_4k, app.config.hdr_to_sdr);  // For the thumbnails' videos too.
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeLoad(&app.resume, path);
     appConfigPath(path, sizeof(path), "watched.txt");
