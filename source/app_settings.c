@@ -27,6 +27,7 @@
 #include "ui_library.h"
 #include "ui_settings.h"
 #include "util.h"
+#include "video.h"
 
 #ifndef KAIVIDEO_VERSION
 #define KAIVIDEO_VERSION "dev"
@@ -363,6 +364,8 @@ static void change(App *app, SettingRow row, int delta, uint64_t now)
         appLibraryRefreshHome(app);
     } else {
         settingStep(&app->config, row, delta);
+        if (row == SETTING_FASTER_4K || row == SETTING_HDR)  // Thumbnails made from now on follow them too.
+            videoSetPlayback(app->config.faster_4k, app->config.hdr_to_sdr);
         if (row == SETTING_HOME_STYLE || row == SETTING_HOME_TILES)
             appLibraryRefreshHome(app);
         applyLooks(app);

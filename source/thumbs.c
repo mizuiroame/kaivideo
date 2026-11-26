@@ -15,6 +15,9 @@
 #define FILE_MAX (1u << 20)
 #define LARGE_KEY_MARK 0x9E3779B97F4A7C15ull  // A large picture is another file,
 #define POSTER_KEY_MARK 0xC2B2AE3D27D4EB4Full  // and a poster another.
+// A video's own frames are made again from this version on (other files, not read
+// again, stay behind): HDR frames were washed out, and are now brought down to SDR.
+#define FRAME_KEY_MARK 0xD6E8FEB86659FD93ull
 #define LARGE_KEPT 3           // Large pictures kept: the one shown, and those it fades from.
 
 typedef enum { THUMB_UNKNOWN, THUMB_ASKED, THUMB_ON_CARD, THUMB_NONE, THUMB_LOADED } ThumbState;
@@ -155,9 +158,16 @@ static uint64_t shapeMark(ThumbShape shape)
     return shape == THUMB_SHAPE_LARGE ? LARGE_KEY_MARK : shape == THUMB_SHAPE_POSTER ? POSTER_KEY_MARK : 0;
 }
 
+// The picture's key, and so its file's name.
+static uint64_t pictureKey(const char *path, int64_t size, ThumbShape shape)
+{
+    uint64_t key = keyOf(path, size) ^ shapeMark(shape) ^ (thumbgenIsFrame(path) ? FRAME_KEY_MARK : 0);
+    return key ? key : 1;
+}
+
 static const uint32_t *getPicture(const char *path, int64_t size, ThumbShape shape)
 {
-    Entry *e = find(keyOf(path, size) ^ shapeMark(shape), true);
+    Entry *e = find(pictureKey(path, size, shape), true);
     if (!e)
         return NULL;
     e->shape = (uint8_t)shape;
@@ -204,13 +214,13 @@ const uint32_t *thumbGetPoster(const char *art)
 
 bool thumbPosterIsNone(const char *art)
 {
-    Entry *e = find(keyOf(art, 0) ^ POSTER_KEY_MARK, false);
+    Entry *e = find(pictureKey(art, 0, THUMB_SHAPE_POSTER), false);
     return e && e->state == THUMB_NONE;
 }
 
 bool thumbIsNone(const char *path, int64_t size)
 {
-    Entry *e = find(keyOf(path, size), false);
+    Entry *e = find(pictureKey(path, size, THUMB_SHAPE_CARD), false);
     return e && e->state == THUMB_NONE;
 }
 

@@ -9,9 +9,11 @@
 #include <libavcodec/avcodec.h>
 #include <libavcodec/bsf.h>
 #include <libavformat/avformat.h>
+#include <libavutil/mastering_display_metadata.h>
 #include <libavutil/pixdesc.h>
 #include <switch.h>
 
+#include "hdr.h"
 #include "hlsio.h"
 #include "jellyfin.h"
 #include "lang.h"
@@ -71,6 +73,18 @@ struct Video {
     int width, height;
     double aspect;
     bool bt709, full_range;
+    // HDR (hdr.h): its kind and peak, and whether it's brought down to SDR
+    // when drawn (Settings). Set at opening; the decoding thread may still
+    // learn them from the first frame, before any frame is shown.
+    HdrKind hdr;
+    float hdr_peak;
+    bool hdr_convert, hdr_checked;
+    // Lighter deblocking (swframe.h), on the decoding thread; light_deblock
+    // is also read by the window's, under the lock.
+    SwframeFast fast;
+    SwframeKeepUp keep_up;
+    unsigned keep_frames, keep_late;  // Frames out at normal play, and of those, late ones.
+    bool light_deblock;
 
     pthread_t thread;
     bool thread_started;
@@ -229,6 +243,49 @@ static bool handleSoftwareFrame(Video *v, const AVFrame *f, int64_t pts_ns)
     return true;
 }
 
+static float sideDataPeak(const AVFrameSideData *cll, const AVFrameSideData *mastering, float *mastering_nits)
+{
+    *mastering_nits = 0;
+    if (mastering) {
+        const AVMasteringDisplayMetadata *m = (const AVMasteringDisplayMetadata *)mastering->data;
+        if (m->has_luminance)
+            *mastering_nits = (float)av_q2d(m->max_luminance);
+    }
+    return cll ? (float)((const AVContentLightMetadata *)cll->data)->MaxCLL : 0;
+}
+
+// The first frame says what the stream's headers may not have: HDR10's
+// light levels (in the bitstream, not the container), or the transfer itself.
+static void learnHdr(Video *v, const AVFrame *f)
+{
+    v->hdr_checked = true;
+    const AVFrameSideData *cll = av_frame_get_side_data(f, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+    const AVFrameSideData *mastering = av_frame_get_side_data(f, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+    HdrKind kind = v->hdr != HDR_NONE ? v->hdr : hdrDetect(f->color_trc, f->color_primaries, mastering != NULL);
+    if (kind == HDR_NONE)
+        return;
+    float mastering_nits, cll_nits = sideDataPeak(cll, mastering, &mastering_nits);
+    pthread_mutex_lock(&v->lock);
+    if (v->hdr == HDR_NONE || cll_nits > 0 || mastering_nits > 0) {
+        v->hdr = kind;
+        v->hdr_peak = hdrSourcePeak(kind, cll_nits, mastering_nits);
+    }
+    pthread_mutex_unlock(&v->lock);
+}
+
+// One more frame at normal play: late if playback had passed its time already.
+static void countKeepUp(Video *v, int64_t pts_ns)
+{
+    pthread_mutex_lock(&v->lock);
+    int64_t clock_ns = v->clock_ns;
+    pthread_mutex_unlock(&v->lock);
+    if (clock_ns == SWFRAME_NO_CLOCK)
+        return;
+    v->keep_frames++;
+    if (pts_ns < clock_ns)
+        v->keep_late++;
+}
+
 // Takes every frame FFmpeg has ready. False when interrupted or failed.
 static bool takeSoftwareFrames(Video *v)
 {
@@ -249,6 +306,10 @@ static bool takeSoftwareFrames(Video *v)
         int64_t pts_ns = pts != AV_NOPTS_VALUE ? av_rescale_q(pts, v->time_base, (AVRational){1, 1000000000})
                                                : v->software_last_ns + v->frame_ns;
         v->software_last_ns = pts_ns;
+        if (!v->hdr_checked)
+            learnHdr(v, f);
+        if (pts_ns >= v->skip_until_ns)
+            countKeepUp(v, pts_ns);
         bool ok = handleSoftwareFrame(v, f, pts_ns);
         av_frame_unref(f);
         if (!ok)
@@ -266,6 +327,13 @@ static bool submitSoftware(Video *v, const AVPacket *p, bool last)
                      swframeCanSkip(av_rescale_q(p->pts, v->time_base, (AVRational){1, 1000000000}), v->skip_until_ns,
                                     clock_ns);
     v->software->skip_frame = skippable ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
+    bool light = swframeLightDeblock(&v->keep_up, v->fast, v->width, v->height, v->keep_frames, v->keep_late);
+    v->software->skip_loop_filter = light ? AVDISCARD_NONREF : AVDISCARD_DEFAULT;
+    if (light != v->light_deblock) {
+        pthread_mutex_lock(&v->lock);
+        v->light_deblock = light;
+        pthread_mutex_unlock(&v->lock);
+    }
     int sent;
     while ((sent = avcodec_send_packet(v->software, p)) == AVERROR(EAGAIN))
         if (!takeSoftwareFrames(v))
@@ -642,6 +710,31 @@ static bool openDecoder(Video *v, AVStream *st, char *error, size_t error_size)
     }
 }
 
+static SwframeFast g_fast = SWFRAME_FAST_AUTO;
+static bool g_hdr_convert = true;
+
+void videoSetPlayback(int faster_4k, bool hdr_to_sdr)
+{
+    g_fast = faster_4k >= 0 && faster_4k < SWFRAME_FAST_COUNT ? (SwframeFast)faster_4k : SWFRAME_FAST_AUTO;
+    g_hdr_convert = hdr_to_sdr;
+}
+
+// HDR from the stream's headers: its transfer and primaries, and HDR10's
+// data if the container has it (else learnHdr reads it from the first frame).
+static void openHdr(Video *v, const AVCodecParameters *par)
+{
+    const AVPacketSideData *cll =
+        av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data, AV_PKT_DATA_CONTENT_LIGHT_LEVEL);
+    const AVPacketSideData *mastering = av_packet_side_data_get(par->coded_side_data, par->nb_coded_side_data,
+                                                                AV_PKT_DATA_MASTERING_DISPLAY_METADATA);
+    v->hdr = hdrDetect(par->color_trc, par->color_primaries, mastering != NULL);
+    float mastering_nits = 0, cll_nits = cll ? (float)((const AVContentLightMetadata *)cll->data)->MaxCLL : 0;
+    if (mastering && ((const AVMasteringDisplayMetadata *)mastering->data)->has_luminance)
+        mastering_nits = (float)av_q2d(((const AVMasteringDisplayMetadata *)mastering->data)->max_luminance);
+    v->hdr_peak = hdrSourcePeak(v->hdr, cll_nits, mastering_nits);
+    v->hdr_convert = g_hdr_convert;
+}
+
 static const AssFont *g_subtitle_fonts;
 static int g_subtitle_font_count;
 
@@ -835,6 +928,8 @@ Video *videoOpenLimited(const char *path, int max_threads, char *error, size_t e
     v->bt709 = par->color_space == AVCOL_SPC_BT709 ||
                (par->color_space == AVCOL_SPC_UNSPECIFIED && par->height >= 720);
     v->full_range = par->color_range == AVCOL_RANGE_JPEG;
+    v->fast = g_fast;
+    openHdr(v, par);
     for (int i = 0; i <= VIDEO_QUEUE; i++) {
         Slot *s = i < VIDEO_QUEUE ? &v->slots[i] : &v->shown;
         s->y = malloc((size_t)v->width * v->height);
@@ -960,12 +1055,15 @@ const GfxVideoFrame *videoFrameAt(Video *v, int64_t media_ns)
         previewed = true;
     }
     v->preview_ready = false;
+    int hdr = v->hdr_convert ? (int)v->hdr : HDR_NONE;
+    float hdr_peak = v->hdr_peak;
     pthread_mutex_unlock(&v->lock);
     if (taken || previewed) {
         v->frame = (GfxVideoFrame){
             .width = v->width, .height = v->height, .y = v->shown.y, .uv = v->shown.uv,
             .y_pitch = v->width, .uv_pitch = v->width, .id = ++v->frame_id,
             .bt709 = v->bt709, .full_range = v->full_range,
+            .hdr = hdr, .hdr_peak = hdr_peak,
         };
     }
     return v->frame_id ? &v->frame : NULL;
@@ -1003,6 +1101,26 @@ bool videoFinished(Video *v, char *error, size_t error_size)
         error[0] = '\0';
     pthread_mutex_unlock(&v->lock);
     return finished;
+}
+
+bool videoLightDeblock(const Video *v)
+{
+    pthread_mutex_t *lock = (pthread_mutex_t *)&v->lock;  // Taken, not changed.
+    pthread_mutex_lock(lock);
+    bool light = v->light_deblock;
+    pthread_mutex_unlock(lock);
+    return light;
+}
+
+int videoHdr(const Video *v, bool *converted)
+{
+    pthread_mutex_t *lock = (pthread_mutex_t *)&v->lock;
+    pthread_mutex_lock(lock);
+    int kind = v->hdr;
+    pthread_mutex_unlock(lock);
+    if (converted)
+        *converted = v->hdr_convert && kind != HDR_NONE;
+    return kind;
 }
 
 VideoStats videoStats(const Video *v)

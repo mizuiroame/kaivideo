@@ -374,6 +374,7 @@ static void *openThread(void *arg)
     int subtitle_index = app->next_subtitle_set ? app->next_subtitle : SUBTITLE_UNSAID;
     app->next_audio_plus1 = 0;
     app->next_subtitle_set = false;
+    videoSetPlayback(app->config.faster_4k, app->config.hdr_to_sdr);
     bool iptv = iptvIsLocation(app->playing_path) || (stremioIsLocation(app->playing_path) && app->open_url[0]);
     app->playing_live_stream = false;
     bool iptv_opened = iptv && openIptv(app, path, sizeof(path));
@@ -1273,6 +1274,7 @@ int main(int argc, char **argv)
     app.aspect = PLAYBACK_ASPECT_ORIGINAL;
     char folder[BROWSER_PATH_MAX];
     loadSettings(&app, folder, sizeof(folder));
+    videoSetPlayback(app.config.faster_4k, app.config.hdr_to_sdr);  // For the thumbnails' videos too.
     appConfigPath(path, sizeof(path), "resume.txt");
     resumeLoad(&app.resume, path);
     appConfigPath(path, sizeof(path), "watched.txt");

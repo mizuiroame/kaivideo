@@ -39,7 +39,9 @@ void appStatsDraw(const App *app)
         .ahead_s = converted ? hlsSecondsReady(playerPosition(p)) : -1,
         .ahead_mb = converted ? -1 : mediaFileMegabytesReady(),
         .speed_permille = playerSpeed(p),
+        .light_deblock = playerLightDeblock(p),
     };
+    info.hdr = playerHdr(p, &info.hdr_converted);
     char lines[STATS_LINES][STATS_LINE_MAX];
     uiDrawStats(lines, statsFormat(&info, lines));
 }

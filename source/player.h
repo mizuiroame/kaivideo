@@ -85,6 +85,10 @@ const char *playerVideoInfo(const Player *p);
 const char *playerAudioInfo(const Player *p);
 void playerSize(const Player *p, int *width, int *height, double *aspect);
 VideoStats playerStats(const Player *p);
+// True while 4K is decoded with lighter deblocking (Settings' Faster 4K).
+bool playerLightDeblock(const Player *p);
+// The video's HDR (hdr.h's HdrKind, 0 for none), and whether it's shown with SDR colors.
+int playerHdr(const Player *p, bool *converted);
 // Its state for the log, when playback seems stuck: "paused=0 holding=1 ...".
 void playerDescribe(Player *p, char *out, size_t size);
 // Once after each start or jump, for the log: how long until it played, and

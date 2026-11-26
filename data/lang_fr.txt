@@ -1940,3 +1940,24 @@ Le guide n'a rien en ce moment pour cette chaîne.
 
 Watch live
 Regarder en direct
+
+Always
+Toujours
+
+Faster 4K (slightly softer)
+4K plus rapide (un peu plus doux)
+
+Faster 4K: on (lighter deblocking)
+4K plus rapide : activé (filtre anti-blocs allégé)
+
+HDR to SDR colors
+Couleurs HDR en SDR
+
+Picture: %s, shown as it is
+Image : %s, affichée telle quelle
+
+Picture: %s, shown with SDR colors
+Image : %s, affichée en couleurs SDR
+
+When needed
+Si nécessaire

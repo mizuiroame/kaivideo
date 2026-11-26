@@ -75,8 +75,8 @@ void testSettings(void)
     CHECK(!strcmp(settingLabel(SETTING_OPEN_JELLYFIN), "Jellyfin") && !strcmp(settingLabel(SETTING_OPEN_PLEX), "Plex"));
     CHECK(settingsPageRows(SETTINGS_PAGE_LIBRARY, false, SERVER_JELLYFIN, rows) == 3 && rows[0] == SETTING_LIBRARY &&
           rows[1] == SETTING_RESCAN && rows[2] == SETTING_THUMBNAILS);
-    CHECK(settingsPageRows(SETTINGS_PAGE_PLAYBACK, false, SERVER_JELLYFIN, rows) == 2 && rows[0] == SETTING_AUTOPLAY &&
-          rows[1] == SETTING_JF_QUALITY);
+    CHECK(settingsPageRows(SETTINGS_PAGE_PLAYBACK, false, SERVER_JELLYFIN, rows) == 4 && rows[0] == SETTING_AUTOPLAY &&
+          rows[1] == SETTING_FASTER_4K && rows[2] == SETTING_HDR && rows[3] == SETTING_JF_QUALITY);
     SettingsPage page;
     ServerKind opens;
     CHECK(settingOpensPage(SETTING_OPEN_EMBY, &page, &opens) && page == SETTINGS_PAGE_JELLYFIN && opens == SERVER_EMBY);
@@ -194,6 +194,22 @@ void testSettings(void)
     settingStep(&c, SETTING_CLOCK, 1);
     settingStep(&c, SETTING_AUTOPLAY, 1);
     CHECK(!c.autoplay && settingIsChoice(SETTING_AUTOPLAY));
+    CHECK(c.faster_4k == FASTER_4K_WHEN_NEEDED && c.hdr_to_sdr);  // Both on by default.
+    settingStep(&c, SETTING_FASTER_4K, 1);
+    CHECK(c.faster_4k == FASTER_4K_ALWAYS && settingIsChoice(SETTING_FASTER_4K));
+    settingStep(&c, SETTING_FASTER_4K, 1);
+    CHECK(c.faster_4k == FASTER_4K_OFF);
+    settingStep(&c, SETTING_FASTER_4K, -1);
+    CHECK(c.faster_4k == FASTER_4K_ALWAYS);
+    settingStep(&c, SETTING_HDR, 1);
+    CHECK(!c.hdr_to_sdr && settingIsChoice(SETTING_HDR));
+    {
+        char shown[32];
+        settingValue(&c, SETTING_FASTER_4K, shown, sizeof(shown));
+        CHECK(!strcmp(shown, "Always"));
+        settingValue(&c, SETTING_HDR, shown, sizeof(shown));
+        CHECK(!strcmp(shown, "Off"));
+    }
     snprintf(c.background, sizeof(c.background), "%s", "beach.jpg");
     char value[64];
     settingValue(&c, SETTING_ACCENT, value, sizeof(value));
@@ -259,6 +275,7 @@ void testSettings(void)
           strcmp(back.background, "beach.jpg") == 0 && !strcmp(back.subtitle_font, "Atkinson Hyperlegible.ttf"));
     CHECK(!back.update_check && back.update_checked == 1795000000 && !strcmp(back.update_tag, "v1.14.0"));
     CHECK(back.welcomed);
+    CHECK(back.faster_4k == FASTER_4K_ALWAYS && !back.hdr_to_sdr);
     CHECK(configReadLine(&back, "update_tag=v123456789012345678901234567890123") && back.update_tag[0] == '\0');
     CHECK(configReadLine(&back, "subtitle_font=../x.ttf") && back.subtitle_font[0] == '\0');  // A name, never a path.
     CHECK(!configReadLine(&back, "folder=sdmc:/Videos"));

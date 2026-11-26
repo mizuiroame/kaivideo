@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "hdr.h"
 #include "lang.h"
 #include "playback.h"
 
@@ -76,6 +77,14 @@ int statsFormat(const StatsInfo *info, char lines[STATS_LINES][STATS_LINE_MAX])
         else if (info->ahead_mb >= 0)
             snprintf(lines[n++], STATS_LINE_MAX, T("Ready ahead: %.0f MB"), info->ahead_mb);
     }
+    if (info->hdr != HDR_NONE) {
+        const char *kind = info->hdr == HDR_HLG ? "HLG" : "HDR10";
+        snprintf(lines[n++], STATS_LINE_MAX,
+                 info->hdr_converted ? T("Picture: %s, shown with SDR colors") : T("Picture: %s, shown as it is"),
+                 kind);
+    }
+    if (info->light_deblock)
+        snprintf(lines[n++], STATS_LINE_MAX, "%s", T("Faster 4K: on (lighter deblocking)"));
     if (info->speed_permille != PLAYBACK_PERMILLE) {
         char speed[16];
         playbackFormatSpeed(speed, sizeof(speed), info->speed_permille);

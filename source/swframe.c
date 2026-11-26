@@ -41,6 +41,26 @@ bool swframeCanSkip(int64_t pts_ns, int64_t skip_until_ns, int64_t clock_ns)
            (uint64_t)clock_ns - (uint64_t)pts_ns > (uint64_t)SWFRAME_LATE_NS;
 }
 
+bool swframeLightDeblock(SwframeKeepUp *k, SwframeFast mode, int width, int height, unsigned frames, unsigned late)
+{
+    bool large = width > HARDWARE_MAX_WIDTH || height > HARDWARE_MAX_HEIGHT;
+    if (mode == SWFRAME_FAST_OFF || !large)
+        return false;
+    if (mode == SWFRAME_FAST_ALWAYS || k->light)
+        return true;
+    if (frames < k->frames || late < k->late) {  // Counted over again: a new start.
+        k->frames = frames;
+        k->late = late;
+        return false;
+    }
+    if (frames - k->frames < SWFRAME_KEEPUP_FRAMES)
+        return false;
+    k->light = late - k->late >= SWFRAME_KEEPUP_LATE;
+    k->frames = frames;
+    k->late = late;
+    return k->light;
+}
+
 // The conversion runs on the decoding thread, once a frame (about 18 ms a 4K
 // frame in plain C on the console), so on ARM it takes 16 samples at a time
 // with NEON. The plain loops do the rest of a row, and everything elsewhere

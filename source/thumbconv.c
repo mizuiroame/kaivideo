@@ -36,8 +36,19 @@ static uint8_t clampByte(float v)
     return v <= 0.0f ? 0 : v >= 255.0f ? 255 : (uint8_t)(v + 0.5f);
 }
 
+// One pixel of an HDR frame, from its 8-bit Y'CbCr, as gfx_gl.c's HDR shader draws it.
+static void hdrPixel8(const HdrLut *hdr, float lum, float cb, float cr, bool full_range, uint8_t *p)
+{
+    float in[3];
+    if (full_range)
+        hdrYuvToRgb(lum / 255.0f, cb / 255.0f, cr / 255.0f, in);
+    else
+        hdrYuvToRgb((lum - 16.0f) / 219.0f, cb / 224.0f, cr / 224.0f, in);
+    hdrLutPixel(hdr, in, p);
+}
+
 void thumbgenConvert(const uint8_t *y, const uint8_t *uv, int w, int h, int y_pitch, int uv_pitch, bool bt709,
-                     bool full_range, uint8_t *rgb, int out_w, int out_h)
+                     bool full_range, const HdrLut *hdr, uint8_t *rgb, int out_w, int out_h)
 {
     // The middle of the frame with the picture's shape, each output pixel
     // the average of the luma under it (chroma from its middle).
@@ -60,12 +71,16 @@ void thumbgenConvert(const uint8_t *y, const uint8_t *uv, int w, int h, int y_pi
             int mx = ((x0 + x1) / 2) & ~1, my = (y0 + y1) / 2;
             const uint8_t *c = &uv[(my / 2) * uv_pitch + mx];
             float lum = n ? (float)sum / n : 0.0f, cb = c[0] - 128.0f, cr = c[1] - 128.0f;
+            uint8_t *p = &rgb[(oy * out_w + ox) * 3];
+            if (hdr) {
+                hdrPixel8(hdr, lum, cb, cr, full_range, p);
+                continue;
+            }
             if (!full_range) {
                 lum = (lum - 16.0f) * (255.0f / 219.0f);
                 cb *= 255.0f / 224.0f;
                 cr *= 255.0f / 224.0f;
             }
-            uint8_t *p = &rgb[(oy * out_w + ox) * 3];
             p[0] = clampByte(lum + kr * cr);
             p[1] = clampByte(lum - kgb * cb - kgr * cr);
             p[2] = clampByte(lum + kb * cb);

@@ -1940,3 +1940,24 @@ The guide has nothing on now for it.
 
 Watch live
 ライブで見る
+
+Always
+常に
+
+Faster 4K (slightly softer)
+4Kを高速化（少しやわらかく）
+
+Faster 4K: on (lighter deblocking)
+4K高速化: オン（デブロッキングを軽く）
+
+HDR to SDR colors
+HDRをSDRの色で
+
+Picture: %s, shown as it is
+映像: %s、そのまま表示
+
+Picture: %s, shown with SDR colors
+映像: %s、SDRの色で表示
+
+When needed
+必要なときだけ

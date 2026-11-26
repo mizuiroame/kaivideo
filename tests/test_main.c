@@ -90,6 +90,7 @@ int main(void)
     testTrackPrefs();
     testPlayback();
     testSwFrame();
+    testHdr();
     testAssCompose();
     testJellyfin();
     testPlex();

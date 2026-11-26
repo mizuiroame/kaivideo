@@ -954,6 +954,16 @@ VideoStats playerStats(const Player *p)
     return videoStats(p->video);
 }
 
+bool playerLightDeblock(const Player *p)
+{
+    return videoLightDeblock(p->video);
+}
+
+int playerHdr(const Player *p, bool *converted)
+{
+    return videoHdr(p->video, converted);
+}
+
 void playerDescribe(Player *p, char *out, size_t size)
 {
     int64_t heard = 0, next = 0;

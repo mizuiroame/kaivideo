@@ -7,7 +7,7 @@
 
 #define STATS_SAMPLES 12     // About 3 s, sampled every STATS_EVERY_NS.
 #define STATS_EVERY_NS 250000000ull
-#define STATS_LINES 8
+#define STATS_LINES 10
 #define STATS_LINE_MAX 112
 
 // Counters as they stand at a moment; they only grow while a video plays.
@@ -50,6 +50,9 @@ typedef struct {
     double ahead_s;          // Video in memory past where it plays; < 0 if unknown.
     double ahead_mb;         // The same in megabytes, when seconds aren't known; < 0 if unknown.
     int speed_permille;
+    int hdr;                 // hdr.h's HdrKind: 0 for SDR.
+    bool hdr_converted;      // Shown with SDR colors (Settings).
+    bool light_deblock;      // 4K decoded with lighter deblocking (Settings' Faster 4K).
 } StatsInfo;
 
 // The panel's lines. Returns how many.
