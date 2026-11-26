@@ -8,8 +8,9 @@
 // Against the real plex.tv (personal testing only; nothing secret is printed):
 //   PLEX_TOKEN=<account's> PLEX_SERVER_ID=<server's clientIdentifier> PLEX_PIN=<a test profile's>
 //   host_plexhome live
-// It switches to the first profile with a PIN (one wrong PIN first), reads the
-// server's libraries as it, and switches back to the account's own profile.
+// It switches to the first managed profile with a PIN (one wrong PIN first),
+// reads the server's libraries as it, and switches back to the account's own
+// profile (with PLEX_OWNER_PIN if the owner has one; else it checks it's asked for).
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -87,9 +88,25 @@ static void fakeFlow(NetClient *net)
            "back to the owner, under the account's own name");
 }
 
+// The HTTP status of a switch, as plex.tv answers it (0 without an answer).
+static long rawSwitchStatus(NetClient *net, const PlexSession *s, const char *uuid, const char *pin)
+{
+    char path[PLEX_HOME_PATH_MAX], url[PLEX_URL_MAX];
+    if (!plexHomeSwitchPath(uuid, pin, path, sizeof(path)))
+        return -1;
+    plexTvUrl(s, VERSION, path, true, url, sizeof(url));
+    NetRequest request = {.url = url, .post_json = "{}", .accept_json = true, .timeout_s = 30};
+    NetResponse r;
+    if (netFetchText(net, &request, 64 * 1024, &r))
+        netResponseFree(&r);
+    memset(url, 0, sizeof(url));
+    return r.status;
+}
+
 static void liveFlow(NetClient *net)
 {
     const char *token = getenv("PLEX_TOKEN"), *server = getenv("PLEX_SERVER_ID"), *pin = getenv("PLEX_PIN");
+    const char *owner_pin = getenv("PLEX_OWNER_PIN");  // Optional: the owner's own PIN, to switch back.
     if (!token || !server || !pin) {
         printf("PLEX_TOKEN, PLEX_SERVER_ID and PLEX_PIN are needed\n");
         g_failures++;
@@ -119,29 +136,36 @@ static void liveFlow(NetClient *net)
     snprintf(s.account, sizeof(s.account), "%s", owner->uuid);  // As signing in keeps it.
     snprintf(s.profile, sizeof(s.profile), "%s", owner->uuid);
     PlexSession before = s;
-    PlexSwitchResult r = plexNetSwitchHome(net, &s, VERSION, target, "", message, sizeof(message), NULL);
-    printf("        without a PIN: result %d\n", r);
-    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "without its PIN: refused");
     char wrong[8];
     snprintf(wrong, sizeof(wrong), "%s", strcmp(pin, "0000") ? "0000" : "1111");
-    r = plexNetSwitchHome(net, &s, VERSION, target, wrong, message, sizeof(message), NULL);
+    long status = rawSwitchStatus(net, &s, target->uuid, wrong);
+    printf("        plex.tv's status for a wrong PIN: %ld\n", status);
+    PlexSwitchResult r = plexNetSwitchHome(net, &s, VERSION, target, wrong, message, sizeof(message), NULL);
     printf("        a wrong PIN: result %d\n", r);
-    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "a wrong PIN: refused");
+    expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &before, sizeof(s)), "a wrong PIN: refused, the session as it was");
     r = plexNetSwitchHome(net, &s, VERSION, target, pin, message, sizeof(message), NULL);
     printf("        the right PIN: result %d%s%s\n", r, message[0] ? ": " : "", message);
-    expect(r == PLEX_SWITCH_OK || r == PLEX_SWITCH_NO_SERVER, "the right PIN is taken");
-    if (r == PLEX_SWITCH_OK) {
-        expect(strcmp(s.token, before.token) && strcmp(s.server_token, before.server_token) && !plexSessionIsAccount(&s),
-               "the profile's own tokens");
-        char url[PLEX_URL_MAX];
-        long status = 0;
-        plexServerUrl(&s, VERSION, "/library/sections", url, sizeof(url));
-        expect(plexNetCall(net, &s, VERSION, "/library/sections", false, 30, &status), "its libraries, as it sees them");
-        memset(url, 0, sizeof(url));
-        r = plexNetSwitchHome(net, &s, VERSION, owner, "", message, sizeof(message), NULL);
-        printf("        back to the owner: result %d\n", r);
+    expect(r == PLEX_SWITCH_OK, "the right PIN is taken");
+    if (r != PLEX_SWITCH_OK)
+        return;
+    expect(strcmp(s.token, before.token) && strcmp(s.server_token, before.server_token) && !plexSessionIsAccount(&s) &&
+               !strcmp(s.server_id, before.server_id),
+           "the profile's own tokens, for the same server");
+    status = 0;
+    expect(plexNetCall(net, &s, VERSION, "/library/sections", false, 30, &status), "its libraries, as it sees them");
+    expect(plexNetHomeUsers(net, &s, VERSION, users, PLEX_HOME_USERS_MAX, NULL) == n,
+           "the profiles, read with the profile's token");
+    PlexSession managed = s;
+    status = rawSwitchStatus(net, &s, owner->uuid, "");
+    printf("        back to the owner without a PIN: status %ld (the owner %s a PIN)\n", status,
+           owner->protected_pin ? "has" : "has no");
+    r = plexNetSwitchHome(net, &s, VERSION, owner, owner_pin ? owner_pin : "", message, sizeof(message), NULL);
+    printf("        back to the owner%s: result %d\n", owner_pin ? " with its PIN" : "", r);
+    if (owner->protected_pin && !owner_pin)
+        expect(r == PLEX_SWITCH_WRONG_PIN && !memcmp(&s, &managed, sizeof(s)), "the owner's PIN is asked for");
+    else
         expect(r == PLEX_SWITCH_OK && plexSessionIsAccount(&s), "back to the account's own profile");
-    }
+    memset(&managed, 0, sizeof(managed));
     memset(&s, 0, sizeof(s));
     memset(&before, 0, sizeof(before));
 }
